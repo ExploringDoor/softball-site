@@ -64,7 +64,7 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 /* ── HERO ── */
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 48px 80px;position:relative;overflow:hidden;gap:0}
 /* Full-bleed background image */
-.hero-img-bg{position:absolute;inset:0;background:url('dvsl-hero.png') center center/contain no-repeat;background-color:#080d1a;z-index:0}
+.hero-img-bg{position:absolute;inset:0;background:url('dvsl-hero2.png') center center/cover no-repeat;background-color:#06080f;z-index:0}
 /* Dark overlays for readability */
 .hero-bg1{position:absolute;inset:0;z-index:1;background:
   linear-gradient(to bottom, rgba(5,8,20,.55) 0%, rgba(5,8,20,.1) 30%, rgba(5,8,20,.1) 70%, rgba(5,8,20,.75) 100%)}
@@ -374,9 +374,56 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
   .weather-card{min-width:unset}
   .linfo-item{padding:12px 16px}
 }
+
+/* ── CINEMATIC INTRO ── */
+#intro-screen{
+  position:fixed;inset:0;z-index:9999;
+  background:#06080f url('dvsl-hero2.png') center center/cover no-repeat;
+  display:flex;align-items:center;justify-content:center;
+  animation:introZoom 3.2s cubic-bezier(.4,0,.2,1) forwards;
+  pointer-events:none;
+}
+@keyframes introZoom{
+  0%  {transform:scale(1);   opacity:1}
+  65% {transform:scale(1.12);opacity:1}
+  85% {transform:scale(1.18);opacity:1}
+  100%{transform:scale(1.22);opacity:0}
+}
+#intro-screen .intro-vignette{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 80% at 50% 50%, transparent 40%, rgba(6,8,15,.6) 100%);
+}
+#intro-screen .intro-scroll{
+  position:absolute;bottom:36px;left:50%;transform:translateX(-50%);
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;
+  letter-spacing:.28em;text-transform:uppercase;color:rgba(255,255,255,.5);
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  animation:introBlink 1s ease infinite;
+}
+@keyframes introBlink{0%,100%{opacity:.5}50%{opacity:1}}
+#intro-screen .intro-scroll svg{opacity:.6}
+body.intro-done #intro-screen{display:none}
+body.intro-done{overflow:auto}
+body:not(.intro-done){overflow:hidden}
 </style>
 </head>
 <body>
+
+<!-- ═══ CINEMATIC INTRO ═══ -->
+<div id="intro-screen">
+  <div class="intro-vignette"></div>
+  <div class="intro-scroll">
+    <span>SCROLL TO ENTER</span>
+    <svg width="16" height="24" viewBox="0 0 16 24" fill="none">
+      <rect x="1" y="1" width="14" height="22" rx="7" stroke="rgba(255,255,255,.5)" stroke-width="1.5"/>
+      <circle cx="8" cy="7" r="2.5" fill="rgba(255,255,255,.6)">
+        <animate attributeName="cy" values="7;15;7" dur="1.8s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="1;0;1" dur="1.8s" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+  </div>
+</div>
+
 <!-- ═══ NAV ═══ -->
 <nav class="nav">
   <div class="nav-brand" onclick="goPage('home')"><img src="dvsl-logo-dark.png" alt="DVSL" style="height:28px;opacity:.85;filter:drop-shadow(0 0 6px rgba(245,200,66,.3))">DVSL</div>
@@ -411,10 +458,7 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
     <div class="hero-img-bg"></div>
     <div class="hero-bg1"></div>
     <div class="hero-bg2"></div>
-    <div class="hero-scroll-hint">
-      <span>SCROLL TO ENTER</span>
-      <svg width="16" height="24" viewBox="0 0 16 24" fill="none"><rect x="1" y="1" width="14" height="22" rx="7" stroke="rgba(255,255,255,.4)" stroke-width="1.5"/><circle cx="8" cy="7" r="2.5" fill="rgba(255,255,255,.5)"><animate attributeName="cy" values="7;15;7" dur="1.8s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0;1" dur="1.8s" repeatCount="indefinite"/></circle></svg>
-    </div>
+
     <div class="hero-ticker">
       <div class="ticker-track" id="ticker"></div>
     </div>
@@ -994,6 +1038,21 @@ function shareText(title, idx){
     window.open('sms:?body=' + encodeURIComponent(text));
   }
 }
+
+
+// ── Cinematic intro ──
+(function(){
+  var intro = document.getElementById('intro-screen');
+  if(!intro) return;
+  // Remove after animation (3.2s) + small buffer
+  setTimeout(function(){
+    document.body.classList.add('intro-done');
+  }, 3200);
+  // Also allow skip on any click/tap
+  intro.addEventListener('click', function(){
+    document.body.classList.add('intro-done');
+  });
+})();
 
 function buildTicker(){
   const items=[
