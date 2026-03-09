@@ -6,7 +6,7 @@ Official website for the **Delaware Valley Synagogue League (DVSL)**, a men's sl
 
 | File | Description |
 |------|-------------|
-| `league-site.html` | Main SPA — Home, Standings, Leaderboard, Players, Recaps, History |
+| `index.html` | Main SPA — Home, Standings, Leaderboard, Players, Recaps, History |
 | `schedule.html` | Full season schedule with field details |
 | `playoffs.html` | Playoff bracket + Champions gallery |
 | `standings-history.html` | Year-by-year standings archive (2021–2025) |
@@ -32,7 +32,7 @@ No build step required. Pure HTML/CSS/JS — open any `.html` file directly in a
 1. Push all files to a GitHub repo
 2. Go to **Settings → Pages**
 3. Set source to `main` branch, root `/`
-4. Site will be live at `https://yourusername.github.io/repo-name/league-site.html`
+4. Site will be live at `https://yourusername.github.io/repo-name/index.html`
 
 ### Local dev
 ```bash
