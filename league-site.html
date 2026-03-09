@@ -116,17 +116,17 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 .gr-status.upcoming{color:var(--gold)}
 .gr-body{padding:6px 18px;display:flex;flex-direction:column;justify-content:center;gap:0}
 .gr-rhe-hdr{display:flex;justify-content:flex-end;gap:0;padding-bottom:1px}
-.gr-rhe-lbl{font-size:12px;font-weight:700;letter-spacing:.06em;color:rgba(239,239,239,.35);width:40px;text-align:right}
+.gr-rhe-lbl{font-size:13px;font-weight:700;letter-spacing:.06em;color:rgba(239,239,239,.35);width:50px;text-align:right}
 .gr-team{display:flex;align-items:center;gap:8px;padding:3px 0}
-.gr-logo{width:26px;height:26px;border-radius:5px;flex-shrink:0;overflow:hidden;border:1.5px solid;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:8px}
+.gr-logo{width:34px;height:34px;border-radius:6px;flex-shrink:0;overflow:hidden;border:1.5px solid;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:9px}
 .gr-logo img{width:100%;height:100%;object-fit:cover}
-.gr-name{flex:1;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;line-height:1;color:var(--white)}
+.gr-name{flex:1;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30px;line-height:1;color:var(--white)}
 .gr-name.loser{color:rgba(239,239,239,.38)}
 .gr-arrow{font-size:9px;color:var(--white);margin-left:4px;opacity:.7}
 .gr-scores{display:flex;gap:0;flex-shrink:0}
-.gr-score{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;line-height:1;width:40px;text-align:right;color:var(--white)}
+.gr-score{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:44px;line-height:1;width:50px;text-align:right;color:var(--white)}
 .gr-score.loser{color:rgba(239,239,239,.35)}
-.gr-rhe-val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:32px;width:40px;text-align:right;color:rgba(239,239,239,.45)}
+.gr-rhe-val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;width:50px;text-align:right;color:rgba(239,239,239,.45)}
 .gr-time-info{font-size:12px;color:rgba(239,239,239,.5);padding:2px 0;text-align:left}
 .gr-footer{display:flex;flex-direction:column;justify-content:center;gap:6px;padding:8px 14px;border-left:1px solid var(--border);min-width:110px}
 .gr-action{text-align:center;padding:6px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--blue);cursor:pointer;transition:background .15s;border:1px solid rgba(96,165,250,.25);border-radius:14px;white-space:nowrap}
@@ -324,10 +324,10 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
   .game-row{grid-template-columns:1fr auto}
   .gr-bar{min-height:auto;padding:8px 12px;flex-direction:row;justify-content:space-between;align-items:center;border-right:none;border-bottom:1px solid var(--border)}
   .gr-body{padding:6px 12px 4px}
-  .gr-name{font-size:18px}
-  .gr-score{font-size:22px;width:28px}
-  .gr-rhe-val{font-size:14px;width:28px}
-  .gr-rhe-lbl{font-size:10px;width:28px}
+  .gr-name{font-size:22px}
+  .gr-score{font-size:34px;width:42px}
+  .gr-rhe-val{font-size:17px;width:34px}
+  .gr-rhe-lbl{font-size:10px;width:34px}
   .gr-footer{padding:6px 10px;min-width:80px;gap:4px}
   .gr-action{font-size:10px;padding:5px 8px}
   .gr-logo{width:20px;height:20px;font-size:7px}
@@ -338,10 +338,10 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 }
 @media(max-width:420px){
   .pgrid{grid-template-columns:1fr}
-  .gr-name{font-size:15px}
-  .gr-score{font-size:20px;width:24px}
-  .gr-rhe-val{font-size:13px;width:24px}
-  .gr-rhe-lbl{width:24px}
+  .gr-name{font-size:18px}
+  .gr-score{font-size:28px;width:36px}
+  .gr-rhe-val{font-size:14px;width:30px}
+  .gr-rhe-lbl{width:30px}
   .gr-footer{min-width:70px}
   .gr-action{font-size:9px;padding:4px 6px}
 }
@@ -1680,52 +1680,72 @@ function buildStandings(){
 
 // ════════════════════════════ SCHEDULE PREVIEW ═══════════════════════════
 function buildSchedule(){
+  const PITCHER_STATS={
+    GOLD:{wl:'7-3',era:'2.84'},SA:{wl:'8-2',era:'2.11'},KI:{wl:'6-4',era:'3.22'},
+    BOB:{wl:'5-5',era:'3.98'},TBIR:{wl:'7-3',era:'2.65'},AJ:{wl:'4-6',era:'4.12'},
+    TSMC:{wl:'3-7',era:'4.55'},BSMC:{wl:'2-8',era:'5.10'}
+  };
+  const pStats=t=>PITCHER_STATS[t]||{wl:'—',era:'—'};
+  const STAR={
+    GOLD:'Josh Weinberg',SA:'Carlos Rivera',KI:'Kevin Park',BOB:'Bobby Marchetti',
+    TBIR:'Tom Birnbaum',AJ:'Al Jacobs',TSMC:'Dan Cohen',BSMC:'Ari Feldman'
+  };
   const wrap=document.getElementById('sched-wrap');
   const nextIdx=SCHEDULE_PREVIEW.findIndex(g=>!g.done);
   wrap.innerHTML=SCHEDULE_PREVIEW.map((g,i)=>{
     const isNext=i===nextIdx;
     const atTeam=getTeamByShort(g.away), htTeam=getTeamByShort(g.home);
     const ac=atTeam?.color||'#9ca3af', hc=htTeam?.color||'#9ca3af';
-    const logoA=`<div class="gr-logo" style="color:${ac};border-color:${ac}55;background:${ac}11"><img src="logos/${g.away.toLowerCase()}.svg" onerror="this.style.display='none';this.parentNode.textContent='${g.away}'" alt="${g.away}"></div>`;
-    const logoH=`<div class="gr-logo" style="color:${hc};border-color:${hc}55;background:${hc}11"><img src="logos/${g.home.toLowerCase()}.svg" onerror="this.style.display='none';this.parentNode.textContent='${g.home}'" alt="${g.home}"></div>`;
+    const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11"><img src="logos/${g.away.toLowerCase()}.svg" onerror="this.style.display='none';this.parentNode.textContent='${g.away}'" alt="${g.away}"></div>`;
+    const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11"><img src="logos/${g.home.toLowerCase()}.svg" onerror="this.style.display='none';this.parentNode.textContent='${g.home}'" alt="${g.home}"></div>`;
     if(g.done){
       const aw=g.as>g.hs;
+      const wTeam=aw?g.away:g.home, lTeam=aw?g.home:g.away;
+      const wc=aw?ac:hc, lc=aw?hc:ac;
       const aH=Math.floor(g.as*2.1), hH=Math.floor(g.hs*2.1);
-      return `<div class="game-row${isNext?' next':''}" onclick="openRecap(${i})">
-        <div class="gr-bar">
-          <span class="gr-bar-field">${g.field}</span>
-          <span class="gr-bar-status gr-status final">FINAL</span>
-        </div>
-        <div class="gr-body">
-          <div class="gr-rhe-hdr"><span class="gr-rhe-lbl">R</span><span class="gr-rhe-lbl">H</span><span class="gr-rhe-lbl">E</span></div>
-          <div class="gr-team">${logoA}
-            <span class="gr-name${aw?'':' loser'}" style="color:${aw?ac:'rgba(239,239,239,.38)'}">${g.away}${aw?'<span class="gr-arrow">◀</span>':''}</span>
-            <div class="gr-scores"><span class="gr-score${aw?'':' loser'}">${g.as}</span><span class="gr-rhe-val">${aH}</span><span class="gr-rhe-val">0</span></div>
+      return `<div class="sched-game-block${isNext?' next':''}" onclick="openRecap(${i})">
+        <div class="gb-left">
+          <div class="gb-status-row">
+            <span class="gb-status final">FINAL</span>
+            <div class="gb-rhe-labels"><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
           </div>
-          <div class="gr-team">${logoH}
-            <span class="gr-name${!aw?'':' loser'}" style="color:${!aw?hc:'rgba(239,239,239,.38)'}">${g.home}${!aw?'<span class="gr-arrow">◀</span>':''}</span>
-            <div class="gr-scores"><span class="gr-score${!aw?'':' loser'}">${g.hs}</span><span class="gr-rhe-val">${hH}</span><span class="gr-rhe-val">0</span></div>
+          <div class="gb-team-row">${logoA}
+            <span class="gb-name ${aw?'winner':'loser'}" style="color:${aw?ac:'rgba(239,239,239,.38)'}">${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <div class="gb-rhe-vals"><span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">0</span></div>
+          </div>
+          <div class="gb-team-row">${logoH}
+            <span class="gb-name ${!aw?'winner':'loser'}" style="color:${!aw?hc:'rgba(239,239,239,.38)'}">${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <div class="gb-rhe-vals"><span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">0</span></div>
           </div>
         </div>
-        <div class="gr-footer">
-          <div class="gr-action" onclick="event.stopPropagation();openRecap(${i})">Recap</div>
-          <div class="gr-action" onclick="event.stopPropagation();openBsm(${i})">Box</div>
+        <div class="gb-mid"><div class="gb-field">${g.field}</div></div>
+        <div class="gb-wl">
+          <div class="gb-wl-row">
+            <span class="gb-wl-role">WIN</span>
+            <div class="gb-wl-badge" style="background:${wc}22;border:1px solid ${wc}44;overflow:hidden"><img src="logos/${wTeam.toLowerCase()}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentNode.style.color='${wc}';this.parentNode.textContent='${wTeam}'" alt="${wTeam}"></div>
+            <div><div class="gb-wl-name">${STAR[wTeam]||wTeam+' Player'}</div><div class="gb-wl-stat">${pStats(wTeam).wl} · ${pStats(wTeam).era} ERA</div></div>
+          </div>
+          <div class="gb-wl-row">
+            <span class="gb-wl-role">LOSS</span>
+            <div class="gb-wl-badge" style="background:${lc}22;border:1px solid ${lc}44;overflow:hidden"><img src="logos/${lTeam.toLowerCase()}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentNode.style.color='${lc}';this.parentNode.textContent='${lTeam}'" alt="${lTeam}"></div>
+            <div><div class="gb-wl-name">${STAR[lTeam]||lTeam+' Player'}</div><div class="gb-wl-stat">${pStats(lTeam).wl} · ${pStats(lTeam).era} ERA</div></div>
+          </div>
+        </div>
+        <div class="gb-actions">
+          <button class="gb-btn" onclick="event.stopPropagation();openRecap(${i})">Recap</button>
+          <button class="gb-btn" onclick="event.stopPropagation();openBsm(${i})">Box Score</button>
         </div>
       </div>`;
     } else {
-      return `<div class="game-row${isNext?' next':''}" onclick="openBsm(${i})">
-        <div class="gr-bar">
-          <span class="gr-bar-field">${g.field}</span>
-          <span class="gr-bar-status gr-status upcoming">${isNext?'▶ NEXT':'UPCOMING'}</span>
+      return `<div class="sched-game-block${isNext?' next':''}" onclick="openBsm(${i})">
+        <div class="gb-left">
+          <div class="gb-status-row"><span class="gb-status upcoming">${isNext?'▶ NEXT':'UPCOMING'}</span></div>
+          <div class="gb-team-row">${logoA}<span class="gb-name winner" style="color:${ac}">${g.away}</span></div>
+          <div class="gb-team-row">${logoH}<span class="gb-name winner" style="color:${hc}">${g.home}</span></div>
         </div>
-        <div class="gr-body">
-          <div class="gr-team">${logoA}<span class="gr-name" style="color:${ac}">${g.away}</span></div>
-          <div class="gr-team">${logoH}<span class="gr-name" style="color:${hc}">${g.home}</span></div>
-          <div class="gr-time-info">${g.time} · ${g.date}</div>
-        </div>
-        <div class="gr-footer">
-          <div class="gr-action gold" onclick="event.stopPropagation();openBsm(${i})">Gameday</div>
-        </div>
+        <div class="gb-mid"><div class="gb-field">${g.field}</div><div class="gb-time">${g.time} · ${g.date}</div></div>
+        <div class="gb-wl"></div>
+        <div class="gb-actions"><button class="gb-btn gold">Gameday</button></div>
       </div>`;
     }
   }).join('');
