@@ -118,6 +118,12 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:rgba(245,200,66,.3);border-radius:2px}
+
+thead th.sortable{cursor:pointer;user-select:none;transition:color .15s,background .15s}
+thead th.sortable:hover{color:var(--white);background:rgba(255,255,255,.05)}
+thead th.sorted-col{color:var(--gold) !important}
+thead th .sarrow{margin-left:3px;opacity:.5;font-size:9px}
+thead th.sorted-col .sarrow{opacity:1}
 </style>
 </head>
 <body>
@@ -408,11 +414,59 @@ const DATA = {
 
 function medal(i){return i===0?'🥇':i===1?'🥈':i===2?'🥉':''}
 
-function buildTable(yr){
-  const rows=DATA[yr];
-  const tb=document.getElementById('tbody-'+yr);
-  if(!tb||tb.children.length>0)return;
-  tb.innerHTML=rows.map((r,i)=>{
+// Sort state per year
+const sortState = {};
+
+function buildTable(yr, sortKey, sortDir){
+  const rows = [...DATA[yr]];
+  sortKey = sortKey || sortState[yr]?.key || 'pts';
+  sortDir = sortDir || sortState[yr]?.dir || 'desc';
+  sortState[yr] = {key:sortKey, dir:sortDir};
+
+  // Sort rows
+  rows.sort((a,b)=>{
+    let av = a[sortKey], bv = b[sortKey];
+    if(sortKey==='strk'){
+      // Won beats Loss, then number
+      const aw = av.startsWith('Won') ? 1 : -1;
+      const bw = bv.startsWith('Won') ? 1 : -1;
+      if(aw!==bw) return bw-aw;
+      const an = parseInt(av.replace(/\D/g,''))||0;
+      const bn = parseInt(bv.replace(/\D/g,''))||0;
+      return sortDir==='desc'?bn-an:an-bn;
+    }
+    if(typeof av==='string') av=parseFloat(av)||0;
+    if(typeof bv==='string') bv=parseFloat(bv)||0;
+    return sortDir==='desc'?bv-av:av-bv;
+  });
+
+  // Column defs
+  const cols = [
+    {key:'w',   label:'W',   cls:'num sortable'},
+    {key:'l',   label:'L',   cls:'num sortable'},
+    {key:'ti',  label:'T',   cls:'num sortable'},
+    {key:'pct', label:'PCT', cls:'num sortable'},
+    {key:'avg', label:'AVG', cls:'num sortable'},
+    {key:'gb',  label:'GB',  cls:'num sortable'},
+    {key:'pf',  label:'PF',  cls:'num sortable'},
+    {key:'pa',  label:'PA',  cls:'num sortable'},
+    {key:'diff',label:'DIFF',cls:'num sortable'},
+    {key:'strk',label:'STRK',cls:'sortable'},
+    {key:'pts', label:'PTS', cls:'num sortable'},
+  ];
+
+  // Build header
+  const thead = document.querySelector(`#yr-${yr} thead tr`);
+  thead.innerHTML = `<th>#</th><th>Team</th>` + cols.map(col=>{
+    const isSorted = col.key===sortKey;
+    const arrow = isSorted ? (sortDir==='desc'?'↓':'↑') : '↕';
+    const nextDir = isSorted&&sortDir==='desc'?'asc':'desc';
+    return `<th class="${col.cls}${isSorted?' sorted-col':''}" onclick="buildTable(${yr},'${col.key}','${nextDir}')">${col.label}<span class="sarrow">${arrow}</span></th>`;
+  }).join('');
+
+  // Build body
+  const tb = document.getElementById('tbody-'+yr);
+  tb.innerHTML = rows.map((r,i)=>{
     const strk=r.strk.startsWith('Won')
       ?`<span class="streak-w">${r.strk}</span>`
       :`<span class="streak-l">${r.strk}</span>`;
@@ -421,7 +475,7 @@ function buildTable(yr){
     const pctBar=`<div class="pct-bar-wrap"><span class="pct-val">${r.pct.toFixed(3).replace(/^0\./,'.')}</span><div class="pct-bar"><div class="pct-bar-fill" style="width:${r.pct*100}%"></div></div></div>`;
     const rowCls=i<3?`rank-${i+1}`:'';
     return `<tr class="${rowCls}">
-      <td class="rank-cell">${medal(i)||'<span style="color:rgba(237,237,237,.25);font-size:12px">${i+1}</span>'}</td>
+      <td class="rank-cell">${medal(i)||i+1}</td>
       <td class="team-name">${r.t}</td>
       <td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num">${r.ti}</td>
       <td class="num">${pctBar}</td>
