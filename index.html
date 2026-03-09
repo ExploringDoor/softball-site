@@ -331,14 +331,17 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
   /* Mobile score rows */
   .sched-game-block{grid-template-columns:1fr auto;gap:0}
   .gb-mid,.gb-wl{display:none}
-  .gb-actions{flex-direction:row;flex-wrap:wrap;gap:6px;padding-left:10px;justify-content:flex-end;align-self:center}
-  .gb-btn{font-size:11px;padding:5px 12px;min-width:68px}
-  .gb-name{font-size:16px}
-  .gb-score{font-size:24px;width:36px}
-  .gb-rhe-val{font-size:24px;width:36px}
-  .gb-rhe-lbl{font-size:10px;width:36px}
-  .gb-logo{width:26px;height:26px;min-width:26px;max-width:26px;margin-right:6px}
-  .gb-rhe-hdr-row{padding-left:32px}
+  .gb-actions{flex-direction:row;flex-wrap:wrap;gap:4px;padding-left:8px;justify-content:flex-end;align-self:center}
+  .gb-btn{font-size:10px;padding:4px 10px;min-width:60px}
+  .gb-name{font-size:14px;overflow:hidden;white-space:nowrap}
+  .gb-name{font-size:0}
+  .gb-name::before{content:attr(data-short);font-size:16px;font-family:'Barlow Condensed',sans-serif;font-weight:900}
+  .gb-arrow{display:none}
+  .gb-score{font-size:22px;width:32px}
+  .gb-rhe-val{font-size:22px;width:32px}
+  .gb-rhe-lbl{font-size:10px;width:32px}
+  .gb-logo{width:24px;height:24px;min-width:24px;max-width:24px;margin-right:6px;font-size:6px}
+  .gb-rhe-hdr-row{padding-left:30px}
   .modal-inner{padding:18px}
   .modal-stat-row{grid-template-columns:1fr 1fr}
   .modal-hero{flex-direction:column}
@@ -346,12 +349,13 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 }
 @media(max-width:420px){
   .pgrid{grid-template-columns:1fr}
-  .gb-name{font-size:13px}
-  .gb-score{font-size:20px;width:30px}
-  .gb-rhe-val{font-size:20px;width:30px}
-  .gb-rhe-lbl{font-size:9px;width:30px}
-  .gb-btn{font-size:10px;padding:4px 8px;min-width:56px}
-  .gb-rhe-hdr-row{padding-left:28px}
+  .gb-name::before{font-size:14px}
+  .gb-score{font-size:18px;width:28px}
+  .gb-rhe-val{font-size:18px;width:28px}
+  .gb-rhe-lbl{font-size:9px;width:28px}
+  .gb-logo{width:20px;height:20px;min-width:20px;max-width:20px;margin-right:4px}
+  .gb-rhe-hdr-row{padding-left:24px}
+  .gb-btn{font-size:9px;padding:4px 6px;min-width:50px}
 }
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -1715,11 +1719,11 @@ function buildSchedule(){
         <div class="gb-left">
           <div class="gb-rhe-hdr-row"><span class="gb-rhe-lbl" style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
           <div class="gb-team-row">${logoA}
-            <span class="gb-name ${aw?'winner':'loser'}" style="color:${aw?ac:'rgba(239,239,239,.38)'}">${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <span class="gb-name ${aw?'winner':'loser'}" data-short="${teamShort(g.away)}" style="color:${aw?ac:'rgba(239,239,239,.38)'}">${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span>
             <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">0</span>
           </div>
           <div class="gb-team-row">${logoH}
-            <span class="gb-name ${!aw?'winner':'loser'}" style="color:${!aw?hc:'rgba(239,239,239,.38)'}">${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <span class="gb-name ${!aw?'winner':'loser'}" data-short="${teamShort(g.home)}" style="color:${!aw?hc:'rgba(239,239,239,.38)'}">${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
             <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">0</span>
           </div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px">FINAL</div>
@@ -1745,8 +1749,8 @@ function buildSchedule(){
     } else {
       return `<div class="sched-game-block${isNext?' next':''}" onclick="openBsm(${i})">
         <div class="gb-left">
-          <div class="gb-team-row">${logoA}<span class="gb-name winner" style="color:${ac}">${g.away}</span></div>
-          <div class="gb-team-row">${logoH}<span class="gb-name winner" style="color:${hc}">${g.home}</span></div>
+          <div class="gb-team-row">${logoA}<span class="gb-name winner" data-short="${teamShort(g.away)}" style="color:${ac}">${g.away}</span></div>
+          <div class="gb-team-row">${logoH}<span class="gb-name winner" data-short="${teamShort(g.home)}" style="color:${hc}">${g.home}</div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);padding-top:2px;padding-left:44px">${isNext?'▶ NEXT':'UPCOMING'}</div>
         </div>
         <div class="gb-mid"><div class="gb-field">${g.field}</div><div class="gb-time">${g.time} · ${g.date}</div></div>
