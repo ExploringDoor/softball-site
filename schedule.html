@@ -58,15 +58,15 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .sb-wrap{max-width:1060px;margin:0 auto;padding:0 32px 80px}
 
 /* Day header */
-.sb-day-head{padding:22px 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border2);margin-bottom:2px}
-.sb-week-head{padding:20px 0 4px;font-size:18px;font-weight:700;color:var(--white)}
+.sb-day-head{padding:14px 0 6px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border2);margin-bottom:2px}
+.sb-week-head{padding:16px 0 2px;font-size:18px;font-weight:700;color:var(--white)}
 
 /* ── GAME BLOCK ─────────────────────────────────── */
 .game-block{
   display:grid;
   grid-template-columns: 300px 1fr 260px 160px;
   align-items:center;
-  padding:16px 0;
+  padding:10px 0;
   border-bottom:1px solid var(--border);
   gap:0;
   cursor:pointer;
@@ -79,7 +79,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .gb-left{}
 
 /* Status row: FINAL + R H E labels */
-.gb-status-row{display:flex;align-items:center;margin-bottom:6px;padding-left:2px}
+.gb-status-row{display:flex;align-items:center;margin-bottom:3px;padding-left:2px}
 .gb-status{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);width:52px;flex-shrink:0}
 .gb-status.final{color:var(--muted2)}
 .gb-status.upcoming{color:var(--gold)}
@@ -87,7 +87,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .gb-rhe-lbl{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted2);width:38px;text-align:right}
 
 /* Team row */
-.gb-team-row{display:flex;align-items:center;padding:5px 0}
+.gb-team-row{display:flex;align-items:center;padding:3px 0}
 .gb-logo{width:30px;height:30px;border-radius:6px;border:1.5px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:9px;letter-spacing:.03em;margin-right:10px}
 .gb-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;flex:1;white-space:nowrap}
 .gb-name.winner{color:var(--white)}
@@ -102,12 +102,12 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 /* ── MIDDLE: field info ─────────────────────── */
 .gb-mid{padding:0 28px;border-left:1px solid var(--border)}
 .gb-field{font-weight:700;font-size:14px;color:var(--white);margin-bottom:3px}
-.gb-addr{font-size:12px;color:var(--muted2)}
+.gb-addr{display:none}
 .gb-time{font-size:14px;font-weight:700;color:var(--gold);margin-top:6px}
 
 /* ── WIN/LOSS column ─────────────────────── */
 .gb-wl{padding:0 20px;border-left:1px solid var(--border)}
-.gb-wl-row{display:flex;align-items:center;gap:10px;padding:5px 0}
+.gb-wl-row{display:flex;align-items:center;gap:8px;padding:3px 0}
 .gb-wl-role{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);width:32px;flex-shrink:0}
 .gb-wl-badge{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:8px}
 .gb-wl-name{font-size:12px;font-weight:600;color:rgba(239,239,239,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
@@ -450,6 +450,15 @@ const RECAPS = [
 ];
 
 // Stars of game lookup per-team
+// Pitcher season stats per team (fake but realistic)
+const PITCHER_STATS = {
+  GOLD: {wl:'7-3', era:'2.84'}, SA:   {wl:'8-2', era:'2.11'},
+  KI:   {wl:'6-4', era:'3.22'}, BOB:  {wl:'5-5', era:'3.98'},
+  TBIR: {wl:'7-3', era:'2.65'}, AJ:   {wl:'4-6', era:'4.12'},
+  TSMC: {wl:'3-7', era:'4.55'}, BSMC: {wl:'2-8', era:'5.10'},
+};
+function pStats(team){ return PITCHER_STATS[team]||{wl:'—',era:'—'}; }
+
 const STAR_NAMES = {
   GOLD:['Josh Weinberg','Mike Goldstein','Aaron Rosen','David Levy'],
   SA:['Carlos Rivera','Tony DeLuca','Pete DiNunzio','Ray Kowalski'],
@@ -555,18 +564,17 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
       </div>
       <div class="gb-mid">
         <div class="gb-field">${field}</div>
-        <div class="gb-addr">${addr}</div>
       </div>
       <div class="gb-wl">
         <div class="gb-wl-row">
           <span class="gb-wl-role">WIN</span>
           <div class="gb-wl-badge" style="background:${wc}22;color:${wc};border:1px solid ${wc}44">${wTeam}</div>
-          <div><div class="gb-wl-name">${wStar}</div><div class="gb-wl-stat">${wTeam}</div></div>
+          <div><div class="gb-wl-name">${wStar}</div><div class="gb-wl-stat">${pStats(wTeam).wl} · ${pStats(wTeam).era} ERA</div></div>
         </div>
         <div class="gb-wl-row">
           <span class="gb-wl-role">LOSS</span>
           <div class="gb-wl-badge" style="background:${lc}22;color:${lc};border:1px solid ${lc}44">${lTeam}</div>
-          <div><div class="gb-wl-name">${lStar}</div><div class="gb-wl-stat">${lTeam}</div></div>
+          <div><div class="gb-wl-name">${lStar}</div><div class="gb-wl-stat">${pStats(lTeam).wl} · ${pStats(lTeam).era} ERA</div></div>
         </div>
       </div>
       <div class="gb-actions">
@@ -591,7 +599,6 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
       </div>
       <div class="gb-mid">
         <div class="gb-field">${field}</div>
-        <div class="gb-addr">${addr}</div>
         <div class="gb-time">${time}</div>
       </div>
       <div class="gb-wl" style="display:flex;align-items:center;justify-content:center">
