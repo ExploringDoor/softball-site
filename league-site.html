@@ -1190,6 +1190,8 @@ function slg(v){return v.toFixed(3).replace(/^0\./,'.')}
 let currentTeamId=null, currentTeamTab='roster';
 
 function goPage(name,extra,skipHistory){
+  // Skip intro if navigating away from home
+  if(name!=='home') document.body.classList.add('intro-done');
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('show'));
   document.getElementById('pg-'+name).classList.add('show');
   document.querySelectorAll('[id^="nl-"]').forEach(el=>el.classList.remove('active'));
@@ -1352,11 +1354,16 @@ function shareText(title, idx){
 (function(){
   var intro = document.getElementById('intro-screen');
   if(!intro) return;
-  // Remove after animation (3.2s) + small buffer
+  // If navigating directly to a sub-page via hash, skip intro instantly
+  var hash = window.location.hash.replace('#','').split('/')[0];
+  var subPages = ['players','team','history','leaders'];
+  if(hash && subPages.includes(hash)){
+    document.body.classList.add('intro-done');
+    return;
+  }
   setTimeout(function(){
     document.body.classList.add('intro-done');
   }, 1800);
-  // Also allow skip on any click/tap
   intro.addEventListener('click', function(){
     document.body.classList.add('intro-done');
   });
