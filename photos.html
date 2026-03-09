@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photos — DVSL Softball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#070709;--dark:#0d0d11;--card:#141418;--card2:#1a1a1f;--border:rgba(255,255,255,0.08);--gold:#F5C842;--gold-dim:rgba(245,200,66,0.1);--white:#EDEDED;--muted:rgba(237,237,237,0.45);--red:#E03C31;--green:#22c55e;--blue:#60a5fa}
+body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;line-height:1.6;overflow-x:hidden}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 40px;height:62px;background:rgba(7,7,9,.92);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.nav-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);text-decoration:none;display:flex;align-items:center;gap:10px}
+.nav-logo img{height:32px;width:auto;opacity:.85}
+.nav-links{display:flex;gap:4px;list-style:none}
+.nav-links a{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-decoration:none;padding:7px 13px;border-radius:6px;transition:color .2s}
+.nav-links a:hover{color:var(--white)}
+.nav-links a.active{color:var(--gold)}
+.hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;background:none;border:none;padding:4px}
+.hamburger span{display:block;width:22px;height:2px;background:var(--white);border-radius:2px;transition:all .3s}
+.hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hamburger.open span:nth-child(2){opacity:0}
+.hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+.mob-menu{display:none;position:fixed;top:62px;left:0;right:0;z-index:99;background:rgba(7,7,9,.97);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);flex-direction:column;padding:20px}
+.mob-menu.open{display:flex}
+.mob-menu a,.mob-menu span{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:var(--white);text-decoration:none;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer}
+.mob-menu a:last-child,.mob-menu span:last-child{border-bottom:none}
+
+/* HERO */
+.hero{padding:62px 0 0;position:relative;overflow:hidden;min-height:420px;display:flex;flex-direction:column;justify-content:flex-end}
+.hero-bg{position:absolute;inset:0;background:#070709}
+.hero-logo-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.hero-logo-center img{width:min(500px,75vw);height:auto;opacity:.08;filter:saturate(0.4);mix-blend-mode:luminosity;animation:logoPulse 8s ease-in-out infinite}
+@keyframes logoPulse{0%,100%{opacity:.08;transform:scale(1)}50%{opacity:.12;transform:scale(1.015)}}
+.hero-vignette{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(7,7,9,0.3) 0%,rgba(7,7,9,0) 40%,rgba(7,7,9,0) 60%,rgba(7,7,9,1) 100%)}
+.hero-content{position:relative;z-index:2;padding:0 48px 52px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.hero-text{}
+.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;background:var(--gold-dim);border:1px solid rgba(245,200,66,.3);border-radius:100px;padding:5px 18px;font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;color:var(--gold);margin-bottom:16px}
+.hero-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(56px,9vw,104px);text-transform:uppercase;line-height:.9;letter-spacing:-.01em}
+.hero-title span{color:var(--gold)}
+.hero-sub{font-size:15px;color:var(--muted);margin-top:14px;max-width:500px}
+.hero-stats{display:flex;gap:28px;flex-shrink:0}
+.hstat{text-align:center}
+.hstat-val{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:36px;color:var(--gold);line-height:1}
+.hstat-lbl{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+
+/* FILTER BAR */
+.filter-bar{display:flex;align-items:center;gap:8px;padding:16px 48px;background:var(--dark);border-bottom:1px solid var(--border);position:sticky;top:62px;z-index:50;backdrop-filter:blur(12px);overflow-x:auto;scrollbar-width:none}
+.filter-bar::-webkit-scrollbar{display:none}
+.f-btn{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.07em;text-transform:uppercase;background:var(--card);border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:7px 16px;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.f-btn:hover,.f-btn.active{background:rgba(245,200,66,.12);border-color:rgba(245,200,66,.4);color:var(--gold)}
+
+/* SECTION HEADER */
+.section-wrap{padding:52px 48px 0}
+.section-header{display:flex;align-items:baseline;gap:16px;margin-bottom:28px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.section-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;text-transform:uppercase}
+.section-badge{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.section-link{margin-left:auto;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);text-decoration:none;opacity:.8}
+.section-link:hover{opacity:1}
+
+/* FEATURED STRIP — wide hero photos */
+.featured-strip{display:grid;grid-template-columns:2fr 1fr 1fr;gap:4px;margin-bottom:4px}
+.feat-main{grid-row:span 2;position:relative;overflow:hidden;cursor:pointer;aspect-ratio:4/3}
+.feat-sm{position:relative;overflow:hidden;cursor:pointer;aspect-ratio:16/9}
+.feat-img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
+.feat-main:hover .feat-img,.feat-sm:hover .feat-img{transform:scale(1.04)}
+.feat-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(7,7,9,.85) 0%,transparent 60%);pointer-events:none}
+.feat-caption{position:absolute;bottom:16px;left:16px;right:16px;z-index:2}
+.feat-caption-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;line-height:1.1}
+.feat-caption-sub{font-size:11px;color:rgba(237,237,237,.65);margin-top:4px}
+.feat-placeholder{width:100%;height:100%;background:var(--card2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:1px solid var(--border)}
+.feat-placeholder-icon{font-size:36px;opacity:.3}
+.feat-placeholder-text{font-size:12px;color:var(--muted);text-align:center;padding:0 16px}
+
+/* PHOTO GRID */
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:4px;padding-bottom:4px}
+.photo-card{position:relative;overflow:hidden;cursor:pointer;aspect-ratio:4/3;background:var(--card2)}
+.photo-card img{width:100%;height:100%;object-fit:cover;transition:transform .4s ease}
+.photo-card:hover img{transform:scale(1.06)}
+.photo-card-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(7,7,9,.8) 0%,transparent 55%);opacity:0;transition:opacity .3s}
+.photo-card:hover .photo-card-overlay{opacity:1}
+.photo-card-info{position:absolute;bottom:0;left:0;right:0;padding:14px 16px;transform:translateY(8px);opacity:0;transition:all .3s}
+.photo-card:hover .photo-card-info{transform:translateY(0);opacity:1}
+.photo-card-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase}
+.photo-card-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.upload-card{background:var(--card);border:1px dashed rgba(245,200,66,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .2s;aspect-ratio:4/3}
+.upload-card:hover{border-color:rgba(245,200,66,.5);background:rgba(245,200,66,.04)}
+.upload-icon{font-size:32px;opacity:.4}
+.upload-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;color:var(--muted)}
+
+/* LOGO SHOWCASE */
+.logo-showcase{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:4px 0}
+.logo-card{position:relative;overflow:hidden;background:var(--card2);display:flex;align-items:center;justify-content:center;padding:60px 40px}
+.logo-card img{max-width:100%;max-height:340px;object-fit:contain;transition:transform .5s ease;filter:drop-shadow(0 20px 60px rgba(0,0,0,.6))}
+.logo-card:hover img{transform:scale(1.03)}
+.logo-card-label{position:absolute;bottom:20px;left:20px;right:20px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;text-transform:uppercase;color:var(--muted);letter-spacing:.1em}
+
+/* GALLERY SECTION — phillyburbs link */
+.gallery-link-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px 32px;display:flex;align-items:center;justify-content:space-between;gap:24px;margin:0 48px 52px}
+.glc-text{}
+.glc-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;margin-bottom:6px}
+.glc-sub{font-size:13px;color:var(--muted);max-width:480px;line-height:1.6}
+.glc-btn{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;background:var(--gold);color:#000;border:none;border-radius:6px;padding:12px 24px;cursor:pointer;text-decoration:none;white-space:nowrap;transition:opacity .2s;display:inline-block}
+.glc-btn:hover{opacity:.85}
+
+/* LIGHTBOX */
+.lightbox{position:fixed;inset:0;z-index:999;background:rgba(7,7,9,.96);display:none;align-items:center;justify-content:center;padding:20px}
+.lightbox.open{display:flex}
+.lb-img-wrap{position:relative;max-width:90vw;max-height:90vh;display:flex;align-items:center;justify-content:center}
+.lb-img{max-width:90vw;max-height:88vh;object-fit:contain;border-radius:4px}
+.lb-close{position:fixed;top:20px;right:24px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:var(--white);transition:background .2s}
+.lb-close:hover{background:rgba(255,255,255,.2)}
+.lb-caption{position:fixed;bottom:0;left:0;right:0;padding:16px 24px;text-align:center;background:linear-gradient(transparent,rgba(7,7,9,.9));font-size:13px;color:var(--muted)}
+
+/* FOOTER */
+footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-top:52px}
+.ft-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+.ft-links{display:flex;gap:0;flex-wrap:wrap}
+.ft-links a{font-size:12px;color:var(--muted);text-decoration:none;padding:2px 14px;border-right:1px solid var(--border);transition:color .15s}
+.ft-links a:last-child{border-right:none}
+.ft-links a:hover{color:var(--white)}
+.ft-copy{font-size:12px;color:var(--muted)}
+
+@media(max-width:900px){
+  .featured-strip{grid-template-columns:1fr 1fr;gap:3px}
+  .feat-main{grid-row:span 1;grid-column:1/-1}
+  .hero-stats{display:none}
+  .logo-showcase{grid-template-columns:1fr}
+  .gallery-link-card{flex-direction:column;margin:0 20px 40px}
+  .section-wrap{padding:36px 20px 0}
+  .filter-bar{padding:12px 20px}
+  footer{padding:32px 20px}
+}
+@media(max-width:600px){
+  nav{padding:0 18px}
+  .nav-links{display:none}
+  .hamburger{display:flex}
+  .hero-content{padding:0 20px 36px}
+  .photo-grid{grid-template-columns:repeat(2,1fr)}
+}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:rgba(245,200,66,.3);border-radius:2px}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="league-site.html" class="nav-logo">
+    <img src="dvsl-logo-dark.png" alt="DVSL">
+    DVSL
+  </a>
+  <ul class="nav-links">
+    <li><a href="league-site.html">Home</a></li>
+    <li><a href="league-site.html">Players</a></li>
+    <li><a href="schedule.html">Schedule</a></li>
+    <li><a href="playoffs.html">Playoffs</a></li>
+    <li><a href="standings-history.html">Standings</a></li>
+    <li><a href="standings-history.html">Standings</a>
+  <a href="rules.html">Rules &amp; Fields</a></li>
+    <li><a href="photos.html" class="active">Photos</a></li>
+  </ul>
+  <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
+</nav>
+<div class="mob-menu" id="mobMenu">
+  <a href="league-site.html">Home</a>
+  <a href="schedule.html">Schedule</a>
+  <a href="playoffs.html">Playoffs</a>
+  <a href="rules.html">Rules &amp; Fields</a>
+  <a href="photos.html">Photos</a>
+</div>
+
+<!-- HERO with logo watermark -->
+<div class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-logo-center">
+    <img src="dvsl-logo-dark.png" alt="">
+  </div>
+  <div class="hero-vignette"></div>
+  <div class="hero-content">
+    <div class="hero-text">
+      <div class="hero-eyebrow">📸 League Gallery</div>
+      <h1 class="hero-title">DVSL<br><span>Photos</span></h1>
+      <p class="hero-sub">Game action, championship moments, and field photography from across the Delaware Valley Synagogue League.</p>
+    </div>
+    <div class="hero-stats">
+      <div class="hstat"><div class="hstat-val">8</div><div class="hstat-lbl">Fields</div></div>
+      <div class="hstat"><div class="hstat-val">18+</div><div class="hstat-lbl">Teams</div></div>
+      <div class="hstat"><div class="hstat-val">2025</div><div class="hstat-lbl">Season</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- FILTER BAR -->
+<div class="filter-bar" id="filterBar">
+  <button class="f-btn active" onclick="filterPhotos('all',this)">All</button>
+  <button class="f-btn" onclick="filterPhotos('action',this)">Game Action</button>
+  <button class="f-btn" onclick="filterPhotos('champs',this)">Champions</button>
+  <button class="f-btn" onclick="filterPhotos('logos',this)">League Identity</button>
+  <button class="f-btn" onclick="filterPhotos('mondauk',this)">Mondauk</button>
+  <button class="f-btn" onclick="filterPhotos('southampton',this)">Southampton</button>
+  <button class="f-btn" onclick="filterPhotos('horsham',this)">Horsham</button>
+  <button class="f-btn" onclick="filterPhotos('sunnybrook',this)">Sunnybrook</button>
+  <button class="f-btn" onclick="filterPhotos('ogontz',this)">Ogontz</button>
+</div>
+
+<!-- ═══ FEATURED — 2017 GAME ACTION ═══ -->
+<div class="section-wrap" data-cat="action">
+  <div class="section-header">
+    <div class="section-title">2017 Season — <span style="color:var(--gold)">Game Action</span></div>
+    <div class="section-badge">Phillyburbs.com · Oct 2017</div>
+    <a class="section-link" href="https://www.phillyburbs.com/picture-gallery/lifestyle/2017/10/27/delaware-valley-synagogue-league-photos/563299007/" target="_blank">View Full Gallery ↗</a>
+  </div>
+
+  <!-- Featured 3-up strip using placeholder frames (images from gallery can't be hotlinked) -->
+  <div class="featured-strip">
+    <div class="feat-main" onclick="openLb('','2017 DVSL Game Action · Phillyburbs Gallery')">
+      <div class="feat-placeholder">
+        <div class="feat-placeholder-icon">⚾</div>
+        <div class="feat-placeholder-text" style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:rgba(237,237,237,.5)">2017 Season<br>Game Photos</div>
+        <a href="https://www.phillyburbs.com/picture-gallery/lifestyle/2017/10/27/delaware-valley-synagogue-league-photos/563299007/" target="_blank" style="margin-top:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;background:var(--gold);color:#000;padding:8px 20px;border-radius:4px;text-decoration:none;display:inline-block">View on Phillyburbs ↗</a>
+      </div>
+    </div>
+    <div class="feat-sm" onclick="openLb('','DVSL Playoff Action 2017')">
+      <div class="feat-placeholder" style="background:rgba(245,200,66,.04)">
+        <div style="font-size:28px;opacity:.3">🏆</div>
+        <div style="font-size:11px;color:var(--muted);text-align:center">Playoff Series<br>2017</div>
+      </div>
+    </div>
+    <div class="feat-sm" onclick="openLb('','DVSL Championship Game 2017')">
+      <div class="feat-placeholder" style="background:rgba(96,165,250,.04)">
+        <div style="font-size:28px;opacity:.3">🥇</div>
+        <div style="font-size:11px;color:var(--muted);text-align:center">Championship<br>Day</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GALLERY LINK CARD -->
+<div class="gallery-link-card" style="margin-top:16px" data-cat="action">
+  <div class="glc-text">
+    <div class="glc-title">📰 Full 2017 Season Gallery — Phillyburbs.com</div>
+    <div class="glc-sub">The complete 2017 DVSL photo gallery was published by Phillyburbs.com covering regular season and playoff games across all eight fields. Click below to view the full gallery with all game action photos.</div>
+  </div>
+  <a class="glc-btn" href="https://www.phillyburbs.com/picture-gallery/lifestyle/2017/10/27/delaware-valley-synagogue-league-photos/563299007/" target="_blank">Open Gallery ↗</a>
+</div>
+
+<!-- ═══ CHAMPIONS ═══ -->
+<div class="section-wrap" data-cat="champs">
+  <div class="section-header">
+    <div class="section-title">Championship <span style="color:var(--gold)">Photos</span></div>
+    <div class="section-badge">Gold &amp; Silver Cup · 2019 – 2025</div>
+  </div>
+  <div class="photo-grid">
+    <div class="photo-card" data-cat="champs" onclick="openLb('ki-silver-cup-2025.png','KI Softball Club — 2025 Silver Cup Champions')">
+      <img src="ki-silver-cup-2025.png" alt="KI Silver Cup 2025" onerror="this.parentElement.querySelector('.photo-card-overlay').style.opacity=1;this.style.display='none'">
+      <div class="photo-card-overlay"></div>
+      <div class="photo-card-info">
+        <div class="photo-card-title">KI — 2025 Silver Cup</div>
+        <div class="photo-card-sub">Keneseth Israel · Silver Cup Champions</div>
+      </div>
+    </div>
+    <div class="photo-card" data-cat="champs" onclick="openLb('champ-photo.png','Beth Am — 2019 Gold Cup Champions')">
+      <img src="champ-photo.png" alt="Beth Am 2019 Gold Cup" onerror="this.style.display='none'">
+      <div class="photo-card-overlay"></div>
+      <div class="photo-card-info">
+        <div class="photo-card-title">Beth Am — 2019 Gold Cup</div>
+        <div class="photo-card-sub">Gold Cup Champions · 2019 Season</div>
+      </div>
+    </div>
+    <div class="upload-card" data-cat="champs">
+      <div class="upload-icon">📷</div>
+      <div class="upload-label">Add Champion Photo</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Drop or share image</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LEAGUE IDENTITY / LOGOS ═══ -->
+<div class="section-wrap" data-cat="logos">
+  <div class="section-header">
+    <div class="section-title">League <span style="color:var(--gold)">Identity</span></div>
+    <div class="section-badge">Official DVSL Branding · 2025</div>
+  </div>
+  <div class="logo-showcase">
+    <div class="logo-card" onclick="openLb('dvsl-logo-dark.png','DVSL Official Logo — Dark Edition')">
+      <img src="dvsl-logo-dark.png" alt="DVSL Logo Dark">
+      <div class="logo-card-label">Official Logo — Dark Edition</div>
+    </div>
+    <div class="logo-card" style="background:#c8d0d8" onclick="openLb('dvsl-logo-glass.png','DVSL Official Logo — Glass Trophy Edition')">
+      <img src="dvsl-logo-glass.png" alt="DVSL Logo Glass">
+      <div class="logo-card-label" style="color:rgba(0,0,0,.5)">Glass Trophy Edition</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ BY FIELD ═══ -->
+<div class="section-wrap" data-cat="mondauk">
+  <div class="section-header">
+    <div class="section-title">Mondauk <span style="color:var(--gold)">Common Park</span></div>
+    <div class="section-badge">1452 Dillon Road, Ambler, PA · Fields 4 &amp; 5</div>
+  </div>
+  <div class="photo-grid">
+    <div class="upload-card"><div class="upload-icon">📷</div><div class="upload-label">Add Mondauk 4 Photos</div></div>
+    <div class="upload-card"><div class="upload-icon">📷</div><div class="upload-label">Add Mondauk 5 Photos</div></div>
+  </div>
+</div>
+
+<div class="section-wrap" data-cat="southampton">
+  <div class="section-header">
+    <div class="section-title">Schaefer Park — <span style="color:var(--gold)">Southampton</span></div>
+    <div class="section-badge">444 Gravel Hill Road, Southampton, PA</div>
+  </div>
+  <div class="photo-grid">
+    <div class="upload-card"><div class="upload-icon">📷</div><div class="upload-label">Add Southampton Photos</div></div>
+  </div>
+</div>
+
+<div class="section-wrap" data-cat="horsham">
+  <div class="section-header">
+    <div class="section-title">Horsham <span style="color:var(--gold)">Fields</span></div>
+    <div class="section-badge">Carpenter Park · Lukens Field No. 2</div>
+  </div>
+  <div class="photo-grid">
+    <div class="upload-card"><div class="upload-icon">📷</div><div class="upload-label">Add Horsham Photos</div></div>
+    <div class="upload-card"><div class="upload-icon">📷</div><div class="upload-label">Add Lukens Field Photos</div></div>
+  </div>
+</div>
+
+<div class="section-wrap" data-cat="sunnybrook">
+  <div class="section-header">
+    <div class="section-title">Sunnybrook — <span style="color:var(--gold)">Lansdale</span></div>
+    <div class="section-badge">2532 Long Meadow Road, Lansdale, PA</div>
+  </div>
+  <div class="photo-grid">
+    <div class="upload-card"><div class="upload-icon">📷</div><div class="upload-label">Add Sunnybrook Photos</div></div>
+  </div>
+</div>
+
+<div class="section-wrap" data-cat="ogontz">
+  <div class="section-header">
+    <div class="section-title">Ogontz Field — <span style="color:var(--gold)">Elkins Park</span></div>
+    <div class="section-badge">2040 High School Road, Elkins Park, PA</div>
+  </div>
+  <div class="photo-grid">
+    <div class="upload-card"><div class="upload-icon">📷</div><div class="upload-label">Add Ogontz Photos</div></div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="closeLb()">
+  <div class="lb-close" onclick="closeLb()">✕</div>
+  <div class="lb-img-wrap" onclick="event.stopPropagation()">
+    <img class="lb-img" id="lbImg" src="" alt="">
+  </div>
+  <div class="lb-caption" id="lbCap"></div>
+</div>
+
+<footer>
+  <div class="ft-logo">⬡ DVSL</div>
+  <div class="ft-links">
+    <a href="league-site.html">Home</a>
+    <a href="schedule.html">Schedule</a>
+    <a href="playoffs.html">Playoffs</a>
+    <a href="rules.html">Rules &amp; Fields</a>
+    <a href="photos.html">Photos</a>
+  </div>
+  <div class="ft-copy">© 2025 DVSL · Delaware Valley Synagogue League</div>
+</footer>
+
+<script>
+const hbg=document.getElementById('hbg');
+const mob=document.getElementById('mobMenu');
+hbg.addEventListener('click',()=>{hbg.classList.toggle('open');mob.classList.toggle('open')});
+
+function filterPhotos(cat,btn){
+  document.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('[data-cat]').forEach(el=>{
+    if(cat==='all'||el.dataset.cat===cat){el.style.display=''}
+    else{el.style.display='none'}
+  });
+}
+
+function openLb(src,cap){
+  if(!src){return}
+  document.getElementById('lbImg').src=src;
+  document.getElementById('lbCap').textContent=cap||'';
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLb(){document.getElementById('lightbox').classList.remove('open')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLb()});
+
+// Fade in sections
+const obs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting){e.target.style.opacity='1';e.target.style.transform='translateY(0)';obs.unobserve(e.target)}});
+},{threshold:0.05});
+document.querySelectorAll('.section-wrap,.gallery-link-card,.logo-showcase').forEach(el=>{
+  el.style.cssText='opacity:0;transform:translateY(22px);transition:opacity .6s ease,transform .6s ease';
+  obs.observe(el);
+});
+</script>
+</body>
+</html>
