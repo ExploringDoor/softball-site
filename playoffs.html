@@ -358,7 +358,7 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
   </div>
 
   <!-- GOLD BRACKET -->
-  <div class="bracket-canvas active" id="bracket-gold">
+  <div class="bracket-canvas active" id="bracket-gold" style="display:block">
     <div class="bracket-scroll">
 
       <!-- WINNER'S BRACKET LABEL -->
@@ -543,7 +543,7 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
   </div>
 
   <!-- SILVER BRACKET (placeholder) -->
-    <div class="bracket-canvas" id="bracket-silver">
+    <div class="bracket-canvas" id="bracket-silver" style="display:none">
     <div class="bracket-scroll">
 
       <div style="padding:20px 0 4px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#60a5fa;">Silver Cup · 2026 Playoffs</div>
@@ -758,20 +758,27 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
 
 <script>
   // Hamburger
-  const hb = document.getElementById('hamburger');
-  const mm = document.getElementById('mobileMenu');
-  hb.addEventListener('click', () => { hb.classList.toggle('open'); mm.classList.toggle('open'); });
-  mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); }));
+  const hb = document.getElementById('hbg');
+  const mm = document.getElementById('mobMenu');
+  if(hb) hb.addEventListener('click', () => { hb.classList.toggle('open'); mm.classList.toggle('open'); });
+  if(mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); }));
 
-  // Bracket tabs
-  document.querySelectorAll('.b-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.b-tab').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.bracket-canvas').forEach(c => c.classList.remove('active'));
+  // Bracket tabs - bulletproof version
+  document.querySelectorAll('.b-tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.b-tab').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.bracket-canvas').forEach(function(cv){
+        cv.classList.remove('active');
+        cv.style.display='none';
+      });
       btn.classList.add('active');
-      document.getElementById('bracket-' + btn.dataset.bracket).classList.add('active');
+      var target = document.getElementById('bracket-' + btn.dataset.bracket);
+      if(target){ target.classList.add('active'); target.style.display='block'; }
     });
   });
+  // Init: make sure gold is visible
+  var goldBracket = document.getElementById('bracket-gold');
+  if(goldBracket){ goldBracket.style.display='block'; }
 
   // Fade in
   const obs = new IntersectionObserver(entries => {

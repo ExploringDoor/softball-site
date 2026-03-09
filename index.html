@@ -717,7 +717,6 @@ body:not(.intro-done){overflow:hidden}
     <div class="ft-links">
       <span onclick="goPage('home')">Home</span>
       <span onclick="goPage('players')">Roster</span>
-      <span onclick="goPage('recaps')">Recaps</span>
       <span onclick="goPage('leaders')">Leaders</span>
       <a href="schedule.html">Scores</a>
       <a href="playoffs.html">Bracket</a>
@@ -750,7 +749,6 @@ body:not(.intro-done){overflow:hidden}
     <div class="ft-links">
       <span onclick="goPage('home')">Home</span>
       <span onclick="goPage('players')">Roster</span>
-      <span onclick="goPage('recaps')">Recaps</span>
       <span onclick="goPage('leaders')">Leaders</span>
       <a href="schedule.html">Scores</a>
       <a href="playoffs.html">Bracket</a>
@@ -778,7 +776,6 @@ body:not(.intro-done){overflow:hidden}
     <div class="ft-links">
       <span onclick="goPage('home')">Home</span>
       <span onclick="goPage('players')">Roster</span>
-      <span onclick="goPage('recaps')">Recaps</span>
       <span onclick="goPage('leaders')">Leaders</span>
       <a href="schedule.html">Scores</a>
       <a href="playoffs.html">Bracket</a>
@@ -811,7 +808,6 @@ body:not(.intro-done){overflow:hidden}
     <div class="ft-links">
       <span onclick="goPage('home')">Home</span>
       <span onclick="goPage('players')">Roster</span>
-      <span onclick="goPage('recaps')">Recaps</span>
       <span onclick="goPage('leaders')">Leaders</span>
       <a href="schedule.html">Scores</a>
       <a href="playoffs.html">Bracket</a>
@@ -838,7 +834,6 @@ body:not(.intro-done){overflow:hidden}
     <div class="ft-links">
       <span onclick="goPage('home')">Home</span>
       <span onclick="goPage('players')">Roster</span>
-      <span onclick="goPage('recaps')">Recaps</span>
       <span onclick="goPage('leaders')">Leaders</span>
       <a href="schedule.html">Scores</a>
       <a href="playoffs.html">Bracket</a>
@@ -866,7 +861,6 @@ body:not(.intro-done){overflow:hidden}
     <div class="ft-links">
       <span onclick="goPage('home')">Home</span>
       <span onclick="goPage('players')">Roster</span>
-      <span onclick="goPage('recaps')">Recaps</span>
       <span onclick="goPage('leaders')">Leaders</span>
       <a href="schedule.html">Scores</a>
       <a href="playoffs.html">Bracket</a>
@@ -1358,47 +1352,45 @@ function buildLeadersPage(statKey, dir){
 }
 
 
+
 // ════ RECAP MODAL ════
 function openRecap(gameIdx){
   const g = SCHEDULE_PREVIEW[gameIdx] || {};
-  // Pull recap if it exists from RECAPS data, else show placeholder
-  const recap = RECAPS ? RECAPS.find(r=>r.gameIdx===gameIdx) : null;
   const atTeam = getTeamByShort(g.away||'');
   const htTeam = getTeamByShort(g.home||'');
   const ac = atTeam?.color||'var(--gold)';
   const hc = htTeam?.color||'var(--gold)';
-  document.getElementById('bsmContent').innerHTML = `
-    <div class="bsm-header">
-      <div class="bsm-teams">
-        <div class="bsm-team"><div class="bsm-abbr" style="color:${ac}">${g.away||'—'}</div><div class="bsm-label">Away</div></div>
-        <div class="bsm-score-center">
-          <div class="bsm-score"><span style="color:${(g.as||0)>(g.hs||0)?ac:'var(--muted)'}">
-            ${g.as||'—'}</span><span class="bsm-dash">–</span><span style="color:${(g.hs||0)>(g.as||0)?hc:'var(--muted)'}">
-            ${g.hs||'—'}</span></div>
-          <span class="bsm-badge badge-w">Final</span>
-        </div>
-        <div class="bsm-team"><div class="bsm-abbr" style="color:${hc}">${g.home||'—'}</div><div class="bsm-label">Home</div></div>
-      </div>
-      <div class="bsm-meta"><span>📅 ${g.date||''}</span><span>📍 ${g.field||''}</span></div>
-    </div>
-    <div class="bsm-section">
-      <div class="bsm-section-title">Game Recap</div>
-      ${recap ? `<div style="font-size:14px;line-height:1.7;color:rgba(239,239,239,.85)">${recap.text}</div>`
-              : `<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">
-                  Recap coming soon — check back after the game.<br>
-                  <span style="font-size:11px;opacity:.6">Recaps are posted same night by the league.</span>
-                </div>`}
-    </div>`;
+  const recap = RECAPS.find(r=>{
+    if(typeof r.gameIdx!=='undefined' && r.gameIdx===gameIdx) return true;
+    if(r.away===g.away && r.home===g.home) return true;
+    return false;
+  }) || RECAPS[gameIdx % RECAPS.length];
+  const starsHtml = recap && recap.stars
+    ? `<div style="margin-top:18px;border-top:1px solid rgba(255,255,255,.07);padding-top:14px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(239,239,239,.4);margin-bottom:10px">Stars of the Game</div>
+        ${recap.stars.map(s=>'<div style="font-size:13px;color:rgba(239,239,239,.75);padding:4px 0;display:flex;align-items:center;gap:8px"><span style="color:var(--gold)">★</span>'+s+'</div>').join('')}
+      </div>` : '';
+  document.getElementById('bsmContent').innerHTML =
+    '<div class="bsm-header">' +
+    '<div class="bsm-teams">' +
+    '<div class="bsm-team"><div class="bsm-abbr" style="color:'+ac+'">'+(g.away||'—')+'</div><div class="bsm-label">Away</div></div>' +
+    '<div class="bsm-score-center">' +
+    '<div class="bsm-score"><span style="color:'+((g.as||0)>=(g.hs||0)?ac:'rgba(239,239,239,.35)')+'">'+((g.as!=null)?g.as:'—')+'</span>' +
+    '<span class="bsm-dash">–</span>' +
+    '<span style="color:'+((g.hs||0)>(g.as||0)?hc:'rgba(239,239,239,.35)')+'">'+((g.hs!=null)?g.hs:'—')+'</span></div>' +
+    '<span class="bsm-badge badge-w">Final</span></div>' +
+    '<div class="bsm-team"><div class="bsm-abbr" style="color:'+hc+'">'+(g.home||'—')+'</div><div class="bsm-label">Home</div></div>' +
+    '</div>' +
+    '<div class="bsm-meta"><span>📅 '+(recap&&recap.date?recap.date:g.date||'')+'</span><span>📍 '+(recap&&recap.field?recap.field:g.field||'')+'</span></div>' +
+    '</div>' +
+    '<div class="bsm-section">' +
+    '<div class="bsm-section-title">Game Recap</div>' +
+    '<div style="font-size:14px;line-height:1.8;color:rgba(239,239,239,.82)">'+(recap&&recap.text?recap.text:'Recap coming soon — check back after the game.')+'</div>' +
+    starsHtml +
+    '</div>';
   document.getElementById('bsmOverlay').classList.add('open');
   document.body.style.overflow='hidden';
 }
-
-// Sample recaps data (replace with real game data)
-const RECAPS = [
-  {gameIdx:0, text:'<strong>Shir Ami 9, Goldstein's 5</strong> — Carlos Rivera went 3-for-4 with two home runs and five RBI as Shir Ami dominated Goldstein's in a pivotal divisional matchup at Mondauk. Rivera's two-run blast in the third inning broke a 2-2 tie and the team never looked back. Tony DeLuca added two hits and drove in two more. Goldstein's Mike Goldstein homered in the sixth to make it close, but SA's bullpen held on for the win.'},
-  {gameIdx:1, text:'<strong>KI 8, Beth Or Blue 5</strong> — Keneseth Israel rallied from three runs down to take a crucial win on Tuesday night. Brian Kim sparked the comeback with a three-run home run in the fifth, his sixth of the season. Danny Ito added two hits and a stolen base. Beth Or Blue's Bobby Marchetti was solid early but tired late, and KI took full advantage with a four-run seventh inning.'},
-  {gameIdx:2, text:'<strong>TBIR 7, AJ 4</strong> — Tom Birnbaum put the Royals on his back with a two-homer performance at South Field. TBIR jumped out to a 5-0 lead after three innings and withstood a late AJ rally. Al Jacobs hit a solo shot for AJ in the seventh but it wasn't enough. TBIR improves to 7-5 on the season.'},
-];
 
 // ════ BOX SCORE MODAL ════
 function openBsm(gameIdx){
