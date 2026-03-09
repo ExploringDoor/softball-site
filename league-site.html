@@ -64,11 +64,10 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 /* ── HERO ── */
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 48px 80px;position:relative;overflow:hidden;gap:0}
 /* Full-bleed background image */
-.hero-img-bg{position:absolute;inset:0;background:url('dvsl-hero2.png') center center/cover no-repeat;background-color:#06080f;z-index:0}
+#pg-home .hero-img-bg{position:absolute;inset:0;background:url('dvsl-hero2.png') center center/cover no-repeat;background-color:#06080f;z-index:0}
 /* Dark overlays for readability */
-.hero-bg1{position:absolute;inset:0;z-index:1;background:
-  linear-gradient(to bottom, rgba(5,8,20,.55) 0%, rgba(5,8,20,.1) 30%, rgba(5,8,20,.1) 70%, rgba(5,8,20,.75) 100%)}
-.hero-bg2{display:none}
+#pg-home .hero-bg1{position:absolute;inset:0;z-index:1;background:linear-gradient(to bottom, rgba(5,8,20,.55) 0%, rgba(5,8,20,.1) 30%, rgba(5,8,20,.1) 70%, rgba(5,8,20,.75) 100%)}
+#pg-home .hero-bg2{display:none}
 .hero-lines{display:none}
 .hero-scroll-hint{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;z-index:4;animation:fadeUp .8s 1s ease both}
 .hero-scroll-hint span{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:rgba(255,255,255,.45)}
@@ -405,9 +404,122 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 body.intro-done #intro-screen{display:none}
 body.intro-done{overflow:auto}
 body:not(.intro-done){overflow:hidden}
+
+/* ── MOBILE HERO + INTRO FIXES ── */
+@media(max-width:700px){
+  #intro-screen{
+    background-size:contain;
+    background-position:center center;
+    background-color:#06080f;
+  }
+  .hero-img-bg{
+    background-size:contain !important;
+    background-position:center center !important;
+    background-color:#06080f;
+  }
+  .hero{min-height:100vh;justify-content:flex-end;padding-bottom:60px}
+}
+
+/* ── BOX SCORE MODAL ── */
+.bsm-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.bsm-overlay.open{opacity:1;pointer-events:all}
+.bsm-inner{background:var(--bg2);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:640px;max-height:88vh;overflow-y:auto;position:relative;animation:bsmIn .25s ease}
+@keyframes bsmIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.bsm-close{position:absolute;top:14px;right:16px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:16px;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:color .15s;z-index:2}
+.bsm-close:hover{color:var(--white)}
+.bsm-header{padding:24px 24px 16px;border-bottom:1px solid var(--border)}
+.bsm-teams{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:12px}
+.bsm-team{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+.bsm-abbr{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:48px;line-height:1}
+.bsm-name{font-size:11px;color:var(--muted);font-weight:500;text-align:center}
+.bsm-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);margin-top:2px}
+.bsm-score-center{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0}
+.bsm-score{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:52px;line-height:1;color:var(--white);letter-spacing:.02em}
+.bsm-dash{font-size:24px;color:var(--muted);margin:0 4px}
+.bsm-badge{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:4px 12px;border-radius:4px}
+.bsm-meta{display:flex;justify-content:center;gap:20px;font-size:12px;color:var(--muted)}
+.bsm-meta span{display:flex;align-items:center;gap:5px}
+.bsm-section{padding:16px 24px}
+.bsm-section-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.bsm-table{width:100%;border-collapse:collapse;font-size:13px}
+.bsm-table th{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding:6px 8px;text-align:right;border-bottom:1px solid var(--border)}
+.bsm-table th:first-child{text-align:left}
+.bsm-table td{padding:8px 8px;border-bottom:1px solid rgba(255,255,255,.04);text-align:right;color:rgba(237,237,237,.8)}
+.bsm-table td:first-child{text-align:left;font-weight:600;color:var(--white)}
+.bsm-table tr:last-child td{border-bottom:none}
+.bsm-table tr:hover td{background:rgba(255,255,255,.03)}
+.bsm-hr{color:var(--gold);font-weight:700}
+.bsm-upcoming{padding:40px 24px;text-align:center;color:var(--muted);font-size:14px;line-height:1.8}
+.bsm-upcoming .bsm-date-big{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:var(--white);margin-bottom:8px}
+@media(max-width:480px){
+  .bsm-abbr{font-size:36px}
+  .bsm-score{font-size:42px}
+  .bsm-inner{border-radius:12px}
+  .bsm-section{padding:14px 16px}
+  .bsm-header{padding:18px 16px 14px}
+}
+
+/* Leaderboard headshot */
+.ldr-headshot{width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid rgba(245,200,66,.25);margin-bottom:12px;display:block;background:var(--card2)}
+.ldr-card.gold .ldr-headshot{border-color:rgba(245,200,66,.5);box-shadow:0 0 20px rgba(245,200,66,.15)}
+.ldr-headshot-wrap{display:flex;align-items:center;gap:14px;margin-bottom:10px}
+.ldr-headshot-info{display:flex;flex-direction:column;gap:2px}
+
+/* ══ LEADERS PAGE ══ */
+.leaders-page-wrap{max-width:1100px;margin:0 auto;padding:32px 48px 80px}
+.stat-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px}
+.sf-btn{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:8px 18px;border-radius:8px;border:1px solid var(--border2);background:var(--card2);color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap}
+.sf-btn:hover{border-color:rgba(245,200,66,.4);color:var(--white)}
+.sf-btn.active{background:var(--gold);border-color:var(--gold);color:#000}
+.leaders-table-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.leaders-table{width:100%;border-collapse:collapse}
+.leaders-table thead th{background:var(--card2);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;transition:color .15s}
+.leaders-table thead th:hover{color:var(--white)}
+.leaders-table thead th.sorted{color:var(--gold)}
+.leaders-table thead th .sort-arrow{margin-left:4px;opacity:.6;font-size:10px}
+.leaders-table tbody tr{border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;transition:background .15s}
+.leaders-table tbody tr:hover{background:rgba(245,200,66,.04)}
+.leaders-table tbody tr:last-child{border-bottom:none}
+.leaders-table tbody tr.rank-1{background:linear-gradient(90deg,rgba(245,200,66,.07),transparent)}
+.leaders-table tbody tr.rank-2{background:linear-gradient(90deg,rgba(200,200,200,.04),transparent)}
+.leaders-table tbody tr.rank-3{background:linear-gradient(90deg,rgba(205,127,50,.04),transparent)}
+.lt-rank{padding:12px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;color:var(--muted2);width:48px}
+.lt-rank.r1{color:#F5C842}
+.lt-rank.r2{color:rgba(200,200,200,.6)}
+.lt-rank.r3{color:rgba(205,127,50,.7)}
+.lt-player{padding:12px 16px;display:flex;align-items:center;gap:12px}
+.lt-avatar{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--border2);flex-shrink:0;background:var(--card2)}
+.lt-info{display:flex;flex-direction:column;gap:1px}
+.lt-name{font-weight:700;font-size:14px;color:var(--white)}
+.lt-team{font-size:11px;color:var(--muted)}
+.lt-val{padding:12px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:var(--white);text-align:right;white-space:nowrap}
+.lt-val.highlight{color:var(--gold)}
+.lt-stat{padding:12px 16px;font-size:13px;color:rgba(237,237,237,.6);text-align:right;white-space:nowrap}
+.lt-bar-cell{padding:12px 16px;width:120px}
+.lt-bar-bg{background:var(--card2);border-radius:3px;height:6px;overflow:hidden}
+.lt-bar-fill{height:100%;border-radius:3px;background:var(--gold);transition:width .4s ease}
+.leaders-stat-group{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);padding:8px 16px;background:rgba(0,0,0,.2);border-bottom:1px solid var(--border)}
+@media(max-width:700px){
+  .leaders-page-wrap{padding:20px 14px 60px}
+  .lt-bar-cell{display:none}
+  .lt-stat{display:none}
+  .leaders-table thead th:not(:first-child):not(:nth-child(2)):not(:last-child){display:none}
+  .lt-val{font-size:18px}
+  .lt-name{font-size:13px}
+  .lt-avatar{width:32px;height:32px}
+}
 </style>
 </head>
 <body>
+
+
+<!-- ═══ BOX SCORE MODAL ═══ -->
+<div class="bsm-overlay" id="bsmOverlay" onclick="if(event.target===this)closeBsm()">
+  <div class="bsm-inner" id="bsmInner">
+    <button class="bsm-close" onclick="closeBsm()">✕</button>
+    <div id="bsmContent"></div>
+  </div>
+</div>
 
 <!-- ═══ CINEMATIC INTRO ═══ -->
 <div id="intro-screen">
@@ -431,6 +543,7 @@ body:not(.intro-done){overflow:hidden}
     <li id="nl-home" class="active"><span onclick="goPage('home')">Home</span></li>
     <li id="nl-players"><span onclick="goPage('players')">Roster</span></li>
     <li id="nl-recaps"><span onclick="goPage('recaps')">Recaps</span></li>
+    <li id="nl-leaders"><span onclick="goPage('leaders')">Leaders</span></li>
     <li><a href="schedule.html">Scores</a></li>
     <li><a href="playoffs.html">Bracket</a></li>
     <li><a href="standings-history.html">Standings</a></li>
@@ -446,6 +559,7 @@ body:not(.intro-done){overflow:hidden}
   <span onclick="goPage('home');closeMob()">Home</span>
   <span onclick="goPage('players');closeMob()">Roster</span>
   <span onclick="goPage('recaps');closeMob()">Recaps</span>
+  <span onclick="goPage('leaders');closeMob()">Leaders</span>
   <a href="schedule.html">Scores</a>
   <a href="playoffs.html">Bracket</a>
   <a href="standings-history.html">Standings</a>
@@ -552,7 +666,7 @@ body:not(.intro-done){overflow:hidden}
   <section class="sec">
     <div class="container">
       <div class="sec-eyebrow">Individual Leaders</div>
-      <div class="sec-title">Leaderboard</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="sec-title">Leaderboard</div><button class="btn-outline" style="font-size:11px;padding:8px 18px" onclick="goPage('leaders')">Full Leaders →</button></div>
       <div class="leaders-grid" id="ldr-grid"></div>
     </div>
   </section>
@@ -591,6 +705,33 @@ body:not(.intro-done){overflow:hidden}
       <a href="schedule.html">Scores</a>
       <a href="playoffs.html">Bracket</a>
   <a href="photos.html">Gallery</a>
+    </div>
+    <div class="ft-copy">© 2026 DVSL · Delaware Valley Softball League</div>
+  </footer>
+</div>
+
+<!-- ═══ LEADERS PAGE ═══ -->
+<div class="page" id="pg-leaders">
+  <div style="padding:80px 48px 24px;background:var(--bg2);border-bottom:1px solid var(--border)">
+    <div class="sec-eyebrow">2026 Season</div>
+    <h1 class="sec-title">Individual <span style="color:var(--gold)">Leaders</span></h1>
+    <p style="font-size:13px;color:var(--muted);margin-top:8px">Click any stat to re-rank. Click a player to view full profile.</p>
+  </div>
+  <div class="leaders-page-wrap">
+    <div class="stat-filter-bar" id="lp-filters"></div>
+    <div class="leaders-table-wrap">
+      <table class="leaders-table" id="lp-table">
+        <thead id="lp-thead"></thead>
+        <tbody id="lp-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  <footer class="ft">
+    <div class="ft-logo">⬡ DVSL</div>
+    <div class="ft-links">
+      <span onclick="goPage('home')">Home</span>
+      <span onclick="goPage('players')">Roster</span>
+      <span onclick="goPage('leaders')">Leaders</span>
     </div>
     <div class="ft-copy">© 2026 DVSL · Delaware Valley Softball League</div>
   </footer>
@@ -893,6 +1034,7 @@ function goPage(name,extra,skipHistory){
   window.scrollTo(0,0);
   if(name==='team'&&extra) loadTeam(extra);
   if(name==='players') buildPlayerGrid('all');
+  if(name==='leaders') buildLeadersPage();
   if(!skipHistory){
     const state={page:name,extra:extra||null};
     const url='#'+name+(extra?'/'+extra:'');
@@ -1056,6 +1198,192 @@ function shareText(title, idx){
   });
 })();
 
+
+
+// ════ LEADERS PAGE ════
+const STAT_CATS = [
+  {key:'avg',  label:'AVG',          fmt:p=>p.avg.toFixed(3).replace(/^0/,''), group:'Batting', desc:'Batting Average', higherBetter:true},
+  {key:'hr',   label:'HR',           fmt:p=>p.hr,                              group:'Batting', desc:'Home Runs',       higherBetter:true},
+  {key:'rbi',  label:'RBI',          fmt:p=>p.rbi,                             group:'Batting', desc:'RBI',             higherBetter:true},
+  {key:'h',    label:'H',            fmt:p=>p.h,                               group:'Batting', desc:'Hits',            higherBetter:true},
+  {key:'r',    label:'R',            fmt:p=>p.r,                               group:'Batting', desc:'Runs',            higherBetter:true},
+  {key:'ab',   label:'AB',           fmt:p=>p.ab,                              group:'Batting', desc:'At Bats',         higherBetter:true},
+  {key:'bb',   label:'BB',           fmt:p=>p.bb,                              group:'Batting', desc:'Walks',           higherBetter:true},
+  {key:'slg',  label:'SLG',          fmt:p=>p.slg.toFixed(3).replace(/^0/,''),group:'Advanced',desc:'Slugging %',      higherBetter:true},
+  {key:'ops',  label:'OPS',          fmt:p=>p.ops.toFixed(3).replace(/^0/,''),group:'Advanced',desc:'OPS',             higherBetter:true},
+];
+
+let lpCurrentStat = 'avg';
+let lpSortDir = 'desc';
+
+function buildLeadersPage(statKey, dir){
+  statKey = statKey || lpCurrentStat;
+  dir = dir || 'desc';
+  lpCurrentStat = statKey;
+  lpSortDir = dir;
+  const cat = STAT_CATS.find(s=>s.key===statKey) || STAT_CATS[0];
+
+  // Stat filter buttons
+  const filtersEl = document.getElementById('lp-filters');
+  filtersEl.innerHTML = STAT_CATS.map(s =>
+    `<button class="sf-btn ${s.key===statKey?'active':''}" onclick="buildLeadersPage('${s.key}','desc')">${s.desc}</button>`
+  ).join('');
+
+  // Sort players
+  const sorted = [...PLAYERS].sort((a,b) => dir==='desc' ? b[statKey]-a[statKey] : a[statKey]-b[statKey]);
+  const maxVal = sorted[0][statKey];
+
+  // Table header
+  document.getElementById('lp-thead').innerHTML = `<tr>
+    <th style="width:40px">#</th>
+    <th>Player</th>
+    <th class="sorted" style="text-align:right">${cat.desc} <span class="sort-arrow">${dir==='desc'?'↓':'↑'}</span></th>
+    <th style="text-align:right" onclick="buildLeadersPage('hr','desc')" class="${statKey==='hr'?'sorted':''}">HR</th>
+    <th style="text-align:right" onclick="buildLeadersPage('rbi','desc')" class="${statKey==='rbi'?'sorted':''}">RBI</th>
+    <th style="text-align:right" onclick="buildLeadersPage('avg','desc')" class="${statKey==='avg'?'sorted':''}">AVG</th>
+    <th style="text-align:right" onclick="buildLeadersPage('ops','desc')" class="${statKey==='ops'?'sorted':''}">OPS</th>
+    <th class="lt-bar-cell" style="text-align:left"></th>
+  </tr>`;
+
+  // Table rows
+  const pidxMap = Object.fromEntries(PLAYERS.map((p,i)=>[p.id,i]));
+  document.getElementById('lp-tbody').innerHTML = sorted.map((p, i) => {
+    const t = getTeam(p.team);
+    const rank = i+1;
+    const rankCls = rank===1?'r1':rank===2?'r2':rank===3?'r3':'';
+    const rowCls = rank<=3?`rank-${rank}`:'';
+    const pidx = pidxMap[p.id] || 0;
+    const barPct = maxVal > 0 ? Math.round((p[statKey]/maxVal)*100) : 0;
+    const barColor = rank===1?'#F5C842':rank===2?'rgba(200,200,200,.7)':rank===3?'rgba(205,127,50,.8)':'rgba(245,200,66,.4)';
+    return `<tr class="${rowCls}" onclick="openModal('${p.id}')">
+      <td class="lt-rank ${rankCls}">${rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank}</td>
+      <td class="lt-player">
+        <img class="lt-avatar" src="https://randomuser.me/api/portraits/men/${pidx%70}.jpg" alt="${p.name}"
+          onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=111&color=F5C842&size=38'">
+        <div class="lt-info">
+          <div class="lt-name">${p.name}</div>
+          <div class="lt-team" style="color:${t?.color||'var(--muted)'}">${t?.name||''}</div>
+        </div>
+      </td>
+      <td class="lt-val highlight">${cat.fmt(p)}</td>
+      <td class="lt-stat">${p.hr}</td>
+      <td class="lt-stat">${p.rbi}</td>
+      <td class="lt-stat">${p.avg.toFixed(3).replace(/^0/,'')}</td>
+      <td class="lt-stat">${p.ops.toFixed(3).replace(/^0/,'')}</td>
+      <td class="lt-bar-cell"><div class="lt-bar-bg"><div class="lt-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ════ BOX SCORE MODAL ════
+function openBsm(gameIdx){
+  const g = SCHEDULE_PREVIEW[gameIdx];
+  if(!g) return;
+  const atTeam = getTeamByShort(g.away);
+  const htTeam = getTeamByShort(g.home);
+  const atColor = atTeam?.color || 'var(--white)';
+  const htColor = htTeam?.color || 'var(--white)';
+  let html = '';
+  if(g.done){
+    const awayWon = g.as > g.hs;
+    // Get players for each team
+    const awayPlayers = PLAYERS.filter(p => getTeamByShort(g.away)?.id === p.team);
+    const homePlayers = PLAYERS.filter(p => getTeamByShort(g.home)?.id === p.team);
+    const buildRows = (players, side) => players.map(p => {
+      const log = p.log ? p.log.find(l => l.res && l.res.includes(side==='away'?g.hs+'':`${g.as}-${g.hs}`)) : null;
+      // Use game log if found, else show season avg line
+      const ab = log ? log.ab : p.ab;
+      const h  = log ? log.h  : p.h;
+      const hr = log ? log.hr : p.hr;
+      const rbi= log ? log.rbi: p.rbi;
+      const r  = log ? log.r  : p.r;
+      const avgVal = ab>0 ? (h/ab).toFixed(3).replace(/^0/,'') : '.000';
+      return `<tr onclick="openModal('${p.id}')" style="cursor:pointer">
+        <td>${p.name} <span style="font-size:10px;color:var(--muted)">${p.pos}</span></td>
+        <td>${ab}</td><td>${h}</td>
+        <td class="${hr>0?'bsm-hr':''}">${hr>0?hr:'-'}</td>
+        <td>${rbi}</td><td>${r}</td>
+        <td>${avgVal}</td>
+      </tr>`;
+    }).join('');
+    html = `
+      <div class="bsm-header">
+        <div class="bsm-teams">
+          <div class="bsm-team">
+            <div class="bsm-abbr" style="color:${atColor}">${g.away}</div>
+            <div class="bsm-name">${atTeam?.name||g.away}</div>
+            <div class="bsm-label">Away ${awayWon?'✓':''}</div>
+          </div>
+          <div class="bsm-score-center">
+            <div class="bsm-score"><span style="color:${awayWon?atColor:'var(--muted)'}">${g.as}</span><span class="bsm-dash">–</span><span style="color:${!awayWon?htColor:'var(--muted)'}">${g.hs}</span></div>
+            <span class="bsm-badge badge-w">Final</span>
+          </div>
+          <div class="bsm-team">
+            <div class="bsm-abbr" style="color:${htColor}">${g.home}</div>
+            <div class="bsm-name">${htTeam?.name||g.home}</div>
+            <div class="bsm-label">Home ${!awayWon?'✓':''}</div>
+          </div>
+        </div>
+        <div class="bsm-meta">
+          <span>📅 ${g.date}</span>
+          <span>📍 ${g.field}</span>
+          <span>⏰ ${g.time}</span>
+        </div>
+      </div>
+      <div class="bsm-section">
+        <div class="bsm-section-title" style="color:${atColor}">${g.away} — ${atTeam?.name||''}</div>
+        <table class="bsm-table">
+          <thead><tr><th>Player</th><th>AB</th><th>H</th><th>HR</th><th>RBI</th><th>R</th><th>AVG</th></tr></thead>
+          <tbody>${awayPlayers.length ? buildRows(awayPlayers,'away') : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No player data</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="bsm-section">
+        <div class="bsm-section-title" style="color:${htColor}">${g.home} — ${htTeam?.name||''}</div>
+        <table class="bsm-table">
+          <thead><tr><th>Player</th><th>AB</th><th>H</th><th>HR</th><th>RBI</th><th>R</th><th>AVG</th></tr></thead>
+          <tbody>${homePlayers.length ? buildRows(homePlayers,'home') : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No player data</td></tr>'}</tbody>
+        </table>
+      </div>`;
+  } else {
+    html = `
+      <div class="bsm-header">
+        <div class="bsm-teams">
+          <div class="bsm-team">
+            <div class="bsm-abbr" style="color:${atColor}">${g.away}</div>
+            <div class="bsm-name">${atTeam?.name||g.away}</div>
+            <div class="bsm-label">Away</div>
+          </div>
+          <div class="bsm-score-center">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--muted)">VS</div>
+          </div>
+          <div class="bsm-team">
+            <div class="bsm-abbr" style="color:${htColor}">${g.home}</div>
+            <div class="bsm-name">${htTeam?.name||g.home}</div>
+            <div class="bsm-label">Home</div>
+          </div>
+        </div>
+        <div class="bsm-meta">
+          <span>📅 ${g.date}</span><span>📍 ${g.field}</span><span>⏰ ${g.time}</span>
+        </div>
+      </div>
+      <div class="bsm-upcoming">
+        <div class="bsm-date-big">${g.day}, ${g.date}</div>
+        <div>Game time: <strong>${g.time}</strong></div>
+        <div style="margin-top:6px">📍 ${g.field} · ${g.addr}</div>
+        <div style="margin-top:16px;font-size:12px;color:var(--muted2)">Box score available after the game</div>
+      </div>`;
+  }
+  document.getElementById('bsmContent').innerHTML = html;
+  document.getElementById('bsmOverlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeBsm(){
+  document.getElementById('bsmOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeBsm(); });
+
 function buildTicker(){
   const items=[
     ...PLAYERS.sort((a,b)=>b.avg-a.avg).slice(0,5).map(p=>`<span class="ticker-item"><span style="color:var(--gold)">AVG #${PLAYERS.sort((a,b)=>b.avg-a.avg).indexOf(p)+1}</span>${p.name} ${avg(p.avg)}</span><span class="ticker-item ticker-sep">·</span>`),
@@ -1099,12 +1427,19 @@ function buildSchedule(){
     let rightCol='';
     if(g.done){
       const awayWon=g.as>g.hs;
-      rightCol=`<div class="game-score">${g.as}–${g.hs}<span class="wl-lbl ${awayWon?'badge-w':'badge-l'}" style="font-size:10px">${awayWon?'A Win':'H Win'}</span></div>`;
+      const winTeam = awayWon ? getTeamByShort(g.away) : getTeamByShort(g.home);
+      const winColor = winTeam?.color || 'var(--white)';
+      rightCol=`<div class="game-score">
+        <span style="color:${awayWon?atTeam?.color||'var(--white)':'var(--muted)'}">${g.as}</span>
+        <span style="font-size:20px;color:var(--muted);margin:0 4px">–</span>
+        <span style="color:${!awayWon?htTeam?.color||'var(--white)':'var(--muted)'}">${g.hs}</span>
+        <div style="font-size:10px;font-weight:700;color:${winColor};margin-top:3px;letter-spacing:.04em">${winTeam?.short||''} WIN</div>
+      </div>`;
     } else {
       rightCol=isNext?`<span style="background:var(--gold);color:#000;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border-radius:4px">▶ NEXT</span>`
         :`<span style="font-size:12px;color:var(--muted)">Upcoming</span>`;
     }
-    return `<div class="game-row ${isNext?'next':''}">
+    return `<div class="game-row ${isNext?'next':''}" onclick="openBsm(${i})" style="cursor:pointer">
       <div class="gtip"><div class="gtip-time">⏰ ${g.time}</div><div class="gtip-field">📍 ${g.field}</div><div class="gtip-addr">${g.addr}</div></div>
       <div class="game-date"><small>${g.day} · Wk ${g.wk}</small>${g.date}</div>
       <div class="game-matchup">
@@ -1128,12 +1463,20 @@ function buildLeaderboard(){
   document.getElementById('ldr-grid').innerHTML=cats.map((cat,ci)=>{
     const sorted=[...PLAYERS].sort((a,b)=>b[cat.key]-a[cat.key]);
     const top=sorted[0]; const t=getTeam(top.team);
+    // Use player index as seed for stable random headshot
+    const pidx = PLAYERS.indexOf(top);
+    const seed = 200 + (pidx * 7); // baseball-ish portrait seeds
     return `<div class="ldr-card ${ci===0?'gold':''}" onclick="openModal('${top.id}')">
       <div class="ldr-cat">${cat.label}</div>
       <div class="ldr-ghost">#1</div>
-      <div class="ldr-val">${cat.fmt(top)}</div>
-      <div class="ldr-name">${top.name}</div>
-      <div class="ldr-team" style="color:${t?.color||'var(--gold)'}">${t?.name||''}</div>
+      <div class="ldr-headshot-wrap">
+        <img class="ldr-headshot" src="https://randomuser.me/api/portraits/men/${pidx % 70}.jpg" alt="${top.name}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(top.name)}&background=1a1a2e&color=F5C842&size=72'">
+        <div class="ldr-headshot-info">
+          <div class="ldr-val" style="font-size:42px;line-height:1">${cat.fmt(top)}</div>
+          <div class="ldr-name" style="font-size:15px">${top.name}</div>
+          <div class="ldr-team" style="color:${t?.color||'var(--gold)'}">${t?.name||''}</div>
+        </div>
+      </div>
       <div class="ldr-runners">${sorted.slice(1,6).map((p,j)=>{
         return `<div class="rrow"><span class="rpos">${j+2}</span><span class="rname" onclick="event.stopPropagation();openModal('${p.id}')">${p.name.split(' ').pop()}</span><span class="rval">${cat.fmt(p)}</span></div>`;
       }).join('')}</div>
@@ -1383,7 +1726,7 @@ initNextGame();
 // ── Read URL hash on load (e.g. index.html#players) ──
 (function(){
   var hash = window.location.hash.replace('#','').split('/')[0];
-  var valid = ['home','players','team','recaps','history'];
+  var valid = ['home','players','team','recaps','history','leaders'];
   if(hash && valid.includes(hash)){
     goPage(hash);
   }
