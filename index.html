@@ -108,15 +108,15 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 .sched-game-block:last-child{border-bottom:none}
 .sched-game-block:hover{background:rgba(255,255,255,.025)}
 .sched-game-block.next{border-left:3px solid var(--gold)}
-.gb-left{}
+.gb-left{min-width:0;overflow:hidden}
 .gb-status-row{display:flex;align-items:center;margin-bottom:3px;padding-left:2px}
 .gb-status{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);width:60px;flex-shrink:0}
 .gb-status.final{color:var(--muted2)}
 .gb-status.upcoming{color:var(--gold)}
 .gb-rhe-labels{display:flex;gap:0;margin-left:auto}
 .gb-rhe-lbl{font-size:15px;font-weight:700;letter-spacing:.06em;color:var(--muted2);width:50px;text-align:right}
-.gb-team-row{display:flex;align-items:center;padding:3px 0}
-.gb-logo{width:34px;height:34px;border-radius:6px;border:1.5px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:9px;letter-spacing:.03em;margin-right:10px;overflow:hidden}
+.gb-team-row{display:flex;align-items:center;padding:3px 0;min-width:0}
+.gb-logo{width:34px;height:34px;min-width:34px;max-width:34px;border-radius:6px;border:1.5px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:7px;letter-spacing:.03em;margin-right:10px;overflow:hidden;background-repeat:no-repeat}
 .gb-logo img{width:100%;height:100%;object-fit:cover}
 .gb-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30px;line-height:1;flex:1;white-space:nowrap}
 .gb-name.winner{color:var(--white)}
@@ -133,7 +133,7 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 .gb-wl{padding:0 16px;border-left:1px solid var(--border)}
 .gb-wl-row{display:flex;align-items:center;gap:10px;padding:6px 0}
 .gb-wl-role{font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);width:44px;flex-shrink:0}
-.gb-wl-badge{width:42px;height:42px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;overflow:hidden}
+.gb-wl-badge{width:42px;height:42px;min-width:42px;max-width:42px;border-radius:50%;flex-shrink:0;background-repeat:no-repeat}
 .gb-wl-badge img{width:100%;height:100%;object-fit:cover}
 .gb-wl-name{font-size:18px;font-weight:700;color:rgba(239,239,239,.9);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
 .gb-wl-stat{font-size:14px;color:var(--muted2)}
@@ -1705,8 +1705,8 @@ function buildSchedule(){
     const isNext=i===nextIdx;
     const atTeam=getTeamByShort(g.away), htTeam=getTeamByShort(g.home);
     const ac=atTeam?.color||'#9ca3af', hc=htTeam?.color||'#9ca3af';
-    const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11"><img src="logos/${g.away.toLowerCase()}.svg" onerror="this.style.display='none';this.parentNode.textContent='${g.away}'" alt="${g.away}"></div>`;
-    const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11"><img src="logos/${g.home.toLowerCase()}.svg" onerror="this.style.display='none';this.parentNode.textContent='${g.home}'" alt="${g.home}"></div>`;
+    const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${g.away.toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
+    const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${g.home.toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
     if(g.done){
       const aw=g.as>g.hs;
       const wTeam=aw?g.away:g.home, lTeam=aw?g.home:g.away;
@@ -1731,12 +1731,12 @@ function buildSchedule(){
         <div class="gb-wl">
           <div class="gb-wl-row">
             <span class="gb-wl-role">WIN</span>
-            <div class="gb-wl-badge" style="background:${wc}22;border:1px solid ${wc}44;overflow:hidden"><img src="logos/${wTeam.toLowerCase()}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentNode.style.color='${wc}';this.parentNode.textContent='${wTeam}'" alt="${wTeam}"></div>
+            <div class="gb-wl-badge" style="background-color:${wc}22;border:1px solid ${wc}44;background-image:url('logos/${wTeam.toLowerCase()}.svg');background-size:cover;background-position:center"></div>
             <div><div class="gb-wl-name">${STAR[wTeam]||wTeam+' Player'}</div><div class="gb-wl-stat">${pStats(wTeam).wl} · ${pStats(wTeam).era} ERA</div></div>
           </div>
           <div class="gb-wl-row">
             <span class="gb-wl-role">LOSS</span>
-            <div class="gb-wl-badge" style="background:${lc}22;border:1px solid ${lc}44;overflow:hidden"><img src="logos/${lTeam.toLowerCase()}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentNode.style.color='${lc}';this.parentNode.textContent='${lTeam}'" alt="${lTeam}"></div>
+            <div class="gb-wl-badge" style="background-color:${lc}22;border:1px solid ${lc}44;background-image:url('logos/${lTeam.toLowerCase()}.svg');background-size:cover;background-position:center"></div>
             <div><div class="gb-wl-name">${STAR[lTeam]||lTeam+' Player'}</div><div class="gb-wl-stat">${pStats(lTeam).wl} · ${pStats(lTeam).era} ERA</div></div>
           </div>
         </div>
