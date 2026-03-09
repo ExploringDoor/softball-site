@@ -76,27 +76,25 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .game-block:hover{background:rgba(255,255,255,.025)}
 
 /* ── LEFT: status + teams ─────────────────────── */
-.gb-left{}
+.gb-left{display:flex;flex-direction:column;justify-content:center;padding:6px 0}
 
 /* Status row: FINAL + R H E labels */
-.gb-status-row{display:flex;align-items:center;margin-bottom:3px;padding-left:2px}
-.gb-status{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);width:60px;flex-shrink:0}
-.gb-status.final{color:var(--muted2)}
-.gb-status.upcoming{color:var(--gold)}
-.gb-rhe-labels{display:flex;gap:0;margin-left:auto}
-.gb-rhe-lbl{font-size:15px;font-weight:700;letter-spacing:.06em;color:var(--muted2);width:50px;text-align:right}
+.gb-rhe-hdr-row{display:flex;padding-bottom:2px}
+.gb-status-lbl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px}
+.gb-status-lbl.final{color:var(--muted2)}
+.gb-status-lbl.upcoming{color:var(--gold)}
+.gb-rhe-lbl{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted2);width:52px;text-align:right}
 
 /* Team row */
-.gb-team-row{display:flex;align-items:center;padding:3px 0}
+.gb-team-row{display:flex;align-items:center;padding:2px 0;min-width:0}
 .gb-logo{width:34px;height:34px;border-radius:6px;border:1.5px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:9px;letter-spacing:.03em;margin-right:10px;overflow:hidden}
 .gb-logo img{width:100%;height:100%;object-fit:cover}
-.gb-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30px;line-height:1;flex:1;white-space:nowrap}
+.gb-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30px;line-height:1;flex:1;white-space:nowrap;min-width:0;overflow:hidden}
 .gb-name.winner{color:var(--white)}
 .gb-name.loser{color:rgba(239,239,239,.4)}
 .gb-arrow{font-size:9px;margin-left:6px;color:var(--white);opacity:.7}
-.gb-rhe-vals{display:flex;gap:0;margin-left:auto}
-.gb-rhe-val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;width:50px;text-align:right;color:rgba(239,239,239,.55)}
-.gb-score{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:44px;line-height:1;width:50px;text-align:right}
+.gb-rhe-val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:44px;width:52px;text-align:right;color:rgba(239,239,239,.55)}
+.gb-score{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:44px;line-height:1;width:52px;text-align:right}
 .gb-score.winner{color:var(--white)}
 .gb-score.loser{color:rgba(239,239,239,.38)}
 
@@ -189,8 +187,9 @@ footer{padding:32px 40px;border-top:1px solid var(--border);display:flex;align-i
   .game-block{grid-template-columns:1fr auto;padding:8px 0}
   .gb-score-col{padding:0 10px 0 0}
   .gb-name{font-size:22px}
-  .gb-score{font-size:34px;width:42px}
-  .gb-rhe-val{font-size:34px;width:42px}
+  .gb-score{font-size:34px;width:44px}
+  .gb-rhe-val{font-size:34px;width:44px}
+  .gb-rhe-hdr-row{padding-left:0}
   .gb-rhe-lbl{font-size:10px;width:34px}
   .gb-logo{width:26px;height:26px}
   .gb-status{font-size:11px}
@@ -201,8 +200,8 @@ footer{padding:32px 40px;border-top:1px solid var(--border);display:flex;align-i
 }
 @media(max-width:400px){
   .gb-name{font-size:18px}
-  .gb-score{font-size:28px;width:36px}
-  .gb-rhe-val{font-size:28px;width:36px}
+  .gb-score{font-size:26px;width:36px}
+  .gb-rhe-val{font-size:26px;width:36px}
   .gb-rhe-lbl{width:30px}
 }
 </style>
@@ -564,28 +563,18 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
     const wc=aW?ac:hc, lc=aW?hc:ac;
     return`<div class="game-block" onclick="openBox('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">
       <div class="gb-left">
-        <div class="gb-status-row">
-          <span class="gb-status final">FINAL</span>
-          <div class="gb-rhe-labels"><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
-        </div>
+        <div class="gb-rhe-hdr-row"><span style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
           <span class="gb-name ${aW?'winner':'loser'}">${g.away}${aW?'<span class="gb-arrow">◀</span>':''}</span>
-          <div class="gb-rhe-vals">
-            <span class="gb-score ${aW?'winner':'loser'}">${as}</span>
-            <span class="gb-rhe-val">${aH}</span>
-            <span class="gb-rhe-val">${aE}</span>
-          </div>
+          <span class="gb-score ${aW?'winner':'loser'}">${as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">${aE}</span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
           <span class="gb-name ${!aW?'winner':'loser'}">${g.home}${!aW?'<span class="gb-arrow">◀</span>':''}</span>
-          <div class="gb-rhe-vals">
-            <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span>
-            <span class="gb-rhe-val">${hH}</span>
-            <span class="gb-rhe-val">${hE}</span>
-          </div>
+          <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">${hE}</span>
         </div>
+        <div class="gb-status-lbl final">FINAL</div>
       </div>
       <div class="gb-mid">
         <div class="gb-field">${field}</div>
