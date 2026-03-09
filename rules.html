@@ -177,8 +177,9 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
   <ul class="nav-links">
     <li><a href="index.html">Home</a></li>
     <li><a href="index.html#players">Roster</a></li>
+    <li><a href="index.html#leaders">Leaders</a></li>
     <li><a href="schedule.html">Scores</a>
-    <li><a href="stats.html">Stats</a></li></li>
+    <li><a href="stats.html">Stats</a></li>
     <li><a href="playoffs.html">Bracket</a></li>
     <li><a href="standings-history.html">Standings</a></li>
     <li><a href="rules.html" class="active">Field Guide</a></li>
@@ -189,6 +190,7 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
 <div class="mob-menu" id="mobMenu">
   <a href="index.html">Home</a>
   <a href="index.html#players">Roster</a>
+  <a href="index.html#leaders">Leaders</a>
   <a href="schedule.html">Scores</a>
     <li><a href="stats.html">Stats</a></li>
   <a href="playoffs.html">Bracket</a>
@@ -211,12 +213,12 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
 
 <!-- SECTION TABS -->
 <div class="sec-tabs">
-  <button class="sec-tab active" onclick="showPanel('league-rules',this)">📋 League Rules</button>
-  <button class="sec-tab" onclick="showPanel('ground-rules',this)">📍 Ground Rules by Field</button>
+  <button class="sec-tab active" id="tab-league-rules" onclick="showPanel('league-rules',this)">📋 League Rules</button>
+  <button class="sec-tab" id="tab-ground-rules" onclick="showPanel('ground-rules',this)">📍 Ground Rules by Field</button>
 </div>
 
 <!-- ═══════════════ LEAGUE RULES PANEL ═══════════════ -->
-<div class="panel show" id="panel-league-rules">
+<div class="panel show" id="panel-league-rules" style="display:block">
   <!-- stat bar -->
   <div style="display:flex;gap:0;background:var(--card);border-bottom:1px solid var(--border);overflow-x:auto">
     <div style="padding:16px 28px;border-right:1px solid var(--border);text-align:center;flex:1;min-width:120px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;color:var(--gold)">7</div><div style="font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:2px">Innings</div></div>
@@ -700,7 +702,7 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
 </div>
 
 <!-- ═══════════════ GROUND RULES PANEL ═══════════════ -->
-<div class="panel" id="panel-ground-rules">
+<div class="panel" id="panel-ground-rules" style="display:none">
   <div class="quickjump">
     <a class="qj-btn" href="#mondauk4">Mondauk 4</a>
     <a class="qj-btn" href="#mondauk5">Mondauk 5</a>
@@ -999,13 +1001,16 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
   <div class="ft-logo">⬡ DVSL</div>
   <div class="ft-links">
     <a href="index.html">Home</a>
-    <a href="schedule.html">Schedule</a>
-    <a href="playoffs.html">Playoffs</a>
+    <a href="index.html#players">Roster</a>
+    <a href="index.html#leaders">Leaders</a>
+    <a href="schedule.html">Scores</a>
+    <a href="stats.html">Stats</a>
+    <a href="playoffs.html">Bracket</a>
     <a href="standings-history.html">Standings</a>
     <a href="rules.html">Field Guide</a>
-    <a href="photos.html">Photos</a>
+    <a href="photos.html">Gallery</a>
   </div>
-  <div class="ft-copy">© 2025 DVSL · Delaware Valley Synagogue League</div>
+  <div class="ft-copy">© 2026 DVSL · Delaware Valley Synagogue League</div>
 </footer>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
@@ -1014,10 +1019,20 @@ const mob=document.getElementById('mobMenu');
 hbg.addEventListener('click',()=>{hbg.classList.toggle('open');mob.classList.toggle('open')});
 
 function showPanel(name,btn){
-  document.querySelectorAll('.sec-tab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('show'));
-  document.getElementById('panel-'+name).classList.add('show');
+  // Tab activation
+  document.querySelectorAll('.sec-tab').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  else { var t=document.getElementById('tab-'+name); if(t) t.classList.add('active'); }
+  // Panel switching
+  document.querySelectorAll('.panel').forEach(function(p){
+    p.classList.remove('show');
+    p.style.display='none';
+  });
+  var target=document.getElementById('panel-'+name);
+  if(target){
+    target.classList.add('show');
+    target.style.display='block';
+  }
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
