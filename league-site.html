@@ -110,10 +110,10 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 .sched-game-block.next{border-left:3px solid var(--gold)}
 .gb-left{min-width:0;overflow:hidden}
 .gb-status-row{display:flex;align-items:center;margin-bottom:3px;padding-left:2px}
-.gb-status{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);width:60px;flex-shrink:0}
+.gb-status{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);flex-shrink:0}
 .gb-status.final{color:var(--muted2)}
 .gb-status.upcoming{color:var(--gold)}
-.gb-rhe-labels{display:flex;gap:0;margin-left:auto}
+.gb-rhe-labels{display:flex;gap:0}
 .gb-rhe-lbl{font-size:15px;font-weight:700;letter-spacing:.06em;color:var(--muted2);width:50px;text-align:right}
 .gb-team-row{display:flex;align-items:center;padding:3px 0;min-width:0}
 .gb-logo{width:34px;height:34px;min-width:34px;max-width:34px;border-radius:6px;border:1.5px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:7px;letter-spacing:.03em;margin-right:10px;overflow:hidden;background-repeat:no-repeat}
@@ -329,17 +329,21 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
   .ft-links{justify-content:center}
   .sched-wrap{flex-direction:column}
   .ttabs,.team-body,.team-hero{padding-left:18px;padding-right:18px}
-  /* Mobile score rows */
-  .game-row{grid-template-columns:1fr auto}
-  .gr-bar{min-height:auto;padding:8px 12px;flex-direction:row;justify-content:space-between;align-items:center;border-right:none;border-bottom:1px solid var(--border)}
-  .gr-body{padding:6px 12px 4px}
-  .gr-name{font-size:22px}
-  .gr-score{font-size:34px;width:42px}
-  .gr-rhe-val{font-size:17px;width:34px}
-  .gr-rhe-lbl{font-size:10px;width:34px}
-  .gr-footer{padding:6px 10px;min-width:80px;gap:4px}
-  .gr-action{font-size:10px;padding:5px 8px}
-  .gr-logo{width:20px;height:20px;font-size:7px}
+  /* Mobile score rows — gb-* layout */
+  .sched-game-block{grid-template-columns:1fr auto;gap:0}
+  .gb-mid,.gb-wl{display:none}
+  .gb-actions{flex-direction:row;flex-wrap:wrap;gap:6px;padding-left:10px;justify-content:flex-end;align-self:center}
+  .gb-btn{font-size:11px;padding:5px 12px;min-width:68px}
+  /* Left column: shrink fonts so R H E stay on one line */
+  .gb-name{font-size:18px}
+  .gb-score{font-size:26px;width:36px}
+  .gb-rhe-val{font-size:26px;width:36px}
+  .gb-rhe-lbl{font-size:11px;width:36px}
+  .gb-logo{width:26px;height:26px;min-width:26px;max-width:26px;margin-right:6px}
+  .gb-rhe-labels,.gb-rhe-vals{gap:0}
+  /* Keep status row and RHE labels perfectly aligned */
+  .gb-status-row{padding-left:0}
+  .gb-status{width:50px;font-size:11px}
   .modal-inner{padding:18px}
   .modal-stat-row{grid-template-columns:1fr 1fr}
   .modal-hero{flex-direction:column}
@@ -347,12 +351,12 @@ body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;ove
 }
 @media(max-width:420px){
   .pgrid{grid-template-columns:1fr}
-  .gr-name{font-size:18px}
-  .gr-score{font-size:28px;width:36px}
-  .gr-rhe-val{font-size:14px;width:30px}
-  .gr-rhe-lbl{width:30px}
-  .gr-footer{min-width:70px}
-  .gr-action{font-size:9px;padding:4px 6px}
+  .gb-name{font-size:15px}
+  .gb-score{font-size:22px;width:30px}
+  .gb-rhe-val{font-size:22px;width:30px}
+  .gb-rhe-lbl{font-size:10px;width:30px}
+  .gb-btn{font-size:10px;padding:4px 8px;min-width:56px}
+  .gb-status{width:44px;font-size:10px}
 }
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -1715,7 +1719,8 @@ function buildSchedule(){
       return `<div class="sched-game-block${isNext?' next':''}" onclick="openRecap(${i})">
         <div class="gb-left">
           <div class="gb-status-row">
-            <span class="gb-status final">FINAL</span>
+            <div style="width:34px;min-width:34px;margin-right:10px;flex-shrink:0"></div>
+            <span class="gb-status final" style="flex:1">FINAL</span>
             <div class="gb-rhe-labels"><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
           </div>
           <div class="gb-team-row">${logoA}
@@ -1748,7 +1753,7 @@ function buildSchedule(){
     } else {
       return `<div class="sched-game-block${isNext?' next':''}" onclick="openBsm(${i})">
         <div class="gb-left">
-          <div class="gb-status-row"><span class="gb-status upcoming">${isNext?'▶ NEXT':'UPCOMING'}</span></div>
+          <div class="gb-status-row"><div style="width:34px;min-width:34px;margin-right:10px;flex-shrink:0"></div><span class="gb-status upcoming" style="flex:1">${isNext?'▶ NEXT':'UPCOMING'}</span></div>
           <div class="gb-team-row">${logoA}<span class="gb-name winner" style="color:${ac}">${g.away}</span></div>
           <div class="gb-team-row">${logoH}<span class="gb-name winner" style="color:${hc}">${g.home}</span></div>
         </div>
