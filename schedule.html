@@ -2,22 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Scores — DVSL Softball</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#070709;--card:#101013;--card2:#161619;--card3:#1c1c21;
-  --border:rgba(255,255,255,.09);--border2:rgba(255,255,255,.15);
-  --gold:#F5C842;--white:#EFEFEF;--muted:rgba(239,239,239,.75);--muted2:rgba(239,239,239,.45);
+  --bg:#070709;--card:#101013;--card2:#161619;--card3:#1e1e22;
+  --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.14);
+  --gold:#F5C842;--white:#EFEFEF;--muted:rgba(239,239,239,.75);--muted2:rgba(239,239,239,.42);
   --blue:#60a5fa;--green:#22c55e;--red:#E03C31;
 }
-html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;min-height:100vh}
 
-/* NAV */
+/* ── NAV ─────────────────────────────────── */
 nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(7,7,9,.97);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);gap:24px}
 .nav-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);text-decoration:none;display:flex;align-items:center;gap:10px;flex-shrink:0}
 .nav-logo img{height:28px;opacity:.85}
@@ -35,137 +33,131 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .mob-menu a{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:var(--white);text-decoration:none;padding:12px 0;border-bottom:1px solid var(--border);display:block}
 .mob-menu a:last-child{border-bottom:none}
 
-/* PAGE */
+/* ── PAGE SHELL ─────────────────────────────────── */
 .page-wrap{padding-top:62px}
 
-/* SCORES/SCHEDULE TOGGLE */
-.page-header{padding:20px 48px 0;display:flex;align-items:center;gap:0;border-bottom:1px solid var(--border);background:var(--bg)}
-.ph-btn{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30px;text-transform:uppercase;color:var(--muted);padding:14px 0;margin-right:28px;border-bottom:3px solid transparent;cursor:pointer;background:none;border-top:none;border-left:none;border-right:none;transition:color .15s,border-color .15s}
-.ph-btn.active{color:var(--white);border-bottom-color:var(--white)}
+/* ── SCORES/SCHEDULE TABS ─────────────────────────────────── */
+.tab-bar{display:flex;padding:0 48px;border-bottom:1px solid var(--border);background:var(--bg)}
+.tab-btn{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30px;text-transform:uppercase;color:var(--muted);padding:16px 0;margin-right:28px;background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;transition:color .15s,border-color .15s}
+.tab-btn.active{color:var(--white);border-bottom-color:var(--white)}
 
-/* DATE NAV */
-.date-nav{display:flex;align-items:center;background:var(--bg);border-bottom:2px solid var(--border);position:sticky;top:62px;z-index:50;padding:0 32px;gap:0;overflow-x:auto;scrollbar-width:none}
+/* ── DATE NAV ─────────────────────────────────── */
+.date-nav{display:flex;align-items:stretch;background:var(--bg);border-bottom:1px solid var(--border);position:sticky;top:62px;z-index:50;overflow-x:auto;scrollbar-width:none}
 .date-nav::-webkit-scrollbar{display:none}
-.dn-arrow{background:none;border:none;color:var(--muted);font-size:22px;padding:14px 10px;cursor:pointer;flex-shrink:0;transition:color .15s;line-height:1}
+.dn-arrow{background:none;border:none;color:var(--muted);font-size:24px;padding:0 14px;cursor:pointer;flex-shrink:0;transition:color .15s}
 .dn-arrow:hover{color:var(--white)}
-.dn-slots{display:flex;flex:1;overflow:hidden}
-.dn-slot{display:flex;flex-direction:column;align-items:center;padding:12px 20px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s;flex-shrink:0;min-width:70px;gap:2px}
+.dn-slot{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 18px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;flex-shrink:0;min-width:72px;gap:1px}
 .dn-slot:hover{background:rgba(255,255,255,.04)}
 .dn-slot.active{border-bottom-color:var(--gold)}
-.dn-slot-dow{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2)}
-.dn-slot.active .dn-slot-dow{color:var(--gold)}
-.dn-slot-date{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:var(--white);line-height:1}
-.dn-slot.today .dn-slot-dow{color:var(--gold)}
-.dn-slot.today .dn-slot-date{color:var(--gold)}
+.dn-slot .wk-label{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2)}
+.dn-slot.active .wk-label{color:var(--gold)}
+.dn-slot .wk-date{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:var(--white);line-height:1}
+.dn-slot.active .wk-date{color:var(--gold)}
 
-/* SCOREBOARD BODY */
-.sb-wrap{max-width:1100px;margin:0 auto;padding:0 32px 80px}
+/* ── SCOREBOARD ─────────────────────────────────── */
+.sb-wrap{max-width:1060px;margin:0 auto;padding:0 32px 80px}
 
-/* DAY HEADER */
-.sb-day-header{padding:20px 0 10px;display:flex;align-items:baseline;justify-content:space-between;border-bottom:2px solid var(--border2)}
-.sb-day-title{font-size:20px;font-weight:700;color:var(--white)}
+/* Day header */
+.sb-day-head{padding:22px 0 8px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);border-bottom:1px solid var(--border2);margin-bottom:2px}
+.sb-week-head{padding:20px 0 4px;font-size:18px;font-weight:700;color:var(--white)}
 
-/* GAME ROW - ESPN style */
-.game-row{
+/* ── GAME BLOCK ─────────────────────────────────── */
+.game-block{
   display:grid;
-  grid-template-columns:140px 1fr 240px 200px;
+  grid-template-columns: 300px 1fr 260px 160px;
   align-items:center;
   padding:16px 0;
   border-bottom:1px solid var(--border);
-  gap:24px;
+  gap:0;
   cursor:pointer;
-  transition:background .12s;
   border-radius:4px;
+  transition:background .12s;
 }
-.game-row:hover{background:rgba(255,255,255,.03)}
+.game-block:hover{background:rgba(255,255,255,.025)}
 
-/* LEFT — status + R/H/E teams */
-.gr-left{}
-.gr-status{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);margin-bottom:10px}
-.gr-status.final{color:var(--muted2)}
-.gr-status.live{color:#4ade80}
-.gr-status.upcoming{color:var(--gold)}
-.gr-rhe-head{display:grid;grid-template-columns:1fr auto auto auto;gap:0 16px;margin-bottom:4px;padding-right:4px}
-.gr-rhe-lbl{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--muted2);text-align:right;width:28px}
-.gr-team-row{display:grid;grid-template-columns:1fr auto auto auto;align-items:center;gap:0 16px;padding:5px 0}
-.gr-team-logo{width:32px;height:32px;border-radius:6px;border:1px solid rgba(255,255,255,.12);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:11px;margin-right:10px}
-.gr-team-name-wrap{display:flex;align-items:center;min-width:0}
-.gr-team-abbr{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;line-height:1;white-space:nowrap}
-.gr-team-record{font-size:11px;color:var(--muted2);margin-left:8px;font-weight:400;white-space:nowrap}
-.gr-score{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;line-height:1;width:28px;text-align:right}
-.gr-score.winner{color:var(--white)}
-.gr-score.loser{color:rgba(239,239,239,.45)}
-.gr-rhe-val{font-size:16px;font-weight:600;width:28px;text-align:right;color:rgba(239,239,239,.65)}
-.gr-team-abbr.loser{color:rgba(239,239,239,.55)}
-.winner-arrow{color:var(--white);font-size:10px;margin-left:6px;opacity:.7}
+/* ── LEFT: status + teams ─────────────────────── */
+.gb-left{}
 
-/* MIDDLE — field */
-.gr-mid{padding-left:16px;border-left:1px solid var(--border)}
-.gr-field{font-weight:600;font-size:14px;color:var(--white);margin-bottom:3px}
-.gr-addr{font-size:12px;color:var(--muted2)}
-.gr-time{font-size:13px;font-weight:600;color:var(--gold);margin-top:4px}
+/* Status row: FINAL + R H E labels */
+.gb-status-row{display:flex;align-items:center;margin-bottom:6px;padding-left:2px}
+.gb-status{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);width:52px;flex-shrink:0}
+.gb-status.final{color:var(--muted2)}
+.gb-status.upcoming{color:var(--gold)}
+.gb-rhe-labels{display:flex;gap:0;margin-left:auto}
+.gb-rhe-lbl{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted2);width:38px;text-align:right}
 
-/* WIN/LOSS pitcher — only for future maybe */
-.gr-pitcher-col{display:flex;flex-direction:column;gap:8px}
-.gr-pitcher-row{display:flex;align-items:center;gap:10px}
-.gr-pitcher-role{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);width:36px;flex-shrink:0}
-.gr-pitcher-avatar{width:32px;height:32px;border-radius:50%;background:var(--card2);border:1px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--muted)}
-.gr-pitcher-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-.gr-pitcher-name{font-weight:600;font-size:13px;white-space:nowrap}
-.gr-pitcher-stat{font-size:11px;color:var(--muted2)}
+/* Team row */
+.gb-team-row{display:flex;align-items:center;padding:5px 0}
+.gb-logo{width:30px;height:30px;border-radius:6px;border:1.5px solid;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:9px;letter-spacing:.03em;margin-right:10px}
+.gb-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;flex:1;white-space:nowrap}
+.gb-name.winner{color:var(--white)}
+.gb-name.loser{color:rgba(239,239,239,.4)}
+.gb-arrow{font-size:9px;margin-left:6px;color:var(--white);opacity:.7}
+.gb-rhe-vals{display:flex;gap:0;margin-left:auto}
+.gb-rhe-val{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:18px;width:38px;text-align:right;color:rgba(239,239,239,.6)}
+.gb-score{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;line-height:1;width:38px;text-align:right}
+.gb-score.winner{color:var(--white)}
+.gb-score.loser{color:rgba(239,239,239,.38)}
 
-/* RIGHT — action buttons */
-.gr-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
-.gr-btn{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--blue);border:1px solid rgba(96,165,250,.3);border-radius:20px;padding:7px 20px;cursor:pointer;background:none;transition:all .15s;white-space:nowrap;min-width:110px;text-align:center}
-.gr-btn:hover{background:rgba(96,165,250,.1);border-color:var(--blue)}
-.gr-btn.gold-btn{color:var(--gold);border-color:rgba(245,200,66,.3)}
-.gr-btn.gold-btn:hover{background:rgba(245,200,66,.08);border-color:var(--gold)}
+/* ── MIDDLE: field info ─────────────────────── */
+.gb-mid{padding:0 28px;border-left:1px solid var(--border)}
+.gb-field{font-weight:700;font-size:14px;color:var(--white);margin-bottom:3px}
+.gb-addr{font-size:12px;color:var(--muted2)}
+.gb-time{font-size:14px;font-weight:700;color:var(--gold);margin-top:6px}
 
-/* UPCOMING row */
-.gr-upcoming-time{font-size:15px;font-weight:700;color:var(--white);text-align:center;padding:10px 0}
-.gr-vs{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:var(--muted2);margin:0 12px}
+/* ── WIN/LOSS column ─────────────────────── */
+.gb-wl{padding:0 20px;border-left:1px solid var(--border)}
+.gb-wl-row{display:flex;align-items:center;gap:10px;padding:5px 0}
+.gb-wl-role{font-size:9px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2);width:32px;flex-shrink:0}
+.gb-wl-badge{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:8px}
+.gb-wl-name{font-size:12px;font-weight:600;color:rgba(239,239,239,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+.gb-wl-stat{font-size:11px;color:var(--muted2)}
 
-/* SECTION - no games */
-.no-games{padding:40px;text-align:center;color:var(--muted2);font-size:15px}
+/* ── ACTION BUTTONS ─────────────────────── */
+.gb-actions{display:flex;flex-direction:column;gap:8px;align-items:flex-end;padding-left:16px}
+.gb-btn{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--blue);border:1px solid rgba(96,165,250,.35);border-radius:20px;padding:7px 22px;cursor:pointer;background:none;transition:all .15s;white-space:nowrap;min-width:108px;text-align:center}
+.gb-btn:hover{background:rgba(96,165,250,.1);border-color:var(--blue)}
+.gb-btn.gold{color:var(--gold);border-color:rgba(245,200,66,.35)}
+.gb-btn.gold:hover{background:rgba(245,200,66,.08);border-color:var(--gold)}
 
-/* ── POPUP OVERLAY ─────────────────────────────────── */
-.pop-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
-.pop-overlay.open{opacity:1;pointer-events:all}
-.pop-modal{background:#0f0f12;border:1px solid var(--border2);border-radius:16px;width:100%;max-width:740px;max-height:90vh;overflow-y:auto;position:relative;animation:popIn .22s ease}
-@keyframes popIn{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
-.pop-close{position:absolute;top:14px;right:16px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
-.pop-close:hover{color:var(--white)}
-.pop-header{padding:28px 32px 20px;border-bottom:1px solid var(--border)}
-.pop-matchup{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:14px}
-.pop-team{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}
-.pop-abbr{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:64px;line-height:1}
-.pop-role{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2)}
-.pop-score-mid{display:flex;flex-direction:column;align-items:center;padding:0 24px;flex-shrink:0}
-.pop-score{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:72px;line-height:1;letter-spacing:-.02em}
+/* no-games */
+.no-games{padding:48px;text-align:center;color:var(--muted2);font-size:15px}
+
+/* ── POPUP ─────────────────────────────────── */
+.pop{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.pop.open{opacity:1;pointer-events:all}
+.pop-box{background:#0f0f12;border:1px solid var(--border2);border-radius:16px;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;position:relative;animation:popIn .22s ease}
+@keyframes popIn{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+.pop-x{position:absolute;top:14px;right:16px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:13px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+.pop-x:hover{color:var(--white)}
+.pop-hd{padding:28px 32px 18px;border-bottom:1px solid var(--border)}
+.pop-matchup{display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.pop-team{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+.pop-abbr{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:60px;line-height:1}
+.pop-role-lbl{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted2)}
+.pop-sc-mid{display:flex;flex-direction:column;align-items:center;padding:0 20px;flex-shrink:0}
+.pop-sc{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:72px;line-height:1;letter-spacing:-.02em}
 .pop-dash{font-size:40px;color:var(--muted2);margin:0 8px}
-.pop-badge{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:4px 12px;border-radius:4px;margin-top:6px}
-.badge-final{background:rgba(255,255,255,.08);color:var(--muted)}
-.badge-next{background:rgba(245,200,66,.15);color:var(--gold)}
+.pop-badge{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:4px 12px;border-radius:4px;margin-top:6px;background:rgba(255,255,255,.08);color:var(--muted)}
+.pop-badge.next{background:rgba(245,200,66,.15);color:var(--gold)}
 .pop-meta{display:flex;justify-content:center;gap:20px;font-size:12px;color:var(--muted2);flex-wrap:wrap}
-.pop-meta span{display:flex;align-items:center;gap:4px}
-.pop-section{padding:20px 32px}
-.pop-section-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted2);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
-.pop-recap-text{font-size:14px;line-height:1.8;color:rgba(239,239,239,.85)}
-.pop-stars{margin-top:16px;border-top:1px solid var(--border);padding-top:14px}
-.pop-star-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px}
-.pop-star-row{font-size:13px;color:rgba(239,239,239,.75);padding:4px 0;display:flex;align-items:center;gap:8px}
-.pop-lineup-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.pop-lu-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:10px}
-.pop-lu-table{width:100%;border-collapse:collapse;font-size:13px}
-.pop-lu-table th{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);padding:5px 8px;text-align:left;border-bottom:1px solid var(--border)}
-.pop-lu-table th:not(:first-child){text-align:right}
-.pop-lu-table td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.03);color:rgba(239,239,239,.8);font-size:13px}
-.pop-lu-table td:not(:first-child){text-align:right;color:var(--muted);font-size:12px}
-.pop-lu-table tr:last-child td{border-bottom:none}
-.pop-lu-table tr:hover td{background:rgba(255,255,255,.03)}
-.pos-tag{font-size:9px;color:var(--muted2);margin-left:3px}
+.pop-body{padding:20px 32px}
+.pop-sec-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted2);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.pop-recap{font-size:14px;line-height:1.85;color:rgba(239,239,239,.85)}
+.pop-stars{margin-top:16px;padding-top:14px;border-top:1px solid var(--border)}
+.pop-stars-lbl{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px}
+.pop-star{font-size:13px;color:rgba(239,239,239,.75);padding:4px 0;display:flex;align-items:center;gap:8px}
+.pop-grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.pop-team-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:10px}
+.ptbl{width:100%;border-collapse:collapse;font-size:13px}
+.ptbl th{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);padding:5px 8px;text-align:left;border-bottom:1px solid var(--border)}
+.ptbl th:not(:first-child){text-align:right}
+.ptbl td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.03);color:rgba(239,239,239,.8);font-size:13px}
+.ptbl td:not(:first-child){text-align:right;color:var(--muted);font-size:12px}
+.ptbl tr:last-child td{border-bottom:none}
+.ptbl tr:hover td{background:rgba(255,255,255,.03)}
 
-/* FOOTER */
+/* ── FOOTER ─────────────────────────────────── */
 footer{padding:32px 40px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
 .ft-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:17px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
 .ft-links{display:flex;flex-wrap:wrap;gap:0}
@@ -178,27 +170,23 @@ footer{padding:32px 40px;border-top:1px solid var(--border);display:flex;align-i
   nav{padding:0 18px}
   .nav-links{display:none}
   .hamburger{display:flex}
-  .page-header{padding:14px 18px 0}
+  .tab-bar{padding:0 18px}
   .sb-wrap{padding:0 16px 60px}
-  .date-nav{padding:0 8px}
-  .game-row{grid-template-columns:1fr auto;gap:12px}
-  .gr-mid{display:none}
-  .gr-pitcher-col{display:none}
-  .gr-actions{flex-direction:row}
+  .game-block{grid-template-columns:1fr auto;gap:10px}
+  .gb-mid,.gb-wl{display:none}
+  .gb-actions{flex-direction:row;flex-wrap:wrap;justify-content:flex-end}
   footer{flex-direction:column;padding:24px 18px;text-align:center}
   .ft-links{justify-content:center}
-  .pop-lineup-grid{grid-template-columns:1fr}
+  .pop-grid2{grid-template-columns:1fr}
   .pop-abbr{font-size:44px}
-  .pop-score{font-size:52px}
-  .pop-header{padding:20px 18px 14px}
-  .pop-section{padding:16px 18px}
+  .pop-sc{font-size:52px}
+  .pop-hd{padding:20px 18px 14px}
+  .pop-body{padding:16px 18px}
 }
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:rgba(245,200,66,.3);border-radius:2px}
 </style>
 </head>
 <body>
+
 <nav>
   <a href="index.html" class="nav-logo"><img src="dvsl-logo-dark.png" alt="DVSL">DVSL</a>
   <ul class="nav-links">
@@ -227,22 +215,22 @@ footer{padding:32px 40px;border-top:1px solid var(--border);display:flex;align-i
 </div>
 
 <div class="page-wrap">
-  <div class="page-header">
-    <button class="ph-btn active" id="btn-scores" onclick="setView('scores')">Scores</button>
-    <button class="ph-btn" id="btn-schedule" onclick="setView('schedule')">Schedule</button>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="btn-scores" onclick="setView('scores')">Scores</button>
+    <button class="tab-btn" id="btn-schedule" onclick="setView('schedule')">Schedule</button>
   </div>
-  <div class="date-nav" id="dateNav">
-    <button class="dn-arrow" onclick="shiftWeek(-1)">&#8249;</button>
-    <div class="dn-slots" id="dnSlots"></div>
-    <button class="dn-arrow" onclick="shiftWeek(1)">&#8250;</button>
+  <div class="date-nav">
+    <button class="dn-arrow" onclick="shiftNav(-1)">&#8249;</button>
+    <div id="dnSlots" style="display:flex;flex:1"></div>
+    <button class="dn-arrow" onclick="shiftNav(1)">&#8250;</button>
   </div>
   <div class="sb-wrap" id="sbWrap"></div>
 </div>
 
-<!-- POPUP -->
-<div class="pop-overlay" id="popOverlay" onclick="if(event.target===this)closePop()">
-  <div class="pop-modal">
-    <button class="pop-close" onclick="closePop()">✕</button>
+<!-- POPUP OVERLAY -->
+<div class="pop" id="pop" onclick="if(event.target===this)closePop()">
+  <div class="pop-box">
+    <button class="pop-x" onclick="closePop()">✕</button>
     <div id="popContent"></div>
   </div>
 </div>
@@ -250,24 +238,16 @@ footer{padding:32px 40px;border-top:1px solid var(--border);display:flex;align-i
 <footer>
   <div class="ft-logo">⬡ DVSL</div>
   <div class="ft-links">
-    <a href="index.html">Home</a>
-    <a href="index.html#players">Roster</a>
-    <a href="index.html#leaders">Leaders</a>
-    <a href="schedule.html">Scores</a>
-    <a href="stats.html">Stats</a>
-    <a href="playoffs.html">Bracket</a>
-    <a href="standings-history.html">Standings</a>
-    <a href="rules.html">Field Guide</a>
-    <a href="photos.html">Gallery</a>
+    <a href="index.html">Home</a><a href="index.html#players">Roster</a><a href="index.html#leaders">Leaders</a>
+    <a href="schedule.html">Scores</a><a href="stats.html">Stats</a><a href="playoffs.html">Bracket</a>
+    <a href="standings-history.html">Standings</a><a href="rules.html">Field Guide</a><a href="photos.html">Gallery</a>
   </div>
   <div class="ft-copy">© 2026 DVSL · Delaware Valley Synagogue League</div>
 </footer>
 
 <script>
-document.getElementById('hbg').addEventListener('click',function(){
-  this.classList.toggle('open');
-  document.getElementById('mobMenu').classList.toggle('open');
-});
+const hbg=document.getElementById('hbg'),mob=document.getElementById('mobMenu');
+hbg.addEventListener('click',()=>{hbg.classList.toggle('open');mob.classList.toggle('open');});
 
 const TC = {
   'GOLD':'#F5C842','SA':'#4ade80','KI':'#60a5fa','BOB':'#f87171',
@@ -277,16 +257,13 @@ const TC = {
   'TBI1':'#c084fc','GJC':'#38bdf8','BAMI':'#fb923c','BOO':'#a3e635',
   'TBIR':'#c084fc','BSMC':'#f472b6'
 };
-
-function tc(abbr){return TC[abbr]||'#9ca3af'}
+function tc(a){return TC[a]||'#9ca3af'}
 function cleanField(f){return f.replace(/\s*\d+pm$/i,'').trim()}
 function parseTime(g){
-  if(g.time&&g.time!==''&&g.time!=='Tues'){if(/^\d/.test(g.time))return g.time;}
+  if(g.time&&/^\d/.test(g.time))return g.time;
   const m=g.field.match(/(\d+)pm/i);
   if(m)return m[1]+':00 PM';
-  if(g.day==='mon'||g.day==='wed'||g.day==='thu')return '7:30 PM';
-  if(g.day==='tue')return '7:00 PM';
-  return '7:30 PM';
+  return'7:30 PM';
 }
 
 const weeks = [
@@ -460,36 +437,6 @@ const weeks = [
 ];
 
 
-const DOW = {mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu'};
-const MONTH_SHORT = {April:'Apr',May:'May',June:'Jun',July:'Jul',August:'Aug',September:'Sep'};
-const currentWeekIdx = 9;
-let activeWeekOffset = 0;
-let activeView = 'scores';
-
-// Sample lineups
-const LINEUP_A = [
-  {name:'Marcus Williams',pos:'CF',avg:'.312',hr:4,rbi:18},
-  {name:'David Cohen',pos:'SS',avg:'.298',hr:2,rbi:12},
-  {name:'Ray Santos',pos:'1B',avg:'.344',hr:7,rbi:26},
-  {name:'Jake Miller',pos:'LF',avg:'.276',hr:3,rbi:14},
-  {name:'Eric Goldberg',pos:'3B',avg:'.322',hr:5,rbi:20},
-  {name:'Tom Levine',pos:'RF',avg:'.289',hr:1,rbi:9},
-  {name:'Steve Katz',pos:'2B',avg:'.301',hr:2,rbi:11},
-  {name:'Andy Rubin',pos:'C',avg:'.265',hr:1,rbi:8},
-  {name:'Pete Shapiro',pos:'DH',avg:'.334',hr:6,rbi:22},
-];
-const LINEUP_H = [
-  {name:'Carlos Rivera',pos:'SS',avg:'.318',hr:3,rbi:16},
-  {name:'Brian Stern',pos:'CF',avg:'.305',hr:2,rbi:10},
-  {name:'Mike Rosen',pos:'1B',avg:'.355',hr:8,rbi:28},
-  {name:'Jason Weiss',pos:'LF',avg:'.281',hr:4,rbi:15},
-  {name:'Dan Friedman',pos:'3B',avg:'.299',hr:2,rbi:13},
-  {name:'Rob Cohen',pos:'RF',avg:'.274',hr:1,rbi:7},
-  {name:'Larry Gold',pos:'2B',avg:'.311',hr:3,rbi:14},
-  {name:'Jeff Moss',pos:'C',avg:'.258',hr:0,rbi:6},
-  {name:'Alan Sherman',pos:'DH',avg:'.329',hr:5,rbi:19},
-];
-
 const RECAPS = [
   {away:'BOB',home:'SA',as:9,hs:10,
    text:`In one of the most dramatic finishes of the young season, Shir Ami walked off BOB in extra innings, 10-9, on a bases-loaded single by Pete DiNunzio in the bottom of the eighth. BOB had taken a 9-7 lead in the top of the seventh on a two-run shot by Bobby Marchetti — his ninth of the year — that silenced the crowd. But SA refused to fold. Carlos Rivera led off the bottom half with a sharp single up the middle, and Tony DeLuca followed with a double off the wall. DiNunzio worked a 2-0 count before slapping the walk-off hit into right field. Shir Ami's fifth straight win keeps them atop the standings at 9-5.`,
@@ -502,298 +449,279 @@ const RECAPS = [
    stars:['Josh Weinberg · 4-4, 2 HR, 5 RBI','Mike Goldstein · 3-4, 2B, 2 RBI','Aaron Rosen · 2-3, 3B, 1 RBI']},
 ];
 
-function fakeScore(g, idx, gi){
-  const seed = (g.away.charCodeAt(0)||0) + (g.home.charCodeAt(0)||0) + idx*3 + gi*7;
-  let as = 3 + (seed % 9), hs = 2 + ((seed*3+5) % 8);
-  if(as===hs) hs++;
-  return {as,hs};
+// Stars of game lookup per-team
+const STAR_NAMES = {
+  GOLD:['Josh Weinberg','Mike Goldstein','Aaron Rosen','David Levy'],
+  SA:['Carlos Rivera','Tony DeLuca','Pete DiNunzio','Ray Kowalski'],
+  KI:['Kevin Park','Brian Kim','Danny Ito','Sam Levy'],
+  BOB:['Bobby Marchetti','Tony Greco','Chris Rosario','Sal Bianco'],
+  TBIR:['Tom Birnbaum','Jake Robbins','Abe Stern','Phil Grossman'],
+  AJ:['Al Jacobs','Barry Kahn','Dave Stein','Hal Becker'],
+  TSMC:['Rob Zwick','Lenny Gross','Rich Herman','Norm Seidel'],
+  BSMC:['Andy Katz','Bob Weiner','Hal Brody','Chuck Levy'],
+};
+function starName(team,i){return(STAR_NAMES[team]||[])[i%4]||team+' Player';}
+
+const LINEUP = [
+  {name:'Marcus Williams',pos:'CF',avg:'.312',hr:4,rbi:18},
+  {name:'David Cohen',    pos:'SS',avg:'.298',hr:2,rbi:12},
+  {name:'Ray Santos',     pos:'1B',avg:'.344',hr:7,rbi:26},
+  {name:'Jake Miller',    pos:'LF',avg:'.276',hr:3,rbi:14},
+  {name:'Eric Goldberg',  pos:'3B',avg:'.322',hr:5,rbi:20},
+  {name:'Tom Levine',     pos:'RF',avg:'.289',hr:1,rbi:9},
+  {name:'Steve Katz',     pos:'2B',avg:'.301',hr:2,rbi:11},
+  {name:'Andy Rubin',     pos:'C', avg:'.265',hr:1,rbi:8},
+  {name:'Pete Shapiro',   pos:'DH',avg:'.334',hr:6,rbi:22},
+];
+
+const CURRENT_WK_IDX = 9; // weeks index treated as "current"
+let weekOffset = 0;
+let view = 'scores';
+
+function fakeScore(away,home,seed){
+  const s=(away.charCodeAt(0)+home.charCodeAt(0)+seed*7)%15;
+  let a=4+(s%8), h=3+((s*3+5)%7);
+  if(a===h)h++;
+  return{a,h};
 }
 
-function getDisplayWindow(){
-  const center = currentWeekIdx + activeWeekOffset;
-  const start = Math.max(0, center-3);
-  const end = Math.min(weeks.length-1, center+3);
-  return {wks: weeks.slice(start, end+1), startIdx: start};
-}
-
-function buildDateNav(){
-  const {wks, startIdx} = getDisplayWindow();
-  const activeAbsIdx = currentWeekIdx + activeWeekOffset;
-  document.getElementById('dnSlots').innerHTML = wks.map((w, i) => {
-    const absIdx = startIdx + i;
-    const isActive = absIdx === activeAbsIdx;
-    const isCurrent = absIdx === currentWeekIdx;
-    const dateStr = w.date || '';
-    const parts = dateStr.split(' ');
-    const mon = MONTH_SHORT[parts[0]] || parts[0] || '';
-    const day = parts[1] || '';
-    return `<div class="dn-slot ${isActive?'active':''} ${isCurrent?'today':''}" onclick="setActiveWeek(${absIdx - currentWeekIdx})">
-      <div class="dn-slot-dow">WK ${w.wk}</div>
-      <div class="dn-slot-date">${mon} ${day}</div>
+function buildNav(){
+  const center=CURRENT_WK_IDX+weekOffset;
+  const start=Math.max(0,center-3), end=Math.min(weeks.length-1,center+3);
+  const slots=weeks.slice(start,end+1);
+  document.getElementById('dnSlots').innerHTML=slots.map((w,i)=>{
+    const abs=start+i, active=abs===(CURRENT_WK_IDX+weekOffset);
+    const [mon,day]=(w.date||'').split(' ');
+    const mo={'April':'Apr','May':'May','June':'Jun','July':'Jul','August':'Aug'}[mon]||mon;
+    return`<div class="dn-slot${active?' active':''}" onclick="setWeek(${abs-CURRENT_WK_IDX})">
+      <div class="wk-label">WK ${w.wk}</div>
+      <div class="wk-date">${mo} ${day}</div>
     </div>`;
   }).join('');
 }
 
-function setActiveWeek(offset){
-  activeWeekOffset = offset;
-  buildDateNav();
-  renderScoreboard();
+function setWeek(off){weekOffset=off;buildNav();render();}
+function shiftNav(d){
+  const ni=CURRENT_WK_IDX+weekOffset+(d*4);
+  if(ni<0||ni>=weeks.length)return;
+  weekOffset+=d*4;buildNav();render();
 }
-
-function shiftWeek(dir){
-  const newIdx = currentWeekIdx + activeWeekOffset + (dir*4);
-  if(newIdx < 0 || newIdx >= weeks.length) return;
-  activeWeekOffset = activeWeekOffset + (dir*4);
-  buildDateNav();
-  renderScoreboard();
-}
-
 function setView(v){
-  activeView = v;
+  view=v;
   document.getElementById('btn-scores').classList.toggle('active',v==='scores');
   document.getElementById('btn-schedule').classList.toggle('active',v==='schedule');
-  renderScoreboard();
+  render();
 }
 
-function abbr(name){ return name.split(' ').slice(-1)[0].toUpperCase(); }
+const DAY_FULL={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday'};
 
-// Format weekday date label like "Monday, April 17"
-const DAYS_FULL = {mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday'};
-const MONTHS_FULL = {April:'April',May:'May',June:'June',July:'July',August:'August',September:'September'};
-
-function buildGameRow(g, weekIdx, gi, isPast, isCurrent){
-  const ac = tc(g.away), hc = tc(g.home);
-  const time = parseTime(g);
-  const field = cleanField(g.field);
-  const {as,hs} = isPast ? fakeScore(g,weekIdx,gi) : {as:null,hs:null};
-  const awayWon = isPast && as > hs;
-  const awayLogo = `<div class="gr-team-logo" style="color:${ac};border-color:${ac}33">${g.away}</div>`;
-  const homeLogo = `<div class="gr-team-logo" style="color:${hc};border-color:${hc}33">${g.home}</div>`;
-
-  // Find recap
-  const recap = RECAPS.find(r => r.away===g.away && r.home===g.home);
-
+function gameBlock(g,wkIdx,gi,isPast,isNext){
+  const ac=tc(g.away),hc=tc(g.home);
+  const field=cleanField(g.field), time=parseTime(g);
+  const addr=g.addr||'Philadelphia Area';
+  const recap=RECAPS.find(r=>r.away===g.away&&r.home===g.home);
   if(isPast){
-    const aH = Math.floor(as*2.1), hH = Math.floor(hs*2.1);
-    const aE = gi%3===0?1:0, hE = gi%5===0?1:0;
-    return `<div class="game-row" onclick="openBox('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">
-      <div class="gr-left">
-        <div class="gr-status final">FINAL</div>
-        <div class="gr-rhe-head">
-          <div></div>
-          <div class="gr-rhe-lbl">R</div>
-          <div class="gr-rhe-lbl">H</div>
-          <div class="gr-rhe-lbl">E</div>
+    const{a:as,h:hs}=fakeScore(g.away,g.home,wkIdx*10+gi);
+    const aW=as>hs;
+    const aH=Math.floor(as*2.1), hH=Math.floor(hs*2.1);
+    const aE=gi%3?0:1, hE=gi%5?0:1;
+    const wTeam=aW?g.away:g.home, lTeam=aW?g.home:g.away;
+    const wStar=starName(wTeam,0), lStar=starName(lTeam,0);
+    const wc=aW?ac:hc, lc=aW?hc:ac;
+    return`<div class="game-block" onclick="openBox('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">
+      <div class="gb-left">
+        <div class="gb-status-row">
+          <span class="gb-status final">FINAL</span>
+          <div class="gb-rhe-labels"><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         </div>
-        <div class="gr-team-row">
-          <div class="gr-team-name-wrap">${awayLogo}<span class="gr-team-abbr ${awayWon?'':'loser'}" style="color:${awayWon?ac:'rgba(239,239,239,.5)'}">${g.away}${awayWon?'<span class="winner-arrow">◀</span>':''}</span></div>
-          <div class="gr-score ${awayWon?'winner':'loser'}">${as}</div>
-          <div class="gr-rhe-val">${aH}</div>
-          <div class="gr-rhe-val">${aE}</div>
+        <div class="gb-team-row">
+          <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
+          <span class="gb-name ${aW?'winner':'loser'}">${g.away}${aW?'<span class="gb-arrow">◀</span>':''}</span>
+          <div class="gb-rhe-vals">
+            <span class="gb-score ${aW?'winner':'loser'}">${as}</span>
+            <span class="gb-rhe-val">${aH}</span>
+            <span class="gb-rhe-val">${aE}</span>
+          </div>
         </div>
-        <div class="gr-team-row">
-          <div class="gr-team-name-wrap">${homeLogo}<span class="gr-team-abbr ${!awayWon?'':'loser'}" style="color:${!awayWon?hc:'rgba(239,239,239,.5)'}">${g.home}${!awayWon?'<span class="winner-arrow">◀</span>':''}</span></div>
-          <div class="gr-score ${!awayWon?'winner':'loser'}">${hs}</div>
-          <div class="gr-rhe-val">${hH}</div>
-          <div class="gr-rhe-val">${hE}</div>
-        </div>
-      </div>
-      <div class="gr-mid">
-        <div class="gr-field">${field}</div>
-        <div class="gr-addr">${g.addr||'Philadelphia Area'}</div>
-      </div>
-      <div class="gr-pitcher-col">
-        <div class="gr-pitcher-row">
-          <div class="gr-pitcher-role">WIN</div>
-          <div class="gr-pitcher-avatar"><div style="font-size:11px;color:${awayWon?ac:hc}">${awayWon?g.away:g.home}</div></div>
-          <div><div class="gr-pitcher-name">${recap?.stars?.[0]?.split('·')[0]?.trim()||'—'}</div><div class="gr-pitcher-stat">${awayWon?g.away:g.home}</div></div>
-        </div>
-        <div class="gr-pitcher-row">
-          <div class="gr-pitcher-role">LOSS</div>
-          <div class="gr-pitcher-avatar"><div style="font-size:11px;color:${!awayWon?ac:hc}">${!awayWon?g.away:g.home}</div></div>
-          <div><div class="gr-pitcher-name">${recap?.stars?.[2]?.split('·')[0]?.trim()||'—'}</div><div class="gr-pitcher-stat">${!awayWon?g.away:g.home}</div></div>
+        <div class="gb-team-row">
+          <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
+          <span class="gb-name ${!aW?'winner':'loser'}">${g.home}${!aW?'<span class="gb-arrow">◀</span>':''}</span>
+          <div class="gb-rhe-vals">
+            <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span>
+            <span class="gb-rhe-val">${hH}</span>
+            <span class="gb-rhe-val">${hE}</span>
+          </div>
         </div>
       </div>
-      <div class="gr-actions">
-        <button class="gr-btn" onclick="event.stopPropagation();openRecap('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">Recap</button>
-        <button class="gr-btn" onclick="event.stopPropagation();openBox('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">Box Score</button>
+      <div class="gb-mid">
+        <div class="gb-field">${field}</div>
+        <div class="gb-addr">${addr}</div>
+      </div>
+      <div class="gb-wl">
+        <div class="gb-wl-row">
+          <span class="gb-wl-role">WIN</span>
+          <div class="gb-wl-badge" style="background:${wc}22;color:${wc};border:1px solid ${wc}44">${wTeam}</div>
+          <div><div class="gb-wl-name">${wStar}</div><div class="gb-wl-stat">${wTeam}</div></div>
+        </div>
+        <div class="gb-wl-row">
+          <span class="gb-wl-role">LOSS</span>
+          <div class="gb-wl-badge" style="background:${lc}22;color:${lc};border:1px solid ${lc}44">${lTeam}</div>
+          <div><div class="gb-wl-name">${lStar}</div><div class="gb-wl-stat">${lTeam}</div></div>
+        </div>
+      </div>
+      <div class="gb-actions">
+        <button class="gb-btn" onclick="event.stopPropagation();openRecap('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">Recap</button>
+        <button class="gb-btn" onclick="event.stopPropagation();openBox('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">Box Score</button>
       </div>
     </div>`;
   } else {
-    return `<div class="game-row" onclick="openGameday('${g.away}','${g.home}','${field}','${time}')">
-      <div class="gr-left">
-        <div class="gr-status upcoming">${isCurrent?'▶ NEXT':'UPCOMING'}</div>
-        <div class="gr-team-row" style="margin-top:8px">
-          <div class="gr-team-name-wrap">${awayLogo}<span class="gr-team-abbr" style="color:${ac}">${g.away}</span></div>
+    return`<div class="game-block" onclick="openGameday('${g.away}','${g.home}','${field}','${time}')">
+      <div class="gb-left">
+        <div class="gb-status-row">
+          <span class="gb-status upcoming">${isNext?'NEXT':'UPCOMING'}</span>
         </div>
-        <div class="gr-team-row">
-          <div class="gr-team-name-wrap">${homeLogo}<span class="gr-team-abbr" style="color:${hc}">${g.home}</span></div>
+        <div class="gb-team-row">
+          <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
+          <span class="gb-name winner">${g.away}</span>
+        </div>
+        <div class="gb-team-row">
+          <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
+          <span class="gb-name winner">${g.home}</span>
         </div>
       </div>
-      <div class="gr-mid">
-        <div class="gr-field">${field}</div>
-        <div class="gr-addr">${g.addr||'Philadelphia Area'}</div>
-        <div class="gr-time">${time}</div>
+      <div class="gb-mid">
+        <div class="gb-field">${field}</div>
+        <div class="gb-addr">${addr}</div>
+        <div class="gb-time">${time}</div>
       </div>
-      <div class="gr-pitcher-col" style="align-items:center;justify-content:center">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--gold);text-align:center">${time}</div>
+      <div class="gb-wl" style="display:flex;align-items:center;justify-content:center">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:var(--gold)">${time}</div>
       </div>
-      <div class="gr-actions">
-        <button class="gr-btn gold-btn" onclick="event.stopPropagation();openGameday('${g.away}','${g.home}','${field}','${time}')">Gameday</button>
+      <div class="gb-actions">
+        <button class="gb-btn gold" onclick="event.stopPropagation();openGameday('${g.away}','${g.home}','${field}','${time}')">Gameday</button>
       </div>
     </div>`;
   }
 }
 
-function renderScoreboard(){
-  const wrap = document.getElementById('sbWrap');
-  const activeIdx = currentWeekIdx + activeWeekOffset;
-
-  if(activeView === 'scores'){
-    // Show last 3 weeks of completed games
-    const pastWeeks = weeks.map((w,i)=>({w,i})).filter(({i})=>i < currentWeekIdx && weeks[i].games.length>0);
-    if(pastWeeks.length===0){ wrap.innerHTML='<div class="no-games">No completed games yet.</div>'; return; }
-    const toShow = pastWeeks.slice(-3).reverse();
-    wrap.innerHTML = toShow.map(({w,i})=>{
-      // Group by day
-      const byDay = {};
-      w.games.forEach(g=>{ (byDay[g.day]=byDay[g.day]||[]).push(g); });
-      return `<div>
-        <div class="sb-day-header"><div class="sb-day-title">Week ${w.wk} · ${w.date}</div></div>
-        ${['mon','tue','wed','thu'].filter(d=>byDay[d]).map(day=>`
-          <div style="padding:6px 0 2px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2)">${DAYS_FULL[day]}</div>
-          ${byDay[day].map((g,gi)=>buildGameRow(g,i,gi,true,false)).join('')}
-        `).join('')}
-      </div>`;
-    }).join('');
+function render(){
+  const wrap=document.getElementById('sbWrap');
+  if(view==='scores'){
+    // Show 3 most recent completed weeks
+    const past=weeks.map((w,i)=>({w,i})).filter(({i})=>i<CURRENT_WK_IDX&&weeks[i].games.length);
+    if(!past.length){wrap.innerHTML='<div class="no-games">No completed games yet.</div>';return;}
+    const shown=past.slice(-3).reverse();
+    wrap.innerHTML=shown.map(({w,i})=>{
+      const byDay={};
+      w.games.forEach(g=>{(byDay[g.day]=byDay[g.day]||[]).push(g);});
+      const days=['mon','tue','wed','thu'].filter(d=>byDay[d]);
+      return`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
+        +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`+byDay[d].map((g,gi)=>gameBlock(g,i,gi,true,false)).join('')).join('');
+    }).join('<div style="height:16px"></div>');
   } else {
-    const week = weeks[activeIdx];
-    if(!week||!week.games.length){ wrap.innerHTML='<div class="no-games">No games scheduled this week.</div>'; return; }
-    const isPast = activeIdx < currentWeekIdx;
-    const isCurrent = activeIdx === currentWeekIdx;
+    const idx=CURRENT_WK_IDX+weekOffset;
+    const week=weeks[idx];
+    if(!week||!week.games.length){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
+    const isPast=idx<CURRENT_WK_IDX, isCurrent=idx===CURRENT_WK_IDX;
     const byDay={};
     week.games.forEach(g=>{(byDay[g.day]=byDay[g.day]||[]).push(g);});
-    wrap.innerHTML = `<div>
-      <div class="sb-day-header"><div class="sb-day-title">Week ${week.wk} · ${week.date}</div></div>
-      ${['mon','tue','wed','thu'].filter(d=>byDay[d]).map(day=>`
-        <div style="padding:6px 0 2px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2)">${DAYS_FULL[day]}</div>
-        ${byDay[day].map((g,gi)=>buildGameRow(g,activeIdx,gi,isPast,isCurrent)).join('')}
-      `).join('')}
-    </div>`;
+    const days=['mon','tue','wed','thu'].filter(d=>byDay[d]);
+    wrap.innerHTML=`<div class="sb-week-head">Week ${week.wk} · ${week.date}</div>`
+      +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`+byDay[d].map((g,gi)=>gameBlock(g,idx,gi,isPast,isCurrent)).join('')).join('');
   }
 }
 
-// ── POPUPS ─────────────────────────────────────────────────────────────────
+// ── POPUPS ──────────────────────────────────────────────────────────────────
 function openRecap(away,home,as,hs,field,date){
-  const ac=tc(away),hc=tc(home);
-  const recap=RECAPS.find(r=>r.away===away&&r.home===home)||RECAPS[0];
-  const awayWon=as>hs;
+  const ac=tc(away),hc=tc(home),aW=as>hs;
+  const recap=RECAPS.find(r=>r.away===away&&r.home===home);
   const starsHtml=recap&&recap.stars
-    ?`<div class="pop-stars"><div class="pop-star-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star-row"><span style="color:var(--gold)">★</span>${s}</div>`).join('')}</div>`:'';
+    ?`<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:var(--gold)">★</span>${s}</div>`).join('')}</div>`:'';
   document.getElementById('popContent').innerHTML=`
-    <div class="pop-header">
+    <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role">Away</div></div>
-        <div class="pop-score-mid">
-          <div class="pop-score"><span style="color:${awayWon?ac:'rgba(239,239,239,.35)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!awayWon?hc:'rgba(239,239,239,.35)'}">${hs}</span></div>
-          <span class="pop-badge badge-final">Final</span>
+        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
+        <div class="pop-sc-mid">
+          <div class="pop-sc"><span style="color:${aW?ac:'rgba(239,239,239,.3)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!aW?hc:'rgba(239,239,239,.3)'}">${hs}</span></div>
+          <div class="pop-badge">Final</div>
         </div>
-        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role">Home</div></div>
+        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
       </div>
       <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${field}</span></div>
     </div>
-    <div class="pop-section">
-      <div class="pop-section-title">Game Recap</div>
-      <div class="pop-recap-text">${recap?.text||'Recap coming soon — check back after the game.'}</div>
+    <div class="pop-body">
+      <div class="pop-sec-title">Game Recap</div>
+      <div class="pop-recap">${recap?.text||'Recap coming soon — check back after the game.'}</div>
       ${starsHtml}
     </div>`;
-  document.getElementById('popOverlay').classList.add('open');
-  document.body.style.overflow='hidden';
+  openPop();
 }
 
 function openBox(away,home,as,hs,field,date){
-  const ac=tc(away),hc=tc(home);
-  const awayWon=as>hs;
+  const ac=tc(away),hc=tc(home),aW=as>hs;
   const aH=Math.floor(as*2.1),hH=Math.floor(hs*2.1);
-  const mkRows=(lu,color)=>lu.map(p=>`<tr><td>${p.name}<span class="pos-tag">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
+  const mkRows=lu=>lu.map(p=>`<tr><td>${p.name} <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
   document.getElementById('popContent').innerHTML=`
-    <div class="pop-header">
+    <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role">Away</div></div>
-        <div class="pop-score-mid">
-          <div class="pop-score"><span style="color:${awayWon?ac:'rgba(239,239,239,.35)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!awayWon?hc:'rgba(239,239,239,.35)'}">${hs}</span></div>
-          <span class="pop-badge badge-final">Final</span>
+        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
+        <div class="pop-sc-mid">
+          <div class="pop-sc"><span style="color:${aW?ac:'rgba(239,239,239,.3)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!aW?hc:'rgba(239,239,239,.3)'}">${hs}</span></div>
+          <div class="pop-badge">Final</div>
         </div>
-        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role">Home</div></div>
+        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
       </div>
       <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${field}</span></div>
     </div>
-    <div class="pop-section">
-      <div class="pop-section-title">Line Score</div>
-      <table class="pop-lu-table" style="margin-bottom:20px">
+    <div class="pop-body">
+      <div class="pop-sec-title">Line Score</div>
+      <table class="ptbl" style="margin-bottom:20px">
         <thead><tr><th>Team</th><th>R</th><th>H</th><th>E</th></tr></thead>
         <tbody>
           <tr><td style="color:${ac};font-weight:700">${away}</td><td>${as}</td><td>${aH}</td><td>0</td></tr>
           <tr><td style="color:${hc};font-weight:700">${home}</td><td>${hs}</td><td>${hH}</td><td>0</td></tr>
         </tbody>
       </table>
-      <div class="pop-section-title">Batting</div>
-      <div class="pop-lineup-grid">
-        <div>
-          <div class="pop-lu-title" style="color:${ac}">${away}</div>
-          <table class="pop-lu-table"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP_A,ac)}</tbody></table>
-        </div>
-        <div>
-          <div class="pop-lu-title" style="color:${hc}">${home}</div>
-          <table class="pop-lu-table"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP_H,hc)}</tbody></table>
-        </div>
+      <div class="pop-sec-title">Batting</div>
+      <div class="pop-grid2">
+        <div><div class="pop-team-lbl" style="color:${ac}">${away}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${hc}">${home}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP)}</tbody></table></div>
       </div>
     </div>`;
-  document.getElementById('popOverlay').classList.add('open');
-  document.body.style.overflow='hidden';
+  openPop();
 }
 
 function openGameday(away,home,field,time){
   const ac=tc(away),hc=tc(home);
-  const mkRows=lu=>lu.map(p=>`<tr><td>${p.name}<span class="pos-tag">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
+  const mkRows=lu=>lu.map(p=>`<tr><td>${p.name} <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
   document.getElementById('popContent').innerHTML=`
-    <div class="pop-header">
+    <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role">Away</div></div>
-        <div class="pop-score-mid">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--gold);letter-spacing:.04em">${time}</div>
-          <span class="pop-badge badge-next">Upcoming</span>
+        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
+        <div class="pop-sc-mid">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:var(--gold);letter-spacing:.04em;text-align:center">${time}</div>
+          <div class="pop-badge next">Upcoming</div>
         </div>
-        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role">Home</div></div>
+        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
       </div>
       <div class="pop-meta"><span>📍 ${field}</span></div>
     </div>
-    <div class="pop-section">
-      <div class="pop-section-title">Last Game Lineups</div>
-      <div class="pop-lineup-grid">
-        <div>
-          <div class="pop-lu-title" style="color:${ac}">${away}</div>
-          <table class="pop-lu-table"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP_A)}</tbody></table>
-        </div>
-        <div>
-          <div class="pop-lu-title" style="color:${hc}">${home}</div>
-          <table class="pop-lu-table"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP_H)}</tbody></table>
-        </div>
+    <div class="pop-body">
+      <div class="pop-sec-title">Last Game Lineups</div>
+      <div class="pop-grid2">
+        <div><div class="pop-team-lbl" style="color:${ac}">${away}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${hc}">${home}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP)}</tbody></table></div>
       </div>
     </div>`;
-  document.getElementById('popOverlay').classList.add('open');
-  document.body.style.overflow='hidden';
+  openPop();
 }
 
-function closePop(){
-  document.getElementById('popOverlay').classList.remove('open');
-  document.body.style.overflow='';
-}
+function openPop(){document.getElementById('pop').classList.add('open');document.body.style.overflow='hidden';}
+function closePop(){document.getElementById('pop').classList.remove('open');document.body.style.overflow='';}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closePop();});
 
-// ── INIT ────────────────────────────────────────────────────────────────────
-buildDateNav();
-renderScoreboard();
+buildNav();
+render();
 </script>
 </body>
 </html>
