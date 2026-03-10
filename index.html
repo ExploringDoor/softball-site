@@ -561,28 +561,26 @@ body:not(.intro-done){overflow:hidden}
 }
 
 /* ── CINEMATIC INTRO ── */
-#cinematic-intro{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#070709;pointer-events:all;transition:opacity .8s ease,visibility .8s ease}
-#cinematic-intro.done{opacity:0;visibility:hidden;pointer-events:none}
-.ci-league{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(11px,1.8vw,16px);letter-spacing:.5em;text-transform:uppercase;color:var(--gold);opacity:0;animation:ci-fade-up .6s .4s ease forwards}
-.ci-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(72px,16vw,180px);line-height:.85;text-transform:uppercase;letter-spacing:-.03em;color:var(--white);opacity:0;animation:ci-scale-in .7s .8s ease forwards;text-align:center}
-.ci-title span{color:var(--gold)}
-.ci-bar{width:0;height:3px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin-top:32px;animation:ci-bar-grow .6s 1.4s ease forwards;border-radius:2px}
-.ci-sub{font-family:'Barlow Condensed',sans-serif;font-size:clamp(13px,2vw,18px);font-weight:600;letter-spacing:.25em;text-transform:uppercase;color:rgba(239,239,239,.45);margin-top:18px;opacity:0;animation:ci-fade-up .5s 1.7s ease forwards}
-.ci-year{font-family:'Barlow Condensed',sans-serif;font-size:clamp(60px,10vw,110px);font-weight:900;color:transparent;-webkit-text-stroke:1px rgba(245,200,66,.2);letter-spacing:.1em;position:absolute;bottom:8vh;opacity:0;animation:ci-fade-up .6s 1.2s ease forwards}
-@keyframes ci-fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-@keyframes ci-scale-in{from{opacity:0;transform:scale(.92) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
-@keyframes ci-bar-grow{from{width:0;opacity:0}to{width:min(400px,60vw);opacity:1}}
+#ci{position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:#070709;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 1s ease}
+#ci.gone{opacity:0;pointer-events:none}
+#ci .ci1{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:14px;letter-spacing:.45em;text-transform:uppercase;color:#F5C842;opacity:0;margin-bottom:16px}
+#ci .ci2{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(80px,16vw,180px);line-height:.85;text-transform:uppercase;letter-spacing:-.03em;color:#EDEDED;opacity:0;text-align:center}
+#ci .ci2 b{color:#F5C842}
+#ci .ci3{height:3px;width:0;background:linear-gradient(90deg,transparent,#F5C842,transparent);margin-top:28px;border-radius:2px}
+#ci .ci4{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;letter-spacing:.28em;text-transform:uppercase;color:rgba(239,239,239,.4);margin-top:20px;opacity:0}
+#ci .ci5{position:absolute;bottom:8vh;font-family:'Barlow Condensed',sans-serif;font-size:clamp(60px,10vw,110px);font-weight:900;letter-spacing:.12em;color:rgba(245,200,66,.08);opacity:0}
 </style>
 </head>
 <body>
 <!-- ══ CINEMATIC INTRO ══ -->
-<div id="cinematic-intro">
-  <div class="ci-league">Delaware Valley Synagogue League</div>
-  <div class="ci-title">DVS<span>L</span></div>
-  <div class="ci-bar"></div>
-  <div class="ci-sub">Softball · Est. 2002 · Philadelphia Region</div>
-  <div class="ci-year">2026</div>
+<div id="ci" onclick="skipCinematic()">
+  <div class="ci1">Delaware Valley Synagogue League</div>
+  <div class="ci2">DVS<b>L</b></div>
+  <div class="ci3" id="ci3"></div>
+  <div class="ci4" id="ci4">Softball &middot; Est. 2002 &middot; Philadelphia Region</div>
+  <div class="ci5" id="ci5">2026</div>
 </div>
+
 
 
 
@@ -2079,15 +2077,47 @@ buildRecaps();
 buildHistory();
 setTimeout(observeAll,100);
 </script>
-
-// ── Cinematic intro dismiss ──────────────────────────────────────────────
+<script>
+// ── Cinematic intro ──
+function skipCinematic(){
+  var el=document.getElementById('ci');
+  if(el){el.classList.add('gone');setTimeout(function(){el.remove()},1000);}
+}
 (function(){
-  const el = document.getElementById('cinematic-intro');
+  var el=document.getElementById('ci');
   if(!el) return;
-  // Dismiss after 2.6s automatically
-  setTimeout(()=>{ el.classList.add('done'); }, 2600);
-  // Or tap/click to skip
-  el.addEventListener('click', ()=>{ el.classList.add('done'); });
+  var ci1=el.querySelector('.ci1');
+  var ci2=el.querySelector('.ci2');
+  var ci3=document.getElementById('ci3');
+  var ci4=document.getElementById('ci4');
+  var ci5=document.getElementById('ci5');
+
+  function anim(el,props,delay){
+    setTimeout(function(){
+      Object.assign(el.style,{transition:'opacity .6s ease, transform .6s ease',opacity:'1',transform:'translateY(0)'});
+      Object.assign(el.style,props);
+    },delay);
+  }
+
+  // Start states
+  [ci1,ci2,ci4,ci5].forEach(function(e){
+    if(e){e.style.opacity='0';e.style.transform='translateY(18px)';}
+  });
+
+  // Sequence
+  setTimeout(function(){ anim(ci1,{opacity:'1',transform:'translateY(0)'},0); }, 300);
+  setTimeout(function(){ anim(ci2,{opacity:'1',transform:'translateY(0)'},0); }, 700);
+  setTimeout(function(){ anim(ci5,{opacity:'1',transform:'translateY(0)'},0); }, 1000);
+  setTimeout(function(){
+    ci3.style.transition='width .7s ease, opacity .4s ease';
+    ci3.style.width='360px';
+    ci3.style.opacity='1';
+  }, 1200);
+  setTimeout(function(){ anim(ci4,{opacity:'1',transform:'translateY(0)'},0); }, 1600);
+
+  // Auto dismiss after 2.8s
+  setTimeout(skipCinematic, 2800);
 })();
+</script>
 </body>
 </html>
