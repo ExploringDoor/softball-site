@@ -420,7 +420,7 @@ const TEAM_HIT_COLS = [
   {key:'_ops',  label:'OPS', cls:'',         sortable:true, fmt:v=>v.toFixed(3).replace(/^0/,'')},
 ];
 
-function getTeamById(id){ return TEAMS.find(t=>t.id===id); }
+function getTeamById(id){ return ALL_TEAMS.find(t=>t.id===id); }
 
 function applyPlayerSplit(p){
   if(split==='home')  return {...p, avg:p.home_avg||p.avg, hr:p.home_hr||Math.floor(p.hr*.55), rbi:p.home_rbi||Math.floor(p.rbi*.52), h:Math.floor(p.h*.52), ab:Math.floor(p.ab*.52), r:Math.floor(p.r*.52), bb:Math.floor(p.bb*.52)};
@@ -434,7 +434,7 @@ function applyPlayerSplit(p){
 
 function getRows(){
   if(ctx==='team'){
-    return TEAMS.map(t => {
+    return ALL_TEAMS.map(t => {
       const tp = PLAYERS.filter(p=>p.team===t.id);
       const totalAB = tp.reduce((s,p)=>s+p.ab,0);
       const totalH  = tp.reduce((s,p)=>s+p.h,0);
@@ -525,6 +525,8 @@ function buildFilters(){
     <select class="filter-select" id="sel-team" onchange="team=this.value;render()">
       <option value="all">All Teams</option>
       ${TEAMS.map(t=>`<option value="${t.id}" ${t.id===team?'selected':''}>${t.name}</option>`).join('')}
+      <option disabled>── Historical ──</option>
+      ${HIST_TEAMS.map(t=>`<option value="${t.id}" ${t.id===team?'selected':''}>${t.name}</option>`).join('')}
     </select>
     <select class="filter-select" id="sel-split" onchange="split=this.value;sortKey=null;render()">
       ${SPLITS.map(s=>`<option value="${s.val}" ${s.val===split?'selected':''}>${s.label}</option>`).join('')}
