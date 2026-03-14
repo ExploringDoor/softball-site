@@ -545,8 +545,8 @@ function render(){
     const rowCls = i<3?`rank-${i+1}`:'';
     return `<tr class="${rowCls}">${cols.map(c=>{
       if(c.key==='_rank') return `<td class="col-rank ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${medal(i)}</td>`;
-      if(c.key==='name')  return `<td class="col-player">${row.name}${row.pos?`<span class="p-pos">${row.pos}</span>`:''}</td>`;
-      if(c.key==='_team') return `<td class="col-team"><span class="col-team-dot" style="background:${t?.color||'#888'}"></span>${t?.name||''}</td>`;
+      if(c.key==='name')  return `<td class="col-player" style="cursor:pointer" onclick="goPlayer('${row.id||''}')" title="View ${row.name} stats">${row.name}${row.pos?`<span class="p-pos">${row.pos}</span>`:''}</td>`;
+      if(c.key==='_team') return `<td class="col-team" style="cursor:pointer" onclick="goTeamPage('${t?.id||''}')"><span class="col-team-dot" style="background:${t?.color||'#888'}"></span>${t?.name||''}</td>`;
       if(c.key==='_w')    return `<td style="color:var(--muted);font-size:12px">${row._w||0}–${row._l||0}</td>`;
       const val = row[c.key];
       const isHighlit = c.key===sk && i<3;
@@ -599,6 +599,16 @@ function doSort(key,dir){
   render();
 }
 
+function goPlayer(id){
+  if(!id) return;
+  sessionStorage.setItem('dvsl_goPlayer', id);
+  window.location = 'index.html';
+}
+function goTeamPage(id){
+  if(!id) return;
+  sessionStorage.setItem('dvsl_goTeam', id);
+  window.location = 'index.html';
+}
 function resetFilters(){
   year='2026'; team='all'; split='all'; sortKey=null; sortDir='desc';
   ctx='player'; type='hitting';
