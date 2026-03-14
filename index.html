@@ -1750,19 +1750,47 @@ function renderTeamTab(tab){
     </div>`).join('')}</div>`;
   } else if(tab==='schedule'){
     const tgames=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short);
-    body.innerHTML=`<h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:18px;color:${t.color}">${t.name} Schedule</h3>
-    <div style="display:flex;flex-direction:column;gap:6px">${tgames.map(g=>{
+    const wins=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
+    const losses=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
+    const remaining=tgames.filter(g=>!g.done).length;
+    body.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;color:${t.color}">${t.name} · 2026 Schedule</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:2px">${wins}W – ${losses}L · ${remaining} game${remaining!==1?'s':''} remaining</div>
+      </div>
+      <button onclick="downloadCalendar('${t.short}')" style="display:flex;align-items:center;gap:8px;background:${t.color};color:#070709;border:none;border-radius:8px;padding:10px 18px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap;flex-shrink:0">
+        📅 Add to My Calendar
+      </button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+    ${tgames.map(g=>{
       const isH=g.home===t.short; const opp=isH?g.away:g.home;
       const ts=isH?g.hs:g.as; const os=isH?g.as:g.hs;
       const won=g.done&&ts>os;
-      return `<div class="game-row" style="grid-template-columns:90px 1fr 130px auto">
-        <div class="gtip"><div class="gtip-time">⏰ ${g.time}</div><div class="gtip-field">📍 ${g.field}</div><div class="gtip-addr">${g.addr}</div></div>
-        <div class="game-date"><small>${g.day} · Wk ${g.wk}</small>${g.date}</div>
-        <div class="game-matchup">${isH?'vs':'@ '}<span class="tm">${opp}</span></div>
-        <div style="font-size:11px;color:var(--muted)">${g.field}</div>
-        ${g.done?`<div class="game-score">${ts}–${os}<span class="wl-lbl ${won?'badge-w':'badge-l'}">${won?'W':'L'}</span></div>`:'<span style="font-size:11px;color:var(--muted)">Upcoming</span>'}
+      const oppTeam=getTeamByShort(opp);
+      const oppColor=oppTeam?oppTeam.color:'var(--muted)';
+      const leftBorder=!g.done?t.color:won?'#22c55e':'#ef4444';
+      return `<div style="display:grid;grid-template-columns:90px 1fr 1fr auto;align-items:center;gap:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:14px 16px;border-left:3px solid ${leftBorder}">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;color:var(--white)">${g.date}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">${g.day} · Wk ${g.wk}</div>
+        </div>
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;color:var(--white)">${isH?'vs':'@'} <span style="color:${oppColor}">${opp}</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">📍 ${g.field} · ⏰ ${g.time}</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);padding-right:8px">${g.addr}</div>
+        ${g.done
+          ? `<div style="text-align:right"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:var(--white)">${ts}–${os}</div><div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:${won?'#22c55e':'#ef4444'}">${won?'WIN':'LOSS'}</div></div>`
+          : `<div style="text-align:right;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--muted)">UPCOMING</div>`
+        }
       </div>`;
-    }).join('')}</div>`;
+    }).join('')}
+    </div>
+    <div style="margin-top:16px;padding:12px 16px;background:rgba(255,255,255,.02);border-radius:8px;border:1px solid rgba(255,255,255,.05);font-size:12px;color:var(--muted)">
+      📅 Tap <strong style="color:var(--white)">Add to My Calendar</strong> to sync the full ${t.name} schedule to iPhone Calendar, Google Calendar, or Outlook — with date, time, field, and opponent for every game.
+    </div>`;
   } else {
     body.innerHTML=`<h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:18px;color:${t.color}">Team Stats</h3>
     <div style="overflow-x:auto"><table class="big-table"><thead><tr>
@@ -1787,6 +1815,67 @@ document.querySelectorAll('.ttab').forEach(tab=>{
     renderTeamTab(tab.dataset.tab);
   });
 });
+
+// ════════════════════════════ CALENDAR EXPORT ═══════════════════════════
+function downloadCalendar(teamShort){
+  const t=getTeamByShort(teamShort);
+  if(!t) return;
+  const games=SCHEDULE_PREVIEW.filter(g=>g.away===teamShort||g.home===teamShort);
+
+  // Build .ics content
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//DVSL Softball//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+
+  games.forEach((g,i)=>{
+    const isH=g.home===teamShort;
+    const opp=isH?g.away:g.home;
+    const oppTeam=getTeamByShort(opp);
+    const oppName=oppTeam?oppTeam.name:opp;
+
+    // Parse date + time into ics format (2026 assumed)
+    const months={'Jan':'01','Feb':'02','Mar':'03','Apr':'04','May':'05','Jun':'06','Jul':'07','Aug':'08','Sep':'09','Oct':'10','Nov':'11','Dec':'12'};
+    const [mon,day] = g.date.split(' ');
+    const mm=months[mon]||'01';
+    const dd=String(parseInt(day)).padStart(2,'0');
+
+    // Parse time
+    let [timeStr,ampm]=g.time.split(' ');
+    let [hh,mins]=timeStr.split(':');
+    hh=parseInt(hh);
+    if(ampm==='PM'&&hh!==12) hh+=12;
+    if(ampm==='AM'&&hh===12) hh=0;
+    const startHH=String(hh).padStart(2,'0');
+    const endHH=String(hh+1).padStart(2,'0');
+
+    const dtStart=`20260${mm==='10'||mm==='11'||mm==='12'?'':''}${mm}${dd}T${startHH}${mins}00`;
+    const dtEnd=`20260${mm==='10'||mm==='11'||mm==='12'?'':''}${mm}${dd}T${endHH}${mins}00`;
+    const dtStamp=`20260314T120000Z`;
+
+    const summary=`DVSL: ${t.name} ${isH?'vs':'@'} ${oppName}`;
+    const desc=g.done
+      ? `Result: ${isH?g.hs:g.as}–${isH?g.as:g.hs} · Week ${g.wk}`
+      : `Week ${g.wk} · Game time: ${g.time}`;
+
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:dvsl-${teamShort}-game${i}-2026@dvslsoftball.com`);
+    lines.push(`DTSTAMP:${dtStamp}`);
+    lines.push(`DTSTART:${dtStart}`);
+    lines.push(`DTEND:${dtEnd}`);
+    lines.push(`SUMMARY:${summary}`);
+    lines.push(`DESCRIPTION:${desc}`);
+    lines.push(`LOCATION:${g.field}, ${g.addr}`);
+    lines.push('END:VEVENT');
+  });
+
+  lines.push('END:VCALENDAR');
+
+  const blob=new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`DVSL-${teamShort}-2026.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ════════════════════════════ PLAYER MODAL ═══════════════════════════════
 function openModal(playerId){
