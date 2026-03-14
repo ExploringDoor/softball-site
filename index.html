@@ -19,7 +19,7 @@ html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;overflow-x:hidden;line-height:1.6}
 
 /* ── NAV ── */
-.nav{position:fixed;top:0;left:0;right:0;z-index:300;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(7,7,9,0.88);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border)}
+.nav{position:fixed;top:44px;left:0;right:0;z-index:300;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(7,7,9,0.88);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border)}
 .nav-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);cursor:pointer;user-select:none;display:flex;align-items:center;gap:10px}
 
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
@@ -461,11 +461,8 @@ body.ci-active .nav{opacity:0;pointer-events:none}
 .st-scroll{flex:1;overflow:hidden;position:relative;cursor:pointer}
 .st-track{
   display:flex;align-items:stretch;height:100%;
-  animation:st-scroll 60s linear infinite;
   width:max-content;
 }
-.st-track:hover{animation-play-state:paused}
-@keyframes st-scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 .st-game{
   display:flex;align-items:center;gap:0;height:100%;
   border-right:1px solid rgba(255,255,255,.06);padding:0 16px;
@@ -2261,7 +2258,7 @@ function buildTicker2(){
   };
   // Duplicate for seamless loop
   const html = TICKER_GAMES.map(makeGame).join('');
-  track.innerHTML = html + html;
+  track.innerHTML = html;
 }
 
 // Hide ticker on scroll down, show on scroll up
@@ -2272,9 +2269,15 @@ function buildTicker2(){
       requestAnimationFrame(()=>{
         const y = window.scrollY;
         const ticker = document.getElementById('score-ticker');
-        if(ticker){
-          if(y > 80 && y > lastY){ ticker.classList.add('hidden'); }
-          else if(y < lastY){ ticker.classList.remove('hidden'); }
+        const nav = document.querySelector('.nav');
+        if(ticker && nav){
+          if(y > 80 && y > lastY){
+            ticker.classList.add('hidden');
+            nav.style.top = '0px';
+          } else if(y < lastY){
+            ticker.classList.remove('hidden');
+            nav.style.top = '44px';
+          }
         }
         lastY = y;
         ticking = false;
