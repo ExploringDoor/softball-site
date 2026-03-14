@@ -326,6 +326,29 @@ thead th.sorted-col .sarrow{opacity:1}
 </footer>
 
 <script>
+
+// Team name → id lookup for navigation to index.html team pages
+const TEAM_NAME_TO_ID = {
+  "Goldsteins":"gold","Goldstein's":"gold","Shir Ami":"sa","SA":"sa",
+  "Keneseth Israel":"ki","KI":"ki","Beth Or Blue":"bob","BOB":"bob",
+  "TBI Royals":"tbir","TBIR":"tbir","Adath Jeshurun":"aj","AJ":"aj",
+  "Temple Sinai Mens Club":"tsmc","TSMC":"tsmc","Beth Sholom Mens Club":"bsmc","BSMC":"bsmc",
+  "Beth Am":"ba","BA":"ba","Beth Or Silver":"bos","BOS":"bos",
+  "TBI Jaguars":"tbi","TBIMC":"tbimc","Germantown JC":"gjc","GJC":"gjc",
+  "Beth Am Marlins":"bami","BAMI":"bami","Beth Or Orange":"boo","BOO":"boo",
+  "Or Shalom":"os","OS":"os","Temple Israel":"ti","TI":"ti","Kol Ami":"ka","KA":"ka",
+  "Or Ami":"oa","OA":"oa","Beth Sholom Blue":"bsb","BSB":"bsb",
+  "Beth Tikvah B'Nai Jeshrun":"btbj","BTBJ":"btbj","Chabad":"cha","CHABAD":"cha",
+  "Darchei Noam Lightning":"dn","DN Lightning":"dn","DN":"dn",
+  "Temple Sinai Black/Kol Ami":"tsbka","TSBKA":"tsbka",
+  "Temple Sinai Green":"tsg","TSG":"tsg",
+  "Tifereth Bet Israel Mens Club":"tbimc","Beth Or Red":"bor","BOR":"bor",
+};
+function goTeamByName(name){
+  const id=TEAM_NAME_TO_ID[name];
+  if(id){sessionStorage.setItem('dvsl_goTeam',id);window.location='index.html';}
+}
+
 const DATA = {
   2025: [
     {t:'Goldsteins',      w:17,l:3, ti:0,pct:.850,avg:.900,gb:'—',  pf:226,pa:71, diff:155, strk:'Loss 1', pts:54},
@@ -473,7 +496,7 @@ function buildTable(yr, sortKey, sortDir){
     const rowCls=i<3?`rank-${i+1}`:'';
     return `<tr class="${rowCls}">
       <td class="rank-cell">${medal(i)||i+1}</td>
-      <td class="team-name">${r.t}</td>
+      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="goTeamByName('${r.t}')" title="View ${r.t} team page">${r.t} ↗</td>
       <td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num">${r.ti}</td>
       <td class="num">${pctBar}</td>
       <td class="num">${r.avg.toFixed(3).replace(/^0\./,'.')}</td>
