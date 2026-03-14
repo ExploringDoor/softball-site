@@ -471,11 +471,9 @@ body.ci-active .nav{opacity:0;pointer-events:none}
 .st-game:hover{background:rgba(255,255,255,.04)}
 .st-game-inner{display:flex;flex-direction:column;justify-content:center;gap:3px}
 .st-datetime{font-family:'Inter',sans-serif;font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);line-height:1;margin-bottom:2px}
-.st-matchup{display:flex;align-items:center;gap:6px;line-height:1}
-.st-side{display:flex;align-items:center;gap:5px}
-.st-abbr{font-family:'Oswald',sans-serif;font-weight:600;font-size:14px;letter-spacing:.02em}
-.st-rec{font-family:'Inter',sans-serif;font-size:9px;font-weight:500;color:rgba(237,237,237,.4);letter-spacing:.02em}
-.st-vs{font-family:'Inter',sans-serif;font-size:9px;font-weight:600;color:rgba(237,237,237,.25);letter-spacing:.05em;text-transform:uppercase;padding:0 2px}
+.st-row{display:flex;align-items:center;gap:5px;line-height:1}
+.st-abbr{font-family:'Oswald',sans-serif;font-weight:600;font-size:13px;letter-spacing:.02em;min-width:36px}
+.st-rec{font-family:'Inter',sans-serif;font-size:9px;font-weight:500;color:rgba(237,237,237,.4);letter-spacing:.02em;min-width:28px}
 .st-score{font-family:'Oswald',sans-serif;font-weight:700;font-size:14px;min-width:18px;text-align:right}
 .st-score.winner{color:#fff}
 .st-score.loser{color:rgba(237,237,237,.35)}
@@ -1592,10 +1590,12 @@ function closeBsm(){
 }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeBsm(); });
 
-// Handle cross-page team navigation from schedule.html
+// Handle cross-page navigation from schedule.html and stats.html
 window.addEventListener('load', function(){
   const tid = sessionStorage.getItem('dvsl_goTeam');
-  if(tid){ sessionStorage.removeItem('dvsl_goTeam'); setTimeout(()=>goPage('team',tid),300); }
+  if(tid){ sessionStorage.removeItem('dvsl_goTeam'); setTimeout(()=>goPage('team',tid),300); return; }
+  const pid = sessionStorage.getItem('dvsl_goPlayer');
+  if(pid){ sessionStorage.removeItem('dvsl_goPlayer'); setTimeout(()=>openModal(pid),400); }
 });
 
 function buildTicker(){
@@ -1626,7 +1626,7 @@ function buildStandings(){
         +'<td><span class="tname" style="color:'+t.color+(active?';cursor:pointer':'')+'" onclick="'+(active?'event.stopPropagation();goPage(\'team\',\''+t.id+'\')':'')+'">'+(active?'<span style="text-decoration:underline dotted;text-underline-offset:3px">'+t.name+'</span>':t.name)+'</span>'+(!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':'')+'</td>'
         +'<td>'+t.w+'</td><td>'+t.l+'</td>'
         +'<td style="font-weight:600">'+t.pct.toFixed(3).replace(/^0\./,'.')+'</td>'
-        +'<td style="color:var(--muted)">'+t.gb+'</td>'
+        +'<td>'+(t.gb==='—'?'<span style="color:var(--muted)">—</span>':'<span style="color:#60a5fa;font-weight:700">'+t.gb+'</span>')+'</td>'
         +'<td style="color:var(--muted)">'+t.rs+'</td>'
         +'<td style="color:var(--muted)">'+t.ra+'</td>'
         +'<td>'+streak+'</td>'
@@ -1655,6 +1655,8 @@ function buildSchedule(){
     const ac=atTeam?.color||'#9ca3af', hc=htTeam?.color||'#9ca3af';
     const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${g.away.toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
     const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${g.home.toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
+    const atm=getTeamByShort(g.away); const htm=getTeamByShort(g.home);
+    const aRec=atm?`(${atm.w}-${atm.l})`:''; const hRec=htm?`(${htm.w}-${htm.l})`:'';
     if(g.done){
       const aw=g.as>g.hs;
       const wTeam=aw?g.away:g.home, lTeam=aw?g.home:g.away;
@@ -1664,11 +1666,11 @@ function buildSchedule(){
         <div class="gb-left">
           <div class="gb-rhe-hdr-row"><span class="gb-rhe-lbl" style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
           <div class="gb-team-row">${logoA}
-            <span class="gb-name ${aw?'winner':'loser'}" data-short="${g.away}" style="color:${aw?ac:'rgba(239,239,239,.38)'};cursor:pointer" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.away)?.id||''}')">${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <span class="gb-name ${aw?'winner':'loser'}" data-short="${g.away}" style="color:${aw?ac:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.away)?.id||''}')"><span>${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${aRec}</span></span>
             <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">0</span>
           </div>
           <div class="gb-team-row">${logoH}
-            <span class="gb-name ${!aw?'winner':'loser'}" data-short="${g.home}" style="color:${!aw?hc:'rgba(239,239,239,.38)'};cursor:pointer" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.home)?.id||''}')">${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <span class="gb-name ${!aw?'winner':'loser'}" data-short="${g.home}" style="color:${!aw?hc:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.home)?.id||''}')"><span>${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${hRec}</span></span>
             <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">0</span>
           </div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px">FINAL</div>
@@ -1694,8 +1696,8 @@ function buildSchedule(){
     } else {
       return `<div class="sched-game-block${isNext?' next':''}" onclick="openBsm(${i})">
         <div class="gb-left">
-          <div class="gb-team-row">${logoA}<span class="gb-name winner" data-short="${g.away}" style="color:${ac};cursor:pointer" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.away)?.id||''}')">${g.away}</span></div>
-          <div class="gb-team-row">${logoH}<span class="gb-name winner" data-short="${g.home}" style="color:${hc};cursor:pointer" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.home)?.id||''}')">${g.home}</span></div>
+          <div class="gb-team-row">${logoA}<span class="gb-name winner" data-short="${g.away}" style="color:${ac};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.away)?.id||''}')"><span>${g.away}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${aRec}</span></span></div>
+          <div class="gb-team-row">${logoH}<span class="gb-name winner" data-short="${g.home}" style="color:${hc};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.home)?.id||''}')"><span>${g.home}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${hRec}</span></span></div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);padding-top:2px;padding-left:44px">${isNext?'▶ NEXT':'UPCOMING'}</div>
         </div>
         <div class="gb-mid"><div class="gb-field">${g.field}</div><div class="gb-time">${g.time} · ${g.date}</div></div>
@@ -1765,7 +1767,7 @@ function buildPlayerGrid(filterTeam){
         <span>${initials(p.name)}</span>
       </div>
       <div class="pcard-num">#${p.num}</div>
-      <div class="pcard-name">${p.name.split(' ').pop()}<br><span style="font-size:13px;font-weight:600;color:var(--muted2)">${p.name.split(' ')[0]}</span></div>
+      <div class="pcard-name"><span style="font-size:13px;font-weight:500;color:var(--muted2);display:block;line-height:1;margin-bottom:2px">${p.name.split(' ')[0]}</span><span style="display:block;line-height:1">${p.name.split(' ').pop()}</span></div>
       <div class="pcard-pos">${p.pos}</div>
       <div class="pcard-team-badge" style="background:${t?.color||'var(--gold)'}18;color:${t?.color||'var(--gold)'}">${t?.name||t?.short||''}</div>
       <div class="pcard-stats">
@@ -1806,7 +1808,7 @@ function renderTeamTab(tab){
     ${players.map(p=>`<div class="pcard" onclick="openModal('${p.id}')">
       <div class="pcard-avatar" style="background:${t.color}18;border-color:${t.color}44;color:${t.color}"><span>${initials(p.name)}</span></div>
       <div class="pcard-num">#${p.num}</div>
-      <div class="pcard-name">${p.name.split(' ').pop()}<br><span style="font-size:12px;font-weight:600;color:var(--muted2)">${p.name.split(' ')[0]}</span></div>
+      <div class="pcard-name"><span style="font-size:12px;font-weight:500;color:var(--muted2);display:block;line-height:1;margin-bottom:2px">${p.name.split(' ')[0]}</span><span style="display:block;line-height:1">${p.name.split(' ').pop()}</span></div>
       <div class="pcard-pos">${p.pos}</div>
       <div class="pcard-stats">
         <div><div class="pcs-val">${avg(p.avg)}</div><div class="pcs-lbl">AVG</div></div>
@@ -2239,18 +2241,15 @@ function buildTicker2(){
     return '<div class="st-game" onclick="window.location=\'schedule.html\'">'
       +'<div class="st-game-inner">'
       +'<div class="st-datetime">'+(done?'Final':g.status)+'</div>'
-      +'<div class="st-matchup">'
-        +'<div class="st-side">'
-          +'<span class="st-abbr '+(aWin?'winner':done?'loser':'upcoming')+'" style="color:'+(aWin||!done?ac:ac+'88')+'">'+g.away+'</span>'
-          +'<span class="st-rec">'+aRec+'</span>'
-          +(done?'<span class="st-score '+(aWin?'winner':'loser')+'">'+g.as+'</span>':'')
-        +'</div>'
-        +'<span class="st-vs">vs</span>'
-        +'<div class="st-side">'
-          +(done?'<span class="st-score '+(hWin?'winner':'loser')+'">'+g.hs+'</span>':'')
-          +'<span class="st-rec">'+hRec+'</span>'
-          +'<span class="st-abbr '+(hWin?'winner':done?'loser':'upcoming')+'" style="color:'+(hWin||!done?hc:hc+'88')+'">'+g.home+'</span>'
-        +'</div>'
+      +'<div class="st-row">'
+        +'<span class="st-abbr '+(aWin?'winner':done?'loser':'upcoming')+'" style="color:'+(aWin||!done?ac:ac+'88')+'">'+g.away+'</span>'
+        +'<span class="st-rec">'+aRec+'</span>'
+        +(done?'<span class="st-score '+(aWin?'winner':'loser')+'">'+g.as+'</span>':'')
+      +'</div>'
+      +'<div class="st-row">'
+        +'<span class="st-abbr '+(hWin?'winner':done?'loser':'upcoming')+'" style="color:'+(hWin||!done?hc:hc+'88')+'">'+g.home+'</span>'
+        +'<span class="st-rec">'+hRec+'</span>'
+        +(done?'<span class="st-score '+(hWin?'winner':'loser')+'">'+g.hs+'</span>':'')
       +'</div>'
       +'</div>'
       +'</div>';
