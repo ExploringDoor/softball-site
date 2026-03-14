@@ -680,8 +680,8 @@ body.ci-active .nav{opacity:0;pointer-events:none}
 <div class="page" id="pg-players">
   <div style="padding:90px 48px 32px;background:var(--bg2);border-bottom:1px solid var(--border)">
     <div class="sec-eyebrow">2026 Season</div>
-    <h1 class="sec-title">Player <span style="color:var(--gold)">Directory</span></h1>
-    <p style="font-size:13px;color:var(--muted);margin-top:10px">Click any card for full stats, game log &amp; profile</p>
+    <h1 class="sec-title">Team <span style="color:var(--gold)">Directory</span></h1>
+    <p style="font-size:13px;color:var(--muted);margin-top:10px">Click a <strong style="color:var(--white)">team button</strong> above to view their schedule, roster &amp; stats · Click any player card for individual stats</p>
     <div class="player-search-wrap"><span class="search-icon">🔍</span><input class="player-search" id="playerSearch" type="text" placeholder="Search players by name or team…" oninput="filterPlayerSearch(this.value)"></div><div class="player-filters" id="pfilters"></div>
   </div>
   <div style="padding:32px 48px 64px;max-width:1400px;margin:0 auto">
@@ -716,7 +716,7 @@ body.ci-active .nav{opacity:0;pointer-events:none}
   </div>
   <div class="ttabs" id="ttabs">
     <button class="ttab on" data-tab="roster">Roster</button>
-    <button class="ttab" data-tab="schedule">Scores</button>
+    <button class="ttab" data-tab="schedule">Schedule</button>
     <button class="ttab" data-tab="stats">Stats</button>
   </div>
   <div class="team-body" id="team-body"></div>
@@ -1446,8 +1446,8 @@ function openBsm(gameIdx){
       const rbi= log ? log.rbi: p.rbi;
       const r  = log ? log.r  : p.r;
       const avgVal = ab>0 ? (h/ab).toFixed(3).replace(/^0/,'') : '.000';
-      return `<tr onclick="openModal('${p.id}')" style="cursor:pointer">
-        <td>${p.name} <span style="font-size:10px;color:var(--muted)">${p.pos}</span></td>
+      return `<tr onclick="openModal('${p.id}')" style="cursor:pointer" title="View ${p.name}'s full stats">
+        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:10px;color:var(--muted)">${p.pos}</span></td>
         <td>${ab}</td><td>${h}</td>
         <td class="${hr>0?'bsm-hr':''}">${hr>0?hr:'-'}</td>
         <td>${rbi}</td><td>${r}</td>
@@ -1457,8 +1457,7 @@ function openBsm(gameIdx){
     html = `
       <div class="bsm-header">
         <div class="bsm-teams">
-          <div class="bsm-team">
-            <div class="bsm-abbr" style="color:${atColor}">${g.away}</div>
+          <div class="bsm-team" style="cursor:pointer" onclick="closeBsm();goPage('team','${atTeam?.id||''}')">            <div class="bsm-abbr" style="color:${atColor}">${g.away}</div>
             <div class="bsm-name">${atTeam?.name||g.away}</div>
             <div class="bsm-label">Away ${awayWon?'✓':''}</div>
           </div>
@@ -1466,8 +1465,7 @@ function openBsm(gameIdx){
             <div class="bsm-score"><span style="color:${awayWon?atColor:'var(--muted)'}">${g.as}</span><span class="bsm-dash">–</span><span style="color:${!awayWon?htColor:'var(--muted)'}">${g.hs}</span></div>
             <span class="bsm-badge badge-w">Final</span>
           </div>
-          <div class="bsm-team">
-            <div class="bsm-abbr" style="color:${htColor}">${g.home}</div>
+          <div class="bsm-team" style="cursor:pointer" onclick="closeBsm();goPage('team','${htTeam?.id||''}')">            <div class="bsm-abbr" style="color:${htColor}">${g.home}</div>
             <div class="bsm-name">${htTeam?.name||g.home}</div>
             <div class="bsm-label">Home ${!awayWon?'✓':''}</div>
           </div>
@@ -1479,14 +1477,14 @@ function openBsm(gameIdx){
         </div>
       </div>
       <div class="bsm-section">
-        <div class="bsm-section-title" style="color:${atColor}">${g.away} — ${atTeam?.name||''}</div>
+        <div class="bsm-section-title" style="color:${atColor};cursor:pointer" onclick="closeBsm();goPage('team','${atTeam?.id||''}')">${g.away} — ${atTeam?.name||''} ↗</div>
         <table class="bsm-table">
           <thead><tr><th>Player</th><th>AB</th><th>H</th><th>HR</th><th>RBI</th><th>R</th><th>AVG</th></tr></thead>
           <tbody>${awayPlayers.length ? buildRows(awayPlayers,'away') : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No player data</td></tr>'}</tbody>
         </table>
       </div>
       <div class="bsm-section">
-        <div class="bsm-section-title" style="color:${htColor}">${g.home} — ${htTeam?.name||''}</div>
+        <div class="bsm-section-title" style="color:${htColor};cursor:pointer" onclick="closeBsm();goPage('team','${htTeam?.id||''}')">${g.home} — ${htTeam?.name||''} ↗</div>
         <table class="bsm-table">
           <thead><tr><th>Player</th><th>AB</th><th>H</th><th>HR</th><th>RBI</th><th>R</th><th>AVG</th></tr></thead>
           <tbody>${homePlayers.length ? buildRows(homePlayers,'home') : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No player data</td></tr>'}</tbody>
@@ -1598,11 +1596,11 @@ function buildSchedule(){
         <div class="gb-left">
           <div class="gb-rhe-hdr-row"><span class="gb-rhe-lbl" style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
           <div class="gb-team-row">${logoA}
-            <span class="gb-name ${aw?'winner':'loser'}" data-short="${g.away}" style="color:${aw?ac:'rgba(239,239,239,.38)'}">${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <span class="gb-name ${aw?'winner':'loser'}" data-short="${g.away}" style="color:${aw?ac:'rgba(239,239,239,.38)'};cursor:pointer" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.away)?.id||''}')">${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span>
             <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">0</span>
           </div>
           <div class="gb-team-row">${logoH}
-            <span class="gb-name ${!aw?'winner':'loser'}" data-short="${g.home}" style="color:${!aw?hc:'rgba(239,239,239,.38)'}">${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <span class="gb-name ${!aw?'winner':'loser'}" data-short="${g.home}" style="color:${!aw?hc:'rgba(239,239,239,.38)'};cursor:pointer" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.home)?.id||''}')">${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
             <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">0</span>
           </div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px">FINAL</div>
@@ -1628,8 +1626,8 @@ function buildSchedule(){
     } else {
       return `<div class="sched-game-block${isNext?' next':''}" onclick="openBsm(${i})">
         <div class="gb-left">
-          <div class="gb-team-row">${logoA}<span class="gb-name winner" data-short="${g.away}" style="color:${ac}">${g.away}</span></div>
-          <div class="gb-team-row">${logoH}<span class="gb-name winner" data-short="${g.home}" style="color:${hc}">${g.home}</span></div>
+          <div class="gb-team-row">${logoA}<span class="gb-name winner" data-short="${g.away}" style="color:${ac};cursor:pointer" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.away)?.id||''}')">${g.away}</span></div>
+          <div class="gb-team-row">${logoH}<span class="gb-name winner" data-short="${g.home}" style="color:${hc};cursor:pointer" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.home)?.id||''}')">${g.home}</span></div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);padding-top:2px;padding-left:44px">${isNext?'▶ NEXT':'UPCOMING'}</div>
         </div>
         <div class="gb-mid"><div class="gb-field">${g.field}</div><div class="gb-time">${g.time} · ${g.date}</div></div>
@@ -1686,7 +1684,7 @@ function buildPlayerGrid(filterTeam){
   const pf=document.getElementById('pfilters');
   const allFilterTeams=[...TEAMS,...HIST_TEAMS];
   pf.innerHTML=`<button class="pf-btn ${filterTeam==='all'?'on':''}" onclick="buildPlayerGrid('all')">All</button>`
-    +TEAMS.map(t=>`<button class="pf-btn ${filterTeam===t.id?'on':''}" style="border-color:${t.color}44;color:${t.color};${filterTeam===t.id?'background:'+t.color+';color:#000;border-color:'+t.color:''}" onclick="buildPlayerGrid('${t.id}')">${t.short}</button>`).join('')
+    +TEAMS.map(t=>`<button class="pf-btn" style="border-color:${t.color}44;color:${t.color}" onclick="goPage('team','${t.id}')">${t.short}</button>`).join('')
     +`<span style="display:inline-block;width:1px;background:var(--border);height:28px;margin:0 8px;vertical-align:middle"></span>`
     +HIST_TEAMS.map(t=>`<button class="pf-btn ${filterTeam===t.id?'on':''}" style="border-color:${t.color}33;color:${t.color}88;font-size:13px;padding:6px 14px;${filterTeam===t.id?'background:'+t.color+'44;color:'+t.color+';border-color:'+t.color:''}" onclick="buildPlayerGrid('${t.id}')">${t.short}</button>`).join('');
 
