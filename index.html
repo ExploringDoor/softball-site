@@ -1552,17 +1552,17 @@ function buildStandings(){
     <table class="s-tbl"><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Str</th></tr></thead><tbody>
     ${sorted.map((t,i)=>{
       const active=isActive(t);
-      const streak=t.streak&&t.streak!=='—'?`<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`:`<span style="color:var(--muted)">—</span>`;
-      return `<tr class="${i===0?'leader':''}" style="${!active?'opacity:.55':''}" onclick="${active?`goPage('team','${t.id}')`:''}">
-        <td style="color:var(--muted);font-size:12px">${i+1}</td>
-        <td><span class="tname" style="color:${t.color}">${t.name}</span>${!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':''}</td>
-        <td>${t.w}</td><td>${t.l}</td>
-        <td style="font-weight:600">${t.pct.toFixed(3).replace(/^0\./,'.')}</td>
-        <td style="color:var(--muted)">${t.gb}</td>
-        <td style="color:var(--muted)">${t.rs}</td>
-        <td style="color:var(--muted)">${t.ra}</td>
-        <td>${streak}</td>
-      </tr>`;
+      const streak=t.streak&&t.streak!=='—'?'<span class="'+(t.streak[0]==='W'?'badge-w':'badge-l')+'">'+t.streak+'</span>':'<span style="color:var(--muted)">—</span>';
+      return '<tr class="'+(i===0?'leader':'')+'" style="'+(active?'cursor:pointer':'opacity:.55')+'" onclick="'+(active?'goPage(\'team\',\''+t.id+'\')':'')+'">'
+        +'<td style="color:var(--muted);font-size:12px">'+(i+1)+'</td>'
+        +'<td><span class="tname" style="color:'+t.color+(active?';cursor:pointer':'')+'" onclick="'+(active?'event.stopPropagation();goPage(\'team\',\''+t.id+'\')':'')+'">'+(active?'<span style="text-decoration:underline dotted;text-underline-offset:3px">'+t.name+'</span>':t.name)+'</span>'+(!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':'')+'</td>'
+        +'<td>'+t.w+'</td><td>'+t.l+'</td>'
+        +'<td style="font-weight:600">'+t.pct.toFixed(3).replace(/^0\./,'.')+'</td>'
+        +'<td style="color:var(--muted)">'+t.gb+'</td>'
+        +'<td style="color:var(--muted)">'+t.rs+'</td>'
+        +'<td style="color:var(--muted)">'+t.ra+'</td>'
+        +'<td>'+streak+'</td>'
+        +'</tr>';
     }).join('')}</tbody></table>
   </div>`;
 }
