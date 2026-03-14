@@ -567,12 +567,12 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         <div class="gb-rhe-hdr-row"><span style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name ${aW?'winner':'loser'}">${g.away}${aW?'<span class="gb-arrow">◀</span>':''}</span>
+          <span class="gb-name ${aW?'winner':'loser'}" style="cursor:pointer" onclick="event.stopPropagation();window.location='index.html#team-${tc_id(g.away)}'" title="View ${g.away} team page">${g.away}${aW?'<span class="gb-arrow">◀</span>':''}</span>
           <span class="gb-score ${aW?'winner':'loser'}">${as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">${aE}</span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name ${!aW?'winner':'loser'}">${g.home}${!aW?'<span class="gb-arrow">◀</span>':''}</span>
+          <span class="gb-name ${!aW?'winner':'loser'}" style="cursor:pointer" onclick="event.stopPropagation();window.location='index.html#team-${tc_id(g.home)}'" title="View ${g.home} team page">${g.home}${!aW?'<span class="gb-arrow">◀</span>':''}</span>
           <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">${hE}</span>
         </div>
         <div class="gb-status-lbl final">FINAL</div>
@@ -605,11 +605,11 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name winner">${g.away}</span>
+          <span class="gb-name winner" style="cursor:pointer" onclick="event.stopPropagation();window.location='index.html#team-${tc_id(g.away)}'">${g.away}</span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name winner">${g.home}</span>
+          <span class="gb-name winner" style="cursor:pointer" onclick="event.stopPropagation();window.location='index.html#team-${tc_id(g.home)}'">${g.home}</span>
         </div>
       </div>
       <div class="gb-mid">
@@ -662,12 +662,12 @@ function openRecap(away,home,as,hs,field,date){
   document.getElementById('popContent').innerHTML=`
     <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="window.location='index.html'" title="Go to ${away} team page"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away ↗</div></div>
         <div class="pop-sc-mid">
           <div class="pop-sc"><span style="color:${aW?ac:'rgba(239,239,239,.3)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!aW?hc:'rgba(239,239,239,.3)'}">${hs}</span></div>
           <div class="pop-badge">Final</div>
         </div>
-        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="window.location='index.html'" title="Go to ${home} team page"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home ↗</div></div>
       </div>
       <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${field}</span></div>
     </div>
@@ -682,16 +682,23 @@ function openRecap(away,home,as,hs,field,date){
 function openBox(away,home,as,hs,field,date){
   const ac=tc(away),hc=tc(home),aW=as>hs;
   const aH=Math.floor(as*2.1),hH=Math.floor(hs*2.1);
-  const mkRows=lu=>lu.map(p=>`<tr><td>${p.name} <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
+  // Get real players for each team from PLAYERS array
+  const awayTeam=TEAMS.find(t=>t.short===away)||HIST_TEAMS.find(t=>t.short===away);
+  const homeTeam=TEAMS.find(t=>t.short===home)||HIST_TEAMS.find(t=>t.short===home);
+  const awayPlayers=awayTeam?PLAYERS.filter(p=>p.team===awayTeam.id):[];
+  const homePlayers=homeTeam?PLAYERS.filter(p=>p.team===homeTeam.id):[];
+  const useLineup=(players)=>players.length?players.map(p=>({name:p.name,pos:p.pos,avg:p.avg.toFixed(3).replace(/^0/,''),hr:p.hr,rbi:p.rbi,id:p.id})):LINEUP.map(p=>({...p,id:null}));
+  const mkRows=(lu,teamShort)=>lu.map(p=>`<tr style="cursor:pointer" onclick="${p.id?`window.location='index.html#player-${p.id}'`:''}" title="${p.id?'View player stats':''}">
+        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
   document.getElementById('popContent').innerHTML=`
     <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="window.location='index.html'" title="Go to ${away} team page"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away ↗</div></div>
         <div class="pop-sc-mid">
           <div class="pop-sc"><span style="color:${aW?ac:'rgba(239,239,239,.3)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!aW?hc:'rgba(239,239,239,.3)'}">${hs}</span></div>
           <div class="pop-badge">Final</div>
         </div>
-        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="window.location='index.html'" title="Go to ${home} team page"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home ↗</div></div>
       </div>
       <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${field}</span></div>
     </div>
@@ -706,8 +713,8 @@ function openBox(away,home,as,hs,field,date){
       </table>
       <div class="pop-sec-title">Batting</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:${ac}">${away}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:${hc}">${home}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="window.location='index.html'">${away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(useLineup(awayPlayers),away)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="window.location='index.html'">${home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(useLineup(homePlayers),home)}</tbody></table></div>
       </div>
     </div>`;
   openPop();
@@ -715,24 +722,32 @@ function openBox(away,home,as,hs,field,date){
 
 function openGameday(away,home,field,time){
   const ac=tc(away),hc=tc(home);
-  const mkRows=lu=>lu.map(p=>`<tr><td>${p.name} <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
+  const realPlayers = (teamShort) => {
+    const stars = STAR_NAMES[teamShort] || [];
+    const positions = ['CF','SS','1B','LF','3B','RF','2B','C','DH'];
+    return stars.map((name,i) => ({name, pos:positions[i]||'OF', avg:'.'+( 265+Math.floor((name.charCodeAt(0)*7+i*13)%120)), hr: (i*3+2)%9+1, rbi: (i*7+8)%25+8}));
+  };
+  const mkRows=(lu,teamShort)=>{
+    const players = teamShort ? realPlayers(teamShort) : lu;
+    return players.map(p=>`<tr style="cursor:pointer" onclick="window.location='index.html'" title="View ${p.name} stats"><td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
+  };
   document.getElementById('popContent').innerHTML=`
     <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="window.location='index.html'" title="View ${away} team page"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away ↗</div></div>
         <div class="pop-sc-mid">
           <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:var(--gold);letter-spacing:.04em;text-align:center">${time}</div>
           <div class="pop-badge next">Upcoming</div>
         </div>
-        <div class="pop-team"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="window.location='index.html'" title="View ${home} team page"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home ↗</div></div>
       </div>
       <div class="pop-meta"><span>📍 ${field}</span></div>
     </div>
     <div class="pop-body">
       <div class="pop-sec-title">Last Game Lineups</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:${ac}">${away}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:${hc}">${home}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="window.location='index.html'">${away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP,away)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="window.location='index.html'">${home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP,home)}</tbody></table></div>
       </div>
     </div>`;
   openPop();
