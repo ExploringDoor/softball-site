@@ -1668,13 +1668,16 @@ thead th.sorted-col .sarrow{opacity:1}
 <div class="page" id="pg-team">
   <div class="team-hero" id="team-hero">
     <div class="team-hero-blob" id="team-blob"></div>
-    <div class="team-hero-inner">
-      <div id="team-back-btn" style="display:none;margin-bottom:12px">
-        <button onclick="teamGoBack()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:rgba(237,237,237,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer;display:flex;align-items:center;gap:6px">← Back</button>
+    <div class="team-hero-inner" style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
+      <div>
+        <div id="team-back-btn" style="display:none;margin-bottom:12px">
+          <button onclick="teamGoBack()" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:6px;color:rgba(237,237,237,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer;display:flex;align-items:center;gap:6px">← Back</button>
+        </div>
+        <div class="sec-eyebrow" id="team-div-label"></div>
+        <div class="team-name-big" id="team-big-name"></div>
+        <div class="team-rec" id="team-rec"></div>
       </div>
-      <div class="sec-eyebrow" id="team-div-label"></div>
-      <div class="team-name-big" id="team-big-name"></div>
-      <div class="team-rec" id="team-rec"></div>
+      <div id="team-cal-btn" style="flex-shrink:0;padding-bottom:4px"></div>
     </div>
   </div>
   <div class="ttabs" id="ttabs">
@@ -2902,6 +2905,14 @@ function loadTeam(teamId){
   document.getElementById('team-big-name').innerHTML=`${t.name} <span style="color:${t.color}">·</span> ${t.short}`;
   document.getElementById('team-rec').innerHTML=`<strong>${t.w}–${t.l}</strong>&nbsp;·&nbsp;${t.pct.toFixed(3).replace(/^0\./,'.')}&nbsp;PCT&nbsp;·&nbsp;${t.rs} RS&nbsp;·&nbsp;${t.ra} RA&nbsp;·&nbsp;<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`;
   document.getElementById('team-blob').style.background=`linear-gradient(135deg,${t.color},transparent 60%)`;
+  // Calendar button in hero
+  const calBtn = document.getElementById('team-cal-btn');
+  if(calBtn){
+    calBtn.innerHTML=`<button onclick="downloadCalendar('${t.short}')" style="display:flex;align-items:center;gap:10px;background:${t.color};color:#070709;border:none;border-radius:10px;padding:14px 22px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap;box-shadow:0 4px 20px ${t.color}44;transition:all .2s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Add to Calendar
+    </button>`;
+  }
   document.querySelectorAll('.ttab').forEach(tab=>{tab.classList.remove('on');if(tab.dataset.tab==='roster')tab.classList.add('on')});
   renderTeamTab('roster');
 }
