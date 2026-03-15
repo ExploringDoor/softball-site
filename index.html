@@ -2474,12 +2474,12 @@ function teamGoBack(){
 }
 
 function loadTeam(teamId){
+  if(!teamId){ console.warn('loadTeam: no teamId'); return; }
   currentTeamId=teamId; currentTeamTab='roster';
-  // Show back button if came from another page
-  const ref = sessionStorage.getItem('dvsl_teamReferrer');
   const backBtn = document.getElementById('team-back-btn');
-  if(backBtn) backBtn.style.display = ref ? 'block' : 'none';
-  const t=getTeam(teamId); if(!t) return;
+  if(backBtn) backBtn.style.display='block';
+  const t=getTeam(teamId)||(typeof ALL_TEAMS!=='undefined'&&ALL_TEAMS.find(x=>x.id===teamId));
+  if(!t){ console.warn('loadTeam: team not found:',teamId); return; }
   document.getElementById('team-div-label').textContent=`Division ${t.div} · 2026 Season`;
   document.getElementById('team-big-name').innerHTML=`${t.name} <span style="color:${t.color}">·</span> ${t.short}`;
   document.getElementById('team-rec').innerHTML=`<strong>${t.w}–${t.l}</strong>&nbsp;·&nbsp;${t.pct.toFixed(3).replace(/^0\./,'.')}&nbsp;PCT&nbsp;·&nbsp;${t.rs} RS&nbsp;·&nbsp;${t.ra} RA&nbsp;·&nbsp;<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`;
@@ -3802,7 +3802,11 @@ const TEAM_NAME_TO_ID = {
 };
 function goTeamByName(name){
   const id=TEAM_NAME_TO_ID[name];
-  if(id) window.location='index.html#team/'+id;
+  if(id){ goPage('team',id); return; }
+  // Try searching by team name directly
+  const allT = (typeof ALL_TEAMS!=='undefined'?ALL_TEAMS:TEAMS);
+  const t = allT.find(x=>x.name===name||x.short===name);
+  if(t) goPage('team',t.id);
 }
 
 const DATA = {
