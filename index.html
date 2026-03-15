@@ -3793,6 +3793,79 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
   }
 }
 
+
+// ════ SCHEDULE BLOCK — mirrors home page sched-game-block style ═══════════
+function scheduleBlock(g, isNext){
+  const atm=TEAMS.find(t=>t.short===g.away)||HIST_TEAMS.find(t=>t.short===g.away);
+  const htm=TEAMS.find(t=>t.short===g.home)||HIST_TEAMS.find(t=>t.short===g.home);
+  const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
+  const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:``; 
+  const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:``;
+  const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${g.away.toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
+  const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${g.home.toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
+  
+  if(g.done){
+    const aw=g.as>g.hs;
+    const aH=Math.floor(g.as*2.1), hH=Math.floor(g.hs*2.1);
+    const away_recap=g.away, home_recap=g.home, as_recap=g.as, hs_recap=g.hs;
+    return `<div class="sched-game-block${isNext?' next':''}" onclick="openRecap2('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">
+      <div class="gb-left">
+        <div class="gb-rhe-hdr-row"><span class="gb-rhe-lbl" style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
+        <div class="gb-team-row">${logoA}
+          <span class="gb-name ${aw?'winner':'loser'}" style="color:${aw?ac:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.away}')">
+            <span>${atm?.name||g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${aRec}</span>
+          </span>
+          <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">0</span>
+        </div>
+        <div class="gb-team-row">${logoH}
+          <span class="gb-name ${!aw?'winner':'loser'}" style="color:${!aw?hc:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.home}')">
+            <span>${htm?.name||g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
+            <span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${hRec}</span>
+          </span>
+          <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">0</span>
+        </div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px">FINAL</div>
+      </div>
+      <div class="gb-actions">
+        <button class="gb-btn" onclick="event.stopPropagation();openRecap2('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Recap</button>
+        <button class="gb-btn" onclick="event.stopPropagation();openRecap2('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Box Score</button>
+      </div>
+    </div>`;
+  } else {
+    const timeStr = g.time||'TBD';
+    return `<div class="sched-game-block${isNext?' next':''}" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${timeStr}')">
+      <div class="gb-left">
+        <div class="gb-team-row">${logoA}
+          <span class="gb-name winner" style="color:${ac};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.away}')">
+            <span>${atm?.name||g.away}</span>
+            <span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${aRec}</span>
+          </span>
+        </div>
+        <div class="gb-team-row">${logoH}
+          <span class="gb-name winner" style="color:${hc};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.home}')">
+            <span>${htm?.name||g.home}</span>
+            <span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${hRec}</span>
+          </span>
+        </div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);padding-top:2px;padding-left:44px">${isNext?'▶ NEXT':'UPCOMING'}</div>
+      </div>
+      <div class="gb-mid">
+        <div class="gb-time" style="font-size:28px">${timeStr}</div>
+        <div style="font-size:16px;color:var(--white);font-weight:700;margin-top:4px">${g.date||''}</div>
+      </div>
+      <div class="gb-wl" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 12px">
+        <div class="gb-field" style="font-size:18px;font-weight:700;color:var(--white);text-align:center">${g.field||''}</div>
+      </div>
+      <div class="gb-actions"><button class="gb-btn gold">Gameday</button></div>
+    </div>`;
+  }
+}
+
+// openRecap2 bridges the full-schedule recap popup
+function openRecap2(away,home,as,hs,field,date){
+  openRecap(away,home,as,hs,field,date);
+}
 function renderScores(){
   const wrap=document.getElementById('sbWrap');
   if(view==='scores'){
@@ -3805,22 +3878,34 @@ function renderScores(){
       w.games.forEach(g=>{(byDay[g.day]=byDay[g.day]||[]).push(g);});
       const days=['mon','tue','wed','thu'].filter(d=>byDay[d]);
       return`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
-        +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`
-          +`<div class="games-grid">`+byDay[d].map((g,gi)=>gameBlock(g,i,gi,true,false)).join('')+`</div>`
-        ).join('');
+        +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`+byDay[d].map((g,gi)=>gameBlock(g,i,gi,true,false)).join('')).join('');
     }).join('<div style="height:16px"></div>');
   } else {
-    const idx=CURRENT_WK_IDX+weekOffset;
-    const week=weeks[idx];
-    if(!week||!week.games.length){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
-    const isPast=idx<CURRENT_WK_IDX, isCurrent=idx===CURRENT_WK_IDX;
-    const byDay={};
-    week.games.forEach(g=>{(byDay[g.day]=byDay[g.day]||[]).push(g);});
-    const days=['mon','tue','wed','thu'].filter(d=>byDay[d]);
-    wrap.innerHTML=`<div class="sb-week-head">Week ${week.wk} · ${week.date}</div>`
-      +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`
-        +`<div class="games-grid">`+byDay[d].map((g,gi)=>gameBlock(g,idx,gi,isPast,isCurrent)).join('')+`</div>`
-      ).join('');
+    // Schedule view: use sched-game-block style matching home page
+    // Show ALL SCHEDULE_PREVIEW games grouped by week, with date nav selecting week
+    const nextGlobalIdx = SCHEDULE_PREVIEW.findIndex(g=>!g.done);
+    // Group by week number
+    const spWkMap={};
+    SCHEDULE_PREVIEW.forEach((g,gi)=>{
+      if(!spWkMap[g.wk]) spWkMap[g.wk]={wk:g.wk,date:g.date,games:[]};
+      spWkMap[g.wk].games.push({...g,_gi:gi});
+    });
+    const spWkKeys=Object.keys(spWkMap).map(Number).sort((a,b)=>a-b);
+    // Map weekOffset to schedule preview weeks
+    // Find current week index in spWkKeys (first week with an upcoming game)
+    const spCurrentWk = SCHEDULE_PREVIEW.find(g=>!g.done)?.wk || spWkKeys[0];
+    const spCurrentIdx = spWkKeys.indexOf(spCurrentWk);
+    const spIdx = Math.max(0, Math.min(spWkKeys.length-1, spCurrentIdx + weekOffset));
+    const spWkNum = spWkKeys[spIdx];
+    const spWkData = spWkMap[spWkNum];
+    if(!spWkData){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
+    wrap.innerHTML=`<div class="sb-week-head">Week ${spWkData.wk} · ${spWkData.date}</div>`
+      +`<div class="sched-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px;">`
+      +spWkData.games.map((g)=>{
+        const isNext = g._gi===nextGlobalIdx;
+        return scheduleBlock(g, isNext);
+      }).join('')
+      +`</div>`;
   }
 }
 
