@@ -1590,31 +1590,7 @@ function closeBsm(){
 }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeBsm(); });
 
-// Handle cross-page navigation from schedule.html and stats.html
-window.addEventListener('load', function(){
-  const tid = sessionStorage.getItem('dvsl_goTeam');
-  if(tid){
-    sessionStorage.removeItem('dvsl_goTeam');
-    // Skip intro animation and go straight to team page
-    sessionStorage.setItem('ci_played','1');
-    document.body.classList.remove('ci-active');
-    document.body.classList.add('intro-done');
-    const ci = document.getElementById('ci');
-    if(ci) ci.style.display='none';
-    setTimeout(()=>goPage('team',tid),150);
-    return;
-  }
-  const pid = sessionStorage.getItem('dvsl_goPlayer');
-  if(pid){
-    sessionStorage.removeItem('dvsl_goPlayer');
-    sessionStorage.setItem('ci_played','1');
-    document.body.classList.remove('ci-active');
-    document.body.classList.add('intro-done');
-    const ci = document.getElementById('ci');
-    if(ci) ci.style.display='none';
-    setTimeout(()=>openModal(pid),250);
-  }
-});
+
 
 function buildTicker(){
   const items=[
@@ -2111,6 +2087,31 @@ buildLeaderboard();
 buildRecaps();
 buildHistory();
 setTimeout(observeAll,100);
+
+// Handle cross-page navigation — runs LAST after all init
+(function(){
+  const tid = sessionStorage.getItem('dvsl_goTeam');
+  if(tid){
+    sessionStorage.removeItem('dvsl_goTeam');
+    sessionStorage.setItem('ci_played','1');
+    document.body.classList.remove('ci-active');
+    document.body.classList.add('intro-done');
+    const ci = document.getElementById('ci');
+    if(ci) ci.style.display='none';
+    setTimeout(()=>goPage('team',tid),50);
+    return;
+  }
+  const pid = sessionStorage.getItem('dvsl_goPlayer');
+  if(pid){
+    sessionStorage.removeItem('dvsl_goPlayer');
+    sessionStorage.setItem('ci_played','1');
+    document.body.classList.remove('ci-active');
+    document.body.classList.add('intro-done');
+    const ci = document.getElementById('ci');
+    if(ci) ci.style.display='none';
+    setTimeout(()=>openModal(pid),100);
+  }
+})();
 </script>
 <script>
 (function(){
