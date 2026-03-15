@@ -2074,21 +2074,7 @@ buildStandings();
 buildSchedule();
 initNextGame();
 
-// ── Read URL hash on load (e.g. index.html#players) ──
-(function(){
-  var hash = window.location.hash.replace('#','').split('/')[0];
-  var valid = ['home','players','teams','team','recaps','history','leaders'];
-  if(hash && valid.includes(hash)){
-    goPage(hash);
-  }
-})();
-
-buildLeaderboard();
-buildRecaps();
-buildHistory();
-setTimeout(observeAll,100);
-
-// Handle cross-page navigation — runs LAST after all init
+// Handle cross-page navigation — check BEFORE hash routing
 (function(){
   const tid = sessionStorage.getItem('dvsl_goTeam');
   if(tid){
@@ -2098,7 +2084,8 @@ setTimeout(observeAll,100);
     document.body.classList.add('intro-done');
     const ci = document.getElementById('ci');
     if(ci) ci.style.display='none';
-    setTimeout(()=>goPage('team',tid),50);
+    buildLeaderboard();buildRecaps();buildHistory();setTimeout(observeAll,100);
+    goPage('team',tid);
     return;
   }
   const pid = sessionStorage.getItem('dvsl_goPlayer');
@@ -2109,8 +2096,18 @@ setTimeout(observeAll,100);
     document.body.classList.add('intro-done');
     const ci = document.getElementById('ci');
     if(ci) ci.style.display='none';
+    buildLeaderboard();buildRecaps();buildHistory();setTimeout(observeAll,100);
     setTimeout(()=>openModal(pid),100);
+    return;
   }
+  // Normal hash routing
+  var hash = window.location.hash.replace('#','').split('/')[0];
+  var valid = ['home','players','teams','team','recaps','history','leaders'];
+  if(hash && valid.includes(hash)) goPage(hash);
+  buildLeaderboard();
+  buildRecaps();
+  buildHistory();
+  setTimeout(observeAll,100);
 })();
 </script>
 <script>
