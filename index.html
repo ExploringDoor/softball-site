@@ -108,24 +108,45 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;over
 .sched-game-block{display:grid;grid-template-columns:minmax(280px,300px) auto auto auto;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:0;column-gap:0;cursor:pointer;transition:background .12s;}
 .sched-game-block:last-child{border-bottom:none}
 .sched-game-block:hover{background:rgba(255,255,255,.025)}
-/* ── HOME SCHEDULE: 2 games per row ── */
-#sched-wrap{
+
+/* ── HOME SCHEDULE: scores 2-col, upcoming 1-col ── */
+.home-scores-grid{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:8px;
+  margin-bottom:8px;
 }
-#sched-wrap .sched-game-block{
+.home-scores-grid .sched-game-block{
   border:1px solid var(--border)!important;
   border-radius:10px!important;
   overflow:hidden;
   border-bottom:1px solid var(--border)!important;
 }
-#sched-wrap .sched-game-block.next{
+.home-scores-grid .sched-game-block.next{
+  border-left:3px solid var(--gold)!important;
+}
+.home-upcoming-list{
+  display:flex;
+  flex-direction:column;
+  gap:0;
+  border:1px solid var(--border);
+  border-radius:10px;
+  overflow:hidden;
+}
+.home-upcoming-list .sched-game-block{
+  border-bottom:1px solid var(--border)!important;
+  border-radius:0!important;
+}
+.home-upcoming-list .sched-game-block:last-child{
+  border-bottom:none!important;
+}
+.home-upcoming-list .sched-game-block.next{
   border-left:3px solid var(--gold)!important;
 }
 @media(max-width:860px){
-  #sched-wrap{grid-template-columns:1fr!important;}
+  .home-scores-grid{grid-template-columns:1fr!important;}
 }
+
 
 .sched-game-block.next{border-left:3px solid var(--gold)}
 .gb-left{min-width:0;overflow:hidden;display:flex;flex-direction:column;justify-content:center;padding:6px 0}
@@ -2785,7 +2806,10 @@ function buildSchedule(){
   };
   const wrap=document.getElementById('sched-wrap');
   const nextIdx=SCHEDULE_PREVIEW.findIndex(g=>!g.done);
-  wrap.innerHTML=SCHEDULE_PREVIEW.map((g,i)=>{
+  const doneGames = SCHEDULE_PREVIEW.filter(g=>g.done);
+  const upcomingGames = SCHEDULE_PREVIEW.filter(g=>!g.done);
+
+  function renderHomeGame(g, i){
     const isNext=i===nextIdx;
     const atTeam=getTeamByShort(g.away), htTeam=getTeamByShort(g.home);
     const ac=atTeam?.color||'#9ca3af', hc=htTeam?.color||'#9ca3af';
@@ -2834,7 +2858,14 @@ function buildSchedule(){
         <div class="gb-actions"><button class="gb-btn gold">Gameday</button></div>
       </div>`;
     }
-  }).join('');
+  }
+
+  const doneHtml = doneGames.map((g,i)=>renderHomeGame(g, SCHEDULE_PREVIEW.indexOf(g))).join('');
+  const upcomingHtml = upcomingGames.map((g,i)=>renderHomeGame(g, SCHEDULE_PREVIEW.indexOf(g))).join('');
+
+  wrap.innerHTML =
+    `<div class="home-scores-grid">${doneHtml}</div>` +
+    `<div class="home-upcoming-list">${upcomingHtml}</div>`;
 }
 
 // ════════════════════════════ LEADERBOARD ════════════════════════════════
