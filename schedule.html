@@ -822,6 +822,9 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
   const field=cleanField(g.field), time=parseTime(g);
   const addr=g.addr||'Philadelphia Area';
   const recap=RECAPS.find(r=>r.away===g.away&&r.home===g.home);
+  const atm=TEAMS.find(t=>t.short===g.away)||HIST_TEAMS.find(t=>t.short===g.away);
+  const htm=TEAMS.find(t=>t.short===g.home)||HIST_TEAMS.find(t=>t.short===g.home);
+  const aRec=atm?`(${atm.w}-${atm.l})`:''; const hRec=htm?`(${htm.w}-${htm.l})`:'';
   if(isPast){
     const{a:as,h:hs}=fakeScore(g.away,g.home,wkIdx*10+gi);
     const aW=as>hs;
@@ -835,12 +838,12 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         <div class="gb-rhe-hdr-row"><span style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name ${aW?'winner':'loser'}" style="cursor:pointer" onclick="event.stopPropagation();goTeam(this.textContent.replace('◀','').trim())">${g.away}${aW?'<span class="gb-arrow">◀</span>':''}</span>
+          <span class="gb-name ${aW?'winner':'loser'}" style="cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.away}')"><span style="pointer-events:none">${g.away}${aW?'<span class="gb-arrow">◀</span>':''}</span><span style="font-size:11px;font-family:Inter,sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${aRec}</span></span>
           <span class="gb-score ${aW?'winner':'loser'}">${as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">${aE}</span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name ${!aW?'winner':'loser'}" style="cursor:pointer" onclick="event.stopPropagation();goTeam(this.textContent.replace('◀','').trim())">${g.home}${!aW?'<span class="gb-arrow">◀</span>':''}</span>
+          <span class="gb-name ${!aW?'winner':'loser'}" style="cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.home}')"><span style="pointer-events:none">${g.home}${!aW?'<span class="gb-arrow">◀</span>':''}</span><span style="font-size:11px;font-family:Inter,sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${hRec}</span></span>
           <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">${hE}</span>
         </div>
         <div class="gb-status-lbl final">FINAL</div>
@@ -873,11 +876,11 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name winner" style="cursor:pointer" onclick="event.stopPropagation();goTeam(this.textContent.replace('◀','').trim())">${g.away}</span>
+          <span class="gb-name winner" style="cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.away}')"><span style="pointer-events:none">${g.away}</span><span style="font-size:11px;font-family:Inter,sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${aRec}</span></span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name winner" style="cursor:pointer" onclick="event.stopPropagation();goTeam(this.textContent.replace('◀','').trim())">${g.home}</span>
+          <span class="gb-name winner" style="cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.home}')"><span style="pointer-events:none">${g.home}</span><span style="font-size:11px;font-family:Inter,sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${hRec}</span></span>
         </div>
       </div>
       <div class="gb-mid">
@@ -1023,7 +1026,9 @@ function openGameday(away,home,field,time){
 
 function goTeam(short){
   const t=TEAMS.find(x=>x.short===short)||HIST_TEAMS.find(x=>x.short===short);
-  if(t){sessionStorage.setItem('dvsl_goTeam',t.id);}
+  const id = t ? t.id : short.toLowerCase();
+  sessionStorage.setItem('dvsl_goTeam', id);
+  sessionStorage.setItem('dvsl_teamReferrerUrl', window.location.href);
   window.location='index.html';
 }
 function openPop(){document.getElementById('pop').classList.add('open');document.body.style.overflow='hidden';}
