@@ -19,7 +19,7 @@ html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;overflow-x:hidden;line-height:1.6}
 
 /* ── NAV ── */
-.nav{position:fixed;top:44px;left:0;right:0;z-index:300;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(7,7,9,0.88);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border);transition:top .3s ease}
+.nav{position:fixed;top:48px;left:0;right:0;z-index:400;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(7,7,9,0.88);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border)}
 .nav-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);cursor:pointer;user-select:none;display:flex;align-items:center;gap:10px}
 
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
@@ -431,7 +431,7 @@ body.ci-active .nav{opacity:0;pointer-events:none}
 
 /* ── ESPN-STYLE SCORE TICKER ─────────────────────────────────────────── */
 #score-ticker{
-  position:fixed;top:0;left:0;right:0;z-index:99998;
+  position:fixed;top:4px;left:0;right:0;z-index:200;
   background:#111318;border-bottom:1px solid rgba(255,255,255,.08);
   height:44px;display:flex;align-items:stretch;overflow:hidden;
   transition:transform .3s ease,opacity .3s ease;
@@ -1063,7 +1063,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:cen
 .mob-menu a:last-child{border-bottom:none}
 
 /* HERO */
-.hero{padding:62px 0 0;min-height:320px;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;background:var(--dark);border-bottom:1px solid var(--border)}
+.hero{padding:0;margin-top:110px;min-height:280px;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;background:var(--dark);border-bottom:1px solid var(--border)}
 .hero-logo-bg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
 .hero-logo-bg img{width:min(460px,70vw);height:auto;opacity:.06;filter:saturate(0.3);mix-blend-mode:luminosity;animation:pulse 9s ease-in-out infinite}
 @keyframes pulse{0%,100%{opacity:.06;transform:scale(1)}50%{opacity:.09;transform:scale(1.015)}}
@@ -3334,9 +3334,9 @@ function buildTicker2(){
   track.innerHTML = html;
 }
 
-// Ticker hides on scroll, nav always stays
+// Ticker hides on scroll, nav ALWAYS stays fixed
 (function(){
-  let lastY = 0, ticking = false;
+  let ticking = false;
   function getScrollY(){
     return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
   }
@@ -3345,20 +3345,14 @@ function buildTicker2(){
       requestAnimationFrame(()=>{
         const y = getScrollY();
         const ticker = document.getElementById('score-ticker');
-        const nav = document.querySelector('.nav');
-        if(ticker && nav){
+        if(ticker){
           if(y > 60){
-            // Scrolled down — hide ticker, nav moves to top:0 and STAYS
             ticker.classList.add('hidden');
-            nav.style.top = '0px';
-            nav.style.position = 'fixed';
           } else {
-            // Near top — show ticker, nav back to top:44px
             ticker.classList.remove('hidden');
-            nav.style.top = '44px';
           }
         }
-        lastY = y;
+        // Nav never moves — always fixed via CSS
         ticking = false;
       });
       ticking = true;
