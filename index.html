@@ -108,9 +108,23 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;over
 .sched-game-block{display:grid;grid-template-columns:minmax(280px,300px) auto auto auto;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:0;column-gap:0;cursor:pointer;transition:background .12s;}
 .sched-game-block:last-child{border-bottom:none}
 .sched-game-block:hover{background:rgba(255,255,255,.025)}
-/* ── HOME SCHEDULE: single column ── */
+/* ── HOME SCHEDULE: 2 games per row ── */
 #sched-wrap{
-  display:block;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+#sched-wrap .sched-game-block{
+  border:1px solid var(--border)!important;
+  border-radius:10px!important;
+  overflow:hidden;
+  border-bottom:1px solid var(--border)!important;
+}
+#sched-wrap .sched-game-block.next{
+  border-left:3px solid var(--gold)!important;
+}
+@media(max-width:860px){
+  #sched-wrap{grid-template-columns:1fr!important;}
 }
 
 .sched-game-block.next{border-left:3px solid var(--gold)}
@@ -3789,12 +3803,12 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         <div class="gb-rhe-hdr-row"><span style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name ${aW?'winner':'loser'}" data-short="${g.away}" onclick="event.stopPropagation();goTeam('${g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
+          <span class="gb-name ${aW?'winner':'loser'}" data-short="${g.away}" style="color:${aW?ac:'rgba(239,239,239,.38)'}" onclick="event.stopPropagation();goTeam('${g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
           <span class="gb-score ${aW?'winner':'loser'}">${as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">${aE}</span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name ${!aW?'winner':'loser'}" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
+          <span class="gb-name ${!aW?'winner':'loser'}" data-short="${g.home}" style="color:${!aW?hc:'rgba(239,239,239,.38)'}" onclick="event.stopPropagation();goTeam('${g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
           <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">${hE}</span>
         </div>
         <div class="gb-status-lbl final">FINAL</div>
@@ -3813,11 +3827,11 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name winner" data-short="${g.away}" onclick="event.stopPropagation();goTeam('${g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
+          <span class="gb-name winner" data-short="${g.away}" style="color:${ac}" onclick="event.stopPropagation();goTeam('${g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name winner" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
+          <span class="gb-name winner" data-short="${g.home}" style="color:${hc}" onclick="event.stopPropagation();goTeam('${g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
         </div>
         <div style="padding-left:38px;margin-top:4px;font-size:13px;color:var(--gold);font-weight:700;font-family:'Oswald',sans-serif">${time} <span style="color:var(--muted);font-size:11px;font-family:'Inter',sans-serif;font-weight:500">· ${field}</span></div>
       </div>
