@@ -2695,7 +2695,7 @@ function buildSchedule(){
     const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${g.away.toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
     const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${g.home.toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
     const atm=getTeamByShort(g.away); const htm=getTeamByShort(g.home);
-    const aRec=atm?`(${atm.w}-${atm.l})`:''; const hRec=htm?`(${htm.w}-${htm.l})`:'';
+    const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:``; const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:``;
     if(g.done){
       const aw=g.as>g.hs;
       const wTeam=aw?g.away:g.home, lTeam=aw?g.home:g.away;
@@ -2714,18 +2714,7 @@ function buildSchedule(){
           </div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px">FINAL</div>
         </div>
-        <div class="gb-wl">
-          <div class="gb-wl-row">
-            <span class="gb-wl-role">WIN</span>
-            <div class="gb-wl-badge" style="background-color:${wc}22;border:1px solid ${wc}44;background-image:url('logos/${wTeam.toLowerCase()}.svg');background-size:cover;background-position:center"></div>
-            <div><div class="gb-wl-name">${STAR[wTeam]||wTeam+' Player'}</div><div class="gb-wl-stat">${pStats(wTeam).wl} · ${pStats(wTeam).era} ERA</div></div>
-          </div>
-          <div class="gb-wl-row">
-            <span class="gb-wl-role">LOSS</span>
-            <div class="gb-wl-badge" style="background-color:${lc}22;border:1px solid ${lc}44;background-image:url('logos/${lTeam.toLowerCase()}.svg');background-size:cover;background-position:center"></div>
-            <div><div class="gb-wl-name">${STAR[lTeam]||lTeam+' Player'}</div><div class="gb-wl-stat">${pStats(lTeam).wl} · ${pStats(lTeam).era} ERA</div></div>
-          </div>
-        </div>
+
         <div class="gb-actions">
           <button class="gb-btn" onclick="event.stopPropagation();openRecap(${i})">Recap</button>
           <button class="gb-btn" onclick="event.stopPropagation();openBsm(${i})">Box Score</button>
@@ -3664,7 +3653,7 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
   const recap=RECAPS.find(r=>r.away===g.away&&r.home===g.home);
   const atm=TEAMS.find(t=>t.short===g.away)||HIST_TEAMS.find(t=>t.short===g.away);
   const htm=TEAMS.find(t=>t.short===g.home)||HIST_TEAMS.find(t=>t.short===g.home);
-  const aRec=atm?`(${atm.w}-${atm.l})`:''; const hRec=htm?`(${htm.w}-${htm.l})`:'';
+  const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:``; const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:``;
   if(isPast){
     const{a:as,h:hs}=fakeScore(g.away,g.home,wkIdx*10+gi);
     const aW=as>hs;
@@ -3688,18 +3677,7 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         </div>
         <div class="gb-status-lbl final">FINAL</div>
       </div>
-      <div class="gb-wl">
-        <div class="gb-wl-row">
-          <span class="gb-wl-role">WIN</span>
-          <div class="gb-wl-badge" style="background:${wc}22;border:1px solid ${wc}44;overflow:hidden"><img src="logos/${wTeam.toLowerCase()}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentNode.style.color='${wc}';this.parentNode.textContent='${wTeam}'" alt="${wTeam}"></div>
-          <div><div class="gb-wl-name">${wStar}</div><div class="gb-wl-stat">${pStats(wTeam).wl} · ${pStats(wTeam).era} ERA</div></div>
-        </div>
-        <div class="gb-wl-row">
-          <span class="gb-wl-role">LOSS</span>
-          <div class="gb-wl-badge" style="background:${lc}22;border:1px solid ${lc}44;overflow:hidden"><img src="logos/${lTeam.toLowerCase()}.svg" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentNode.style.color='${lc}';this.parentNode.textContent='${lTeam}'" alt="${lTeam}"></div>
-          <div><div class="gb-wl-name">${lStar}</div><div class="gb-wl-stat">${pStats(lTeam).wl} · ${pStats(lTeam).era} ERA</div></div>
-        </div>
-      </div>
+
       <div class="gb-actions">
         <button class="gb-btn" onclick="event.stopPropagation();openRecap('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">Recap</button>
         <button class="gb-btn" onclick="event.stopPropagation();openBox('${g.away}','${g.home}',${as},${hs},'${field}','${g.date||''}')">Box Score</button>
@@ -3720,9 +3698,9 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
           <span class="gb-name winner" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
         </div>
       </div>
-      <div class="gb-mid">
-        <div class="gb-time">${time}</div>
-        <div class="gb-field">${field}</div>
+      <div class="gb-mid" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px!important;">
+        <div style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;color:var(--gold)">${time} · ${g.date||''}</div>
+        <div style="font-size:15px;font-weight:600;color:var(--white);margin-top:2px">${field}</div>
       </div>
       <div class="gb-actions">
         <button class="gb-btn gold" onclick="event.stopPropagation();openGameday('${g.away}','${g.home}','${field}','${time}')">Gameday</button>
