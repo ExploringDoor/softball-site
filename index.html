@@ -2754,41 +2754,54 @@ function openBsm(gameIdx){
         <td>${avgVal}</td>
       </tr>`;
     }).join('');
+    const aH=Math.floor(g.as*2.1), hH=Math.floor(g.hs*2.1);
+    const mkRows=(players)=>players.map(p=>`<tr style="cursor:pointer" onclick="closeScPop();openModal('${p.id}')">
+        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td>
+        <td>${p.avg.toFixed(3).replace(/^0/,'')}</td>
+        <td>${p.hr||'-'}</td>
+        <td>${p.rbi}</td></tr>`).join('');
     html = `
-      <div class="bsm-header">
-        <div class="bsm-teams">
-          <div class="bsm-team" style="cursor:pointer" onclick="closeBsm();goPage('team','${atTeam?.id||''}')">            <div class="bsm-abbr" style="color:${atColor}">${g.away}</div>
-            <div class="bsm-name">${atTeam?.name||g.away}</div>
-            <div class="bsm-label">Away ${awayWon?'✓':''}</div>
+      <div class="pop-hd">
+        <div class="pop-matchup">
+          <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goPage('team','${atTeam?.id||''}')">
+            <div class="pop-abbr" style="color:${atColor}">${g.away}</div>
+            <div style="font-size:13px;color:rgba(237,237,237,.5)">${atTeam?.name||g.away}</div>
+            <div class="pop-role-lbl">Away ${awayWon?'✓':''}</div>
           </div>
-          <div class="bsm-score-center">
-            <div class="bsm-score"><span style="color:${awayWon?atColor:'var(--muted)'}">${g.as}</span><span class="bsm-dash">–</span><span style="color:${!awayWon?htColor:'var(--muted)'}">${g.hs}</span></div>
-            <span class="bsm-badge badge-w">Final</span>
+          <div class="pop-sc-mid">
+            <div class="pop-sc"><span style="color:${awayWon?atColor:'rgba(239,239,239,.3)'}">${g.as}</span><span class="pop-dash">–</span><span style="color:${!awayWon?htColor:'rgba(239,239,239,.3)'}">${g.hs}</span></div>
+            <div class="pop-badge">Final</div>
           </div>
-          <div class="bsm-team" style="cursor:pointer" onclick="closeBsm();goPage('team','${htTeam?.id||''}')">            <div class="bsm-abbr" style="color:${htColor}">${g.home}</div>
-            <div class="bsm-name">${htTeam?.name||g.home}</div>
-            <div class="bsm-label">Home ${!awayWon?'✓':''}</div>
+          <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goPage('team','${htTeam?.id||''}')">
+            <div class="pop-abbr" style="color:${htColor}">${g.home}</div>
+            <div style="font-size:13px;color:rgba(237,237,237,.5)">${htTeam?.name||g.home}</div>
+            <div class="pop-role-lbl">Home ${!awayWon?'✓':''}</div>
           </div>
         </div>
-        <div class="bsm-meta">
-          <span>📅 ${g.date}</span>
-          <span>📍 ${g.field}</span>
-          <span>⏰ ${g.time}</span>
+        <div class="pop-meta"><span>📅 ${g.date}</span><span>📍 ${g.field}</span><span>⏰ ${g.time}</span></div>
+      </div>
+      <div class="pop-body">
+        <div class="pop-sec-title">Line Score</div>
+        <table class="ptbl" style="margin-bottom:20px">
+          <thead><tr><th>Team</th><th>R</th><th>H</th><th>E</th></tr></thead>
+          <tbody>
+            <tr><td style="color:${atColor};font-weight:700">${g.away}</td><td>${g.as}</td><td>${aH}</td><td>0</td></tr>
+            <tr><td style="color:${htColor};font-weight:700">${g.home}</td><td>${g.hs}</td><td>${hH}</td><td>0</td></tr>
+          </tbody>
+        </table>
+        <div class="pop-sec-title">Batting</div>
+        <div class="pop-grid2">
+          <div>
+            <div class="pop-team-lbl" style="color:${atColor};cursor:pointer" onclick="closeScPop();goPage('team','${atTeam?.id||''}')">${g.away} — ${atTeam?.name||''} ↗</div>
+            <table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead>
+            <tbody>${awayPlayers.length?mkRows(awayPlayers):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>'}</tbody></table>
+          </div>
+          <div>
+            <div class="pop-team-lbl" style="color:${htColor};cursor:pointer" onclick="closeScPop();goPage('team','${htTeam?.id||''}')">${g.home} — ${htTeam?.name||''} ↗</div>
+            <table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead>
+            <tbody>${homePlayers.length?mkRows(homePlayers):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>'}</tbody></table>
+          </div>
         </div>
-      </div>
-      <div class="bsm-section">
-        <div class="bsm-section-title" style="color:${atColor};cursor:pointer" onclick="closeBsm();goPage('team','${atTeam?.id||''}')">${g.away} — ${atTeam?.name||''} ↗</div>
-        <table class="bsm-table">
-          <thead><tr><th>Player</th><th>AB</th><th>H</th><th>HR</th><th>RBI</th><th>R</th><th>AVG</th></tr></thead>
-          <tbody>${awayPlayers.length ? buildRows(awayPlayers,'away') : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No player data</td></tr>'}</tbody>
-        </table>
-      </div>
-      <div class="bsm-section">
-        <div class="bsm-section-title" style="color:${htColor};cursor:pointer" onclick="closeBsm();goPage('team','${htTeam?.id||''}')">${g.home} — ${htTeam?.name||''} ↗</div>
-        <table class="bsm-table">
-          <thead><tr><th>Player</th><th>AB</th><th>H</th><th>HR</th><th>RBI</th><th>R</th><th>AVG</th></tr></thead>
-          <tbody>${homePlayers.length ? buildRows(homePlayers,'home') : '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No player data</td></tr>'}</tbody>
-        </table>
       </div>`;
   } else {
     html = `
@@ -2819,14 +2832,12 @@ function openBsm(gameIdx){
         <div style="margin-top:16px;font-size:12px;color:var(--muted2)">Box score available after the game</div>
       </div>`;
   }
-  document.getElementById('bsmContent').innerHTML = html;
-  document.getElementById('bsmOverlay').classList.add('open');
-  document.body.style.overflow = 'hidden';
+  document.getElementById('scPopContent').innerHTML = html;
+  openScPop();
 }
 
 function closeBsm(){
-  document.getElementById('bsmOverlay').classList.remove('open');
-  document.body.style.overflow = '';
+  closeScPop();
 }
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeBsm(); });
 
