@@ -450,11 +450,6 @@ body.ci-active .nav{opacity:0;pointer-events:none}
   height:44px;display:flex;align-items:stretch;overflow:hidden;
   transition:transform .3s ease,opacity .3s ease;
 }
-@media(max-width:700px){
-  #score-ticker{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  #score-ticker .st-scroll{overflow:visible;flex:unset;}
-  #score-ticker .st-track{animation:none!important;transform:none!important;position:static;width:auto;}
-  #score-ticker .st-label{position:sticky;left:0;z-index:2;flex-shrink:0;}
 }
 #score-ticker.hidden{transform:translateY(-100%);opacity:0;pointer-events:none;transition:transform .3s ease,opacity .3s ease}
 .st-label{
@@ -1193,156 +1188,124 @@ thead th.sorted-col .sarrow{opacity:1}
 .nav-back:hover{background:rgba(245,200,66,.2);border-color:rgba(245,200,66,.5);color:var(--gold)}
 .nav-back svg{flex-shrink:0}
 
-/* ══════════════════════════════════════════
-   MOBILE OVERRIDES
-   ══════════════════════════════════════════ */
 
-/* Ticker — stop animation, make scrollable */
+/* ═══════════════════════════════════════════
+   CLEAN MOBILE CSS
+   ═══════════════════════════════════════════ */
+
+/* 1. TICKER — horizontal scroll on mobile */
 @media(max-width:700px){
-  #score-ticker{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  #score-ticker{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
   .st-scroll{overflow:visible!important;flex:unset!important;}
-  .st-track{animation:none!important;transform:none!important;position:static!important;width:auto!important;display:flex!important;}
+  .st-track{animation:none!important;transform:none!important;position:static!important;width:auto!important;}
   .st-label{position:sticky;left:0;z-index:2;flex-shrink:0;}
+}
 
-  /* Nav logo */
-  .nav-brand img{height:20px!important;}
-  .nav-brand{font-size:15px!important;}
+/* 2. NAV LOGO smaller */
+@media(max-width:700px){
+  .nav-brand img{height:18px!important;}
+  .nav-brand{font-size:14px!important;gap:6px!important;}
+}
 
-  /* Home standings — horizontal scroll */
-  #standings-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  #standings-wrap table{min-width:500px;font-size:11px;}
-  #standings-wrap td,#standings-wrap th{padding:4px 6px!important;white-space:nowrap;}
-
-  /* Scores/Schedule page padding */
-  #pg-scores > div:first-child{padding:80px 10px 0!important;}
-  #pg-scores .sb-wrap{padding:12px 10px 80px!important;}
-
-  /* Game blocks — stack vertically, show everything */
-  .game-block{
+/* 3. HOME PAGE sched-game-block — bigger fonts, proper layout */
+@media(max-width:700px){
+  .sched-game-block{
     display:grid!important;
     grid-template-columns:1fr auto!important;
+    grid-template-rows:auto!important;
+    padding:12px 0!important;
+    gap:0!important;
+  }
+  /* gb-left takes full width, gb-mid shows on right, gb-wl and gb-actions hidden */
+  .sched-game-block .gb-left{grid-column:1;padding:0 10px 0 0!important;}
+  .sched-game-block .gb-mid{
+    grid-column:2;
+    display:flex!important;
+    flex-direction:column;align-items:flex-end;justify-content:center;
+    padding:0 0 0 10px!important;
+    border-left:1px solid var(--border);
+    min-width:90px;max-width:110px;
+    text-align:right;
+  }
+  .sched-game-block .gb-wl{display:none!important;}
+  .sched-game-block .gb-actions{display:none!important;}
+  
+  /* Bigger team names on home page */
+  .sched-game-block .gb-name{font-size:22px!important;font-family:'Oswald',sans-serif!important;font-weight:700!important;white-space:nowrap!important;overflow:visible!important;}
+  .sched-game-block .gb-name::before{display:none!important;}
+  .sched-game-block .gb-score{font-size:28px!important;width:36px!important;}
+  .sched-game-block .gb-rhe-val{font-size:20px!important;width:30px!important;}
+  .sched-game-block .gb-rhe-lbl{font-size:10px!important;width:30px!important;}
+  .sched-game-block .gb-logo{width:28px!important;height:28px!important;min-width:28px!important;font-size:7px!important;margin-right:8px!important;}
+  .sched-game-block .gb-rhe-hdr-row{padding-left:36px!important;}
+  .sched-game-block .gb-arrow{display:none!important;}
+  /* Record tag under name */
+  .sched-game-block .gb-name span:last-child{font-size:11px!important;}
+  
+  /* Time/field on right */
+  .sched-game-block .gb-time{font-size:16px!important;font-family:'Oswald',sans-serif;font-weight:700;color:var(--gold);line-height:1.2;}
+  .sched-game-block .gb-field{font-size:10px!important;color:var(--muted);margin-top:3px;}
+}
+
+/* 4. SCORES/SCHEDULE page game-block — fix team names */
+@media(max-width:700px){
+  .game-block{
+    display:grid!important;
+    grid-template-columns:1fr 85px!important;
     grid-template-rows:auto auto!important;
     border-radius:8px;overflow:hidden;margin-bottom:8px;
   }
-  .gb-left{
-    grid-column:1;grid-row:1;
-    padding:10px 8px!important;
-    min-width:0;
-  }
-  .gb-mid{
+  .game-block .gb-left{grid-column:1;grid-row:1;padding:10px 8px!important;min-width:0;overflow:hidden;}
+  .game-block .gb-mid{
     grid-column:2;grid-row:1;
     display:flex!important;
     flex-direction:column;align-items:center;justify-content:center;
-    padding:8px 10px!important;
-    min-width:80px;
+    padding:6px 8px!important;
+    border-left:1px solid var(--border);
+    overflow:hidden;
   }
-  .gb-wl{display:none!important;}
-  .gb-actions{
-    grid-column:1/-1;grid-row:2;
-    display:flex!important;flex-wrap:wrap;gap:6px;
-    padding:8px 10px!important;
-    border-top:1px solid var(--border);
+  .game-block .gb-wl{display:none!important;}
+  .game-block .gb-actions{grid-column:1/-1;grid-row:2;display:flex!important;flex-wrap:wrap;gap:6px;padding:8px!important;border-top:1px solid var(--border);}
+
+  /* Team names in scores — show full abbr */
+  .game-block .gb-name{
+    font-size:0!important;overflow:hidden!important;flex:1!important;min-width:0!important;
   }
+  .game-block .gb-name::before{
+    content:attr(data-short);
+    font-size:16px!important;font-family:'Barlow Condensed',sans-serif;font-weight:900;line-height:1;display:block!important;
+  }
+  .game-block .gb-name > span:first-child{display:none!important;}
+  .game-block .gb-name > span:last-child{display:none!important;}
+  .game-block .gb-arrow{display:none!important;}
+  .game-block .gb-logo{width:22px!important;height:22px!important;min-width:22px!important;max-width:22px!important;font-size:6px!important;flex-shrink:0!important;margin-right:6px!important;}
+  .game-block .gb-score{font-size:18px!important;width:26px!important;}
+  .game-block .gb-rhe-val{font-size:14px!important;width:24px!important;}
+  .game-block .gb-rhe-lbl{font-size:9px!important;width:24px!important;}
+  .game-block .gb-rhe-hdr-row{padding-left:28px!important;}
+  .game-block .gb-time{font-size:14px!important;color:var(--gold)!important;text-align:center;font-family:'Oswald',sans-serif;font-weight:700;}
+  .game-block .gb-field{font-size:10px!important;color:var(--muted)!important;text-align:center;line-height:1.2;word-break:break-word;}
+  
+  /* Week nav slots scrollable */
+  #dnSlots{overflow-x:auto!important;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;}
+  .dn-slot{flex-shrink:0!important;min-width:54px;}
 
-  /* RHE — tight */
-  .gb-rhe-lbl{width:28px!important;font-size:9px!important;text-align:center;}
-  .gb-rhe-val{width:28px!important;font-size:16px!important;text-align:center;}
-  .gb-score{width:28px!important;font-size:18px!important;}
-  .gb-logo{width:22px!important;height:22px!important;min-width:22px!important;max-width:22px!important;font-size:6px!important;flex-shrink:0;}
-  .gb-rhe-hdr-row{padding-left:28px!important;}
-
-  /* Team name — show abbr */
-  .gb-name{font-size:0!important;overflow:hidden;}
-  .gb-name::before{content:attr(data-short);font-size:15px!important;font-family:'Barlow Condensed',sans-serif;font-weight:900;line-height:1;display:block;}
-  .gb-arrow{display:none!important;}
-
-  /* Schedule upcoming — time */
-  .gb-time{font-size:15px!important;color:var(--gold);}
-  .gb-field{font-size:11px!important;color:var(--muted);}
-
-  /* Standings page */
-  .stand-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  .stand-table{min-width:580px;}
-
-  /* Week nav slots */
-  #dnSlots{overflow-x:auto;-webkit-overflow-scrolling:touch;gap:4px;flex-wrap:nowrap;}
-  .dn-slot{flex-shrink:0;min-width:52px;}
-}
-
-@media(max-width:420px){
-  .gb-rhe-lbl{width:24px!important;}
-  .gb-rhe-val{width:24px!important;font-size:14px!important;}
-  .gb-score{width:24px!important;font-size:16px!important;}
-  .gb-logo{width:18px!important;height:18px!important;min-width:18px!important;}
-  .gb-name::before{font-size:13px!important;}
-  .gb-rhe-hdr-row{padding-left:22px!important;}
-}
-
-/* ══════════════════════════════════════════
-   MOBILE OVERRIDES v2
-   ══════════════════════════════════════════ */
-@media(max-width:700px){
-  /* Ticker — stop animation, scrollable */
-  #score-ticker{overflow-x:auto!important;-webkit-overflow-scrolling:touch;}
-  .st-scroll{overflow:visible!important;flex:unset!important;}
-  .st-track{animation:none!important;transform:none!important;position:static!important;width:auto!important;display:flex!important;}
-  .st-label{position:sticky;left:0;z-index:2;flex-shrink:0;}
-
-  /* Nav logo smaller */
-  .nav-brand img{height:20px!important;}
-  .nav-brand{font-size:15px!important;}
-
-  /* Home standings scroll */
-  #standings-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch;}
-  #standings-wrap table{min-width:500px;font-size:11px;}
-  #standings-wrap td,#standings-wrap th{padding:4px 5px!important;white-space:nowrap;}
-
-  /* Scores page container */
+  /* Scores page padding */
   #pg-scores > div:first-child{padding:80px 10px 0!important;}
   #pg-scores .sb-wrap{padding:12px 10px 80px!important;}
 
-  /* Game blocks layout */
-  .game-block{
-    display:grid!important;
-    grid-template-columns:1fr 90px!important;
-    grid-template-rows:auto auto!important;
-    border-radius:8px;overflow:hidden;margin-bottom:8px;
-  }
-  .gb-left{grid-column:1;grid-row:1;padding:10px 6px!important;min-width:0;}
-  .gb-mid{grid-column:2;grid-row:1;display:flex!important;flex-direction:column;align-items:center;justify-content:center;padding:6px 8px!important;border-left:1px solid var(--border);}
-  .gb-wl{display:none!important;}
-  .gb-actions{grid-column:1/-1;grid-row:2;display:flex!important;flex-wrap:wrap;gap:6px;padding:8px 8px!important;border-top:1px solid var(--border);}
-
-  /* RHE tighter */
-  .gb-rhe-lbl{width:26px!important;font-size:9px!important;text-align:center!important;}
-  .gb-rhe-val{width:26px!important;font-size:14px!important;text-align:center!important;}
-  .gb-score{width:26px!important;font-size:16px!important;}
-  .gb-logo{width:20px!important;height:20px!important;min-width:20px!important;max-width:20px!important;font-size:6px!important;flex-shrink:0!important;margin-right:5px!important;}
-  .gb-rhe-hdr-row{padding-left:25px!important;}
-
-  /* Team names */
-  .gb-name{font-size:0!important;overflow:hidden!important;}
-  .gb-name::before{content:attr(data-short);font-size:15px!important;font-family:'Barlow Condensed',sans-serif;font-weight:900;line-height:1;display:block!important;}
-  .gb-arrow{display:none!important;}
-
-  /* gb-mid content */
-  .gb-time{font-size:14px!important;color:var(--gold)!important;text-align:center;}
-  .gb-field{font-size:10px!important;color:var(--muted)!important;text-align:center;}
-
-  /* Week nav */
-  #dnSlots{overflow-x:auto!important;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;}
-  .dn-slot{flex-shrink:0!important;min-width:52px;}
-
-  /* Standings page */
-  .stand-wrap,.yr-panel{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  /* Home standings */
+  #standings-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;}
+  #standings-wrap table{min-width:480px!important;font-size:11px!important;}
+  #standings-wrap td,#standings-wrap th{padding:4px 5px!important;white-space:nowrap!important;}
 }
+
 @media(max-width:420px){
-  .gb-rhe-lbl{width:22px!important;}
-  .gb-rhe-val{width:22px!important;font-size:13px!important;}
-  .gb-score{width:22px!important;font-size:14px!important;}
-  .gb-logo{width:18px!important;height:18px!important;min-width:18px!important;}
-  .gb-name::before{font-size:13px!important;}
-  .gb-rhe-hdr-row{padding-left:23px!important;}
+  .game-block .gb-score{font-size:16px!important;width:22px!important;}
+  .game-block .gb-rhe-val{font-size:12px!important;width:20px!important;}
+  .game-block .gb-rhe-lbl{font-size:8px!important;width:20px!important;}
+  .game-block .gb-logo{width:18px!important;height:18px!important;min-width:18px!important;}
+  .game-block .gb-name::before{font-size:14px!important;}
 }
 </style>
 </head>
@@ -2773,11 +2736,13 @@ function buildSchedule(){
           <div class="gb-team-row">${logoH}<span class="gb-name winner" data-short="${g.home}" style="color:${hc};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.home)?.id||''}')"><span>${g.home}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${hRec}</span></span></div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);padding-top:2px;padding-left:44px">${isNext?'▶ NEXT':'UPCOMING'}</div>
         </div>
-        <div class="gb-mid" style="display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:4px">
-          <div style="font-family:'Oswald',sans-serif;font-weight:700;font-size:22px;color:var(--gold);line-height:1">${g.time}</div>
-          <div style="font-family:'Inter',sans-serif;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">${g.date}</div>
+        <div class="gb-mid">
+          <div class="gb-time">${g.time}</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600;margin-top:2px">${g.date}</div>
         </div>
-        <div class="gb-wl" style="display:none"></div>
+        <div class="gb-wl" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 12px">
+          <div class="gb-field" style="font-size:11px;color:var(--muted2);text-align:center">${g.field}</div>
+        </div>
         <div class="gb-actions"><button class="gb-btn gold">Gameday</button></div>
       </div>`;
     }
