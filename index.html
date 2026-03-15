@@ -3881,29 +3881,25 @@ function renderScores(){
         +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`+byDay[d].map((g,gi)=>gameBlock(g,i,gi,true,false)).join('')).join('');
     }).join('<div style="height:16px"></div>');
   } else {
-    // Schedule view: use sched-game-block style matching home page
-    // Show ALL SCHEDULE_PREVIEW games grouped by week, with date nav selecting week
+    // Schedule view: use weeks[] for full schedule, merged with SCHEDULE_PREVIEW scores
     const nextGlobalIdx = SCHEDULE_PREVIEW.findIndex(g=>!g.done);
-    // Group by week number
-    const spWkMap={};
-    SCHEDULE_PREVIEW.forEach((g,gi)=>{
-      if(!spWkMap[g.wk]) spWkMap[g.wk]={wk:g.wk,date:g.date,games:[]};
-      spWkMap[g.wk].games.push({...g,_gi:gi});
-    });
-    const spWkKeys=Object.keys(spWkMap).map(Number).sort((a,b)=>a-b);
-    // Map weekOffset to schedule preview weeks
-    // Find current week index in spWkKeys (first week with an upcoming game)
-    const spCurrentWk = SCHEDULE_PREVIEW.find(g=>!g.done)?.wk || spWkKeys[0];
-    const spCurrentIdx = spWkKeys.indexOf(spCurrentWk);
-    const spIdx = Math.max(0, Math.min(spWkKeys.length-1, spCurrentIdx + weekOffset));
-    const spWkNum = spWkKeys[spIdx];
-    const spWkData = spWkMap[spWkNum];
-    if(!spWkData){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
-    wrap.innerHTML=`<div class="sb-week-head">Week ${spWkData.wk} · ${spWkData.date}</div>`
+    const nextGlobalWk = nextGlobalIdx>=0 ? SCHEDULE_PREVIEW[nextGlobalIdx].wk : 999;
+    const idx = CURRENT_WK_IDX + weekOffset;
+    const week = weeks[idx];
+    if(!week||!week.games.length){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
+    // Build a lookup of SCHEDULE_PREVIEW results by away+home
+    const spLookup={};
+    SCHEDULE_PREVIEW.forEach((g,gi)=>{ spLookup[g.away+'_'+g.home]={...g,_gi:gi}; });
+    const nextSPGame = SCHEDULE_PREVIEW[nextGlobalIdx];
+    wrap.innerHTML=`<div class="sb-week-head">Week ${week.wk} · ${week.date}</div>`
       +`<div class="sched-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px;">`
-      +spWkData.games.map((g)=>{
-        const isNext = g._gi===nextGlobalIdx;
-        return scheduleBlock(g, isNext);
+      +week.games.map((g)=>{
+        // Merge score data from SCHEDULE_PREVIEW if it exists
+        const sp = spLookup[g.away+'_'+g.home];
+        const merged = sp ? {...g, done:sp.done, as:sp.as, hs:sp.hs, date:sp.date||week.date, time:sp.time||g.time||'7:00 PM', addr:sp.addr||g.addr||''} 
+                          : {...g, done:false, date:week.date, time:g.time||'7:00 PM', addr:g.addr||''};
+        const isNext = sp && sp._gi===nextGlobalIdx;
+        return scheduleBlock(merged, isNext);
       }).join('')
       +`</div>`;
   }
