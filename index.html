@@ -1573,6 +1573,7 @@ const HIST_TEAMS = [
   {id:'ti',   name:'Temple Israel',       short:'TI',  color:'#e879f9', w:10, l:5,  pct:.667, gb:0,  streak:'—', rs:148,ra:105},
   {id:'ka',   name:'Kol Ami',             short:'KA',  color:'#34d399', w:6,  l:9,  pct:.400, gb:3,  streak:'—', rs:108,ra:129},
 ];
+const ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
 
 const PLAYERS = [
   // ── GOLDSTEINS ──────────────────────────────────────────────
@@ -3621,7 +3622,7 @@ const TEAM_HIT_COLS = [
   {key:'_ops',  label:'OPS', cls:'',         sortable:true, fmt:v=>v.toFixed(3).replace(/^0/,'')},
 ];
 
-function getTeamById(id){ return ALL_TEAMS.find(t=>t.id===id); }
+function getTeamById(id){ return TEAMS.find(t=>t.id===id)||HIST_TEAMS.find(t=>t.id===id); }
 
 function applyPlayerSplit(p){
   if(split==='home')  return {...p, avg:p.home_avg||p.avg, hr:p.home_hr||Math.floor(p.hr*.55), rbi:p.home_rbi||Math.floor(p.rbi*.52), h:Math.floor(p.h*.52), ab:Math.floor(p.ab*.52), r:Math.floor(p.r*.52), bb:Math.floor(p.bb*.52)};
@@ -3720,16 +3721,16 @@ function renderStats(){
 function buildFilters(){
   const fr = document.getElementById('filterRow');
   fr.innerHTML = `
-    <select class="filter-select" id="sel-year" onchange="year=this.value;render()">
+    <select class="filter-select" id="sel-year" onchange="year=this.value;renderStats()">
       ${YEARS.map(y=>`<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
     </select>
-    <select class="filter-select" id="sel-team" onchange="team=this.value;render()">
+    <select class="filter-select" id="sel-team" onchange="team=this.value;renderStats()">
       <option value="all">All Teams</option>
       ${TEAMS.map(t=>`<option value="${t.id}" ${t.id===team?'selected':''}>${t.name}</option>`).join('')}
       <option disabled>── Historical ──</option>
       ${HIST_TEAMS.map(t=>`<option value="${t.id}" ${t.id===team?'selected':''}>${t.name}</option>`).join('')}
     </select>
-    <select class="filter-select" id="sel-split" onchange="split=this.value;sortKey=null;render()">
+    <select class="filter-select" id="sel-split" onchange="split=this.value;sortKey=null;renderStats()">
       ${SPLITS.map(s=>`<option value="${s.val}" ${s.val===split?'selected':''}>${s.label}</option>`).join('')}
     </select>
   `;
@@ -3757,13 +3758,11 @@ function doSort(key,dir){
 
 function goPlayer(id){
   if(!id) return;
-  sessionStorage.setItem('dvsl_goPlayer', id);
-  sessionStorage.setItem('dvsl_teamReferrerUrl', window.location.href);
-  window.location = 'index.html';
+  openModal(id);
 }
 function goTeamPage(id){
   if(!id) return;
-  window.location='index.html#team/'+id;
+  goPage('team',id);
 }
 function resetStatsFilters(){
   year='2026'; team='all'; split='all'; sortKey=null; sortDir='desc';
