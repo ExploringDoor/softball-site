@@ -2093,9 +2093,7 @@ initNextGame();
   const tid = sessionStorage.getItem('dvsl_goTeam');
   if(tid){
     sessionStorage.removeItem('dvsl_goTeam');
-    // Store where we came from so back button works
-    const ref = sessionStorage.getItem('dvsl_teamReferrerUrl');
-    if(ref){ sessionStorage.setItem('dvsl_teamReferrer', ref); sessionStorage.removeItem('dvsl_teamReferrerUrl'); }
+    // fallback for any old sessionStorage navigations
     sessionStorage.setItem('ci_played','1');
     document.body.classList.remove('ci-active');
     document.body.classList.add('intro-done');
@@ -2117,10 +2115,13 @@ initNextGame();
     setTimeout(()=>openModal(pid),100);
     return;
   }
-  // Normal hash routing
-  var hash = window.location.hash.replace('#','').split('/')[0];
+  // Normal hash routing — supports #team/gold format
+  var hashFull = window.location.hash.replace('#','');
+  var parts = hashFull.split('/');
+  var hash = parts[0];
+  var hashExtra = parts[1]||null;
   var valid = ['home','players','teams','team','recaps','history','leaders'];
-  if(hash && valid.includes(hash)) goPage(hash);
+  if(hash && valid.includes(hash)) goPage(hash, hashExtra);
   buildLeaderboard();
   buildRecaps();
   buildHistory();
