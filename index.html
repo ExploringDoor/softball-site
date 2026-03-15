@@ -64,7 +64,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;over
 /* ── HERO ── */
 .hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0 48px 80px;position:relative;overflow:hidden;gap:0}
 /* Full-bleed background image */
-#pg-home .hero-img-bg{position:absolute;inset:0;background:url('bannersoftball.jpg') center 40%/cover no-repeat;background-color:#06080f;z-index:0}
+#pg-home .hero-img-bg{position:absolute;inset:0;background:url('bannersoftball.jpg') center bottom/cover no-repeat;background-color:#06080f;z-index:0}
 .hero-mobile-logo{display:none;position:absolute;top:20px;left:0;right:0;width:100%;z-index:1;pointer-events:none}
 /* Dark overlays for readability */
 #pg-home .hero-bg1{position:absolute;inset:0;z-index:1;background:linear-gradient(to bottom, rgba(5,8,20,.55) 0%, rgba(5,8,20,.1) 30%, rgba(5,8,20,.1) 70%, rgba(5,8,20,.75) 100%)}
@@ -3334,11 +3334,10 @@ function buildTicker2(){
   track.innerHTML = html;
 }
 
-// Hide ticker on scroll down, show on scroll up
+// Ticker hides on scroll, nav always stays
 (function(){
   let lastY = 0, ticking = false;
   function getScrollY(){
-    // Try window first, then document.documentElement, then body
     return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
   }
   function onScroll(){
@@ -3348,12 +3347,13 @@ function buildTicker2(){
         const ticker = document.getElementById('score-ticker');
         const nav = document.querySelector('.nav');
         if(ticker && nav){
-          if(y > 60 && y > lastY){
-            // Scrolling down — hide ticker, slide nav to top
+          if(y > 60){
+            // Scrolled down — hide ticker, nav moves to top:0 and STAYS
             ticker.classList.add('hidden');
             nav.style.top = '0px';
-          } else if(y < lastY - 5 || y <= 60){
-            // Scrolling up or near top — show ticker, push nav down
+            nav.style.position = 'fixed';
+          } else {
+            // Near top — show ticker, nav back to top:44px
             ticker.classList.remove('hidden');
             nav.style.top = '44px';
           }
