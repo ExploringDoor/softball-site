@@ -3337,17 +3337,23 @@ function buildTicker2(){
 // Hide ticker on scroll down, show on scroll up
 (function(){
   let lastY = 0, ticking = false;
-  window.addEventListener('scroll', () => {
+  function getScrollY(){
+    // Try window first, then document.documentElement, then body
+    return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  }
+  function onScroll(){
     if(!ticking){
       requestAnimationFrame(()=>{
-        const y = window.scrollY;
+        const y = getScrollY();
         const ticker = document.getElementById('score-ticker');
         const nav = document.querySelector('.nav');
         if(ticker && nav){
-          if(y > 80 && y > lastY){
+          if(y > 60 && y > lastY){
+            // Scrolling down — hide ticker, slide nav to top
             ticker.classList.add('hidden');
-            nav.style.top = '0';
-          } else if(y < lastY || y <= 80){
+            nav.style.top = '0px';
+          } else if(y < lastY - 5 || y <= 60){
+            // Scrolling up or near top — show ticker, push nav down
             ticker.classList.remove('hidden');
             nav.style.top = '44px';
           }
@@ -3357,7 +3363,9 @@ function buildTicker2(){
       });
       ticking = true;
     }
-  });
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  document.addEventListener('scroll', onScroll, {passive:true});
 })();
 
 buildTicker2();
