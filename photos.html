@@ -3,155 +3,307 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Photos — DVSL Softball</title>
+<title>Playoffs — DVSL Softball</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#070709;--dark:#0d0d11;--card:#141418;--card2:#1a1a1f;--border:rgba(255,255,255,0.08);--gold:#F5C842;--gold-dim:rgba(245,200,66,0.10);--white:#EDEDED;--muted:rgba(237,237,237,0.45);--red:#E03C31;--green:#22c55e;--blue:#60a5fa}
-html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;overflow-x:hidden}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --black: #080808; --dark: #0e0e0e; --card: #161616; --card2: #1c1c1c;
+  --border: rgba(255,255,255,0.08); --gold: #F5C842; --gold2: #d4a820;
+  --gold-dim: rgba(245,200,66,0.12); --white: #F2F2F2;
+  --muted: rgba(242,242,242,0.45); --red: #E03C31;
+  --green: #22c55e; --blue: #60a5fa;
+  --winner: rgba(34,197,94,0.15); --loser: rgba(96,165,250,0.12);
+}
+html { scroll-behavior: smooth; }
+body { background: var(--black); color: var(--white); font-family: 'Barlow', sans-serif; overflow-x: hidden; }
 
-/* NAV */
-nav{position:fixed;top:0;left:0;right:0;z-index:100;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(7,7,9,.85);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border);transition:background .3s}
-.nav-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);text-decoration:none;display:flex;align-items:center;gap:10px;flex-shrink:0}
-.nav-logo img{height:30px;opacity:.85}
-.nav-links{margin:0 auto;display:flex;gap:4px;list-style:none}
-.nav-links a{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-decoration:none;padding:7px 13px;border-radius:6px;transition:all .2s}
-.nav-links a:hover{color:var(--white)}
-.nav-links a.active{color:var(--gold)}
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(7,7,9,.9);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid rgba(255,255,255,.08)}
+.nav-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:#F5C842;text-decoration:none;display:flex;align-items:center;gap:10px}
+.nav-logo img{height:28px;opacity:.85}
+.nav-links{display:flex;gap:2px;list-style:none;margin:0 auto;padding:0}
+.nav-links a{font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:rgba(237,237,237,.5);text-decoration:none;padding:7px 13px;border-radius:6px;transition:color .15s,background .15s;white-space:nowrap}
+.nav-links a:hover{color:#fff;background:rgba(255,255,255,.06)}
+.nav-links a.active{color:#F5C842}
 .hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;background:none;border:none;padding:4px;margin-left:0}
-.hamburger span{display:block;width:22px;height:2px;background:var(--white);border-radius:2px;transition:all .3s}
+.hamburger span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s}
 .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
 .hamburger.open span:nth-child(2){opacity:0}
 .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-.mob-menu{display:none;position:fixed;top:62px;left:0;right:0;z-index:199;background:rgba(7,7,9,.98);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);flex-direction:column;padding:20px}
+.mob-menu{display:none;position:fixed;top:62px;left:0;right:0;z-index:199;background:rgba(7,7,9,.98);backdrop-filter:blur(24px);border-bottom:1px solid rgba(255,255,255,.08);flex-direction:column;padding:16px 20px 24px}
 .mob-menu.open{display:flex}
-.mob-menu a{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:var(--white);text-decoration:none;padding:12px 0;border-bottom:1px solid var(--border)}
+.mob-menu a{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:#fff;text-decoration:none;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.06)}
 
-/* HERO — full viewport with parallax logo */
-.hero{position:relative;min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;background:var(--bg)}
-.hero-logo-parallax{position:absolute;inset:-10%;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:0;will-change:transform}
-.hero-logo-parallax img{width:min(680px,90vw);height:auto;opacity:.22;filter:saturate(0.7) brightness(1.1);transition:opacity 1s ease}
-.hero-glow{position:absolute;inset:0;background:radial-gradient(ellipse 60% 50% at 50% 60%,rgba(245,200,66,.07),transparent 70%);z-index:1;pointer-events:none}
-.hero-vignette{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(7,7,9,.5) 0%,transparent 30%,transparent 55%,rgba(7,7,9,1) 100%);z-index:2;pointer-events:none}
-.hero-content{position:relative;z-index:3;padding:0 64px 80px;max-width:1100px}
-.hero-eyebrow{display:inline-flex;align-items:center;gap:8px;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);border-radius:100px;padding:6px 18px;font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:20px;opacity:0;animation:fadeUp .8s .2s ease forwards}
-.hero-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(64px,12vw,136px);text-transform:uppercase;line-height:.88;letter-spacing:-.02em;opacity:0;animation:fadeUp .8s .35s ease forwards}
-.hero-title span{color:var(--gold)}
-.hero-desc{font-size:17px;color:var(--muted);margin-top:20px;max-width:520px;line-height:1.7;opacity:0;animation:fadeUp .8s .5s ease forwards}
-.hero-stats-row{display:flex;gap:32px;margin-top:36px;opacity:0;animation:fadeUp .8s .65s ease forwards}
-.hst{display:flex;flex-direction:column;gap:2px}
-.hst-val{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:38px;color:var(--gold);line-height:1}
-.hst-lbl{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
-.hero-scroll-hint{position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:3;display:flex;flex-direction:column;align-items:center;gap:6px;opacity:.4;animation:bounce 2s infinite}
-.hero-scroll-hint span{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--white)}
-.scroll-line{width:1px;height:40px;background:linear-gradient(to bottom,transparent,var(--white));animation:scrollLine 2s infinite}
-@keyframes scrollLine{0%{transform:scaleY(0);transform-origin:top}50%{transform:scaleY(1);transform-origin:top}51%{transform:scaleY(1);transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
-@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(6px)}}
-@keyframes fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+.hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; background: none; border: none; }
+.hamburger span { display: block; width: 24px; height: 2px; background: var(--white); border-radius: 2px; transition: all 0.3s; }
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.mobile-menu { display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 99; background: rgba(8,8,8,0.97); backdrop-filter: blur(20px); border-bottom: 1px solid var(--border); padding: 24px 24px 32px; flex-direction: column; }
+.mobile-menu.open { display: flex; }
+.mobile-menu a { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 28px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--white); text-decoration: none; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.mobile-menu a:last-child { border-bottom: none; }
 
-/* FILTER */
-.filter-bar{display:flex;align-items:center;gap:6px;padding:16px 48px;background:rgba(7,7,9,.9);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);position:sticky;top:62px;z-index:50;overflow-x:auto;scrollbar-width:none}
-.filter-bar::-webkit-scrollbar{display:none}
-.f-btn{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.07em;text-transform:uppercase;background:var(--card);border:1px solid var(--border);color:var(--muted);border-radius:100px;padding:7px 18px;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
-.f-btn:hover{border-color:rgba(245,200,66,.4);color:var(--gold)}
-.f-btn.active{background:var(--gold);color:#000;border-color:var(--gold)}
+/* ── HERO ── */
+.playoffs-hero {
+  height: calc(100vw / 3.26);
+  max-height: 520px;
+  min-height: 200px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 0 48px;
+  position: relative; overflow: hidden;
+}
+.playoffs-hero-bg {
+  position: absolute; inset: 0;
+  background: url('bannersoftball.jpg') center center / 100% auto no-repeat;
+  background-color: #06080f;
+  z-index: 0;
+}
+.hero-grid {
+  position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(to bottom, rgba(5,8,20,.55) 0%, rgba(5,8,20,.1) 30%, rgba(5,8,20,.1) 70%, rgba(5,8,20,.75) 100%);
+}
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--gold-dim); border: 1px solid rgba(245,200,66,0.35);
+  border-radius: 100px; padding: 6px 20px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold);
+  margin-bottom: 24px; position: relative; z-index: 1;
+  animation: fadeUp 0.7s ease both;
+}
+.trophy-icon { font-size: 16px; }
+.playoffs-hero h1 {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 900;
+  font-size: clamp(72px, 13vw, 160px); text-transform: uppercase;
+  line-height: 0.88; letter-spacing: -0.02em; white-space: nowrap;
+  position: relative; z-index: 2;
+  text-shadow: 0 4px 40px rgba(0,0,0,.8), 0 2px 8px rgba(0,0,0,.9);
+  animation: fadeUp 0.7s 0.1s ease both;
+}
+.playoffs-hero h1 .gold { color: var(--gold); }
+.playoffs-hero p {
+  font-size: 17px; color: rgba(200,215,255,.75); margin-top: 16px; max-width: 480px;
+  position: relative; z-index: 2;
+  text-shadow: 0 2px 12px rgba(0,0,0,.9);
+  animation: fadeUp 0.7s 0.2s ease both;
+}
+@keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
 
-/* SECTION */
-.section{padding:72px 48px 0;opacity:0;transform:translateY(32px);transition:opacity .7s ease,transform .7s ease}
-.section.visible{opacity:1;transform:translateY(0)}
-.section-header{display:flex;align-items:baseline;gap:14px;margin-bottom:32px;padding-bottom:16px;border-bottom:1px solid var(--border)}
-.section-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;text-transform:uppercase;letter-spacing:-.01em}
-.section-title span{color:var(--gold)}
-.section-meta{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:rgba(237,237,237,.25)}
+/* ── BRACKET SECTION ── */
+.bracket-section {
+  padding: 80px 0 60px;
+  background: var(--dark);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.section-header { padding: 0 48px; margin-bottom: 40px; }
+.section-label { font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 10px; }
+.section-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: clamp(32px, 5vw, 52px); text-transform: uppercase; line-height: 1; }
 
-/* CHAMP HERO CARD — full bleed */
-.champ-card{position:relative;overflow:hidden;border-radius:16px;margin-bottom:8px;cursor:pointer;aspect-ratio:16/7}
-.champ-card img{width:100%;height:100%;object-fit:cover;transition:transform .7s ease}
-.champ-card:hover img{transform:scale(1.03)}
-.champ-card-glass{position:absolute;inset:0;background:linear-gradient(to top,rgba(7,7,9,.9) 0%,rgba(7,7,9,.3) 50%,transparent 100%)}
-.champ-card-info{position:absolute;bottom:0;left:0;right:0;padding:36px 40px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px}
-.champ-card-text{}
-.champ-tag{display:inline-flex;align-items:center;gap:6px;background:rgba(245,200,66,.15);border:1px solid rgba(245,200,66,.3);border-radius:100px;padding:4px 14px;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:10px}
-.champ-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(32px,5vw,64px);text-transform:uppercase;line-height:.95}
-.champ-sub{font-size:14px;color:rgba(237,237,237,.6);margin-top:8px}
-.champ-year-badge{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:72px;color:rgba(245,200,66,.15);line-height:1;flex-shrink:0}
+/* BRACKET TABS */
+.bracket-tabs {
+  display: flex; gap: 4px; margin: 0 48px 32px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px; width: fit-content;
+}
+.b-tab {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+  font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 9px 24px; border-radius: 5px; border: none;
+  background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s;
+}
+.b-tab.active { background: var(--gold); color: var(--black); }
 
-/* PHOTO GRID */
-.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px}
-.photo-card{position:relative;overflow:hidden;cursor:pointer;border-radius:10px;aspect-ratio:4/3;background:var(--card2);transition:transform .3s ease}
-.photo-card:hover{transform:scale(1.015)}
-.photo-card img{width:100%;height:100%;object-fit:cover;transition:transform .5s ease}
-.photo-card:hover img{transform:scale(1.06)}
-.photo-card-glass{position:absolute;inset:0;background:linear-gradient(to top,rgba(7,7,9,.85) 0%,transparent 55%);opacity:0;transition:opacity .3s}
-.photo-card:hover .photo-card-glass{opacity:1}
-.photo-card-info{position:absolute;bottom:0;left:0;right:0;padding:16px 18px;transform:translateY(6px);opacity:0;transition:all .3s}
-.photo-card:hover .photo-card-info{transform:translateY(0);opacity:1}
-.photo-card-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase}
-.photo-card-sub{font-size:11px;color:var(--muted);margin-top:2px}
+/* BRACKET WRAPPER */
+.bracket-scroll { overflow-x: auto; padding: 0 48px 24px; scrollbar-width: thin; }
+.bracket-scroll::-webkit-scrollbar { height: 4px; }
+.bracket-scroll::-webkit-scrollbar-track { background: transparent; }
+.bracket-scroll::-webkit-scrollbar-thumb { background: rgba(245,200,66,0.3); border-radius: 2px; }
 
-/* LOGO SHOWCASE */
-.logo-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;border-radius:16px;overflow:hidden}
-.logo-card{position:relative;overflow:hidden;cursor:pointer;padding:80px 60px;display:flex;align-items:center;justify-content:center;transition:background .3s}
-.logo-card-dark{background:var(--card2)}
-.logo-card-light{background:#b8c4ce}
-.logo-card img{max-width:100%;max-height:320px;object-fit:contain;transition:transform .5s ease;filter:drop-shadow(0 24px 64px rgba(0,0,0,.5))}
-.logo-card:hover img{transform:scale(1.04) translateY(-4px)}
-.logo-card-label{position:absolute;bottom:20px;left:0;right:0;text-align:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.4}
-.logo-card-dark .logo-card-label{color:var(--white)}
-.logo-card-light .logo-card-label{color:#000}
+.bracket-canvas { display: none; min-width: 600px; }
+.bracket-canvas.active { display: block; }
 
-/* UPLOAD CARD */
-.upload-card{background:var(--card);border:1.5px dashed rgba(245,200,66,.2);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:52px 24px;text-align:center;cursor:pointer;transition:all .25s;aspect-ratio:4/3}
-.upload-card:hover{border-color:rgba(245,200,66,.45);background:rgba(245,200,66,.03);transform:scale(1.01)}
-.upload-icon{font-size:32px;opacity:.35;transition:opacity .25s}
-.upload-card:hover .upload-icon{opacity:.6}
-.upload-label{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;text-transform:uppercase;color:var(--muted)}
-.upload-sub{font-size:11px;color:rgba(237,237,237,.25);margin-top:2px}
+/* BRACKET LAYOUT */
+.bracket-wrap {
+  display: flex; gap: 0; align-items: flex-start; position: relative;
+  padding: 20px 0;
+}
 
-/* LIGHTBOX */
-.lightbox{position:fixed;inset:0;z-index:999;background:rgba(7,7,9,.97);display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;opacity:0;transition:opacity .3s}
-.lightbox.open{display:flex;opacity:1}
-.lb-img{max-width:92vw;max-height:86vh;object-fit:contain;border-radius:6px;box-shadow:0 40px 120px rgba(0,0,0,.8)}
-.lb-close{position:fixed;top:20px;right:24px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;color:var(--white);transition:all .2s;backdrop-filter:blur(10px)}
-.lb-close:hover{background:rgba(255,255,255,.18);transform:scale(1.1)}
-.lb-caption{margin-top:16px;font-size:13px;color:var(--muted);text-align:center;max-width:600px;line-height:1.6}
+/* COLUMN */
+.b-col { display: flex; flex-direction: column; justify-content: space-around; min-width: 180px; flex-shrink: 0; }
+.b-col-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); text-align: center; padding: 0 8px 12px;
+}
 
-/* FOOTER */
-footer{margin-top:80px;padding:40px 48px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
-.ft-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
-.ft-links a{font-size:12px;color:var(--muted);text-decoration:none;padding:2px 14px;border-right:1px solid var(--border);transition:color .15s}
+/* MATCHUP CARD */
+.matchup {
+  margin: 6px 8px; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--border); background: var(--card2);
+  position: relative;
+}
+.matchup.winner-bracket { border-left: 3px solid var(--green); }
+.matchup.loser-bracket  { border-left: 3px solid var(--blue); }
+.matchup.champ-bracket  { border-left: 3px solid var(--gold); }
+.matchup.tbd            { opacity: 0.5; }
+
+.matchup-game {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); padding: 6px 10px 4px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.matchup-game .game-info { font-size: 9px; color: var(--muted); }
+
+.team-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  transition: background 0.15s;
+}
+.team-row:last-child { border-bottom: none; }
+.team-row.won { background: rgba(34,197,94,0.08); }
+.team-row.lost { background: rgba(224,60,49,0.05); }
+
+.team-seed { font-size: 10px; color: var(--muted); margin-right: 6px; min-width: 14px; }
+.team-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; flex: 1; }
+.team-name.won-name { color: var(--gold); }
+.team-score { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 15px; min-width: 24px; text-align: right; }
+.team-score.high { color: var(--green); }
+
+/* CONNECTOR LINES */
+.b-connector { display: flex; flex-direction: column; justify-content: center; min-width: 32px; flex-shrink: 0; }
+.conn-line { flex: 1; border-right: 1px solid rgba(255,255,255,0.12); }
+.conn-mid { width: 32px; height: 1px; background: rgba(255,255,255,0.12); }
+.conn-top { flex: 1; border-right: 1px solid rgba(255,255,255,0.12); border-bottom: 1px solid rgba(255,255,255,0.12); border-radius: 0 0 4px 0; }
+.conn-bot { flex: 1; border-right: 1px solid rgba(255,255,255,0.12); border-top: 1px solid rgba(255,255,255,0.12); border-radius: 0 4px 0 0; }
+
+/* LEGEND */
+.bracket-legend {
+  display: flex; gap: 20px; padding: 16px 48px 0; flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.legend-bar { width: 20px; height: 3px; border-radius: 2px; }
+
+/* ── CHAMPION SECTION ── */
+.champ-section {
+  padding: 100px 48px;
+  background: var(--black);
+  position: relative; overflow: hidden;
+}
+.champ-bg {
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(245,200,66,0.05) 0%, transparent 70%);
+}
+.champ-inner { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+
+/* CHAMPION CARD */
+.champ-card {
+  border-radius: 16px; overflow: hidden;
+  border: 1px solid rgba(245,200,66,0.2);
+  background: var(--card);
+  position: relative;
+}
+.champ-photo-wrap {
+  position: relative; width: 100%;
+  background: #0a0a0a;
+}
+.champ-photo-img {
+  width: 100%; display: block;
+  max-height: 520px; object-fit: cover; object-position: center top;
+  filter: saturate(1.1) contrast(1.05);
+}
+.champ-photo-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, transparent 50%, rgba(8,8,8,0.95) 100%);
+}
+.champ-photo-badge {
+  position: absolute; top: 20px; left: 20px;
+  background: rgba(8,8,8,0.75); backdrop-filter: blur(8px);
+  border: 1px solid rgba(245,200,66,0.4); border-radius: 8px;
+  padding: 10px 16px;
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 900;
+  font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold);
+  display: flex; align-items: center; gap: 8px;
+}
+.champ-info {
+  padding: 36px 40px 40px;
+  display: grid; grid-template-columns: 1fr auto;
+  gap: 24px; align-items: end;
+}
+.champ-season { font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; }
+.champ-team-name {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 900;
+  font-size: clamp(40px, 7vw, 72px); text-transform: uppercase;
+  line-height: 0.9; letter-spacing: -0.01em;
+}
+.champ-subtitle { font-size: 15px; color: var(--muted); margin-top: 12px; }
+.champ-stats { display: flex; gap: 32px; margin-top: 28px; }
+.champ-stat { text-align: center; }
+.champ-stat-val { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 36px; color: var(--gold); line-height: 1; }
+.champ-stat-lbl { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+.champ-trophy-area { text-align: right; }
+.trophy-big { font-size: 80px; line-height: 1; filter: drop-shadow(0 0 30px rgba(245,200,66,0.4)); }
+.trophy-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin-top: 4px; }
+
+/* PAST CHAMPS */
+.past-champs { margin-top: 32px; }
+.past-champs-header { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 28px; text-transform: uppercase; margin-bottom: 16px; }
+.past-champ-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.past-champ-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
+  transition: border-color 0.2s;
+}
+.past-champ-card:hover { border-color: rgba(245,200,66,0.2); }
+.past-champ-card.gold-cup { border-left: 3px solid var(--gold); }
+.past-champ-year { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 22px; color: var(--gold); }
+.past-champ-team { font-weight: 600; font-size: 14px; margin-top: 2px; }
+.past-champ-bracket { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.past-champ-icon { font-size: 24px; }
+
+/* ── FOOTER ── */
+footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.ft-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:17px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold)}
+.ft-links{display:flex;gap:0;flex-wrap:wrap}
+.ft-links a{font-size:11px;color:var(--muted);text-decoration:none;padding:2px 14px;border-right:1px solid var(--border);transition:color .15s}
 .ft-links a:last-child{border-right:none}
 .ft-links a:hover{color:var(--white)}
-.ft-copy{font-size:12px;color:var(--muted)}
+.ft-copy{font-size:11px;color:rgba(239,239,239,.22)}
 
-@media(max-width:768px){
-  .hero-content{padding:0 24px 60px}
-  .hero-stats-row{gap:20px}
-  .hst-val{font-size:28px}
-  .section{padding:48px 20px 0}
-  .filter-bar{padding:12px 20px}
-  .logo-grid{grid-template-columns:1fr}
-  .photo-grid{grid-template-columns:repeat(2,1fr)}
-  .champ-card{aspect-ratio:4/3}
-  .champ-year-badge{display:none}
-  footer{padding:32px 20px;flex-direction:column}
-  nav{padding:0 18px}
-  .nav-links{display:none}
-  .hamburger{display:flex}
+/* ── MOBILE ── */
+@media (max-width: 768px) {
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .bracket-scroll { padding: 0 16px 24px; -webkit-overflow-scrolling: touch; }
+  .hamburger { display: flex; }
+  .playoffs-hero { padding: 100px 20px 48px; }
+  .section-header { padding: 0 20px; }
+  .bracket-tabs { margin: 0 20px 24px; width: calc(100% - 40px); }
+  .b-tab { padding: 12px 0; font-size: 13px; flex: 1; text-align: center; min-height: 44px; }
+  .bracket-scroll { padding: 0 20px 24px; }
+  .bracket-legend { padding: 12px 20px 0; }
+  .champ-section { padding: 60px 20px; }
+  .champ-info { grid-template-columns: 1fr; }
+  .champ-trophy-area { text-align: left; display: flex; align-items: center; gap: 16px; }
+  .trophy-big { font-size: 48px; }
+  .champ-stats { gap: 20px; }
+  footer{flex-direction:column;padding:32px 20px;gap:16px;text-align:center}
+  .ft-links{justify-content:center}
 }
-::-webkit-scrollbar{width:4px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:rgba(245,200,66,.3);border-radius:2px}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--black); }
+::-webkit-scrollbar-thumb { background: rgba(245,200,66,0.3); border-radius: 2px; }
 </style>
 </head>
 <body>
 
+<!-- NAV -->
 <nav>
   <a href="index.html" class="nav-logo">
-    <img src="dvsl-logo-dark.png" alt="DVSL" style="height:30px;opacity:.85">
-    <span>DVSL</span>
+    <img src="dvsl-logo-dark.png" alt="DVSL">DVSL
   </a>
   <ul class="nav-links">
     <li><a href="index.html">Home</a></li>
@@ -160,11 +312,11 @@ footer{margin-top:80px;padding:40px 48px;border-top:1px solid var(--border);disp
     <li><a href="standings-history.html">Standings</a></li>
     <li><a href="stats.html">Stats</a></li>
     <li><a href="index.html#players">Teams</a></li>
-    <li><a href="playoffs.html">Brackets</a></li>
+    <li><a href="playoffs.html" class="active">Brackets</a></li>
     <li><a href="rules.html">Field Guide</a></li>
-    <li><a href="photos.html" class="active">Gallery</a></li>
+    <li><a href="photos.html">Gallery</a></li>
   </ul>
-  <button class="hamburger" id="hbg" onclick="document.getElementById('mobMenu').classList.toggle('open');this.classList.toggle('open')"><span></span><span></span><span></span></button>
+  <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
 </nav>
 <div class="mob-menu" id="mobMenu">
   <a href="index.html">Home</a>
@@ -178,129 +330,418 @@ footer{margin-top:80px;padding:40px 48px;border-top:1px solid var(--border);disp
   <a href="photos.html">Gallery</a>
 </div>
 
+
 <!-- HERO -->
-<div class="hero">
-  <div class="hero-logo-parallax" id="logoParallax">
-    <img src="dvsl-logo-dark.png" alt="">
-  </div>
-  <div class="hero-glow"></div>
-  <div class="hero-vignette"></div>
-  <div class="hero-content">
-    <div class="hero-eyebrow">📸 League Gallery</div>
-    <h1 class="hero-title">DVSL<br><span>Photos</span></h1>
-    <p class="hero-desc">Championship moments, league identity, and field photography from across the Delaware Valley Synagogue League.</p>
-    <div class="hero-stats-row">
-      <div class="hst"><div class="hst-val">8</div><div class="hst-lbl">Fields</div></div>
-      <div class="hst"><div class="hst-val">18+</div><div class="hst-lbl">Teams</div></div>
-      <div class="hst"><div class="hst-val">2025</div><div class="hst-lbl">Season</div></div>
-    </div>
-  </div>
-  <div class="hero-scroll-hint">
-    <div class="scroll-line"></div>
-    <span>Scroll</span>
-  </div>
+<div class="playoffs-hero">
+  <div class="playoffs-hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-eyebrow" style="position:relative;z-index:2"><span class="trophy-icon">🏆</span> DVSL · 2026 Postseason</div>
+  <h1>Playoff <span class="gold">Brackets</span></h1>
+  <p>8-team double-elimination tournament. Winner's bracket, loser's bracket, and championship path.</p>
 </div>
 
-<!-- FILTER -->
-<div class="filter-bar">
-  <button class="f-btn active" onclick="filterSections('all',this)">All</button>
-  <button class="f-btn" onclick="filterSections('champs',this)">Champions</button>
-  <button class="f-btn" onclick="filterSections('logos',this)">League Identity</button>
-  <button class="f-btn" onclick="filterSections('fields',this)">Fields</button>
-</div>
-
-<!-- CHAMPIONS -->
-<div class="section" data-cat="champs" id="sec-champs">
+<!-- BRACKET SECTION -->
+<div class="bracket-section">
   <div class="section-header">
-    <div class="section-title">Championship <span>Photos</span></div>
-    <div class="section-meta">Gold &amp; Silver Cup · 2019 – 2025</div>
+    <div class="section-label">2026 Tournament</div>
+    <div class="section-title">Interactive Bracket</div>
   </div>
 
-  <!-- KI Silver Cup 2025 — hero card -->
-  <div class="champ-card" onclick="openLb('ki-silver-cup-2025.png','Keneseth Israel — 2025 DVSL Silver Cup Champions')">
-    <img src="ki-silver-cup-2025.png" alt="KI Silver Cup 2025">
-    <div class="champ-card-glass"></div>
-    <div class="champ-card-info">
-      <div class="champ-card-text">
-        <div class="champ-tag">🥈 Silver Cup Champions</div>
-        <div class="champ-name">Keneseth<br>Israel</div>
-        <div class="champ-sub">2025 DVSL Silver Cup · KI Softball Club</div>
+  <div class="bracket-tabs">
+    <button class="b-tab active" data-bracket="gold">Gold Bracket</button>
+    <button class="b-tab" data-bracket="silver">Silver Bracket</button>
+  </div>
+
+  <div class="bracket-legend">
+    <div class="legend-item"><div class="legend-bar" style="background:var(--green)"></div>Winner's Bracket</div>
+    <div class="legend-item"><div class="legend-bar" style="background:var(--blue)"></div>Loser's Bracket</div>
+    <div class="legend-item"><div class="legend-bar" style="background:var(--gold)"></div>Championship</div>
+    <div class="legend-item"><span style="color:var(--gold);font-weight:700;font-size:13px;">★</span>&nbsp;Champion</div>
+  </div>
+
+  <!-- GOLD BRACKET -->
+  <div class="bracket-canvas active" id="bracket-gold" style="display:block">
+    <div class="bracket-scroll">
+
+      <!-- WINNER'S BRACKET LABEL -->
+      <div style="padding: 28px 0 4px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--green);">Winner's Bracket</div>
+
+      <div class="bracket-wrap">
+
+        <!-- R1 WINNER -->
+        <div class="b-col">
+          <div class="b-col-label">Round 1 · 7/25</div>
+
+          <div class="matchup winner-bracket">
+            <div class="matchup-game"><span>GAME 1</span><span class="game-info">7/25 · Mondauk 4 · 7:00</span></div>
+            <div class="team-row won"><span class="team-seed">1</span><span class="team-name won-name">GOLD</span><span class="team-score high">9</span></div>
+            <div class="team-row lost"><span class="team-seed">8</span><span class="team-name">Chabad</span><span class="team-score">6</span></div>
+          </div>
+
+          <div style="height:24px"></div>
+
+          <div class="matchup winner-bracket">
+            <div class="matchup-game"><span>GAME 2</span><span class="game-info">7/25 · Sunnybrook</span></div>
+            <div class="team-row lost"><span class="team-seed">4</span><span class="team-name">TBIR</span><span class="team-score">5</span></div>
+            <div class="team-row won"><span class="team-seed">5</span><span class="team-name won-name">BOB</span><span class="team-score high">7</span></div>
+          </div>
+
+          <div style="height:24px"></div>
+
+          <div class="matchup winner-bracket">
+            <div class="matchup-game"><span>GAME 3</span><span class="game-info">7/25 · Mondauk 5</span></div>
+            <div class="team-row won"><span class="team-seed">3</span><span class="team-name won-name">KI</span><span class="team-score high">5</span></div>
+            <div class="team-row lost"><span class="team-seed">6</span><span class="team-name">AJ</span><span class="team-score">4</span></div>
+          </div>
+
+          <div style="height:24px"></div>
+
+          <div class="matchup winner-bracket">
+            <div class="matchup-game"><span>GAME 4</span><span class="game-info">7/25 · Southampton</span></div>
+            <div class="team-row won"><span class="team-seed">2</span><span class="team-name won-name">SA</span><span class="team-score high">5</span></div>
+            <div class="team-row lost"><span class="team-seed">7</span><span class="team-name">Or Ami</span><span class="team-score">0</span></div>
+          </div>
+        </div>
+
+        <!-- connector -->
+        <div style="display:flex;flex-direction:column;min-width:32px;flex-shrink:0;padding-top:40px;">
+          <div style="flex:1;border-right:1px solid rgba(255,255,255,0.12);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:0 0 4px 0;margin-top:30px;"></div>
+          <div style="width:32px;height:1px;background:rgba(255,255,255,0.12);"></div>
+          <div style="flex:1;border-right:1px solid rgba(255,255,255,0.12);border-top:1px solid rgba(255,255,255,0.12);border-radius:0 4px 0 0;margin-bottom:30px;"></div>
+          <div style="flex:0;height:24px;"></div>
+          <div style="flex:1;border-right:1px solid rgba(255,255,255,0.12);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:0 0 4px 0;margin-top:30px;"></div>
+          <div style="width:32px;height:1px;background:rgba(255,255,255,0.12);"></div>
+          <div style="flex:1;border-right:1px solid rgba(255,255,255,0.12);border-top:1px solid rgba(255,255,255,0.12);border-radius:0 4px 0 0;margin-bottom:30px;"></div>
+        </div>
+
+        <!-- R2 WINNER -->
+        <div class="b-col" style="justify-content:space-around;padding-top:50px;">
+          <div class="b-col-label">Semis · 7/27</div>
+
+          <div class="matchup winner-bracket">
+            <div class="matchup-game"><span>GAME 5</span><span class="game-info">7/27 · Mondauk 4</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name">GOLD</span><span class="team-score high">6</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">BOB</span><span class="team-score">5</span></div>
+          </div>
+
+          <div style="height:80px;"></div>
+
+          <div class="matchup winner-bracket">
+            <div class="matchup-game"><span>GAME 6</span><span class="game-info">7/27 · South 8pm</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name">SA</span><span class="team-score high">16</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">KI</span><span class="team-score">8</span></div>
+          </div>
+        </div>
+
+        <!-- connector -->
+        <div style="display:flex;flex-direction:column;min-width:32px;flex-shrink:0;padding-top:90px;">
+          <div style="flex:1;border-right:1px solid rgba(255,255,255,0.12);border-bottom:1px solid rgba(255,255,255,0.12);border-radius:0 0 4px 0;margin-top:25px;"></div>
+          <div style="width:32px;height:1px;background:rgba(255,255,255,0.12);"></div>
+          <div style="flex:1;border-right:1px solid rgba(255,255,255,0.12);border-top:1px solid rgba(255,255,255,0.12);border-radius:0 4px 0 0;margin-bottom:25px;"></div>
+        </div>
+
+        <!-- WINNER FINAL -->
+        <div class="b-col" style="padding-top:170px;">
+          <div class="b-col-label">W-Final · 8/3</div>
+          <div class="matchup winner-bracket">
+            <div class="matchup-game"><span>GAME 7</span><span class="game-info">8/3 · Mondauk 4</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">GOLD</span><span class="team-score">5</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name">SA</span><span class="team-score high">4</span></div>
+          </div>
+        </div>
+
+        <!-- CHAMP PATH -->
+        <div style="display:flex;flex-direction:column;min-width:32px;flex-shrink:0;padding-top:210px;">
+          <div style="width:32px;height:1px;background:rgba(245,200,66,0.4);"></div>
+        </div>
+
+        <div class="b-col" style="padding-top:140px;">
+          <div class="b-col-label">Championship · 8/10</div>
+          <div class="matchup champ-bracket">
+            <div class="matchup-game" style="color:var(--gold)"><span>GAME 14</span><span class="game-info">8/10 · Mondauk 4</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name">SA</span><span class="team-score high">5</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">KI</span><span class="team-score">4</span></div>
+          </div>
+          <div style="height:20px;"></div>
+          <div class="matchup champ-bracket tbd">
+            <div class="matchup-game" style="color:var(--gold)"><span>GAME 15</span><span class="game-info">8/11 if necessary · Mondauk 5</span></div>
+            <div class="team-row"><span class="team-seed"></span><span class="team-name" style="color:var(--muted)">If needed</span><span class="team-score">—</span></div>
+            <div class="team-row"><span class="team-seed"></span><span class="team-name" style="color:var(--muted)">If needed</span><span class="team-score">—</span></div>
+          </div>
+        </div>
+
       </div>
-      <div class="champ-year-badge">2025</div>
-    </div>
-  </div>
 
-  <!-- Beth Am 2019 -->
-  <div class="champ-card" style="margin-top:6px" onclick="openLb('champ-photo.png','Beth Am — 2019 DVSL Gold Cup Champions')">
-    <img src="champ-photo.png" alt="Beth Am 2019">
-    <div class="champ-card-glass"></div>
-    <div class="champ-card-info">
-      <div class="champ-card-text">
-        <div class="champ-tag">🏆 Gold Cup Champions</div>
-        <div class="champ-name">Beth Am</div>
-        <div class="champ-sub">2019 DVSL Gold Cup · League Champions</div>
+      <!-- LOSER'S BRACKET -->
+      <div style="padding: 40px 0 4px; font-size:11px; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:var(--blue);">Loser's Bracket</div>
+      <div class="bracket-wrap">
+
+        <div class="b-col">
+          <div class="b-col-label">L-Round 1 · 7/27</div>
+          <div class="matchup loser-bracket">
+            <div class="matchup-game"><span>GAME 3</span><span class="game-info">7/27 · Sunnybrook</span></div>
+            <div class="team-row won"><span class="team-seed">L1</span><span class="team-name won-name">Chabad</span><span class="team-score high">5</span></div>
+            <div class="team-row lost"><span class="team-seed">L2</span><span class="team-name">TBIR</span><span class="team-score">2</span></div>
+          </div>
+          <div style="height:16px;"></div>
+          <div class="matchup loser-bracket">
+            <div class="matchup-game"><span>GAME 5</span><span class="game-info">7/27 · Mondauk 5</span></div>
+            <div class="team-row lost"><span class="team-seed">L3</span><span class="team-name">AJ</span><span class="team-score">3</span></div>
+            <div class="team-row won"><span class="team-seed">L4</span><span class="team-name won-name">OA</span><span class="team-score high">6</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;min-width:32px;flex-shrink:0;padding-top:36px;">
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,0.25);border-bottom:1px solid rgba(96,165,250,0.25);border-radius:0 0 4px 0;margin-top:24px;"></div>
+          <div style="width:32px;height:1px;background:rgba(96,165,250,0.25);"></div>
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,0.25);border-top:1px solid rgba(96,165,250,0.25);border-radius:0 4px 0 0;margin-bottom:24px;"></div>
+        </div>
+
+        <div class="b-col" style="padding-top:20px;">
+          <div class="b-col-label">L-Bracket · 8/1</div>
+          <div class="matchup loser-bracket">
+            <div class="matchup-game"><span>GAME 1-L8</span><span class="game-info">8/1 · Mondauk 4</span></div>
+            <div class="team-row won"><span class="team-seed">L8</span><span class="team-name won-name">KI</span><span class="team-score high">11</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">TBIR</span><span class="team-score">2</span></div>
+          </div>
+          <div style="height:16px;"></div>
+          <div class="matchup loser-bracket">
+            <div class="matchup-game"><span>GAME 7</span><span class="game-info">8/1 · Mondauk 5</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name">OA</span><span class="team-score high">18</span></div>
+            <div class="team-row lost"><span class="team-seed">L7</span><span class="team-name">BOB</span><span class="team-score">2</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;min-width:32px;flex-shrink:0;padding-top:36px;">
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,0.25);border-bottom:1px solid rgba(96,165,250,0.25);border-radius:0 0 4px 0;margin-top:24px;"></div>
+          <div style="width:32px;height:1px;background:rgba(96,165,250,0.25);"></div>
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,0.25);border-top:1px solid rgba(96,165,250,0.25);border-radius:0 4px 0 0;margin-bottom:24px;"></div>
+        </div>
+
+        <div class="b-col" style="padding-top:20px;">
+          <div class="b-col-label">L-Semis · 8/3</div>
+          <div class="matchup loser-bracket">
+            <div class="matchup-game"><span>GAME 12</span><span class="game-info">8/3 · Mondauk 5</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name">KI</span><span class="team-score high">9</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">OA</span><span class="team-score">3</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;min-width:32px;flex-shrink:0;padding-top:60px;">
+          <div style="width:32px;height:1px;background:rgba(96,165,250,0.25);"></div>
+        </div>
+
+        <div class="b-col" style="padding-top:20px;">
+          <div class="b-col-label">L-Final · 8/8</div>
+          <div class="matchup loser-bracket">
+            <div class="matchup-game"><span>GAME 8</span><span class="game-info">8/8 · Mondauk 4</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name">KI</span><span class="team-score high">2</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">Gold</span><span class="team-score">1</span></div>
+          </div>
+        </div>
+
       </div>
-      <div class="champ-year-badge">2019</div>
     </div>
   </div>
 
-  <div class="photo-grid" style="margin-top:6px">
-    <div class="upload-card">
-      <div class="upload-icon">📷</div>
-      <div class="upload-label">Add Champion Photo</div>
-      <div class="upload-sub">Drop or share an image</div>
+  <!-- SILVER BRACKET (placeholder) -->
+    <div class="bracket-canvas" id="bracket-silver" style="display:none">
+    <div class="bracket-scroll">
+
+      <div style="padding:20px 0 4px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#60a5fa;">Silver Cup · 2026 Playoffs</div>
+
+      <div class="bracket-wrap">
+
+        <!-- R1 SILVER -->
+        <div class="b-col">
+          <div class="b-col-label">Round 1 · 7/25</div>
+
+          <div class="matchup" style="border-color:rgba(96,165,250,.25)">
+            <div class="matchup-game"><span>GAME S1</span><span class="game-info">7/25 · Mondauk 5 · 6:00</span></div>
+            <div class="team-row won"><span class="team-seed">5</span><span class="team-name won-name" style="color:#c084fc">TBIR</span><span class="team-score high" style="color:#c084fc">8</span></div>
+            <div class="team-row lost"><span class="team-seed">8</span><span class="team-name">BSMC</span><span class="team-score">4</span></div>
+          </div>
+
+          <div style="height:24px"></div>
+
+          <div class="matchup" style="border-color:rgba(96,165,250,.25)">
+            <div class="matchup-game"><span>GAME S2</span><span class="game-info">7/25 · South 6pm</span></div>
+            <div class="team-row won"><span class="team-seed">6</span><span class="team-name won-name" style="color:#fb923c">AJ</span><span class="team-score high" style="color:#fb923c">7</span></div>
+            <div class="team-row lost"><span class="team-seed">7</span><span class="team-name">TSMC</span><span class="team-score">5</span></div>
+          </div>
+
+          <div style="height:24px"></div>
+
+          <div class="matchup" style="border-color:rgba(96,165,250,.25)">
+            <div class="matchup-game"><span>GAME S3</span><span class="game-info">7/25 · Mondauk 5 · 8:00</span></div>
+            <div class="team-row lost"><span class="team-seed">L1</span><span class="team-name">BOB</span><span class="team-score">3</span></div>
+            <div class="team-row won"><span class="team-seed">L4</span><span class="team-name won-name" style="color:#4ade80">SA</span><span class="team-score high" style="color:#4ade80">6</span></div>
+          </div>
+
+          <div style="height:24px"></div>
+
+          <div class="matchup" style="border-color:rgba(96,165,250,.25)">
+            <div class="matchup-game"><span>GAME S4</span><span class="game-info">7/25 · South 8pm</span></div>
+            <div class="team-row lost"><span class="team-seed">L2</span><span class="team-name">TBIR</span><span class="team-score">4</span></div>
+            <div class="team-row won"><span class="team-seed">L3</span><span class="team-name won-name" style="color:#60a5fa">KI</span><span class="team-score high" style="color:#60a5fa">9</span></div>
+          </div>
+        </div>
+
+        <!-- connector -->
+        <div style="display:flex;flex-direction:column;min-width:32px;flex-shrink:0;padding-top:40px;">
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,.2);border-bottom:1px solid rgba(96,165,250,.2);border-radius:0 0 4px 0;margin-top:30px;"></div>
+          <div style="width:32px;height:1px;background:rgba(96,165,250,.2);"></div>
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,.2);border-top:1px solid rgba(96,165,250,.2);border-radius:0 4px 0 0;margin-bottom:30px;"></div>
+          <div style="flex:0;height:24px;"></div>
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,.2);border-bottom:1px solid rgba(96,165,250,.2);border-radius:0 0 4px 0;margin-top:30px;"></div>
+          <div style="width:32px;height:1px;background:rgba(96,165,250,.2);"></div>
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,.2);border-top:1px solid rgba(96,165,250,.2);border-radius:0 4px 0 0;margin-bottom:30px;"></div>
+        </div>
+
+        <!-- R2 SILVER SEMIS -->
+        <div class="b-col" style="justify-content:space-around;padding-top:50px;">
+          <div class="b-col-label">Semis · 7/27</div>
+
+          <div class="matchup" style="border-color:rgba(96,165,250,.25)">
+            <div class="matchup-game"><span>GAME S5</span><span class="game-info">7/27 · Mondauk 5</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name" style="color:#c084fc">TBIR</span><span class="team-score high" style="color:#c084fc">7</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">AJ</span><span class="team-score">6</span></div>
+          </div>
+
+          <div style="height:40px"></div>
+
+          <div class="matchup" style="border-color:rgba(96,165,250,.25)">
+            <div class="matchup-game"><span>GAME S6</span><span class="game-info">7/27 · South 8pm</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name" style="color:#4ade80">SA</span><span class="team-score high" style="color:#4ade80">8</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">KI</span><span class="team-score">5</span></div>
+          </div>
+        </div>
+
+        <!-- connector -->
+        <div style="display:flex;flex-direction:column;min-width:32px;flex-shrink:0;padding-top:100px;">
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,.2);border-bottom:1px solid rgba(96,165,250,.2);border-radius:0 0 4px 0;margin-top:30px;"></div>
+          <div style="width:32px;height:1px;background:rgba(96,165,250,.2);"></div>
+          <div style="flex:1;border-right:1px solid rgba(96,165,250,.2);border-top:1px solid rgba(96,165,250,.2);border-radius:0 4px 0 0;margin-bottom:30px;"></div>
+        </div>
+
+        <!-- SILVER FINAL -->
+        <div class="b-col" style="justify-content:center;padding-top:110px;">
+          <div class="b-col-label">Silver Final · 7/29</div>
+
+          <div class="matchup" style="border-color:rgba(96,165,250,.4);box-shadow:0 0 20px rgba(96,165,250,.08)">
+            <div class="matchup-game"><span>GAME S7</span><span class="game-info">7/29 · Mondauk 4</span></div>
+            <div class="team-row won"><span class="team-seed"></span><span class="team-name won-name" style="color:#4ade80">SA</span><span class="team-score high" style="color:#4ade80">11</span></div>
+            <div class="team-row lost"><span class="team-seed"></span><span class="team-name">TBIR</span><span class="team-score">8</span></div>
+          </div>
+        </div>
+
+        <!-- SILVER CHAMPION -->
+        <div style="display:flex;align-items:center;padding:0 20px 0 32px;flex-direction:column;justify-content:center;padding-top:90px;">
+          <div style="width:1px;height:40px;background:rgba(96,165,250,.3);margin-bottom:16px;"></div>
+          <div style="background:linear-gradient(135deg,rgba(96,165,250,.12),rgba(96,165,250,.04));border:1px solid rgba(96,165,250,.4);border-radius:12px;padding:20px 28px;text-align:center;min-width:140px;">
+            <div style="font-size:24px;margin-bottom:8px;">🥈</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#60a5fa;margin-bottom:6px;">2026 Silver Cup</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:#4ade80;letter-spacing:.04em;">SA</div>
+            <div style="font-size:11px;color:rgba(239,239,239,.5);margin-top:4px;">Shir Ami</div>
+            <div style="font-size:10px;color:rgba(239,239,239,.35);margin-top:2px;">11 – 8</div>
+          </div>
+        </div>
+
+      </div>
     </div>
-    <div class="upload-card">
-      <div class="upload-icon">🏆</div>
-      <div class="upload-label">Add Trophy Shot</div>
-      <div class="upload-sub">Drop or share an image</div>
+  </div>
     </div>
   </div>
 </div>
 
-<!-- LEAGUE IDENTITY -->
-<div class="section" data-cat="logos" id="sec-logos">
-  <div class="section-header">
-    <div class="section-title">League <span>Identity</span></div>
-    <div class="section-meta">Official DVSL Branding · 2025</div>
-  </div>
-  <div class="logo-grid">
-    <div class="logo-card logo-card-dark" onclick="openLb('dvsl-logo-dark.png','DVSL Official Logo — Dark Edition')">
-      <img src="dvsl-logo-dark.png" alt="DVSL Logo Dark">
-      <div class="logo-card-label">Official Logo — Dark Edition</div>
+<!-- CHAMPION SECTION -->
+<div class="champ-section" id="champions">
+  <div class="champ-bg"></div>
+  <div class="champ-inner">
+    <div class="section-label" style="margin-bottom:12px;">Hall of Champions</div>
+    <div class="section-title" style="margin-bottom:40px;">Gold Cup<br><span style="color:var(--gold)">Champions</span></div>
+
+    <!-- 2019 CHAMPION CARD -->
+    <div class="champ-card">
+      <div class="champ-photo-wrap">
+        <img class="champ-photo-img" src="champ-photo.png" alt="2019 Gold Cup Champions - Beth Am" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+        <div style="display:none;width:100%;height:300px;background:linear-gradient(135deg,#1a3a1a,#2a5a2a);align-items:center;justify-content:center;font-size:80px;">🏆</div>
+        <div class="champ-photo-overlay"></div>
+        <div class="champ-photo-badge">🏆 2019 Gold Cup Champions</div>
+      </div>
+      <div class="champ-info">
+        <div>
+          <div class="champ-season">2019 Season · DVSL Gold Cup</div>
+          <div class="champ-team-name">Beth<br><span style="color:var(--gold)">Am</span></div>
+          <div class="champ-subtitle">Defeated the field in the Gold Cup Championship — Mondauk Park, Field 5</div>
+          <div class="champ-stats">
+            <div class="champ-stat"><div class="champ-stat-val">1st</div><div class="champ-stat-lbl">Seed</div></div>
+            <div class="champ-stat"><div class="champ-stat-val">5–1</div><div class="champ-stat-lbl">Playoff Record</div></div>
+            <div class="champ-stat"><div class="champ-stat-val">Gold</div><div class="champ-stat-lbl">Brackets</div></div>
+          </div>
+        </div>
+        <div class="champ-trophy-area">
+          <div class="trophy-big">🏆</div>
+          <div class="trophy-label">Gold Cup</div>
+        </div>
+      </div>
     </div>
-    <div class="logo-card logo-card-light" onclick="openLb('dvsl-logo-glass.png','DVSL Official Logo — Glass Trophy Edition')">
-      <img src="dvsl-logo-glass.png" alt="DVSL Logo Glass">
-      <div class="logo-card-label" style="color:rgba(0,0,0,.4)">Glass Trophy Edition</div>
+
+
+    <!-- 2025 SILVER CUP CHAMPION -->
+    <div style="margin-top:40px">
+      <div class="section-label" style="margin-bottom:12px">2025 Silver Cup Champions</div>
+      <div class="champ-card">
+        <div class="champ-photo-wrap">
+          <img class="champ-photo-img" src="ki-silver-cup-2025.png" alt="2025 Silver Cup Champions - Keneseth Israel" onerror="this.style.display='none'">
+          <div class="champ-photo-overlay"></div>
+          <div class="champ-photo-badge" style="background:rgba(8,8,8,.75);border-color:rgba(96,165,250,.5);color:#60a5fa">🥈 2025 Silver Cup Champions</div>
+        </div>
+        <div class="champ-info">
+          <div>
+            <div class="champ-season" style="color:#60a5fa">2025 Season · DVSL Silver Cup</div>
+            <div class="champ-team-name">Keneseth<br><span style="color:#60a5fa">Israel</span></div>
+            <div class="champ-subtitle">KI Softball Club claimed the 2025 Silver Cup — Mondauk Park, Philadelphia area</div>
+            <div class="champ-stats">
+              <div class="champ-stat"><div class="champ-stat-val" style="color:#60a5fa">KI</div><div class="champ-stat-lbl">Team</div></div>
+              <div class="champ-stat"><div class="champ-stat-val" style="color:#60a5fa">2025</div><div class="champ-stat-lbl">Season</div></div>
+              <div class="champ-stat"><div class="champ-stat-val" style="color:#60a5fa">Silver</div><div class="champ-stat-lbl">Brackets</div></div>
+            </div>
+          </div>
+          <div class="champ-trophy-area">
+            <div class="trophy-big" style="filter:drop-shadow(0 0 30px rgba(96,165,250,.4))">🥈</div>
+            <div class="trophy-label" style="color:#60a5fa">Silver Cup</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAST CHAMPIONS -->
+    <div class="past-champs">
+      <div class="past-champs-header">Past Champions</div>
+      <div class="past-champ-list">
+        <div class="past-champ-card gold-cup">
+          <div><div class="past-champ-year">2019</div><div class="past-champ-team">Beth Am</div><div class="past-champ-bracket">Gold Bracket</div></div>
+          <div class="past-champ-icon">🥇</div>
+        </div>
+        <div class="past-champ-card gold-cup">
+          <div><div class="past-champ-year">2018</div><div class="past-champ-team">SA</div><div class="past-champ-bracket">Gold Bracket</div></div>
+          <div class="past-champ-icon">🥇</div>
+        </div>
+        <div class="past-champ-card gold-cup">
+          <div><div class="past-champ-year">2017</div><div class="past-champ-team">SA</div><div class="past-champ-bracket">Gold Bracket</div></div>
+          <div class="past-champ-icon">🥇</div>
+        </div>
+        <div class="past-champ-card" style="border-left:3px solid var(--muted)">
+          <div><div class="past-champ-year">2016</div><div class="past-champ-team">KI</div><div class="past-champ-bracket">Gold Bracket</div></div>
+          <div class="past-champ-icon">🥈</div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-<!-- FIELDS -->
-<div class="section" data-cat="fields" id="sec-fields">
-  <div class="section-header">
-    <div class="section-title">Field <span>Photos</span></div>
-    <div class="section-meta">8 Venues Across Montgomery &amp; Bucks County</div>
-  </div>
-  <div class="photo-grid">
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Mondauk Park</div><div class="upload-sub">Ambler, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Schaefer Park</div><div class="upload-sub">Southampton, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Carpenter Park</div><div class="upload-sub">Horsham, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Lukens Field</div><div class="upload-sub">Horsham, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Plymouth Field</div><div class="upload-sub">Plymouth Meeting, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Ogontz Field</div><div class="upload-sub">Elkins Park, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Sunnybrook</div><div class="upload-sub">Lansdale, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">➕</div><div class="upload-label">Add Game Photos</div><div class="upload-sub">Any field</div></div>
-  </div>
-</div>
-
-<!-- LIGHTBOX -->
-<div class="lightbox" id="lightbox" onclick="closeLb()">
-  <div class="lb-close" onclick="closeLb()">✕</div>
-  <img class="lb-img" id="lbImg" src="" alt="" onclick="event.stopPropagation()">
-  <div class="lb-caption" id="lbCap"></div>
-</div>
-
+<!-- FOOTER -->
 <footer>
   <div class="ft-logo">⬡ DVSL</div>
   <div class="ft-links"><a href="index.html">Home</a><a href="schedule.html">Scores</a><a href="schedule.html?tab=schedule">Schedule</a><a href="standings-history.html">Standings</a><a href="stats.html">Stats</a><a href="index.html#players">Teams</a><a href="playoffs.html">Brackets</a><a href="rules.html">Field Guide</a><a href="photos.html">Gallery</a></div>
@@ -308,49 +749,38 @@ footer{margin-top:80px;padding:40px 48px;border-top:1px solid var(--border);disp
 </footer>
 
 <script>
-// Hamburger
-const hbg=document.getElementById('hbg'),mob=document.getElementById('mobMenu');
-hbg.addEventListener('click',()=>{hbg.classList.toggle('open');mob.classList.toggle('open')});
+  // Hamburger
+  const hb = document.getElementById('hbg');
+  const mm = document.getElementById('mobMenu');
+  if(hb) hb.addEventListener('click', () => { hb.classList.toggle('open'); mm.classList.toggle('open'); });
+  if(mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); }));
 
-// Parallax logo on scroll
-window.addEventListener('scroll',()=>{
-  const y=window.scrollY;
-  document.getElementById('logoParallax').style.transform=`translateY(${y*0.35}px)`;
-},{passive:true});
-
-// Scroll reveal
-const revealObs=new IntersectionObserver(entries=>{
-  entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');revealObs.unobserve(e.target)}});
-},{threshold:0.06});
-document.querySelectorAll('.section').forEach(el=>revealObs.observe(el));
-
-// Filter
-function filterSections(cat,btn){
-  document.querySelectorAll('.f-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  document.querySelectorAll('.section[data-cat]').forEach(el=>{
-    const show=cat==='all'||el.dataset.cat===cat;
-    el.style.display=show?'':'none';
-    if(show&&!el.classList.contains('visible')){
-      setTimeout(()=>el.classList.add('visible'),50);
-    }
+  // Bracket tabs - bulletproof version
+  document.querySelectorAll('.b-tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('.b-tab').forEach(function(b){ b.classList.remove('active'); });
+      document.querySelectorAll('.bracket-canvas').forEach(function(cv){
+        cv.classList.remove('active');
+        cv.style.display='none';
+      });
+      btn.classList.add('active');
+      var target = document.getElementById('bracket-' + btn.dataset.bracket);
+      if(target){ target.classList.add('active'); target.style.display='block'; }
+    });
   });
-}
+  // Init: make sure gold is visible
+  var goldBracket = document.getElementById('bracket-gold');
+  if(goldBracket){ goldBracket.style.display='block'; }
 
-// Lightbox
-function openLb(src,cap){
-  const lb=document.getElementById('lightbox');
-  document.getElementById('lbImg').src=src;
-  document.getElementById('lbCap').textContent=cap||'';
-  lb.style.display='flex';
-  requestAnimationFrame(()=>lb.style.opacity='1');
-}
-function closeLb(){
-  const lb=document.getElementById('lightbox');
-  lb.style.opacity='0';
-  setTimeout(()=>{lb.style.display='none';document.getElementById('lbImg').src=''},300);
-}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLb()});
+  // Fade in
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.style.opacity='1'; e.target.style.transform='translateY(0)'; }});
+  }, { threshold: 0.05 });
+  document.querySelectorAll('.matchup, .champ-card, .past-champ-card').forEach(el => {
+    el.style.opacity = '0'; el.style.transform = 'translateY(16px)';
+    el.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+    obs.observe(el);
+  });
 </script>
 </body>
 </html>
