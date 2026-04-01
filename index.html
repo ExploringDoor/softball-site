@@ -2140,20 +2140,36 @@ thead th.sorted-col .sarrow{opacity:1}
   </div>
 </div>
 <script>
-// ═══════════════════════════════════════ SUPABASE CONFIG ════════════════════
-const SUPABASE_URL = 'https://yicbnkykxmkjyfmsnmoz.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpY2Jua3lreG1ranlmbXNubW96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzA2MzksImV4cCI6MjA5MDE0NjYzOX0.ILMv91sK6gyjl_a8yBnB2QeW_H-NDlC1S8Jh4p1eTJQ';
+// ═══════════════════════════════════════ FIREBASE CONFIG ════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+};
 
-async function sbFetch(table, query='') {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, {
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json'
-    }
-  });
-  if (!res.ok) throw new Error(`Supabase error: ${res.status}`);
-  return res.json();
+// Firebase SDK loaded via CDN module
+let _db = null;
+async function getDb() {
+  if (_db) return _db;
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
+  const { getFirestore, collection, getDocs, query, orderBy } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+  const app = initializeApp(FIREBASE_CONFIG);
+  _db = getFirestore(app);
+  window._fbDeps = { collection, getDocs, query, orderBy };
+  return _db;
+}
+
+async function fbFetch(collectionName, orderField) {
+  const db = await getDb();
+  const { collection, getDocs, query, orderBy } = window._fbDeps;
+  const q = orderField
+    ? query(collection(db, collectionName), orderBy(orderField))
+    : collection(db, collectionName);
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 // Live data arrays — populated from Supabase on load
@@ -2168,69 +2184,84 @@ let TEAM_CALENDARS_DB = {};
 
 async function loadAllData() {
   try {
-    // Load all tables in parallel
+    // Load all collections in parallel from Firebase
     const [teams, histTeams, players, games, recaps, history, calendars] = await Promise.all([
-      sbFetch('teams', '?active=eq.true&order=pct.desc'),
-      sbFetch('hist_teams', '?order=pct.desc'),
-      sbFetch('players', '?order=avg.desc'),
-      sbFetch('games', '?order=wk.asc,time.asc&season=eq.2026'),
-      sbFetch('recaps', '?order=wk.desc'),
-      sbFetch('league_history', '?order=yr.desc'),
-      sbFetch('team_calendars', '')
+      fbFetch('teams', 'name'),
+      fbFetch('hist_teams', 'name'),
+      fbFetch('players', 'avg'),
+      fbFetch('games', 'wk'),
+      fbFetch('recaps', 'wk'),
+      fbFetch('league_history', 'yr'),
+      fbFetch('team_calendars')
     ]);
 
-    // Map teams
-    TEAMS = teams.map(t => ({
-      id: t.id, name: t.name, short: t.short, div: t.div, color: t.color,
-      w: t.w, l: t.l, pct: parseFloat(t.pct), gb: t.gb, streak: t.streak,
-      rs: t.rs, ra: t.ra, founded: t.founded, field: t.field
-    }));
+    // Map teams — sort by pct desc
+    TEAMS = teams
+      .filter(t => t.active !== false)
+      .map(t => ({
+        id: t.id, name: t.name, short: t.short, div: t.div, color: t.color,
+        w: t.w||0, l: t.l||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
+        streak: t.streak||'—', rs: t.rs||0, ra: t.ra||0,
+        founded: t.founded, field: t.field
+      }))
+      .sort((a,b) => b.pct - a.pct);
 
     HIST_TEAMS = histTeams.map(t => ({
       id: t.id, name: t.name, short: t.short, color: t.color,
-      w: t.w, l: t.l, pct: parseFloat(t.pct), gb: t.gb, streak: t.streak,
-      rs: t.rs, ra: t.ra
+      w: t.w||0, l: t.l||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
+      streak: t.streak||'—', rs: t.rs||0, ra: t.ra||0
     }));
 
     ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
 
-    // Map players
-    PLAYERS = players.map(p => ({
-      id: p.id, name: p.name, num: p.num, team: p.team_id, pos: p.pos,
-      avg: parseFloat(p.avg), hr: p.hr, rbi: p.rbi, h: p.h, ab: p.ab,
-      r: p.r, bb: p.bb, slg: parseFloat(p.slg), ops: parseFloat(p.ops), log: []
-    }));
+    // Map players — sort by avg desc
+    PLAYERS = players
+      .map(p => ({
+        id: p.id, name: p.name, num: p.num, team: p.team, pos: p.pos,
+        avg: parseFloat(p.avg)||0, hr: p.hr||0, rbi: p.rbi||0,
+        h: p.h||0, ab: p.ab||0, r: p.r||0, bb: p.bb||0,
+        slg: parseFloat(p.slg)||0, ops: parseFloat(p.ops)||0, log: []
+      }))
+      .sort((a,b) => b.avg - a.avg);
 
-    // Map games -> SCHEDULE_PREVIEW format
-    SCHEDULE_PREVIEW = games.map(g => ({
-      wk: g.wk, date: g.date, day: g.day, time: g.time,
-      field: g.field, addr: g.addr,
-      away: TEAMS.find(t=>t.id===g.away)?.short || g.away,
-      home: TEAMS.find(t=>t.id===g.home)?.short || g.home,
-      as: g.away_score, hs: g.home_score, done: g.done
-    }));
+    // Map games -> SCHEDULE_PREVIEW format, sort by wk then time
+    SCHEDULE_PREVIEW = games
+      .map(g => ({
+        wk: g.wk, date: g.date, day: g.day, time: g.time,
+        field: g.field, addr: g.addr||'',
+        away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
+        home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
+        as: g.away_score, hs: g.home_score, done: g.done||false
+      }))
+      .sort((a,b) => a.wk - b.wk || (a.time||'').localeCompare(b.time||''));
 
-    // Map recaps
-    RECAPS = recaps.map(r => ({
-      date: r.date, wk: r.wk, away: r.away.toUpperCase(), home: r.home.toUpperCase(),
-      as: r.away_score, hs: r.home_score, field: r.field,
-      text: r.text, stars: Array.isArray(r.stars) ? r.stars : JSON.parse(r.stars||'[]')
-    }));
+    // Map recaps — sort by wk desc
+    RECAPS = recaps
+      .map(r => ({
+        date: r.date, wk: r.wk,
+        away: (r.away||'').toUpperCase(),
+        home: (r.home||'').toUpperCase(),
+        as: r.away_score, hs: r.home_score, field: r.field||'',
+        text: r.text||'', stars: Array.isArray(r.stars) ? r.stars : []
+      }))
+      .sort((a,b) => b.wk - a.wk);
 
-    // Map history
-    HISTORY = history.map(h => ({
-      yr: h.yr, champ: h.champ, short: h.short, runner: h.runner,
-      rec: h.rec, pct: h.pct, hr: h.hr, mvp: h.mvp, champ_team: h.champ_team
-    }));
+    // Map history — sort by yr desc
+    HISTORY = history
+      .map(h => ({
+        yr: h.yr, champ: h.champ, short: h.short, runner: h.runner,
+        rec: h.rec, pct: h.pct, hr: h.hr, mvp: h.mvp, champ_team: h.champ_team
+      }))
+      .sort((a,b) => b.yr - a.yr);
 
     // Map calendars
     TEAM_CALENDARS_DB = {};
-    calendars.forEach(c => { TEAM_CALENDARS_DB[c.team_id] = c.calendar_url; });
+    calendars.forEach(c => { if(c.calendar_url) TEAM_CALENDARS_DB[c.id] = c.calendar_url; });
 
-    console.log('✓ All data loaded from Supabase');
+    console.log('✓ All data loaded from Firebase');
     return true;
   } catch(err) {
-    console.error('Supabase load failed, using fallback:', err);
+    console.error('Firebase load failed, using fallback:', err);
     loadFallbackData();
     return false;
   }
