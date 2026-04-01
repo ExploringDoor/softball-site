@@ -2140,320 +2140,150 @@ thead th.sorted-col .sarrow{opacity:1}
   </div>
 </div>
 <script>
-// ═══════════════════════════════════════ DATA ═══════════════════════════════
-const TEAMS = [
-  {id:'gold',name:"Goldstein's",short:'GOLD',div:'East',color:'#F5C842',w:9,l:6,pct:.600,gb:'—',streak:'W3',rs:142,ra:118,founded:2003,field:'Mondauk 4'},
-  {id:'sa',  name:'Shir Ami',   short:'SA',  div:'East',color:'#4ade80',w:9,l:5,pct:.643,gb:'—',streak:'W5',rs:158,ra:102,founded:2002,field:'Southampton'},
-  {id:'ki',  name:'Keneseth Israel',short:'KI',div:'East',color:'#60a5fa',w:8,l:7,pct:.533,gb:2, streak:'L1',rs:131,ra:124,founded:2004,field:'Mondauk 5'},
-  {id:'bob', name:'Beth Or Blue',  short:'BOB',div:'West',color:'#f87171',w:7,l:8,pct:.467,gb:2, streak:'W2',rs:121,ra:130,founded:2005,field:'Sunnybrook'},
-  {id:'tbir',name:'Tifereth Bet Israel Royals',short:'TBIR',div:'West',color:'#c084fc',w:6,l:9,pct:.400,gb:3, streak:'L2',rs:118,ra:141,founded:2003,field:'Warwick'},
-  {id:'aj',  name:'Adath Jeshurun',short:'AJ', div:'West',color:'#fb923c',w:5,l:9,pct:.357,gb:4, streak:'L1',rs:109,ra:138,founded:2006,field:'Plymouth'},
-  {id:'tsmc',name:'Temple Sinai Mens Club',short:'TSMC',div:'East',color:'#2dd4bf',w:5,l:10,pct:.333,gb:4,streak:'W1',rs:105,ra:149,founded:2007,field:'Horsham'},
-  {id:'bsmc',name:'Beth Sholom Mens Club',short:'BSMC',div:'West',color:'#f472b6',w:4,l:11,pct:.267,gb:5,streak:'L3',rs:98, ra:158,founded:2008,field:'Ridgeway'},
-];
+// ═══════════════════════════════════════ SUPABASE CONFIG ════════════════════
+const SUPABASE_URL = 'https://yicbnkykxmkjyfmsnmoz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlpY2Jua3lreG1ranlmbXNubW96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzA2MzksImV4cCI6MjA5MDE0NjYzOX0.ILMv91sK6gyjl_a8yBnB2QeW_H-NDlC1S8Jh4p1eTJQ';
 
+async function sbFetch(table, query='') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  if (!res.ok) throw new Error(`Supabase error: ${res.status}`);
+  return res.json();
+}
 
-// All historical DVSL teams (for full standings display)
-const HIST_TEAMS = [
-  {id:'ba',   name:'Beth Am',             short:'BA',  color:'#facc15', w:8,  l:7,  pct:.533, gb:1,  streak:'—', rs:120,ra:118},
-  {id:'bos',  name:'Beth Or Silver',      short:'BOS', color:'#94a3b8', w:6,  l:9,  pct:.400, gb:3,  streak:'—', rs:105,ra:132},
-  {id:'tbi',  name:'TBI Jaguars',         short:'TBIJ',color:'#a78bfa', w:7,  l:8,  pct:.467, gb:2,  streak:'—', rs:112,ra:121},
-  {id:'bsb',  name:'Beth Sholom Blue',    short:'BSB', color:'#818cf8', w:5,  l:10, pct:.333, gb:4,  streak:'—', rs:99, ra:140},
-  {id:'gjc',  name:'Glenside JCC',        short:'GJC', color:'#38bdf8', w:9,  l:6,  pct:.600, gb:0,  streak:'—', rs:138,ra:112},
-  {id:'bami', name:'Beth Am Marlins',     short:'BAMI',color:'#fb923c', w:4,  l:11, pct:.267, gb:5,  streak:'—', rs:95, ra:152},
-  {id:'boo',  name:'Beth Or Orange',      short:'BOO', color:'#a3e635', w:7,  l:7,  pct:.500, gb:1.5,streak:'—', rs:118,ra:118},
-  {id:'os',   name:'Or Shalom',           short:'OS',  color:'#e2e8f0', w:3,  l:12, pct:.200, gb:6,  streak:'—', rs:88, ra:165},
-  {id:'ti',   name:'Temple Israel',       short:'TI',  color:'#e879f9', w:10, l:5,  pct:.667, gb:0,  streak:'—', rs:148,ra:105},
-  {id:'ka',   name:'Kol Ami',             short:'KA',  color:'#34d399', w:6,  l:9,  pct:.400, gb:3,  streak:'—', rs:108,ra:129},
-];
-const ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
+// Live data arrays — populated from Supabase on load
+let TEAMS = [];
+let HIST_TEAMS = [];
+let ALL_TEAMS = [];
+let PLAYERS = [];
+let SCHEDULE_PREVIEW = [];
+let RECAPS = [];
+let HISTORY = [];
+let TEAM_CALENDARS_DB = {};
 
-const PLAYERS = [
-  // ── GOLDSTEINS ──────────────────────────────────────────────
-  {id:'p01',name:'Mike Goldstein', num:'4', team:'gold',pos:'SS',avg:.512,hr:8, rbi:24,h:41,ab:80, r:18,bb:12,slg:.725,ops:1.237,log:[
-    {opp:'vs KI',   ab:3,h:2,hr:1,rbi:2,bb:0,r:1,res:'W 8-5'},
-    {opp:'vs BOB',  ab:4,h:3,hr:0,rbi:1,bb:1,r:2,res:'W 12-4'},
-    {opp:'vs SA',   ab:4,h:2,hr:1,rbi:3,bb:0,r:1,res:'W 6-5'},
-    {opp:'@ AJ',   ab:3,h:2,hr:0,rbi:1,bb:1,r:1,res:'L 4-7'},
-    {opp:'vs TBIR', ab:4,h:2,hr:1,rbi:2,bb:0,r:2,res:'W 9-3'},
-    {opp:'@ TSMC',  ab:3,h:1,hr:0,rbi:1,bb:1,r:1,res:'W 15-8'},
-  ]},
-  {id:'p02',name:'David Levy',      num:'7', team:'gold',pos:'1B',avg:.488,hr:5, rbi:18,h:39,ab:80, r:14,bb:9, slg:.650,ops:1.138,log:[
-    {opp:'vs KI',   ab:4,h:2,hr:0,rbi:1,bb:1,r:1,res:'W 8-5'},
-    {opp:'vs BOB',  ab:4,h:3,hr:1,rbi:2,bb:0,r:2,res:'W 12-4'},
-    {opp:'vs SA',   ab:3,h:1,hr:0,rbi:0,bb:2,r:0,res:'W 6-5'},
-    {opp:'@ AJ',   ab:4,h:2,hr:1,rbi:2,bb:0,r:2,res:'L 4-7'},
-  ]},
-  {id:'p03',name:'Aaron Rosen',     num:'12',team:'gold',pos:'CF',avg:.420,hr:3, rbi:14,h:33,ab:79, r:12,bb:7, slg:.570,ops:.990,log:[
-    {opp:'vs KI',   ab:3,h:1,hr:0,rbi:1,bb:1,r:1,res:'W 8-5'},
-    {opp:'vs BOB',  ab:3,h:2,hr:0,rbi:1,bb:0,r:1,res:'W 12-4'},
-    {opp:'@ BSMC',  ab:4,h:2,hr:1,rbi:2,bb:0,r:2,res:'W 15-3'},
-    {opp:'@ AJ',   ab:3,h:1,hr:0,rbi:0,bb:1,r:0,res:'L 4-7'},
-  ]},
-  {id:'p04',name:'Josh Weinberg',   num:'22',team:'gold',pos:'RF',avg:.390,hr:6, rbi:20,h:31,ab:79, r:16,bb:5, slg:.620,ops:1.010,log:[
-    {opp:'vs KI',   ab:4,h:2,hr:1,rbi:3,bb:0,r:2,res:'W 8-5'},
-    {opp:'@ BSMC',  ab:4,h:4,hr:2,rbi:5,bb:0,r:3,res:'W 15-3'},
-    {opp:'vs SA',   ab:4,h:1,hr:0,rbi:0,bb:1,r:0,res:'W 6-5'},
-    {opp:'@ AJ',   ab:4,h:2,hr:1,rbi:2,bb:0,r:2,res:'L 4-7'},
-  ]},
-  {id:'p05',name:'Ethan Katz',      num:'3', team:'gold',pos:'P', avg:.355,hr:2, rbi:11,h:28,ab:79, r:9, bb:8, slg:.480,ops:.835,log:[
-    {opp:'vs KI',   ab:3,h:1,hr:0,rbi:0,bb:1,r:0,res:'W 8-5'},
-    {opp:'vs BOB',  ab:3,h:2,hr:0,rbi:1,bb:1,r:1,res:'W 12-4'},
-    {opp:'@ BSMC',  ab:3,h:1,hr:0,rbi:1,bb:1,r:1,res:'W 15-3'},
-    {opp:'@ AJ',   ab:3,h:0,hr:0,rbi:0,bb:2,r:0,res:'L 4-7'},
-  ]},
-  // ── SHIR AMI ────────────────────────────────────────────────
-  {id:'p06',name:'Carlos Rivera',   num:'34',team:'sa', pos:'3B',avg:.504,hr:11,rbi:34,h:57,ab:113,r:28,bb:15,slg:.823,ops:1.327,log:[
-    {opp:'vs BOB',  ab:4,h:3,hr:2,rbi:5,bb:1,r:3,res:'W 10-4'},
-    {opp:'@ TSMC',  ab:3,h:2,hr:1,rbi:3,bb:1,r:2,res:'W 14-2'},
-    {opp:'vs KI',   ab:4,h:2,hr:1,rbi:2,bb:0,r:2,res:'W 11-6'},
-    {opp:'@ GOLD',  ab:4,h:3,hr:2,rbi:4,bb:1,r:2,res:'L 5-6'},
-    {opp:'vs AJ',   ab:4,h:3,hr:1,rbi:3,bb:1,r:3,res:'W 14-4'},
-    {opp:'vs TBIR', ab:3,h:2,hr:1,rbi:2,bb:2,r:2,res:'W 9-5'},
-  ]},
-  {id:'p07',name:'Tony DeLuca',     num:'21',team:'sa', pos:'LF',avg:.461,hr:9, rbi:29,h:52,ab:113,r:22,bb:11,slg:.761,ops:1.222,log:[
-    {opp:'vs BOB',  ab:4,h:2,hr:1,rbi:3,bb:1,r:2,res:'W 10-4'},
-    {opp:'@ TSMC',  ab:4,h:3,hr:1,rbi:2,bb:0,r:2,res:'W 14-2'},
-    {opp:'vs KI',   ab:3,h:2,hr:0,rbi:1,bb:1,r:1,res:'W 11-6'},
-    {opp:'@ GOLD',  ab:4,h:2,hr:1,rbi:2,bb:0,r:2,res:'L 5-6'},
-  ]},
-  {id:'p08',name:'Ray Kowalski',    num:'11',team:'sa', pos:'2B',avg:.438,hr:7, rbi:27,h:49,ab:112,r:19,bb:9, slg:.696,ops:1.134,log:[
-    {opp:'vs BOB',  ab:3,h:2,hr:0,rbi:2,bb:1,r:1,res:'W 10-4'},
-    {opp:'@ TSMC',  ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'W 14-2'},
-    {opp:'vs KI',   ab:4,h:2,hr:1,rbi:3,bb:0,r:2,res:'W 11-6'},
-    {opp:'@ GOLD',  ab:3,h:1,hr:0,rbi:1,bb:1,r:0,res:'L 5-6'},
-  ]},
-  {id:'p09',name:'Pete DiNunzio',   num:'47',team:'sa', pos:'1B',avg:.415,hr:5, rbi:22,h:47,ab:113,r:15,bb:8, slg:.637,ops:1.052,log:[
-    {opp:'vs BOB',  ab:4,h:2,hr:1,rbi:2,bb:0,r:2,res:'W 10-4'},
-    {opp:'@ TSMC',  ab:3,h:1,hr:0,rbi:1,bb:1,r:1,res:'W 14-2'},
-    {opp:'vs KI',   ab:4,h:2,hr:0,rbi:2,bb:1,r:1,res:'W 11-6'},
-    {opp:'vs AJ',   ab:4,h:3,hr:1,rbi:3,bb:0,r:2,res:'W 14-4'},
-  ]},
-  {id:'p10',name:'Sam Greenberg',   num:'8', team:'sa', pos:'C', avg:.380,hr:4, rbi:17,h:43,ab:113,r:12,bb:10,slg:.584,ops:.964,log:[
-    {opp:'vs BOB',  ab:4,h:2,hr:0,rbi:1,bb:1,r:1,res:'W 10-4'},
-    {opp:'@ TSMC',  ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'W 14-2'},
-    {opp:'vs KI',   ab:3,h:1,hr:0,rbi:1,bb:1,r:1,res:'W 11-6'},
-    {opp:'vs AJ',   ab:4,h:2,hr:0,rbi:2,bb:1,r:1,res:'W 14-4'},
-  ]},
-  // ── KI ──────────────────────────────────────────────────────
-  {id:'p11',name:'Brian Kim',       num:'5', team:'ki', pos:'SS',avg:.470,hr:6, rbi:21,h:47,ab:100,r:20,bb:8, slg:.680,ops:1.150,log:[
-    {opp:'@ GOLD',  ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'L 5-8'},
-    {opp:'@ SA',   ab:4,h:2,hr:1,rbi:3,bb:0,r:1,res:'L 6-11'},
-    {opp:'vs BOB',  ab:3,h:2,hr:0,rbi:1,bb:1,r:1,res:'W 7-5'},
-    {opp:'vs TBIR', ab:4,h:3,hr:1,rbi:2,bb:0,r:2,res:'W 9-4'},
-    {opp:'@ BOB',   ab:4,h:2,hr:1,rbi:2,bb:1,r:2,res:'W 7-3'},
-  ]},
-  {id:'p12',name:'Danny Ito',       num:'18',team:'ki', pos:'RF',avg:.440,hr:4, rbi:18,h:44,ab:100,r:16,bb:6, slg:.620,ops:1.060,log:[
-    {opp:'@ GOLD',  ab:3,h:2,hr:0,rbi:1,bb:0,r:1,res:'L 5-8'},
-    {opp:'@ SA',   ab:4,h:2,hr:0,rbi:1,bb:0,r:1,res:'L 6-11'},
-    {opp:'vs BOB',  ab:4,h:2,hr:1,rbi:2,bb:1,r:1,res:'W 7-5'},
-    {opp:'vs TBIR', ab:3,h:2,hr:0,rbi:2,bb:1,r:1,res:'W 9-4'},
-  ]},
-  {id:'p13',name:'Kevin Park',      num:'9', team:'ki', pos:'CF',avg:.400,hr:7, rbi:24,h:40,ab:100,r:21,bb:12,slg:.700,ops:1.100,log:[
-    {opp:'@ GOLD',  ab:4,h:2,hr:1,rbi:2,bb:1,r:2,res:'L 5-8'},
-    {opp:'@ SA',   ab:3,h:1,hr:0,rbi:1,bb:1,r:0,res:'L 6-11'},
-    {opp:'vs BOB',  ab:4,h:2,hr:1,rbi:3,bb:0,r:2,res:'W 7-5'},
-    {opp:'vs TBIR', ab:4,h:2,hr:2,rbi:3,bb:1,r:3,res:'W 9-4'},
-  ]},
-  // ── BOB ─────────────────────────────────────────────────────
-  {id:'p14',name:'Bobby Marchetti', num:'2', team:'bob',pos:'P', avg:.455,hr:9, rbi:28,h:45,ab:99, r:22,bb:7, slg:.737,ops:1.192,log:[
-    {opp:'vs TBIR', ab:4,h:3,hr:1,rbi:3,bb:0,r:2,res:'W 11-3'},
-    {opp:'@ KI',    ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'L 5-7'},
-    {opp:'@ SA',   ab:3,h:1,hr:0,rbi:0,bb:1,r:0,res:'L 9-10'},
-    {opp:'vs TSMC', ab:4,h:2,hr:1,rbi:2,bb:1,r:2,res:'W 9-4'},
-    {opp:'vs GOLD', ab:4,h:3,hr:2,rbi:4,bb:0,r:3,res:'L 4-12'},
-  ]},
-  {id:'p15',name:'Orlando Fuentes', num:'15',team:'bob',pos:'3B',avg:.410,hr:5, rbi:19,h:41,ab:100,r:14,bb:9, slg:.620,ops:1.030,log:[
-    {opp:'vs TBIR', ab:4,h:2,hr:0,rbi:2,bb:1,r:1,res:'W 11-3'},
-    {opp:'@ KI',    ab:3,h:1,hr:0,rbi:1,bb:1,r:0,res:'L 5-7'},
-    {opp:'@ SA',   ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'L 9-10'},
-    {opp:'vs TSMC', ab:3,h:1,hr:0,rbi:1,bb:2,r:1,res:'W 9-4'},
-  ]},
-  // ── TBIR ────────────────────────────────────────────────────
-  {id:'p16',name:'Tom Birnbaum',    num:'33',team:'tbir',pos:'1B',avg:.388,hr:8, rbi:23,h:38,ab:98, r:18,bb:6, slg:.633,ops:1.021,log:[
-    {opp:'@ BOB',   ab:3,h:1,hr:0,rbi:0,bb:0,r:0,res:'L 3-11'},
-    {opp:'@ SA',   ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'L 5-9'},
-    {opp:'@ KI',    ab:4,h:2,hr:1,rbi:3,bb:0,r:1,res:'L 4-9'},
-    {opp:'vs AJ',   ab:4,h:2,hr:2,rbi:3,bb:0,r:3,res:'W 7-4'},
-    {opp:'vs BSMC', ab:4,h:3,hr:1,rbi:2,bb:0,r:2,res:'W 10-5'},
-  ]},
-  {id:'p17',name:'Mark Birnbaum',   num:'41',team:'tbir',pos:'SS',avg:.355,hr:4, rbi:14,h:35,ab:99, r:11,bb:5, slg:.525,ops:.880,log:[
-    {opp:'@ BOB',   ab:3,h:1,hr:0,rbi:0,bb:0,r:0,res:'L 3-11'},
-    {opp:'vs AJ',   ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'W 7-4'},
-    {opp:'vs BSMC', ab:3,h:1,hr:0,rbi:1,bb:1,r:1,res:'W 10-5'},
-  ]},
-  // ── AJ ──────────────────────────────────────────────────────
-  {id:'p18',name:'Al Jacobs',       num:'6', team:'aj', pos:'CF',avg:.360,hr:4, rbi:15,h:36,ab:100,r:13,bb:10,slg:.540,ops:.900,log:[
-    {opp:'vs BSMC', ab:4,h:2,hr:1,rbi:2,bb:0,r:2,res:'W 9-6'},
-    {opp:'vs GOLD', ab:3,h:1,hr:0,rbi:1,bb:1,r:1,res:'W 7-4'},
-    {opp:'@ SA',   ab:4,h:1,hr:0,rbi:0,bb:0,r:0,res:'L 4-14'},
-    {opp:'@ BOB',   ab:3,h:1,hr:0,rbi:1,bb:1,r:0,res:'L 4-9'},
-  ]},
-  {id:'p19',name:'Joe Friedman',    num:'23',team:'aj', pos:'RF',avg:.345,hr:3, rbi:13,h:34,ab:99, r:10,bb:7, slg:.505,ops:.850,log:[
-    {opp:'vs BSMC', ab:3,h:1,hr:0,rbi:1,bb:1,r:1,res:'W 9-6'},
-    {opp:'vs GOLD', ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'W 7-4'},
-    {opp:'@ SA',   ab:3,h:0,hr:0,rbi:0,bb:1,r:0,res:'L 4-14'},
-  ]},
-  // ── TSMC ────────────────────────────────────────────────────
-  {id:'p20',name:'Mark Chen',       num:'44',team:'tsmc',pos:'SS',avg:.375,hr:3, rbi:14,h:37,ab:99, r:11,bb:7, slg:.525,ops:.900,log:[
-    {opp:'vs BSMC', ab:4,h:2,hr:0,rbi:1,bb:1,r:1,res:'W 8-6'},
-    {opp:'@ SA',   ab:3,h:1,hr:0,rbi:0,bb:0,r:0,res:'L 2-14'},
-    {opp:'@ BOB',  ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'L 4-9'},
-    {opp:'@ KI',   ab:3,h:1,hr:0,rbi:1,bb:1,r:0,res:'L 6-9'},
-  ]},
-  {id:'p21',name:'Steven Tran',     num:'17',team:'tsmc',pos:'LF',avg:.340,hr:2, rbi:10,h:33,ab:97, r:9, bb:6, slg:.490,ops:.830,log:[
-    {opp:'vs BSMC', ab:4,h:2,hr:1,rbi:2,bb:0,r:1,res:'W 8-6'},
-    {opp:'@ SA',   ab:3,h:1,hr:0,rbi:0,bb:0,r:0,res:'L 2-14'},
-    {opp:'@ BOB',  ab:3,h:1,hr:0,rbi:1,bb:1,r:0,res:'L 4-9'},
-  ]},
-  // ── BSMC ────────────────────────────────────────────────────
-  {id:'p22',name:'Frank Rosario',   num:'27',team:'bsmc',pos:'RF',avg:.355,hr:2, rbi:12,h:35,ab:99, r:9, bb:5, slg:.465,ops:.820,log:[
-    {opp:'@ TSMC',  ab:4,h:2,hr:0,rbi:2,bb:0,r:1,res:'L 6-8'},
-    {opp:'@ AJ',    ab:3,h:1,hr:0,rbi:0,bb:0,r:0,res:'L 6-9'},
-    {opp:'@ TBIR',  ab:4,h:2,hr:0,rbi:1,bb:0,r:0,res:'L 5-10'},
-    {opp:'@ GOLD',  ab:3,h:1,hr:0,rbi:1,bb:0,r:0,res:'L 3-15'},
-  ]},
-  {id:'p23',name:'Danny Schwartz',  num:'14',team:'bsmc',pos:'2B',avg:.320,hr:1, rbi:9, h:31,ab:97, r:7, bb:4, slg:.410,ops:.730,log:[
-    {opp:'@ TSMC',  ab:3,h:1,hr:0,rbi:1,bb:0,r:1,res:'L 6-8'},
-    {opp:'@ AJ',    ab:4,h:1,hr:0,rbi:0,bb:0,r:0,res:'L 6-9'},
-    {opp:'@ GOLD',  ab:3,h:1,hr:0,rbi:1,bb:0,r:0,res:'L 3-15'},
-  ]},
+async function loadAllData() {
+  try {
+    // Load all tables in parallel
+    const [teams, histTeams, players, games, recaps, history, calendars] = await Promise.all([
+      sbFetch('teams', '?active=eq.true&order=pct.desc'),
+      sbFetch('hist_teams', '?order=pct.desc'),
+      sbFetch('players', '?order=avg.desc'),
+      sbFetch('games', '?order=wk.asc,time.asc&season=eq.2026'),
+      sbFetch('recaps', '?order=wk.desc'),
+      sbFetch('league_history', '?order=yr.desc'),
+      sbFetch('team_calendars', '')
+    ]);
 
-  // ── GOLDSTEINS extra ────────────────────────────────────
-  {id:'p05b',name:'Ethan Katz',     num:'3', team:'gold',pos:'P', avg:.355,hr:2, rbi:11,h:28,ab:79, r:9, bb:8, slg:.480,ops:.835,log:[]},
-  {id:'p05c',name:'Ben Abrams',     num:'17',team:'gold',pos:'LF',avg:.312,hr:3, rbi:13,h:25,ab:80, r:10,bb:6, slg:.450,ops:.762,log:[]},
-  {id:'p05d',name:'Noah Schwartz',  num:'29',team:'gold',pos:'2B',avg:.298,hr:1, rbi:8, h:24,ab:81, r:8, bb:9, slg:.370,ops:.668,log:[]},
-  {id:'p05e',name:'Sam Rubin',      num:'45',team:'gold',pos:'C', avg:.275,hr:2, rbi:9, h:22,ab:80, r:7, bb:5, slg:.350,ops:.625,log:[]},
-  {id:'p05f',name:'Zach Feldman',   num:'8', team:'gold',pos:'DH',avg:.340,hr:4, rbi:16,h:27,ab:79, r:12,bb:7, slg:.520,ops:.860,log:[]},
-  {id:'p05g',name:'Lev Cohen',      num:'16',team:'gold',pos:'RF',avg:.318,hr:2, rbi:10,h:25,ab:79, r:9, bb:4, slg:.405,ops:.723,log:[]},
-  {id:'p05h',name:'Jon Silver',     num:'37',team:'gold',pos:'3B',avg:.289,hr:1, rbi:7, h:23,ab:80, r:6, bb:6, slg:.338,ops:.628,log:[]},
-  {id:'p05i',name:'Matty Greenberg',num:'50',team:'gold',pos:'SS',avg:.261,hr:0, rbi:5, h:21,ab:81, r:5, bb:8, slg:.286,ops:.585,log:[]},
-  {id:'p05j',name:'Ari Blum',       num:'23',team:'gold',pos:'1B',avg:.305,hr:3, rbi:12,h:24,ab:79, r:8, bb:5, slg:.430,ops:.735,log:[]},
-  {id:'p05k',name:'Danny Fox',      num:'9', team:'gold',pos:'CF',avg:.332,hr:2, rbi:11,h:26,ab:78, r:10,bb:7, slg:.449,ops:.779,log:[]},
-  // ── SHIR AMI extra ──────────────────────────────────────
-  {id:'p10b',name:'Lou DiMaggio',   num:'19',team:'sa', pos:'RF',avg:.302,hr:3, rbi:12,h:34,ab:113,r:11,bb:7, slg:.434,ops:.736,log:[]},
-  {id:'p10c',name:'Frank Palermo',  num:'33',team:'sa', pos:'P', avg:.278,hr:1, rbi:8, h:31,ab:112,r:9, bb:9, slg:.330,ops:.608,log:[]},
-  {id:'p10d',name:'Matt Greco',     num:'42',team:'sa', pos:'3B',avg:.315,hr:4, rbi:17,h:36,ab:114,r:13,bb:6, slg:.456,ops:.771,log:[]},
-  {id:'p10e',name:'Chris Napoli',   num:'6', team:'sa', pos:'C', avg:.291,hr:2, rbi:10,h:33,ab:113,r:8, bb:8, slg:.372,ops:.663,log:[]},
-  {id:'p10f',name:'Vinnie Esposito', num:'28',team:'sa',pos:'DH',avg:.348,hr:5, rbi:19,h:39,ab:112,r:14,bb:5, slg:.536,ops:.884,log:[]},
-  {id:'p10g',name:'Rob Mancini',    num:'11',team:'sa', pos:'LF',avg:.266,hr:1, rbi:7, h:30,ab:113,r:7, bb:10,slg:.310,ops:.576,log:[]},
-  {id:'p10h',name:'Sal Benedetto',  num:'44',team:'sa', pos:'CF',avg:.309,hr:3, rbi:13,h:35,ab:113,r:10,bb:6, slg:.451,ops:.760,log:[]},
-  {id:'p10i',name:'Nick Catalano',  num:'15',team:'sa', pos:'SS',avg:.283,hr:2, rbi:9, h:32,ab:113,r:8, bb:7, slg:.354,ops:.637,log:[]},
-  {id:'p10j',name:'Mike Ferrara',   num:'51',team:'sa', pos:'2B',avg:.325,hr:3, rbi:14,h:37,ab:114,r:11,bb:5, slg:.465,ops:.790,log:[]},
-  {id:'p10k',name:'Dom Rizzo',      num:'38',team:'sa', pos:'1B',avg:.294,hr:4, rbi:15,h:33,ab:112,r:9, bb:6, slg:.429,ops:.723,log:[]},
-  // ── KI extra ────────────────────────────────────────────
-  {id:'p15b',name:'Kevin Park',     num:'31',team:'ki', pos:'LF',avg:.410,hr:7, rbi:24,h:41,ab:100,r:17,bb:9, slg:.620,ops:1.030,log:[]},
-  {id:'p15c',name:'Sam Levy',       num:'44',team:'ki', pos:'2B',avg:.348,hr:3, rbi:13,h:35,ab:101,r:13,bb:7, slg:.475,ops:.823,log:[]},
-  {id:'p15d',name:'Eric Goldstein', num:'22',team:'ki', pos:'C', avg:.301,hr:2, rbi:10,h:30,ab:100,r:9, bb:8, slg:.380,ops:.681,log:[]},
-  {id:'p15e',name:'Mark Kessler',   num:'9', team:'ki', pos:'CF',avg:.329,hr:4, rbi:15,h:33,ab:100,r:12,bb:6, slg:.490,ops:.819,log:[]},
-  {id:'p15f',name:'Josh Rubin',     num:'16',team:'ki', pos:'1B',avg:.288,hr:2, rbi:9, h:29,ab:101,r:8, bb:9, slg:.356,ops:.644,log:[]},
-  {id:'p15g',name:'Aaron Berg',     num:'38',team:'ki', pos:'RF',avg:.315,hr:3, rbi:12,h:32,ab:102,r:10,bb:5, slg:.441,ops:.756,log:[]},
-  {id:'p15h',name:'Eli Rosen',      num:'7', team:'ki', pos:'DH',avg:.345,hr:5, rbi:18,h:35,ab:101,r:13,bb:7, slg:.545,ops:.890,log:[]},
-  {id:'p15i',name:'Max Friedman',   num:'23',team:'ki', pos:'3B',avg:.272,hr:1, rbi:7, h:27,ab:99, r:7, bb:8, slg:.313,ops:.591,log:[]},
-  {id:'p15j',name:'Nat Bloom',      num:'52',team:'ki', pos:'P', avg:.255,hr:1, rbi:5, h:26,ab:102,r:6, bb:10,slg:.294,ops:.554,log:[]},
-  // ── BOB extra ───────────────────────────────────────────
-  {id:'p20b',name:'Bobby Marchetti',num:'17',team:'bob',pos:'LF',avg:.388,hr:9, rbi:28,h:42,ab:108,r:18,bb:8, slg:.630,ops:1.018,log:[]},
-  {id:'p20c',name:'Tony Greco',     num:'24',team:'bob',pos:'SS',avg:.342,hr:4, rbi:15,h:37,ab:108,r:13,bb:7, slg:.491,ops:.833,log:[]},
-  {id:'p20d',name:'Chris Rosario',  num:'8', team:'bob',pos:'2B',avg:.310,hr:2, rbi:10,h:33,ab:107,r:10,bb:6, slg:.393,ops:.703,log:[]},
-  {id:'p20e',name:'Frank Morales',  num:'41',team:'bob',pos:'C', avg:.285,hr:1, rbi:8, h:30,ab:105,r:8, bb:9, slg:.333,ops:.618,log:[]},
-  {id:'p20f',name:'Sal Bianco',     num:'33',team:'bob',pos:'CF',avg:.318,hr:3, rbi:13,h:34,ab:107,r:11,bb:5, slg:.439,ops:.757,log:[]},
-  {id:'p20g',name:'Mike Fiore',     num:'55',team:'bob',pos:'1B',avg:.299,hr:2, rbi:9, h:32,ab:107,r:9, bb:7, slg:.374,ops:.673,log:[]},
-  {id:'p20h',name:'Dom Palombo',    num:'14',team:'bob',pos:'RF',avg:.275,hr:1, rbi:6, h:29,ab:106,r:7, bb:8, slg:.311,ops:.586,log:[]},
-  {id:'p20i',name:'Richie Coppola', num:'29',team:'bob',pos:'DH',avg:.332,hr:4, rbi:14,h:36,ab:108,r:12,bb:6, slg:.481,ops:.813,log:[]},
-  {id:'p20j',name:'Joe Pellegrino', num:'3', team:'bob',pos:'3B',avg:.262,hr:1, rbi:5, h:28,ab:107,r:6, bb:9, slg:.299,ops:.561,log:[]},
-  {id:'p20k',name:'Vince DeLuca',   num:'37',team:'bob',pos:'P', avg:.240,hr:0, rbi:4, h:26,ab:108,r:5, bb:11,slg:.259,ops:.499,log:[]},
-  // ── TBIR extra ──────────────────────────────────────────
-  {id:'p25b',name:'Tom Birnbaum',   num:'14',team:'tbir',pos:'CF',avg:.395,hr:8, rbi:26,h:45,ab:114,r:19,bb:9, slg:.614,ops:1.004,log:[]},
-  {id:'p25c',name:'Jake Robbins',   num:'22',team:'tbir',pos:'LF',avg:.348,hr:4, rbi:16,h:40,ab:115,r:14,bb:7, slg:.487,ops:.835,log:[]},
-  {id:'p25d',name:'Kyle Weiss',     num:'7', team:'tbir',pos:'SS',avg:.312,hr:2, rbi:11,h:36,ab:115,r:11,bb:8, slg:.391,ops:.699,log:[]},
-  {id:'p25e',name:'Abe Stern',      num:'35',team:'tbir',pos:'1B',avg:.329,hr:3, rbi:14,h:38,ab:115,r:12,bb:6, slg:.452,ops:.768,log:[]},
-  {id:'p25f',name:'Dan Horowitz',   num:'18',team:'tbir',pos:'2B',avg:.291,hr:1, rbi:8, h:33,ab:113,r:8, bb:9, slg:.336,ops:.627,log:[]},
-  {id:'p25g',name:'Neil Marks',     num:'46',team:'tbir',pos:'C', avg:.278,hr:2, rbi:9, h:32,ab:115,r:7, bb:8, slg:.339,ops:.617,log:[]},
-  {id:'p25h',name:'Phil Grossman',  num:'11',team:'tbir',pos:'RF',avg:.305,hr:3, rbi:12,h:35,ab:115,r:10,bb:5, slg:.426,ops:.731,log:[]},
-  {id:'p25i',name:'Russ Lipman',    num:'27',team:'tbir',pos:'DH',avg:.341,hr:5, rbi:17,h:39,ab:114,r:13,bb:7, slg:.535,ops:.876,log:[]},
-  {id:'p25j',name:'Hank Segal',     num:'53',team:'tbir',pos:'3B',avg:.265,hr:1, rbi:6, h:30,ab:113,r:6, bb:10,slg:.301,ops:.571,log:[]},
-  {id:'p25k',name:'Lou Shapiro',    num:'4', team:'tbir',pos:'P', avg:.249,hr:0, rbi:4, h:28,ab:112,r:5, bb:12,slg:.268,ops:.518,log:[]},
-  // ── AJ extra ────────────────────────────────────────────
-  {id:'p30b',name:'Al Jacobs',      num:'22',team:'aj', pos:'CF',avg:.377,hr:8, rbi:24,h:43,ab:114,r:17,bb:8, slg:.596,ops:.973,log:[]},
-  {id:'p30c',name:'Barry Kahn',     num:'15',team:'aj', pos:'SS',avg:.325,hr:3, rbi:12,h:37,ab:114,r:12,bb:7, slg:.447,ops:.772,log:[]},
-  {id:'p30d',name:'Carl Freed',     num:'41',team:'aj', pos:'2B',avg:.298,hr:2, rbi:9, h:34,ab:114,r:9, bb:9, slg:.368,ops:.666,log:[]},
-  {id:'p30e',name:'Dave Stein',     num:'8', team:'aj', pos:'LF',avg:.315,hr:3, rbi:13,h:36,ab:114,r:11,bb:6, slg:.439,ops:.755,log:[]},
-  {id:'p30f',name:'Ed Kaplan',      num:'30',team:'aj', pos:'1B',avg:.285,hr:1, rbi:7, h:32,ab:112,r:7, bb:8, slg:.330,ops:.615,log:[]},
-  {id:'p30g',name:'Fred Ruben',     num:'19',team:'aj', pos:'C', avg:.271,hr:1, rbi:6, h:31,ab:114,r:6, bb:9, slg:.307,ops:.578,log:[]},
-  {id:'p30h',name:'Gary Moss',      num:'44',team:'aj', pos:'RF',avg:.302,hr:2, rbi:10,h:34,ab:113,r:9, bb:5, slg:.389,ops:.694,log:[]},
-  {id:'p30i',name:'Hal Becker',     num:'26',team:'aj', pos:'DH',avg:.338,hr:4, rbi:15,h:39,ab:115,r:12,bb:7, slg:.504,ops:.842,log:[]},
-  {id:'p30j',name:'Ira Golden',     num:'5', team:'aj', pos:'3B',avg:.261,hr:1, rbi:5, h:30,ab:115,r:6, bb:10,slg:.296,ops:.557,log:[]},
-  {id:'p30k',name:'Jay Silver',     num:'38',team:'aj', pos:'P', avg:.244,hr:0, rbi:4, h:28,ab:115,r:5, bb:11,slg:.261,ops:.501,log:[]},
-  // ── TSMC extra ──────────────────────────────────────────
-  {id:'p35b',name:'Rob Zwick',      num:'12',team:'tsmc',pos:'CF',avg:.362,hr:6, rbi:21,h:41,ab:113,r:16,bb:8, slg:.566,ops:.934,log:[]},
-  {id:'p35c',name:'Lenny Gross',    num:'28',team:'tsmc',pos:'LF',avg:.318,hr:3, rbi:12,h:36,ab:113,r:11,bb:7, slg:.442,ops:.760,log:[]},
-  {id:'p35d',name:'Marty Korn',     num:'44',team:'tsmc',pos:'SS',avg:.288,hr:2, rbi:8, h:32,ab:111,r:8, bb:9, slg:.351,ops:.640,log:[]},
-  {id:'p35e',name:'Norm Seidel',    num:'7', team:'tsmc',pos:'2B',avg:.305,hr:1, rbi:9, h:34,ab:112,r:9, bb:6, slg:.366,ops:.672,log:[]},
-  {id:'p35f',name:'Oscar Reich',    num:'33',team:'tsmc',pos:'1B',avg:.279,hr:2, rbi:7, h:31,ab:111,r:7, bb:8, slg:.333,ops:.612,log:[]},
-  {id:'p35g',name:'Paul Stein',     num:'17',team:'tsmc',pos:'C', avg:.261,hr:1, rbi:5, h:29,ab:111,r:6, bb:9, slg:.297,ops:.557,log:[]},
-  {id:'p35h',name:'Quincy Blum',    num:'49',team:'tsmc',pos:'RF',avg:.298,hr:2, rbi:9, h:33,ab:111,r:8, bb:5, slg:.369,ops:.667,log:[]},
-  {id:'p35i',name:'Rich Herman',    num:'21',team:'tsmc',pos:'DH',avg:.334,hr:4, rbi:14,h:37,ab:111,r:11,bb:7, slg:.495,ops:.829,log:[]},
-  {id:'p35j',name:'Steve Nathan',   num:'55',team:'tsmc',pos:'3B',avg:.255,hr:1, rbi:4, h:28,ab:110,r:5, bb:10,slg:.291,ops:.551,log:[]},
-  {id:'p35k',name:'Todd Felder',    num:'8', team:'tsmc',pos:'P', avg:.238,hr:0, rbi:3, h:26,ab:109,r:4, bb:11,slg:.257,ops:.497,log:[]},
-  // ── BSMC extra ──────────────────────────────────────────
-  {id:'p40b',name:'Andy Katz',      num:'18',team:'bsmc',pos:'CF',avg:.355,hr:5, rbi:18,h:40,ab:113,r:15,bb:7, slg:.540,ops:.895,log:[]},
-  {id:'p40c',name:'Bob Weiner',     num:'34',team:'bsmc',pos:'LF',avg:.312,hr:3, rbi:12,h:35,ab:112,r:11,bb:8, slg:.438,ops:.750,log:[]},
-  {id:'p40d',name:'Chuck Levy',     num:'9', team:'bsmc',pos:'SS',avg:.281,hr:2, rbi:8, h:31,ab:110,r:8, bb:9, slg:.336,ops:.617,log:[]},
-  {id:'p40e',name:'Dan Berman',     num:'43',team:'bsmc',pos:'2B',avg:.299,hr:1, rbi:7, h:33,ab:110,r:7, bb:6, slg:.355,ops:.654,log:[]},
-  {id:'p40f',name:'Ed Sachs',       num:'26',team:'bsmc',pos:'1B',avg:.271,hr:2, rbi:9, h:30,ab:111,r:6, bb:8, slg:.324,ops:.595,log:[]},
-  {id:'p40g',name:'Frank Gould',    num:'11',team:'bsmc',pos:'C', avg:.255,hr:1, rbi:5, h:28,ab:110,r:5, bb:9, slg:.291,ops:.546,log:[]},
-  {id:'p40h',name:'Glen Epstein',   num:'46',team:'bsmc',pos:'RF',avg:.292,hr:2, rbi:8, h:32,ab:110,r:8, bb:5, slg:.355,ops:.650,log:[]},
-  {id:'p40i',name:'Hal Brody',      num:'22',team:'bsmc',pos:'DH',avg:.325,hr:4, rbi:14,h:36,ab:111,r:10,bb:7, slg:.477,ops:.802,log:[]},
-  {id:'p40j',name:'Ivan Gross',     num:'57',team:'bsmc',pos:'3B',avg:.247,hr:1, rbi:4, h:27,ab:109,r:4, bb:10,slg:.284,ops:.544,log:[]},
-  {id:'p40k',name:'Joel Stern',     num:'4', team:'bsmc',pos:'P', avg:.231,hr:0, rbi:3, h:25,ab:108,r:3, bb:11,slg:.250,ops:.481,log:[]},
+    // Map teams
+    TEAMS = teams.map(t => ({
+      id: t.id, name: t.name, short: t.short, div: t.div, color: t.color,
+      w: t.w, l: t.l, pct: parseFloat(t.pct), gb: t.gb, streak: t.streak,
+      rs: t.rs, ra: t.ra, founded: t.founded, field: t.field
+    }));
 
-];
+    HIST_TEAMS = histTeams.map(t => ({
+      id: t.id, name: t.name, short: t.short, color: t.color,
+      w: t.w, l: t.l, pct: parseFloat(t.pct), gb: t.gb, streak: t.streak,
+      rs: t.rs, ra: t.ra
+    }));
 
-const SCHEDULE_PREVIEW = [
-  {wk:5,date:'May 15',day:'Mon',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'SA',  home:'KI',   as:11,hs:6, done:true},
-  {wk:5,date:'May 15',day:'Mon',time:'8:15 PM',field:'Mondauk 5', addr:'1451 Dillon Rd, Ambler PA',        away:'TSMC',home:'BOB',  as:4, hs:9, done:true},
-  {wk:6,date:'May 22',day:'Mon',time:'7:00 PM',field:'Mondauk 4', addr:'1451 Dillon Rd, Ambler PA',        away:'AJ',  home:'TBIR', as:4, hs:7, done:true},
-  {wk:6,date:'May 22',day:'Mon',time:'8:15 PM',field:'Warwick',   addr:'2301 Dark Hollow Rd, Jamison PA',  away:'GOLD',home:'BSMC', as:15,hs:3, done:true},
-  {wk:7,date:'May 29',day:'Tue',time:'7:30 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',        away:'BOB', home:'SA',   as:9, hs:10,done:true},
-  {wk:7,date:'May 29',day:'Tue',time:'8:45 PM',field:'Horsham',   addr:'308 Cedar Hill Rd, Ambler PA',     away:'KI',  home:'AJ',   as:8, hs:5, done:true},
-  {wk:8,date:'Jun 5', day:'Mon',time:'7:00 PM',field:'Mondauk 4', addr:'1451 Dillon Rd, Ambler PA',        away:'GOLD',home:'TBIR', as:null,hs:null,done:false},
-  {wk:8,date:'Jun 5', day:'Mon',time:'8:15 PM',field:'Warwick',   addr:'2301 Dark Hollow Rd, Jamison PA',  away:'SA',  home:'AJ',   as:null,hs:null,done:false},
-  {wk:9,date:'Jun 12',day:'Mon',time:'7:00 PM',field:'Horsham',   addr:'308 Cedar Hill Rd, Ambler PA',     away:'KI',  home:'BSMC', as:null,hs:null,done:false},
-  {wk:9,date:'Jun 12',day:'Mon',time:'8:15 PM',field:'Plymouth',  addr:'2919 Walton Rd, Plymouth Mtg PA',  away:'BOB', home:'TSMC', as:null,hs:null,done:false},
-];
+    ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
 
-const RECAPS = [
-  {date:'May 29',wk:7,away:'BOB',home:'SA',as:9,hs:10,field:'Sunnybrook · Elkins Park',
-   text:`In one of the most dramatic finishes of the young season, Shir Ami walked off BOB in extra innings at Sunnybrook Field, 10-9, on a bases-loaded single by Pete DiNunzio in the bottom of the eighth. BOB had taken a 9-7 lead in the top of the seventh on a two-run shot by Bobby Marchetti — his ninth of the year — that silenced what had been a raucous crowd along the first base line. But SA refused to fold. Carlos Rivera led off the bottom half with a sharp single up the middle, and Tony DeLuca followed with a double off the wall in left-center to set the table. After a pitching change, DiNunzio worked a 2-0 count before slapping a low line drive into right field that scored two runs to tie it. The winning run came an inning later, when Rivera singled, stole second, and scored on DiNunzio's walk-off hit. Shir Ami's fifth straight win keeps them atop the East Division at 9-5.`,
-   stars:['Pete DiNunzio · 3-5, 2 RBI, walk-off single','Carlos Rivera · 3-4, HR, 3 RBI','Bobby Marchetti · 2-4, HR, 2 RBI (BOB)']},
-  {date:'May 29',wk:7,away:'KI',home:'AJ',as:8,hs:5,field:'Horsham · Ambler',
-   text:`KI used a five-run fourth inning to put away a stubborn AJ squad at Horsham Field, 8-5. Kevin Park was the catalyst in that decisive frame, crushing a three-run homer to deep left that put KI ahead for good at 6-4. It was Park's seventh home run of the season, cementing his status as one of the most feared hitters in the East Division. Brian Kim chipped in a two-run double earlier in the inning. AJ's Al Jacobs gave the home side a chance, going 2-for-4 with a solo home run in the sixth, but KI's pitching buckled down and retired the next seven batters in a row to secure the win. The victory pulls KI back to .500 at 8-7 and into contention for a playoff spot.`,
-   stars:['Kevin Park · 3-4, HR, 3 RBI','Brian Kim · 2-4, 2B, 2 RBI','Al Jacobs · 2-4, HR (AJ)']},
-  {date:'May 22',wk:6,away:'GOLD',home:'BSMC',as:15,hs:3,field:'Warwick · Jamison',
-   text:`Josh Weinberg put on a performance for the ages at Warwick Field on Monday night, going 4-for-4 with two home runs and five RBI as Goldsteins dismantled BSMC 15-3 in a game that was all but decided by the third inning. Weinberg's first shot — a no-doubt blast over the left-center wall — came in the first with two men on and gave GOLD an immediate 3-0 cushion. By the time his second homer cleared the fence in the fourth, the crowd gathering along the hill in right had already started talking playoff seeding. Mike Goldstein added three hits of his own, including a two-run double in the fifth that pushed the lead past ten. BSMC's Frank Rosario had a respectable night at the plate going 2-for-3, but had virtually no support. The mercy discussion was real by the sixth. GOLD's win streak hits three.`,
-   stars:['Josh Weinberg · 4-4, 2 HR, 5 RBI','Mike Goldstein · 3-4, 2B, 2 RBI','Aaron Rosen · 2-3, 3B, 1 RBI']},
-  {date:'May 22',wk:6,away:'AJ',home:'TBIR',as:4,hs:7,field:'Mondauk 4 · Ambler',
-   text:`Tom Birnbaum carried TBIR on his back at Mondauk 4 on a cool May evening, launching two home runs and driving in three as TBIR snapped their two-game skid with a 7-4 win over AJ. Birnbaum's first blast came in the second inning with nobody on, a solo shot that set the tone. His second — a two-run laser in the fifth — all but ended it. AJ's Joe Friedman provided a moment to remember in the third, crushing a two-run shot that briefly tied the game at 3-3, but TBIR answered with four unanswered runs to put it away. Mark Birnbaum (no relation) continued his solid season at shortstop, adding two hits and a run scored. TBIR now sit at 6-9 with the playoffs still within reach if they can string together a few more results.`,
-   stars:['Tom Birnbaum · 3-4, 2 HR, 3 RBI','Mark Birnbaum · 2-4, R','Joe Friedman · 2-4, HR, 2 RBI (AJ)']},
-];
+    // Map players
+    PLAYERS = players.map(p => ({
+      id: p.id, name: p.name, num: p.num, team: p.team_id, pos: p.pos,
+      avg: parseFloat(p.avg), hr: p.hr, rbi: p.rbi, h: p.h, ab: p.ab,
+      r: p.r, bb: p.bb, slg: parseFloat(p.slg), ops: parseFloat(p.ops), log: []
+    }));
 
-const HISTORY = [
-  {yr:2024,champ:'Shir Ami', short:'SA',  runner:'KI',  rec:'9-6', pct:'.600',hr:8, mvp:'Carlos Rivera',  champ_team:'sa'},
-  {yr:2023,champ:'Goldsteins',short:'GOLD',runner:'BOB',rec:'11-4',pct:'.733',hr:14,mvp:'Mike Goldstein', champ_team:'gold'},
-  {yr:2022,champ:'KI',       short:'KI',  runner:'SA',  rec:'10-5',pct:'.667',hr:12,mvp:'Brian Kim',      champ_team:'ki'},
-  {yr:2021,champ:'BOB',      short:'BOB', runner:'TSMC',rec:'9-6', pct:'.600',hr:9, mvp:'Bobby Marchetti',champ_team:'bob'},
-  {yr:2020,champ:'Shir Ami', short:'SA',  runner:'AJ',  rec:'8-4', pct:'.667',hr:11,mvp:'Tony DeLuca',    champ_team:'sa'},
-  {yr:2019,champ:'Beth Am',  short:'BA',  runner:'SA',  rec:'12-3',pct:'.800',hr:15,mvp:'D. Schwartz',    champ_team:null},
-  {yr:2018,champ:'Shir Ami', short:'SA',  runner:'GOLD',rec:'10-5',pct:'.667',hr:13,mvp:'Ray Kowalski',   champ_team:'sa'},
-  {yr:2017,champ:'Shir Ami', short:'SA',  runner:'KI',  rec:'11-4',pct:'.733',hr:14,mvp:'Pete DiNunzio',  champ_team:'sa'},
-  {yr:2016,champ:'KI',       short:'KI',  runner:'TBIR',rec:'9-6', pct:'.600',hr:10,mvp:'Kevin Park',     champ_team:'ki'},
-  {yr:2015,champ:'Goldsteins',short:'GOLD',runner:'BOB',rec:'10-5',pct:'.667',hr:12,mvp:'Josh Weinberg',  champ_team:'gold'},
-  {yr:2014,champ:'TBIR',     short:'TBIR',runner:'SA',  rec:'8-7', pct:'.533',hr:9, mvp:'Tom Birnbaum',   champ_team:'tbir'},
-  {yr:2013,champ:'BOB',      short:'BOB', runner:'KI',  rec:'11-4',pct:'.733',hr:13,mvp:'Orlando Fuentes',champ_team:'bob'},
-  {yr:2012,champ:'Shir Ami', short:'SA',  runner:'GOLD',rec:'10-5',pct:'.667',hr:11,mvp:'Ray Kowalski',   champ_team:'sa'},
-  {yr:2011,champ:'KI',       short:'KI',  runner:'AJ',  rec:'9-6', pct:'.600',hr:10,mvp:'Brian Kim',      champ_team:'ki'},
-  {yr:2010,champ:'Goldsteins',short:'GOLD',runner:'SA', rec:'10-5',pct:'.667',hr:12,mvp:'David Levy',     champ_team:'gold'},
-];
+    // Map games -> SCHEDULE_PREVIEW format
+    SCHEDULE_PREVIEW = games.map(g => ({
+      wk: g.wk, date: g.date, day: g.day, time: g.time,
+      field: g.field, addr: g.addr,
+      away: TEAMS.find(t=>t.id===g.away)?.short || g.away,
+      home: TEAMS.find(t=>t.id===g.home)?.short || g.home,
+      as: g.away_score, hs: g.home_score, done: g.done
+    }));
+
+    // Map recaps
+    RECAPS = recaps.map(r => ({
+      date: r.date, wk: r.wk, away: r.away.toUpperCase(), home: r.home.toUpperCase(),
+      as: r.away_score, hs: r.home_score, field: r.field,
+      text: r.text, stars: Array.isArray(r.stars) ? r.stars : JSON.parse(r.stars||'[]')
+    }));
+
+    // Map history
+    HISTORY = history.map(h => ({
+      yr: h.yr, champ: h.champ, short: h.short, runner: h.runner,
+      rec: h.rec, pct: h.pct, hr: h.hr, mvp: h.mvp, champ_team: h.champ_team
+    }));
+
+    // Map calendars
+    TEAM_CALENDARS_DB = {};
+    calendars.forEach(c => { TEAM_CALENDARS_DB[c.team_id] = c.calendar_url; });
+
+    console.log('✓ All data loaded from Supabase');
+    return true;
+  } catch(err) {
+    console.error('Supabase load failed, using fallback:', err);
+    loadFallbackData();
+    return false;
+  }
+}
+
+// Fallback hardcoded data in case Supabase is unreachable
+function loadFallbackData() {
+  TEAMS = [
+    {id:'gold',name:"Goldstein's",short:'GOLD',div:'East',color:'#F5C842',w:9,l:6,pct:.600,gb:'—',streak:'W3',rs:142,ra:118,founded:2003,field:'Mondauk 4'},
+    {id:'sa',  name:'Shir Ami',   short:'SA',  div:'East',color:'#4ade80',w:9,l:5,pct:.643,gb:'—',streak:'W5',rs:158,ra:102,founded:2002,field:'Southampton'},
+    {id:'ki',  name:'Keneseth Israel',short:'KI',div:'East',color:'#60a5fa',w:8,l:7,pct:.533,gb:2, streak:'L1',rs:131,ra:124,founded:2004,field:'Mondauk 5'},
+    {id:'bob', name:'Beth Or Blue',  short:'BOB',div:'West',color:'#f87171',w:7,l:8,pct:.467,gb:2, streak:'W2',rs:121,ra:130,founded:2005,field:'Sunnybrook'},
+    {id:'tbir',name:'Tifereth Bet Israel Royals',short:'TBIR',div:'West',color:'#c084fc',w:6,l:9,pct:.400,gb:3, streak:'L2',rs:118,ra:141,founded:2003,field:'Warwick'},
+    {id:'aj',  name:'Adath Jeshurun',short:'AJ', div:'West',color:'#fb923c',w:5,l:9,pct:.357,gb:4, streak:'L1',rs:109,ra:138,founded:2006,field:'Plymouth'},
+    {id:'tsmc',name:'Temple Sinai Mens Club',short:'TSMC',div:'East',color:'#2dd4bf',w:5,l:10,pct:.333,gb:4,streak:'W1',rs:105,ra:149,founded:2007,field:'Horsham'},
+    {id:'bsmc',name:'Beth Sholom Mens Club',short:'BSMC',div:'West',color:'#f472b6',w:4,l:11,pct:.267,gb:5,streak:'L3',rs:98, ra:158,founded:2008,field:'Ridgeway'},
+  ];
+  HIST_TEAMS = [
+    {id:'ba',color:'#facc15',name:'Beth Am',short:'BA',w:8,l:7,pct:.533,gb:'1',streak:'—',rs:120,ra:118},
+    {id:'boo',color:'#a3e635',name:'Beth Or Orange',short:'BOO',w:7,l:7,pct:.500,gb:'1.5',streak:'—',rs:118,ra:118},
+    {id:'ti',color:'#e879f9',name:'Temple Israel',short:'TI',w:10,l:5,pct:.667,gb:'0',streak:'—',rs:148,ra:105},
+    {id:'ka',color:'#34d399',name:'Kol Ami',short:'KA',w:6,l:9,pct:.400,gb:'3',streak:'—',rs:108,ra:129},
+    {id:'gjc',color:'#38bdf8',name:'Glenside JCC',short:'GJC',w:9,l:6,pct:.600,gb:'0',streak:'—',rs:138,ra:112},
+    {id:'bsb',color:'#818cf8',name:'Beth Sholom Blue',short:'BSB',w:5,l:10,pct:.333,gb:'4',streak:'—',rs:99,ra:140},
+    {id:'os',color:'#e2e8f0',name:'Or Shalom',short:'OS',w:3,l:12,pct:.200,gb:'6',streak:'—',rs:88,ra:165},
+    {id:'bami',color:'#fb923c',name:'Beth Am Marlins',short:'BAMI',w:4,l:11,pct:.267,gb:'5',streak:'—',rs:95,ra:152},
+    {id:'tbi',color:'#a78bfa',name:'TBI Jaguars',short:'TBIJ',w:7,l:8,pct:.467,gb:'2',streak:'—',rs:112,ra:121},
+    {id:'bos',color:'#94a3b8',name:'Beth Or Silver',short:'BOS',w:6,l:9,pct:.400,gb:'3',streak:'—',rs:105,ra:132},
+  ];
+  ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
+  SCHEDULE_PREVIEW = [
+    {wk:5,date:'May 15',day:'Mon',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'SA',home:'KI',as:11,hs:6,done:true},
+    {wk:5,date:'May 15',day:'Mon',time:'8:15 PM',field:'Mondauk 5',addr:'1451 Dillon Rd, Ambler PA',away:'TSMC',home:'BOB',as:4,hs:9,done:true},
+    {wk:6,date:'May 22',day:'Mon',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'AJ',home:'TBIR',as:4,hs:7,done:true},
+    {wk:6,date:'May 22',day:'Mon',time:'8:15 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'GOLD',home:'BSMC',as:15,hs:3,done:true},
+    {wk:7,date:'May 29',day:'Tue',time:'7:30 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',away:'BOB',home:'SA',as:9,hs:10,done:true},
+    {wk:7,date:'May 29',day:'Tue',time:'8:45 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'KI',home:'AJ',as:8,hs:5,done:true},
+    {wk:8,date:'Jun 5',day:'Mon',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'GOLD',home:'TBIR',as:null,hs:null,done:false},
+    {wk:8,date:'Jun 5',day:'Mon',time:'8:15 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'SA',home:'AJ',as:null,hs:null,done:false},
+    {wk:9,date:'Jun 12',day:'Mon',time:'7:00 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'KI',home:'BSMC',as:null,hs:null,done:false},
+    {wk:9,date:'Jun 12',day:'Mon',time:'8:15 PM',field:'Plymouth',addr:'2919 Walton Rd, Plymouth Mtg PA',away:'BOB',home:'TSMC',as:null,hs:null,done:false},
+  ];
+  HISTORY = [
+    {yr:2024,champ:'Shir Ami',short:'SA',runner:'KI',rec:'9-6',pct:'.600',hr:8,mvp:'Carlos Rivera',champ_team:'sa'},
+    {yr:2023,champ:'Goldsteins',short:'GOLD',runner:'BOB',rec:'11-4',pct:'.733',hr:14,mvp:'Mike Goldstein',champ_team:'gold'},
+    {yr:2022,champ:'KI',short:'KI',runner:'SA',rec:'10-5',pct:'.667',hr:12,mvp:'Brian Kim',champ_team:'ki'},
+    {yr:2021,champ:'BOB',short:'BOB',runner:'TSMC',rec:'9-6',pct:'.600',hr:9,mvp:'Bobby Marchetti',champ_team:'bob'},
+    {yr:2020,champ:'Shir Ami',short:'SA',runner:'AJ',rec:'8-4',pct:'.667',hr:11,mvp:'Tony DeLuca',champ_team:'sa'},
+    {yr:2019,champ:'Beth Am',short:'BA',runner:'SA',rec:'12-3',pct:'.800',hr:15,mvp:'D. Schwartz',champ_team:null},
+  ];
+  RECAPS = [];
+  PLAYERS = [];
+}
 
 // ════════════════════════════ HELPERS ════════════════════════════════════
 function getTeam(id){return TEAMS.find(t=>t.id===id)}
@@ -3055,7 +2885,7 @@ function buildTeamsBigCards(){
   const grid = document.getElementById('teams-bigcard-grid');
   if(!grid) return;
   grid.innerHTML = TEAMS.map(t => {
-    const calUrl = TEAM_CALENDARS[t.id];
+    const calUrl = TEAM_CALENDARS_DB[t.id] || null;
     const webcalUrl = calUrl ? calUrl.replace('https://','webcal://') : null;
     return `<div class="team-bigcard">
       <div class="team-bigcard-logo" style="background:linear-gradient(160deg,${t.color}22,${t.color}06)">
@@ -3111,7 +2941,7 @@ function loadTeam(teamId){
   // Calendar button in hero
   const calBtn = document.getElementById('team-cal-btn');
   if(calBtn){
-    const calUrl = TEAM_CALENDARS[t.id];
+    const calUrl = TEAM_CALENDARS_DB[t.id] || null;
     if(calUrl){
       // Convert https:// to webcal:// so iPhone/Android prompts to subscribe (not download)
       const webcalUrl = calUrl.replace('https://', 'webcal://');
@@ -3488,10 +3318,17 @@ const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersect
 function observeAll(){document.querySelectorAll('.div-card,.ldr-card,.game-row,.pcard,.recap-card,.hist-row,.tsg-cell').forEach(el=>{el.classList.add('fade-in');io.observe(el)})}
 
 // ════════════════════════════ INIT ═══════════════════════════════════════
-buildTicker();
-buildStandings();
-buildSchedule();
-initNextGame();
+// ── INIT: Load from Supabase then render ──────────────────────
+loadAllData().then(() => {
+  buildTicker();
+  buildStandings();
+  buildSchedule();
+  initNextGame();
+  buildLeaderboard();
+  buildRecaps();
+  buildHistory();
+  setTimeout(observeAll, 100);
+});
 
 // Handle cross-page navigation — check BEFORE hash routing
 (function(){
@@ -3535,10 +3372,7 @@ initNextGame();
     if(ci) ci.style.display='none';
     goPage(hash, hashExtra);
   }
-  buildLeaderboard();
-  buildRecaps();
-  buildHistory();
-  setTimeout(observeAll,100);
+  // Data already loaded above by loadAllData()
 })();
 </script>
 <script>
