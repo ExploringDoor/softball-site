@@ -2236,11 +2236,11 @@ async function loadAllData() {
     const [teams, histTeams, players, games, recaps, history, calendars] = await Promise.all([
       fbFetch('teams', 'name'),
       fbFetch('hist_teams', 'name'),
-      fbFetch('players', 'avg'),
+      fbFetch('players').catch(()=>[]),
       fbFetch('games', 'wk'),
-      fbFetch('recaps', 'wk'),
-      fbFetch('league_history', 'yr'),
-      fbFetch('team_calendars')
+      fbFetch('recaps', 'wk').catch(()=>[]),
+      fbFetch('league_history', 'yr').catch(()=>[]),
+      fbFetch('team_calendars').catch(()=>[])
     ]);
 
     // Map teams — sort by pct desc
@@ -3449,6 +3449,7 @@ function observeAll(){document.querySelectorAll('.div-card,.ldr-card,.game-row,.
 window._dataPromise = loadAllData();
 window._dataPromise.then(() => {
   buildTicker();
+  buildTicker2();
   buildStandings();
   buildHomeSidebar();
   buildSchedule();
@@ -4211,20 +4212,20 @@ function openGameday(away,home,field,time){
   document.getElementById('scPopContent').innerHTML=`
     <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goTeam('${away}')"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away ↗</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goTeam('${away}')"><div class="pop-abbr" style="color:#1a1a1a">${away}</div><div class="pop-role-lbl">Away ↗</div></div>
         <div class="pop-sc-mid">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:var(--gold);letter-spacing:.04em;text-align:center">${time}</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:#1a1a1a;letter-spacing:.04em;text-align:center">${time}</div>
           <div class="pop-badge next">Upcoming</div>
         </div>
-        <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goTeam('${home}')"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home ↗</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goTeam('${home}')"><div class="pop-abbr" style="color:#1a1a1a">${home}</div><div class="pop-role-lbl">Home ↗</div></div>
       </div>
       <div class="pop-meta"><span>📍 ${field}</span></div>
     </div>
     <div class="pop-body">
       <div class="pop-sec-title">Rosters</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${at?.name||away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(awayRoster)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${ht?.name||home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(homeRoster)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${away}')">${at?.name||away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(awayRoster)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${home}')">${ht?.name||home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(homeRoster)}</tbody></table></div>
       </div>
     </div>`;
   openScPop();
