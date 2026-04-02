@@ -2394,9 +2394,17 @@ function goPage(name,extra,skipHistory){
   if(nl) nl.classList.add('active');
   window.scrollTo(0,0);
   if(name==='team'&&extra) loadTeam(extra);
-  if(name==='players'||name==='teams'){buildTeamsBigCards();}
+  if(name==='players'||name==='teams'){
+    buildTeamsBigCards();
+    // If data hasn't loaded yet, rebuild once it does
+    if(!TEAMS.length && window._dataPromise) window._dataPromise.then(()=>buildTeamsBigCards());
+  }
   if(name==='leaders') buildLeadersPage();
-  if(name==='scores') setTimeout(()=>{try{if(!extra)setView('scores');buildScoresNav();renderScores();}catch(e){console.error(e);}},50);
+  if(name==='scores'){
+    const doScores=()=>{try{if(!extra)setView('scores');buildScoresNav();renderScores();}catch(e){console.error(e);}};
+    if(SCHEDULE_PREVIEW.length) setTimeout(doScores,50);
+    else if(window._dataPromise) window._dataPromise.then(()=>setTimeout(doScores,50));
+  }
   if(name==='stats') setTimeout(()=>{try{renderStats();}catch(e){console.error(e);}},50);
   if(name==='standings') setTimeout(()=>{try{buildStandTable(2025);var p=document.getElementById('yr-2025');if(p){document.querySelectorAll('#pg-standings .yr-panel').forEach(x=>x.classList.remove('show'));p.classList.add('show');}var b=document.querySelector('#pg-standings .yr-tab');if(b){document.querySelectorAll('#pg-standings .yr-tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');}}catch(e){console.error(e);}},50);
   if(!skipHistory){
@@ -3423,7 +3431,8 @@ function observeAll(){document.querySelectorAll('.div-card,.ldr-card,.game-row,.
 
 // ════════════════════════════ INIT ═══════════════════════════════════════
 // ── INIT: Load from Supabase then render ──────────────────────
-loadAllData().then(() => {
+window._dataPromise = loadAllData();
+window._dataPromise.then(() => {
   buildTicker();
   buildStandings();
   buildSchedule();
