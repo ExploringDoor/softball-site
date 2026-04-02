@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DVSL Admin — Box Score Entry</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080808;--card:#141416;--card2:#1c1c1f;--border:rgba(255,255,255,.08);
+  --gold:#F5C842;--gold2:#d4a820;--white:#F2F2F2;--muted:rgba(242,242,242,.45);
+  --green:#22c55e;--red:#ef4444;--blue:#60a5fa;--purple:#a78bfa;--orange:#fb923c
+}
+body{background:var(--bg);color:var(--white);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+.nav{background:rgba(8,8,8,.97);border-bottom:1px solid var(--border);padding:0 28px;height:58px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:200}
+.nav-logo{font-weight:900;font-size:20px;letter-spacing:.08em;color:var(--gold);text-transform:uppercase}
+.nav-sub{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+.conn{display:flex;align-items:center;gap:7px;margin-left:auto}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--red)}
+.conn-txt{font-size:12px;color:var(--muted)}
+.wrap{max-width:1120px;margin:0 auto;padding:28px 20px 80px}
+.mode-tabs{display:flex;gap:3px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:24px;width:fit-content}
+.mode-tab{font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:9px 20px;border-radius:7px;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:all .15s}
+.mode-tab.active{background:var(--gold);color:#000}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:16px}
+.card-title{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:16px}
+.card-title span{color:var(--gold)}
+/* UPLOAD */
+.upload-zone{border:2px dashed rgba(245,200,66,.25);border-radius:12px;padding:44px 24px;text-align:center;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.upload-zone:hover{border-color:var(--gold);background:rgba(245,200,66,.04)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+/* WEEK PICKER */
+.week-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.week-btn{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;transition:all .15s;text-align:left;width:100%}
+.week-btn:hover,.week-btn.active{border-color:var(--gold);background:rgba(245,200,66,.06)}
+.week-btn-num{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.week-btn-date{font-size:15px;font-weight:700;color:var(--white);margin-top:1px}
+/* GAME PICKER */
+.game-pick-btn{background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:12px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;transition:all .15s;text-align:left;width:100%;margin-bottom:6px}
+.game-pick-btn:hover,.game-pick-btn.selected{border-color:var(--gold);background:rgba(245,200,66,.06)}
+.gpb-done{font-size:11px;font-weight:700;color:var(--green);background:rgba(34,197,94,.1);border-radius:4px;padding:2px 8px;flex-shrink:0}
+/* SCORE */
+.score-row{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center}
+.score-team{text-align:center}
+.score-name{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+.score-input{width:88px;font-size:44px;font-weight:900;text-align:center;background:var(--card2);border:2px solid var(--border);border-radius:10px;color:var(--white);padding:6px;outline:none;transition:border-color .15s}
+.score-input:focus{border-color:var(--gold)}
+.score-vs{font-size:18px;font-weight:700;color:var(--muted);text-align:center}
+/* LINESCORE */
+.linescore{width:100%;border-collapse:collapse;font-size:13px}
+.linescore th{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:5px 6px;text-align:center;border-bottom:1px solid var(--border)}
+.linescore td{padding:3px 3px;text-align:center}
+.linescore .tn{text-align:left;padding-left:8px;font-weight:700;font-size:13px}
+.linescore input{width:30px;background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--white);font-size:13px;font-weight:700;text-align:center;outline:none}
+.linescore input:focus{border-color:var(--gold)}
+.linescore .tc{font-weight:900;font-size:14px;color:var(--gold)}
+/* TEAMS */
+.teams-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.teams-grid{grid-template-columns:1fr}}
+/* PLAYERS */
+.player-row{background:var(--card2);border:1px solid var(--border);border-radius:8px;margin-bottom:5px}
+.player-row.inactive{opacity:.35}
+.player-top{display:flex;align-items:center;gap:7px;padding:8px 10px}
+.drag-h{color:var(--muted);font-size:14px;cursor:grab;flex-shrink:0}
+.bat-n{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
+.p-name{font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.p-num{font-size:11px;color:var(--muted);flex-shrink:0}
+.p-pos-badge{font-size:10px;font-weight:700;background:rgba(255,255,255,.06);border-radius:3px;padding:1px 5px;flex-shrink:0}
+.p-pos-badge.pitcher{background:rgba(96,165,250,.15);color:var(--blue)}
+.p-play-btn{width:32px;height:18px;border-radius:9px;border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .15s}
+.p-play-btn.on{background:var(--green)}
+.p-play-btn.off{background:rgba(255,255,255,.1)}
+.p-play-btn::after{content:'';position:absolute;width:12px;height:12px;border-radius:50%;background:#fff;top:3px;transition:left .15s}
+.p-play-btn.on::after{left:17px}
+.p-play-btn.off::after{left:3px}
+/* BAT STATS */
+.bat-stats{display:grid;grid-template-columns:repeat(10,1fr);gap:3px;padding:0 8px 8px}
+.sc{display:flex;flex-direction:column;gap:2px}
+.sc label{font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:center}
+.sc input,.sc select{background:rgba(0,0,0,.4);border:1px solid var(--border);border-radius:4px;padding:4px 2px;color:var(--white);font-size:13px;font-weight:700;text-align:center;outline:none;width:100%;transition:border-color .15s}
+.sc input:focus,.sc select:focus{border-color:var(--gold)}
+.sc.c-hr input{color:var(--gold)}
+.sc.c-rbi input{color:var(--blue)}
+.sc.c-e input{color:var(--red)}
+.sc select{font-size:11px;padding:3px 2px}
+.sc select option{background:#1c1c1f}
+/* PITCHER ROWS */
+.pitch-row{background:rgba(96,165,250,.05);border:1px solid rgba(96,165,250,.15);border-radius:8px;margin-bottom:5px;padding:10px}
+.pitch-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.pitch-header select{flex:1;background:var(--card2);border:1px solid rgba(96,165,250,.3);border-radius:6px;padding:7px 10px;color:var(--white);font-size:13px;font-weight:600;outline:none}
+.pitch-header select option{background:#1c1c1f}
+.pitch-stats{display:grid;grid-template-columns:repeat(8,1fr);gap:4px}
+.rm-btn{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);border-radius:5px;color:var(--red);font-size:11px;font-weight:700;padding:4px 8px;cursor:pointer;flex-shrink:0}
+.rm-btn:hover{background:rgba(239,68,68,.25)}
+/* ADD PLAYER */
+.add-player-row{display:flex;gap:8px;align-items:center;margin-top:8px;padding:8px 0;border-top:1px solid var(--border)}
+.add-player-row input{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:6px;padding:7px 10px;color:var(--white);font-size:13px;outline:none;transition:border-color .15s}
+.add-player-row input:focus{border-color:var(--gold)}
+/* FORM */
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.fg input,.fg select,.fg textarea{background:var(--card2);border:1px solid var(--border);border-radius:7px;padding:8px 11px;color:var(--white);font-size:13px;outline:none;transition:border-color .15s;width:100%;font-family:inherit}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:rgba(245,200,66,.5)}
+.fg select option{background:#1c1c1f}
+.fg textarea{resize:vertical;min-height:80px}
+.r2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.r4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+/* BUTTONS */
+.btn-big{background:var(--green);color:#000;font-size:15px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:14px 36px;border-radius:10px;border:none;cursor:pointer;transition:all .15s}
+.btn-big:hover{filter:brightness(1.1)}
+.btn-big:disabled{opacity:.35;cursor:not-allowed}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted);font-size:13px;font-weight:700;padding:10px 20px;border-radius:8px;cursor:pointer}
+.btn-ghost:hover{border-color:rgba(255,255,255,.2);color:var(--white)}
+.btn-add{background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.25);color:var(--gold);font-size:12px;font-weight:700;padding:6px 14px;border-radius:6px;cursor:pointer}
+.btn-add:hover{background:rgba(245,200,66,.18)}
+.btn-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.new-badge{background:rgba(167,139,250,.15);border:1px solid rgba(167,139,250,.3);border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700;color:var(--purple);margin-left:4px}
+/* LOG + SUCCESS */
+.log-box{background:#000;border:1px solid var(--border);border-radius:10px;padding:14px;font-family:monospace;font-size:12px;line-height:1.9;max-height:220px;overflow-y:auto;margin-top:14px;display:none}
+.log-box.show{display:block}
+.l-ok{color:var(--green)}.l-err{color:var(--red)}.l-info{color:var(--blue)}.l-warn{color:var(--gold)}
+.success-box{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:12px;padding:20px 22px;display:none;margin-top:14px;gap:14px;align-items:flex-start}
+.success-box.show{display:flex}
+/* SCORE PREVIEW */
+.sp{display:flex;align-items:center;gap:24px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:16px}
+.sp-team{flex:1;text-align:center}
+.sp-n{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.sp-s{font-size:48px;font-weight:900;line-height:1}
+.sp-s.win{color:var(--gold)}
+.sp-vs{font-size:16px;color:var(--muted);font-weight:700}
+.player-row.over{border-color:var(--gold);background:rgba(245,200,66,.04)}
+.step-dot{width:24px;height:24px;border-radius:50%;background:var(--gold);color:#000;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div><div class="nav-logo">⬡ DVSL Admin</div><div class="nav-sub">Box Score Entry</div></div>
+  <div class="conn"><div class="conn-dot" id="connDot"></div><div class="conn-txt" id="connTxt">Connecting...</div></div>
+</nav>
+<div class="wrap">
+  <div class="mode-tabs">
+    <button class="mode-tab active" onclick="setMode('pdf')">📄 Upload / Paste PDF</button>
+    <button class="mode-tab" onclick="setMode('manual')">✏️ Manual Entry</button>
+  </div>
+
+  <!-- PDF MODE -->
+  <div id="pdf-mode">
+    <!-- STEP 1: Pick Game First -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div class="step-dot">1</div>
+        <div><div style="font-size:15px;font-weight:700">Select the Game</div><div style="font-size:12px;color:var(--muted)">Pick the game this box score is for</div></div>
+      </div>
+      <div class="week-grid" id="pdf-week-grid"></div>
+      <div id="pdf-game-picker" style="display:none;margin-top:12px"></div>
+    </div>
+
+    <!-- STEP 2: Drop PDF -->
+    <div class="card" id="pdf-upload-card" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <div class="step-dot">2</div>
+        <div><div style="font-size:15px;font-weight:700">Drop Box Score PDF</div><div style="font-size:12px;color:var(--muted)" id="pdf-game-label">Game selected</div></div>
+      </div>
+
+      <div class="upload-zone" id="uploadZone"
+        ondragover="event.preventDefault();this.style.borderColor='var(--gold)';this.style.background='rgba(245,200,66,.06)'"
+        ondragleave="this.style.borderColor='';this.style.background=''"
+        ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';handlePdfDrop(event.dataTransfer.files[0])">
+        <input type="file" accept=".pdf" onchange="handlePdfDrop(this.files[0])" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+        <div style="font-size:40px;margin-bottom:12px">📄</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:5px">Drop PDF here or click to browse</div>
+        <div style="font-size:13px;color:var(--muted)">Claude will read it perfectly — no parsing errors</div>
+      </div>
+
+      <!-- Processing state -->
+      <div id="pdf-processing" style="display:none;text-align:center;padding:32px">
+        <div style="font-size:36px;margin-bottom:12px">⏳</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">Claude is reading the box score...</div>
+        <div style="font-size:13px;color:var(--muted)" id="pdf-processing-msg">Extracting text from PDF...</div>
+      </div>
+
+      <!-- Error state -->
+      <div id="pdf-error" style="display:none;margin-top:12px;padding:14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:13px;color:var(--red)" id="pdf-error-msg"></div>
+    </div>
+    <div id="pdf-result" style="display:none">
+      <div class="card">
+        <div class="card-title">✅ Review Before Saving</div>
+        <div id="pdf-score-display"></div>
+        <div class="r3">
+          <div class="fg"><label>Date</label><input id="p-date" placeholder="Jun 5"></div>
+          <div class="fg"><label>Week #</label><input id="p-wk" type="number" placeholder="8"></div>
+          <div class="fg"><label>Field</label><input id="p-field" placeholder="Mondauk 4"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Linescore</div>
+        <div style="overflow-x:auto"><table class="linescore" id="p-linescore">
+          <thead><tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>R</th><th>H</th><th>E</th></tr></thead>
+          <tbody id="p-ls-body"></tbody>
+        </table></div>
+      </div>
+      <div class="teams-grid">
+        <div class="card"><div class="card-title" id="p-at">Away Batting</div><div id="p-ab"></div><div class="add-player-row"><input id="p-add-away" placeholder="Add player name..."><button class="btn-add" onclick="addPdfPlayer('away')">+ Add</button></div></div>
+        <div class="card"><div class="card-title" id="p-ht">Home Batting</div><div id="p-hb"></div><div class="add-player-row"><input id="p-add-home" placeholder="Add player name..."><button class="btn-add" onclick="addPdfPlayer('home')">+ Add</button></div></div>
+      </div>
+      <div class="teams-grid">
+        <div class="card"><div class="card-title" id="p-apt">Away Pitching</div><div id="p-ap"></div><button class="btn-add" onclick="addPitcher('pdf','away')">+ Add Pitcher</button></div>
+        <div class="card"><div class="card-title" id="p-hpt">Home Pitching</div><div id="p-hp"></div><button class="btn-add" onclick="addPitcher('pdf','home')">+ Add Pitcher</button></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📝 Game Recap <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted)">(optional)</span></div>
+        <div class="fg"><textarea id="p-recap" rows="4" placeholder="Write a quick recap..."></textarea></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-ghost" onclick="resetPdf()">← Start Over</button>
+        <button class="btn-big" onclick="submitPdf()" id="p-btn">✓ Save to Firebase & Update Site</button>
+      </div>
+      <div class="log-box" id="p-log"></div>
+      <div class="success-box" id="p-success">
+        <div style="font-size:30px">🎉</div>
+        <div><div style="font-size:16px;font-weight:700;color:var(--green);margin-bottom:3px">Site Updated!</div><div style="font-size:13px;color:var(--muted)" id="p-success-msg"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANUAL MODE -->
+  <div id="manual-mode" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div class="step-dot">1</div><div><div style="font-size:15px;font-weight:700">Select Week</div><div style="font-size:12px;color:var(--muted)">Choose the week you are entering</div></div></div>
+      <div class="week-grid" id="week-grid"></div>
+    </div>
+    <div class="card" id="step2" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px"><div class="step-dot">2</div><div><div style="font-size:15px;font-weight:700" id="step2-title">Select Game</div><div style="font-size:12px;color:var(--muted)">Click the game you are entering</div></div></div>
+      <div id="game-picker"></div>
+    </div>
+    <div id="step3" style="display:none">
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><div class="step-dot">3</div><div><div style="font-size:15px;font-weight:700">Enter Score & Stats</div><div style="font-size:12px;color:var(--muted)" id="game-sub">Loading...</div></div></div>
+        <div class="score-row">
+          <div class="score-team"><div class="score-name" id="m-an">Away</div><input class="score-input" type="number" id="m-as" min="0" max="99" placeholder="0"></div>
+          <div class="score-vs">vs</div>
+          <div class="score-team"><div class="score-name" id="m-hn">Home</div><input class="score-input" type="number" id="m-hs" min="0" max="99" placeholder="0"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Linescore</div>
+        <div style="overflow-x:auto"><table class="linescore">
+          <thead><tr><th></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>R</th><th>H</th><th>E</th></tr></thead>
+          <tbody>
+            <tr><td class="tn" id="m-ls-an">Away</td>
+              <td><input id="mla1" type="number" min="0" max="99"></td><td><input id="mla2" type="number" min="0" max="99"></td>
+              <td><input id="mla3" type="number" min="0" max="99"></td><td><input id="mla4" type="number" min="0" max="99"></td>
+              <td><input id="mla5" type="number" min="0" max="99"></td><td><input id="mla6" type="number" min="0" max="99"></td>
+              <td><input id="mla7" type="number" min="0" max="99"></td>
+              <td class="tc"><input id="mlar" type="number" min="0" max="99" style="color:var(--gold);border-color:rgba(245,200,66,.3)"></td>
+              <td class="tc"><input id="mlah" type="number" min="0" max="99"></td>
+              <td><input id="mlae" type="number" min="0" max="99" style="color:var(--red)"></td>
+            </tr>
+            <tr><td class="tn" id="m-ls-hn">Home</td>
+              <td><input id="mlh1" type="number" min="0" max="99"></td><td><input id="mlh2" type="number" min="0" max="99"></td>
+              <td><input id="mlh3" type="number" min="0" max="99"></td><td><input id="mlh4" type="number" min="0" max="99"></td>
+              <td><input id="mlh5" type="number" min="0" max="99"></td><td><input id="mlh6" type="number" min="0" max="99"></td>
+              <td><input id="mlh7" type="number" min="0" max="99"></td>
+              <td class="tc"><input id="mlhr" type="number" min="0" max="99" style="color:var(--gold);border-color:rgba(245,200,66,.3)"></td>
+              <td class="tc"><input id="mlhh" type="number" min="0" max="99"></td>
+              <td><input id="mlhe" type="number" min="0" max="99" style="color:var(--red)"></td>
+            </tr>
+          </tbody>
+        </table></div>
+      </div>
+      <div class="teams-grid">
+        <div class="card">
+          <div class="card-title" id="m-abt">Away Batting</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Toggle off players not playing · Drag to reorder · Set position in last column</div>
+          <div id="m-ar"></div>
+          <div class="add-player-row"><input id="m-add-away" placeholder="Add player not in roster..."><button class="btn-add" onclick="addManualPlayer('away')">+ Add</button></div>
+        </div>
+        <div class="card">
+          <div class="card-title" id="m-hbt">Home Batting</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Toggle off players not playing · Drag to reorder · Set position in last column</div>
+          <div id="m-hr"></div>
+          <div class="add-player-row"><input id="m-add-home" placeholder="Add player not in roster..."><button class="btn-add" onclick="addManualPlayer('home')">+ Add</button></div>
+        </div>
+      </div>
+      <div class="teams-grid">
+        <div class="card"><div class="card-title" id="m-apt">Away Pitching</div><div id="m-ap"></div><button class="btn-add" onclick="addPitcher('manual','away')">+ Add Pitcher</button></div>
+        <div class="card"><div class="card-title" id="m-hpt">Home Pitching</div><div id="m-hp"></div><button class="btn-add" onclick="addPitcher('manual','home')">+ Add Pitcher</button></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📝 Game Recap <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--muted)">(optional)</span></div>
+        <div class="fg"><textarea id="m-recap" rows="4" placeholder="Write a recap..."></textarea></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-ghost" onclick="backToGames()">← Pick Different Game</button>
+        <button class="btn-big" onclick="submitManual()" id="m-btn">✓ Save to Firebase & Update Site</button>
+      </div>
+      <div class="log-box" id="m-log"></div>
+      <div class="success-box" id="m-success">
+        <div style="font-size:30px">🎉</div>
+        <div><div style="font-size:16px;font-weight:700;color:var(--green);margin-bottom:3px">Site Updated!</div>
+          <div style="font-size:13px;color:var(--muted)" id="m-success-msg"></div>
+          <button class="btn-ghost" style="margin-top:10px;font-size:12px" onclick="resetManual()">+ Enter Another Score</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, addDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey:"AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain:"dvsl-292dd.firebaseapp.com",
+  projectId:"dvsl-292dd",
+  storageBucket:"dvsl-292dd.firebasestorage.app",
+  messagingSenderId:"145862305559",
+  appId:"1:145862305559:web:153ec455bad57e17517952"
+});
+const db = getFirestore(app);
+
+let TEAMS=[], PLAYERS=[], GAMES=[];
+let awayRoster=[], homeRoster=[];
+let selectedGame=null;
+let pdfSelectedGame=null;  // separate selected game for PDF mode
+
+// pdf pitcher lists
+let pdfAwayPitchers=[], pdfHomePitchers=[];
+let manAwayPitchers=[], manHomePitchers=[];
+
+// ── PDF WEEK/GAME PICKER ─────────────────────────────────
+function buildPdfWeeks(){
+  const weeks=[...new Set(GAMES.map(g=>g.wk))].sort((a,b)=>a-b);
+  const grid=document.getElementById('pdf-week-grid');
+  if(!grid)return;
+  grid.innerHTML=weeks.map(wk=>{
+    const wg=GAMES.filter(g=>g.wk===wk);
+    const done=wg.filter(g=>g.done).length;
+    const date=wg[0]?.date||'—';
+    const status=done===wg.length?'#22c55e':done>0?'#F5C842':'rgba(242,242,242,.3)';
+    return `<button class="week-btn" onclick="selectPdfWeek(${wk})" id="pdf-wb${wk}">
+      <div class="week-btn-num">WK ${wk}</div>
+      <div class="week-btn-date">${date}</div>
+      <div style="font-size:10px;margin-top:2px;color:${status}">${done}/${wg.length} done</div>
+    </button>`;
+  }).join('');
+}
+
+window.selectPdfWeek=function(wk){
+  document.querySelectorAll('#pdf-week-grid .week-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`pdf-wb${wk}`)?.classList.add('active');
+  const wg=GAMES.filter(g=>g.wk===wk);
+  const picker=document.getElementById('pdf-game-picker');
+  picker.innerHTML=wg.map(g=>{
+    const away=TEAMS.find(t=>t.id===g.away);
+    const home=TEAMS.find(t=>t.id===g.home);
+    return `<button class="game-pick-btn" onclick="selectPdfGame('${g.id}')" id="pdf-gpb${g.id}">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">${away?.name||g.away||'TBD'} vs ${home?.name||g.home||'TBD'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${g.time||''} · ${g.field||'TBD'}</div>
+      </div>
+      <span style="font-size:12px;color:var(--gold);font-weight:700;flex-shrink:0">${g.time||''}</span>
+      ${g.done?`<span class="gpb-done">✓ ${g.away_score}–${g.home_score}</span>`:''}
+    </button>`;
+  }).join('');
+  picker.style.display='block';
+};
+
+window.selectPdfGame=function(gid){
+  document.querySelectorAll('#pdf-game-picker .game-pick-btn').forEach(b=>b.classList.remove('selected'));
+  document.getElementById(`pdf-gpb${gid}`)?.classList.add('selected');
+  pdfSelectedGame=GAMES.find(g=>g.id===gid);
+  if(!pdfSelectedGame)return;
+  const away=TEAMS.find(t=>t.id===pdfSelectedGame.away);
+  const home=TEAMS.find(t=>t.id===pdfSelectedGame.home);
+  const label=`${away?.name||pdfSelectedGame.away} vs ${home?.name||pdfSelectedGame.home} · ${pdfSelectedGame.date||''} · ${pdfSelectedGame.field||''}`;
+  document.getElementById('pdf-game-label').textContent=label;
+  document.getElementById('pdf-upload-card').style.display='block';
+  document.getElementById('pdf-upload-card').scrollIntoView({behavior:'smooth',block:'nearest'});
+};
+
+// ── PDF DROP HANDLER — uses PDF.js then calls Claude API ──
+window.handlePdfDrop=async function(file){
+  if(!file){return;}
+  if(!pdfSelectedGame){alert('Please select a game first.');return;}
+  if(file.type!=='application/pdf'&&!file.name.endsWith('.pdf')){
+    alert('Please drop a PDF file.');return;
+  }
+
+  const zone=document.getElementById('uploadZone');
+  const proc=document.getElementById('pdf-processing');
+  const errEl=document.getElementById('pdf-error');
+  zone.style.display='none';
+  proc.style.display='block';
+  errEl.style.display='none';
+
+  const away=TEAMS.find(t=>t.id===pdfSelectedGame.away);
+  const home=TEAMS.find(t=>t.id===pdfSelectedGame.home);
+
+  try{
+    // Step 1: Extract text from PDF using PDF.js
+    document.getElementById('pdf-processing-msg').textContent='Extracting text from PDF...';
+    const pdfjsLib=window['pdfjs-dist/build/pdf'];
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const arrayBuffer=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+    let fullText='';
+    for(let i=1;i<=pdf.numPages;i++){
+      const page=await pdf.getPage(i);
+      const content=await page.getTextContent();
+      const pageText=content.items.map(item=>item.str).join(' ');
+      fullText+=pageText+'
+';
+    }
+
+    // Step 2: Send to Claude via Vercel serverless function
+    document.getElementById('pdf-processing-msg').textContent='Claude is reading the box score...';
+    const response=await fetch('/api/parse-boxscore',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        text:fullText,
+        gameId:pdfSelectedGame.id,
+        awayTeam:away?.name||pdfSelectedGame.away,
+        homeTeam:home?.name||pdfSelectedGame.home,
+        awayTeamId:pdfSelectedGame.away,
+        homeTeamId:pdfSelectedGame.home,
+        date:pdfSelectedGame.date||'',
+        week:pdfSelectedGame.wk||0,
+        field:pdfSelectedGame.field||''
+      })
+    });
+
+    const data=await response.json();
+    if(!data.success)throw new Error(data.error||'Claude API failed');
+
+    // Step 3: Write to Firebase
+    document.getElementById('pdf-processing-msg').textContent='Updating Firebase...';
+    const fbRes=await fetch('/api/update-firebase',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        parsed:data.parsed,
+        gameId:pdfSelectedGame.id,
+        awayTeamId:pdfSelectedGame.away,
+        homeTeamId:pdfSelectedGame.home,
+        date:pdfSelectedGame.date||'',
+        week:pdfSelectedGame.wk||0,
+        field:pdfSelectedGame.field||''
+      })
+    });
+
+    const fbData=await fbRes.json();
+    if(!fbData.success)throw new Error(fbData.error||'Firebase update failed');
+
+    // Done! Show success
+    proc.style.display='none';
+    document.getElementById('pdf-result').style.display='block';
+
+    const win=data.parsed.awayScore>data.parsed.homeScore?away?.name:home?.name;
+    document.getElementById('pdf-score-display').innerHTML=`
+      <div class="sp">
+        <div class="sp-team">
+          <div class="sp-n">${away?.name||pdfSelectedGame.away}</div>
+          <div class="sp-s ${data.parsed.awayScore>data.parsed.homeScore?'win':''}">${data.parsed.awayScore}</div>
+        </div>
+        <div class="sp-vs">vs</div>
+        <div class="sp-team">
+          <div class="sp-n">${home?.name||pdfSelectedGame.home}</div>
+          <div class="sp-s ${data.parsed.homeScore>data.parsed.awayScore?'win':''}">${data.parsed.homeScore}</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:14px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px">
+        <div style="font-size:15px;font-weight:700;color:var(--green);margin-bottom:8px">🎉 Site Updated!</div>
+        <div style="font-family:monospace;font-size:12px;line-height:1.8;color:var(--muted)">${(fbData.results||[]).join('<br>')}</div>
+      </div>
+      <button class="btn-ghost" style="margin-top:12px" onclick="resetPdfFull()">+ Enter Another Score</button>`;
+
+  }catch(err){
+    proc.style.display='none';
+    zone.style.display='block';
+    errEl.style.display='block';
+    errEl.textContent='Error: '+err.message;
+  }
+};
+
+window.resetPdfFull=function(){
+  document.getElementById('uploadZone').style.display='block';
+  document.getElementById('pdf-processing').style.display='none';
+  document.getElementById('pdf-result').style.display='none';
+  document.getElementById('pdf-error').style.display='none';
+  pdfSelectedGame=null;
+  document.querySelectorAll('#pdf-week-grid .week-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#pdf-game-picker .game-pick-btn').forEach(b=>b.classList.remove('selected'));
+  document.getElementById('pdf-upload-card').style.display='none';
+  document.getElementById('pdf-game-picker').style.display='none';
+};
+
+async function init(){
+  try{
+    const [ts,ps,gs]=await Promise.all([
+      getDocs(query(collection(db,'teams'),orderBy('name'))),
+      getDocs(collection(db,'players')),
+      getDocs(collection(db,'games'))
+    ]);
+    TEAMS=ts.docs.map(d=>({id:d.id,...d.data()}));
+    PLAYERS=ps.docs.map(d=>({id:d.id,...d.data()}));
+    GAMES=gs.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.wk||0)-(b.wk||0));
+    document.getElementById('connDot').style.background='#22c55e';
+    document.getElementById('connTxt').textContent=`Connected · ${TEAMS.length} teams · ${PLAYERS.length} players`;
+    buildWeeks();
+    buildPdfWeeks();
+  }catch(e){
+    document.getElementById('connDot').style.background='#ef4444';
+    document.getElementById('connTxt').textContent='Connection failed';
+    console.error(e);
+  }
+}
+init();
+
+// ── MODE ──────────────────────────────────────────────────
+window.setMode=m=>{
+  document.getElementById('pdf-mode').style.display=m==='pdf'?'block':'none';
+  document.getElementById('manual-mode').style.display=m==='manual'?'block':'none';
+  document.querySelectorAll('.mode-tab').forEach((t,i)=>t.classList.toggle('active',(m==='pdf'&&i===0)||(m==='manual'&&i===1)));
+};
+
+// ── WEEKS ─────────────────────────────────────────────────
+function buildWeeks(){
+  const weeks=[...new Set(GAMES.map(g=>g.wk))].sort((a,b)=>a-b);
+  document.getElementById('week-grid').innerHTML=weeks.map(wk=>{
+    const wg=GAMES.filter(g=>g.wk===wk);
+    const done=wg.filter(g=>g.done).length;
+    const total=wg.length;
+    const date=wg[0]?.date||'—';
+    const status=done===total?'#22c55e':done>0?'#F5C842':'rgba(242,242,242,.3)';
+    return `<button class="week-btn" onclick="selectWeek(${wk})" id="wb${wk}">
+      <div class="week-btn-num">WK ${wk}</div>
+      <div class="week-btn-date">${date}</div>
+      <div style="font-size:10px;margin-top:2px;color:${status}">${done}/${total} done</div>
+    </button>`;
+  }).join('');
+}
+
+window.selectWeek=wk=>{
+  document.querySelectorAll('.week-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`wb${wk}`)?.classList.add('active');
+  const wg=GAMES.filter(g=>g.wk===wk);
+  document.getElementById('step2-title').textContent=`Week ${wk} Games`;
+  document.getElementById('game-picker').innerHTML=wg.map(g=>{
+    const away=TEAMS.find(t=>t.id===g.away);
+    const home=TEAMS.find(t=>t.id===g.home);
+    return `<button class="game-pick-btn" onclick="selectGame('${g.id}')" id="gpb${g.id}">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">${away?.name||g.away||'TBD'} vs ${home?.name||g.home||'TBD'}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${g.time||''} · ${g.field||'TBD'}</div>
+      </div>
+      <span style="font-size:12px;color:var(--gold);font-weight:700;flex-shrink:0">${g.time||''}</span>
+      ${g.done?`<span class="gpb-done">✓ ${g.away_score}–${g.home_score}</span>`:''}
+    </button>`;
+  }).join('');
+  document.getElementById('step2').style.display='block';
+  document.getElementById('step2').scrollIntoView({behavior:'smooth',block:'nearest'});
+  document.getElementById('step3').style.display='none';
+};
+
+window.selectGame=async gid=>{
+  document.querySelectorAll('.game-pick-btn').forEach(b=>b.classList.remove('selected'));
+  document.getElementById(`gpb${gid}`)?.classList.add('selected');
+  selectedGame=GAMES.find(g=>g.id===gid);
+  if(!selectedGame)return;
+  const away=TEAMS.find(t=>t.id===selectedGame.away);
+  const home=TEAMS.find(t=>t.id===selectedGame.home);
+  document.getElementById('m-an').textContent=away?.name||'Away';
+  document.getElementById('m-hn').textContent=home?.name||'Home';
+  document.getElementById('m-abt').innerHTML=`Away Batting — <span>${away?.name||''}</span>`;
+  document.getElementById('m-hbt').innerHTML=`Home Batting — <span>${home?.name||''}</span>`;
+  document.getElementById('m-apt').innerHTML=`Away Pitching — <span>${away?.name||''}</span>`;
+  document.getElementById('m-hpt').innerHTML=`Home Pitching — <span>${home?.name||''}</span>`;
+  document.getElementById('m-ls-an').textContent=away?.short||'Away';
+  document.getElementById('m-ls-hn').textContent=home?.short||'Home';
+  document.getElementById('game-sub').textContent=`${away?.name||''} vs ${home?.name||''} · ${selectedGame.date||''} · ${selectedGame.field||''}`;
+  // Always start with blank scores — user enters from box score
+  document.getElementById('m-as').value='';
+  document.getElementById('m-hs').value='';
+  if(away) loadRoster('away',away,PLAYERS.filter(p=>p.team===away.id));
+  if(home) loadRoster('home',home,PLAYERS.filter(p=>p.team===home.id));
+  // init pitching sections
+  manAwayPitchers=[];manHomePitchers=[];
+  document.getElementById('m-ap').innerHTML='';
+  document.getElementById('m-hp').innerHTML='';
+  document.getElementById('step3').style.display='block';
+  document.getElementById('step3').scrollIntoView({behavior:'smooth',block:'start'});
+};
+window.backToGames=()=>document.getElementById('step3').style.display='none';
+
+// ── ROSTER ────────────────────────────────────────────────
+function loadRoster(side,team,players){
+  const sorted=[...players].sort((a,b)=>(a.name||'')<(b.name||'')?-1:1);
+  const roster=sorted.map(p=>({player:p,playing:true,stats:{ab:0,r:0,h:0,dbl:0,tpl:0,hr:0,rbi:0,bb:0,so:0,e:0},pos:p.pos||''}));
+  if(side==='away')awayRoster=roster;else homeRoster=roster;
+  renderRoster(side,roster,team.color);
+}
+
+function renderRoster(side,roster,color){
+  const el=document.getElementById(`m-${side==='away'?'ar':'hr'}`);
+  el.innerHTML='';
+  roster.forEach((entry,idx)=>{
+    const p=entry.player;
+    const div=document.createElement('div');
+    div.className=`player-row${entry.playing?'':' inactive'}`;
+    div.draggable=true;div.dataset.idx=idx;div.dataset.side=side;
+    const posOpts=['','P','C','1B','2B','3B','SS','LF','CF','RF','DH','PH','PR'].map(pos=>
+      `<option value="${pos}" ${entry.pos===pos?'selected':''}>${pos||'Pos'}</option>`).join('');
+    div.innerHTML=`
+      <div class="player-top">
+        <span class="drag-h">⠿</span>
+        <span class="bat-n" style="background:${color}18;color:${color};border:1px solid ${color}44">${idx+1}</span>
+        <span class="p-name">${p.name||p.raw||'Unknown'}</span>
+        <span class="p-num">#${p.num||'—'}</span>
+        <button class="p-play-btn ${entry.playing?'on':'off'}" onclick="togglePlay('${side}',${idx},this)"></button>
+      </div>
+      <div class="bat-stats">
+        ${['ab','r','h','dbl','tpl','hr','rbi','bb','so','e'].map(s=>`
+          <div class="sc ${s==='hr'?'c-hr':s==='rbi'?'c-rbi':s==='e'?'c-e':''}">
+            <label>${s==='dbl'?'2B':s==='tpl'?'3B':s.toUpperCase()}</label>
+            <input type="number" min="0" max="99" value="0" oninput="setStat('${side}',${idx},'${s}',this.value)">
+          </div>`).join('')}
+        <div class="sc"><label>Pos</label><select onchange="setPos('${side}',${idx},this.value)">${posOpts}</select></div>
+      </div>`;
+    div.addEventListener('dragstart',dStart);
+    div.addEventListener('dragover',dOver);
+    div.addEventListener('drop',dDrop);
+    div.addEventListener('dragend',()=>document.querySelectorAll('.over').forEach(r=>r.classList.remove('over')));
+    el.appendChild(div);
+  });
+}
+
+window.togglePlay=(side,idx,btn)=>{
+  const r=side==='away'?awayRoster:homeRoster;
+  r[idx].playing=!r[idx].playing;
+  btn.classList.toggle('on',r[idx].playing);
+  btn.classList.toggle('off',!r[idx].playing);
+  btn.closest('.player-row').classList.toggle('inactive',!r[idx].playing);
+};
+window.setStat=(side,idx,s,v)=>{const r=side==='away'?awayRoster:homeRoster;if(r[idx])r[idx].stats[s]=parseFloat(v)||0;};
+window.setPos=(side,idx,v)=>{const r=side==='away'?awayRoster:homeRoster;if(r[idx])r[idx].pos=v;};
+
+window.addManualPlayer=side=>{
+  const inp=document.getElementById(`m-add-${side}`);
+  const name=inp.value.trim();
+  if(!name)return;
+  const roster=side==='away'?awayRoster:homeRoster;
+  const team=TEAMS.find(t=>t.id===(side==='away'?selectedGame?.away:selectedGame?.home));
+  roster.push({player:{name,num:'??',id:null,isNew:true},playing:true,stats:{ab:0,r:0,h:0,dbl:0,tpl:0,hr:0,rbi:0,bb:0,so:0,e:0},pos:''});
+  renderRoster(side,roster,team?.color||'#fff');
+  inp.value='';
+};
+
+// ── DRAG ──────────────────────────────────────────────────
+let dragSrc=null;
+function dStart(){dragSrc=this;}
+function dOver(e){e.preventDefault();document.querySelectorAll('.over').forEach(r=>r.classList.remove('over'));this.classList.add('over');}
+function dDrop(e){
+  e.preventDefault();
+  if(dragSrc===this)return;
+  const side=this.dataset.side;
+  const roster=side==='away'?awayRoster:homeRoster;
+  const from=parseInt(dragSrc.dataset.idx),to=parseInt(this.dataset.idx);
+  const [m]=roster.splice(from,1);roster.splice(to,0,m);
+  const team=TEAMS.find(t=>t.id===(side==='away'?selectedGame?.away:selectedGame?.home));
+  renderRoster(side,roster,team?.color||'#fff');
+}
+
+// ── PITCHERS ──────────────────────────────────────────────
+function pitcherSelectHtml(mode,side,idx,selected=''){
+  const teamId=mode==='pdf'
+    ?(side==='away'?window.pdfState?.awayTeam?.id:window.pdfState?.homeTeam?.id)
+    :(side==='away'?selectedGame?.away:selectedGame?.home);
+  const teamPlayers=PLAYERS.filter(p=>p.team===teamId).sort((a,b)=>a.name<b.name?-1:1);
+  return `<select style="flex:1;background:var(--card2);border:1px solid rgba(96,165,250,.3);border-radius:6px;padding:7px 10px;color:var(--white);font-size:13px;font-weight:600;outline:none" onchange="setPitcherName('${mode}','${side}',${idx},this.value)">
+    <option value="">Select pitcher...</option>
+    ${teamPlayers.map(p=>`<option value="${p.name}" ${p.name===selected?'selected':''}>${p.name} #${p.num||'—'}</option>`).join('')}
+    <option value="__other__">Other / Enter name...</option>
+  </select>`;
+}
+
+function pitcherRowHtml(mode,side,idx,name=''){
+  return `<div class="pitch-row" id="${mode}-pitcher-${side}-${idx}">
+    <div class="pitch-header">
+      ${pitcherSelectHtml(mode,side,idx,name)}
+      <input id="${mode}-pname-${side}-${idx}" placeholder="Custom name" style="display:none;flex:1;background:var(--card2);border:1px solid rgba(96,165,250,.3);border-radius:6px;padding:7px 10px;color:var(--white);font-size:13px;outline:none">
+      <button class="rm-btn" onclick="removePitcher('${mode}','${side}',${idx})">✕</button>
+    </div>
+    <div class="pitch-stats">
+      ${['ip','h','r','er','bb','so','hr','e'].map(s=>`
+        <div class="sc ${s==='e'?'c-e':''}">
+          <label>${s.toUpperCase()}</label>
+          <input type="${s==='ip'?'text':'number'}" id="${mode}-ps-${side}-${idx}-${s}" min="0" max="99" value="${s==='ip'?'0.0':'0'}">
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+window.addPitcher=(mode,side)=>{
+  const arr=getPitcherArr(mode,side);
+  const idx=arr.length;
+  arr.push({name:'',stats:{ip:'0.0',h:0,r:0,er:0,bb:0,so:0,hr:0,e:0}});
+  const el=document.getElementById(mode==='pdf'?(side==='away'?'p-ap':'p-hp'):(side==='away'?'m-ap':'m-hp'));
+  const wrap=document.createElement('div');
+  wrap.innerHTML=pitcherRowHtml(mode,side,idx);
+  el.appendChild(wrap.firstElementChild);
+};
+
+window.removePitcher=(mode,side,idx)=>{
+  const el=document.getElementById(`${mode}-pitcher-${side}-${idx}`);
+  el?.remove();
+  const arr=getPitcherArr(mode,side);
+  arr.splice(idx,1);
+};
+
+window.setPitcherName=(mode,side,idx,val)=>{
+  const customInp=document.getElementById(`${mode}-pname-${side}-${idx}`);
+  if(val==='__other__'){customInp.style.display='block';}
+  else{customInp.style.display='none';const arr=getPitcherArr(mode,side);if(arr[idx])arr[idx].name=val;}
+};
+
+function getPitcherArr(mode,side){
+  if(mode==='pdf')return side==='away'?pdfAwayPitchers:pdfHomePitchers;
+  return side==='away'?manAwayPitchers:manHomePitchers;
+}
+
+function collectPitchers(mode,side){
+  const arr=getPitcherArr(mode,side);
+  return arr.map((p,idx)=>{
+    const customName=document.getElementById(`${mode}-pname-${side}-${idx}`)?.value?.trim();
+    const selEl=document.querySelector(`#${mode}-pitcher-${side}-${idx} select`);
+    const name=customName||selEl?.value||p.name||'Unknown';
+    return{
+      name: name==='__other__'?customName||'Unknown':name,
+      ip: document.getElementById(`${mode}-ps-${side}-${idx}-ip`)?.value||'0.0',
+      h: parseInt(document.getElementById(`${mode}-ps-${side}-${idx}-h`)?.value)||0,
+      r: parseInt(document.getElementById(`${mode}-ps-${side}-${idx}-r`)?.value)||0,
+      er: parseInt(document.getElementById(`${mode}-ps-${side}-${idx}-er`)?.value)||0,
+      bb: parseInt(document.getElementById(`${mode}-ps-${side}-${idx}-bb`)?.value)||0,
+      so: parseInt(document.getElementById(`${mode}-ps-${side}-${idx}-so`)?.value)||0,
+      hr: parseInt(document.getElementById(`${mode}-ps-${side}-${idx}-hr`)?.value)||0,
+      e: parseInt(document.getElementById(`${mode}-ps-${side}-${idx}-e`)?.value)||0,
+    };
+  }).filter(p=>p.name&&p.name!=='Select pitcher...');
+}
+
+// ── PDF HANDLING ──────────────────────────────────────────
+window.togglePaste=()=>{
+  const box=document.getElementById('paste-box');
+  box.style.display=box.style.display==='none'?'block':'none';
+};
+
+window.handleFile=async file=>{
+  if(!file)return;
+  try{
+    // Try reading as text
+    const text=await file.text();
+    if(text&&text.trim().length>30){
+      document.getElementById('paste-box').style.display='none';
+      parseBoxScore(text);
+      return;
+    }
+  }catch(e){}
+  // Fallback to paste
+  document.getElementById('paste-box').style.display='block';
+  alert('This PDF cannot be read directly. Please open it, select all text (Cmd+A), copy (Cmd+C), and paste in the text box below.');
+};
+
+window.parsePasted=()=>{
+  const text=document.getElementById('pasteText').value.trim();
+  if(!text){alert('Please paste the box score text first.');return;}
+  parseBoxScore(text);
+};
+
+function parseBoxScore(text){
+  // Normalize — remove extra whitespace, handle various dash types
+  const clean=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  const lines=clean.split('\n').map(l=>l.trim()).filter(l=>l);
+
+  let awayName='',homeName='',awayScore=0,homeScore=0;
+
+  // Find score line — "Team Name [num] N - N Team Name"
+  // Team names can contain numbers (e.g. "Beth Or Blue 25")
+  // So we use a greedy match: everything before "N - N something"
+  for(const line of lines){
+    // Skip linescore rows (start with digit or short caps+digit like "BTHR 1 0...")
+    if(/^\d/.test(line))continue;
+    if(/^[A-Z]{2,5}\s+\d/.test(line))continue;
+    // Greedy match: capture as much as possible before "score - score team"
+    const m=line.match(/^(.+?)\s+(\d+)\s*[-–—]\s*(\d+)\s+(.+)$/);
+    if(m){
+      const as=parseInt(m[2]),hs=parseInt(m[3]);
+      // Sanity: reasonable softball scores, both sides have words
+      if(as<=50&&hs<=50&&m[1].trim().length>=2&&m[4].trim().length>=2){
+        awayName=m[1].trim();awayScore=as;homeScore=hs;homeName=m[4].trim();break;
+      }
+    }
+  }
+
+  if(!awayName){
+    alert('Could not find the score line.\n\nMake sure the text starts with:\n"Team Name 5 - 3 Other Team"\n\nCheck your paste and try again.');
+    return;
+  }
+
+  const awayTeam=matchTeam(awayName),homeTeam=matchTeam(homeName);
+  let gameDate='',gameWk=0,gameField='';
+
+  // Parse date
+  for(const line of lines){
+    const dm=line.match(/(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+(\w+\s+\d+,?\s+\d{4})/i);
+    if(dm){
+      try{const d=new Date(dm[2]);gameDate=d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+      catch(e){gameDate=dm[2];}
+      break;
+    }
+  }
+
+  // Match game
+  if(awayTeam&&homeTeam){
+    const g=GAMES.find(x=>!x.done&&((x.away===awayTeam.id&&x.home===homeTeam.id)||(x.away===homeTeam.id&&x.home===awayTeam.id)));
+    if(g){gameWk=g.wk;gameField=g.field||'';}
+  }
+
+  const awayBatters=parseBatters(text,awayName,awayTeam?.id);
+  const homeBatters=parseBatters(text,homeName,homeTeam?.id);
+  const awayPitch=parsePitchers(text,awayName);
+  const homePitch=parsePitchers(text,homeName);
+
+  window.pdfState={awayName,homeName,awayScore,homeScore,awayTeam,homeTeam,gameDate,gameWk,gameField,awayBatters,homeBatters};
+  pdfAwayPitchers=awayPitch.map(p=>({name:p.raw,...p.stats}));
+  pdfHomePitchers=homePitch.map(p=>({name:p.raw,...p.stats}));
+
+  showParsed(window.pdfState,awayPitch,homePitch);
+}
+
+function parseBatters(text,teamName,teamId){
+  const out=[];
+  const lines=text.split('\n');
+  let active=false;
+  const kw=teamName.toLowerCase().split(' ')[0];
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i].trim();
+    if(!line)continue;
+    // Header line with team name and AB
+    if(!active&&line.toLowerCase().includes(kw)&&/\bAB\b/i.test(line)){active=true;continue;}
+    if(!active)continue;
+    if(/^totals?\s/i.test(line)||/^pitching/i.test(line)){break;}
+    // Match player line: name optionally #num optionally (pos) then AB R H RBI BB SO
+    const m=line.match(/^([A-Za-z][A-Za-z\s\.']+?)(?:\s+#?\d+)?(?:\s+\([A-Z/]+\))?\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/);
+    if(m){
+      const raw=m[1].replace(/#\d+/g,'').replace(/\([^)]+\)/g,'').trim();
+      if(raw.length<2)continue;
+      const player=matchPlayer(raw,teamId);
+      out.push({raw,player,isNew:!player,stats:{ab:+m[2],r:+m[3],h:+m[4],rbi:+m[5],bb:+m[6],so:+m[7],hr:0,dbl:0,tpl:0,e:0}});
+    }
+  }
+  return out;
+}
+
+function parsePitchers(text,teamName){
+  const out=[];
+  const lines=text.split('\n');
+  let active=false;
+  const kw=teamName.toLowerCase().split(' ')[0];
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i].trim();
+    if(!line)continue;
+    if(!active&&line.toLowerCase().includes(kw)&&/\bIP\b/i.test(line)){active=true;continue;}
+    if(!active)continue;
+    if(/^totals?\s/i.test(line)||line.length<5)break;
+    const m=line.match(/^([A-Za-z][A-Za-z\s\.']+?)(?:\s+#?\d+)?\s+([\d.]+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/);
+    if(m){
+      const raw=m[1].replace(/#\d+/g,'').trim();
+      out.push({raw,stats:{ip:m[2],h:+m[3],r:+m[4],er:+m[5],bb:+m[6],so:+m[7],hr:+m[8],e:0}});
+    }
+  }
+  return out;
+}
+
+function matchTeam(name){
+  const n=name.toLowerCase();
+  return TEAMS.find(t=>n.includes(t.short.toLowerCase()))
+    ||TEAMS.find(t=>n.includes(t.name.toLowerCase().split(' ')[0]))
+    ||null;
+}
+function matchPlayer(raw,teamId){
+  const clean=raw.toLowerCase().trim();
+  return PLAYERS.find(p=>{
+    if(teamId&&p.team!==teamId)return false;
+    const pn=(p.name||'').toLowerCase();
+    if(pn===clean)return true;
+    const pL=pn.split(' ').pop(),rL=clean.split(' ').pop();
+    if(pL.startsWith(rL.substring(0,6)))return true;
+    if(pn.startsWith(clean.substring(0,6)))return true;
+    // First initial + last name: "M Goldstein" → "Mike Goldstein"
+    const parts=clean.split(' ');
+    if(parts.length>=2){
+      const initial=parts[0][0],last=parts.slice(1).join(' ');
+      if(pn.startsWith(initial)&&pn.includes(last.substring(0,5)))return true;
+    }
+    return false;
+  })||null;
+}
+
+function showParsed(s,awayPitch,homePitch){
+  const win=s.awayScore>s.homeScore?'away':'home';
+  document.getElementById('pdf-score-display').innerHTML=`
+    <div class="sp">
+      <div class="sp-team"><div class="sp-n">${s.awayName}</div><div class="sp-s ${win==='away'?'win':''}">${s.awayScore}</div>
+        <div style="font-size:11px;margin-top:4px;font-weight:700;color:${s.awayTeam?'var(--green)':'var(--red)'}">${s.awayTeam?'✓ '+s.awayTeam.name:'⚠ Team not matched'}</div>
+      </div>
+      <div class="sp-vs">vs</div>
+      <div class="sp-team"><div class="sp-n">${s.homeName}</div><div class="sp-s ${win==='home'?'win':''}">${s.homeScore}</div>
+        <div style="font-size:11px;margin-top:4px;font-weight:700;color:${s.homeTeam?'var(--green)':'var(--red)'}">${s.homeTeam?'✓ '+s.homeTeam.name:'⚠ Team not matched'}</div>
+      </div>
+    </div>`;
+  document.getElementById('p-date').value=s.gameDate||'';
+  document.getElementById('p-wk').value=s.gameWk||'';
+  document.getElementById('p-field').value=s.gameField||'';
+  document.getElementById('p-at').innerHTML=`Away Batting — <span>${s.awayName}</span>`;
+  document.getElementById('p-ht').innerHTML=`Home Batting — <span>${s.homeName}</span>`;
+  document.getElementById('p-apt').innerHTML=`Away Pitching — <span>${s.awayName}</span>`;
+  document.getElementById('p-hpt').innerHTML=`Home Pitching — <span>${s.homeName}</span>`;
+
+  // Linescore
+  const lsBody=document.getElementById('p-ls-body');
+  lsBody.innerHTML=[
+    {id:'a',name:s.awayTeam?.short||s.awayName.split(' ')[0],score:s.awayScore},
+    {id:'h',name:s.homeTeam?.short||s.homeName.split(' ')[0],score:s.homeScore}
+  ].map(row=>`<tr><td class="tn">${row.name}</td>
+    ${[1,2,3,4,5,6,7].map(i=>`<td><input type="number" min="0" max="99" value="0" style="width:30px;background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:3px 2px;color:var(--white);font-size:13px;text-align:center;outline:none"></td>`).join('')}
+    <td class="tc"><input type="number" min="0" max="99" value="${row.score}" style="width:32px;background:var(--card2);border:1px solid rgba(245,200,66,.3);border-radius:4px;padding:3px;color:var(--gold);font-weight:900;font-size:14px;text-align:center;outline:none"></td>
+    <td class="tc"><input type="number" min="0" max="99" value="0" style="width:30px;background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:3px;color:var(--white);text-align:center;outline:none"></td>
+    <td><input type="number" min="0" max="99" value="0" style="width:30px;background:var(--card2);border:1px solid var(--border);border-radius:4px;padding:3px;color:var(--red);text-align:center;outline:none"></td>
+  </tr>`).join('');
+
+  renderPdfBatters('away',s.awayBatters,s.awayTeam?.color||'#fff');
+  renderPdfBatters('home',s.homeBatters,s.homeTeam?.color||'#fff');
+
+  // Pre-fill pitchers from parse
+  document.getElementById('p-ap').innerHTML='';
+  document.getElementById('p-hp').innerHTML='';
+  pdfAwayPitchers=[];pdfHomePitchers=[];
+  awayPitch.forEach(p=>{pdfAwayPitchers.push({name:p.raw,...p.stats});addPitcherPrefilled('pdf','away',pdfAwayPitchers.length-1,p.raw,p.stats);});
+  homePitch.forEach(p=>{pdfHomePitchers.push({name:p.raw,...p.stats});addPitcherPrefilled('pdf','home',pdfHomePitchers.length-1,p.raw,p.stats);});
+
+  document.getElementById('pdf-result').style.display='block';
+  document.getElementById('pdf-result').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function addPitcherPrefilled(mode,side,idx,name,stats){
+  const el=document.getElementById(mode==='pdf'?(side==='away'?'p-ap':'p-hp'):(side==='away'?'m-ap':'m-hp'));
+  const teamId=mode==='pdf'?(side==='away'?window.pdfState?.awayTeam?.id:window.pdfState?.homeTeam?.id):(side==='away'?selectedGame?.away:selectedGame?.home);
+  const teamPlayers=PLAYERS.filter(p=>p.team===teamId).sort((a,b)=>a.name<b.name?-1:1);
+  // Try to match pitcher name to roster
+  const matched=matchPlayer(name,teamId);
+  const selectName=matched?matched.name:name;
+  const inRoster=teamPlayers.find(p=>p.name===selectName);
+  const div=document.createElement('div');
+  div.className='pitch-row';div.id=`${mode}-pitcher-${side}-${idx}`;
+  div.innerHTML=`<div class="pitch-header">
+    <select style="flex:1;background:var(--card2);border:1px solid rgba(96,165,250,.3);border-radius:6px;padding:7px 10px;color:var(--white);font-size:13px;font-weight:600;outline:none" onchange="setPitcherName('${mode}','${side}',${idx},this.value)">
+      <option value="">Select pitcher...</option>
+      ${teamPlayers.map(p=>`<option value="${p.name}" ${p.name===selectName?'selected':''}>${p.name} #${p.num||'—'}</option>`).join('')}
+      <option value="__other__" ${!inRoster?'selected':''}>Other / Enter name...</option>
+    </select>
+    <input id="${mode}-pname-${side}-${idx}" placeholder="Name" value="${!inRoster?name:''}" style="${!inRoster?'':'display:none'};flex:1;background:var(--card2);border:1px solid rgba(96,165,250,.3);border-radius:6px;padding:7px 10px;color:var(--white);font-size:13px;outline:none">
+    <button class="rm-btn" onclick="removePitcher('${mode}','${side}',${idx})">✕</button>
+  </div>
+  <div class="pitch-stats">
+    ${['ip','h','r','er','bb','so','hr','e'].map(s=>`
+      <div class="sc ${s==='e'?'c-e':''}">
+        <label>${s.toUpperCase()}</label>
+        <input type="${s==='ip'?'text':'number'}" id="${mode}-ps-${side}-${idx}-${s}" min="0" max="99" value="${stats?.[s]||'0'}">
+      </div>`).join('')}
+  </div>`;
+  el.appendChild(div);
+}
+
+function renderPdfBatters(side,batters,color){
+  const el=document.getElementById(`p-${side==='away'?'ab':'hb'}`);
+  if(!batters.length){el.innerHTML='<div style="color:var(--muted);font-size:13px">No batters found</div>';return;}
+  el.innerHTML=batters.map((b,idx)=>`
+    <div class="player-row active" style="margin-bottom:5px">
+      <div class="player-top">
+        <span class="bat-n" style="background:${color}18;color:${color}">${idx+1}</span>
+        <span class="p-name">${b.player?b.player.name:b.raw}${b.isNew?'<span class="new-badge">✦ NEW</span>':''}</span>
+        ${b.player?`<span class="p-pos-badge">${b.player.pos||'—'}</span>`:''}
+      </div>
+      <div class="bat-stats">
+        ${['ab','r','h','dbl','tpl','hr','rbi','bb','so','e'].map(s=>`
+          <div class="sc ${s==='hr'?'c-hr':s==='rbi'?'c-rbi':s==='e'?'c-e':''}">
+            <label>${s==='dbl'?'2B':s==='tpl'?'3B':s.toUpperCase()}</label>
+            <input type="number" min="0" max="99" value="${b.stats[s]||0}" oninput="setPdfStat('${side}',${idx},'${s}',this.value)">
+          </div>`).join('')}
+        <div class="sc"><label>Pos</label>
+          <select onchange="setPdfPos('${side}',${idx},this.value)" style="font-size:11px;padding:3px 2px">
+            ${['','P','C','1B','2B','3B','SS','LF','CF','RF','DH'].map(p=>`<option value="${p}" ${b.player?.pos===p?'selected':''}>${p||'Pos'}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+window.setPdfStat=(side,idx,s,v)=>{
+  const arr=side==='away'?window.pdfState.awayBatters:window.pdfState.homeBatters;
+  if(arr[idx])arr[idx].stats[s]=parseFloat(v)||0;
+};
+window.setPdfPos=(side,idx,v)=>{
+  const arr=side==='away'?window.pdfState.awayBatters:window.pdfState.homeBatters;
+  if(arr[idx]&&arr[idx].player)arr[idx].player.pos=v;
+};
+
+window.addPdfPlayer=side=>{
+  const inp=document.getElementById(`p-add-${side}`);
+  const name=inp.value.trim();if(!name)return;
+  const arr=side==='away'?window.pdfState.awayBatters:window.pdfState.homeBatters;
+  const team=side==='away'?window.pdfState.awayTeam:window.pdfState.homeTeam;
+  arr.push({raw:name,player:null,isNew:true,stats:{ab:0,r:0,h:0,dbl:0,tpl:0,hr:0,rbi:0,bb:0,so:0,e:0}});
+  renderPdfBatters(side,arr,team?.color||'#fff');
+  inp.value='';
+};
+window.resetPdf=()=>{
+  document.getElementById('pdf-result').style.display='none';
+  document.getElementById('pasteText').value='';
+  document.getElementById('p-log').className='log-box';
+  document.getElementById('p-success').className='success-box';
+  pdfAwayPitchers=[];pdfHomePitchers=[];
+  window.pdfState=null;
+};
+
+// ── SUBMIT PDF ────────────────────────────────────────────
+window.submitPdf=async()=>{
+  const s=window.pdfState;if(!s)return;
+  const btn=document.getElementById('p-btn');
+  btn.disabled=true;btn.textContent='Saving...';
+  const logEl=document.getElementById('p-log');
+  logEl.className='log-box show';logEl.innerHTML='';
+  const log=(m,t='info')=>{logEl.innerHTML+=`<div class="l-${t}">${m}</div>`;logEl.scrollTop=logEl.scrollHeight;};
+  try{
+    await saveGame({
+      awayTeam:s.awayTeam,homeTeam:s.homeTeam,awayScore:s.awayScore,homeScore:s.homeScore,
+      awayBatters:s.awayBatters,homeBatters:s.homeBatters,
+      awayPitchers:collectPitchers('pdf','away'),homePitchers:collectPitchers('pdf','home'),
+      date:document.getElementById('p-date').value,
+      wk:parseInt(document.getElementById('p-wk').value)||0,
+      field:document.getElementById('p-field').value,
+      recap:document.getElementById('p-recap').value.trim()
+    },log);
+    document.getElementById('p-success').className='success-box show';
+    document.getElementById('p-success-msg').textContent=`${s.awayTeam?.name||s.awayName} ${s.awayScore}–${s.homeScore} ${s.homeTeam?.name||s.homeName} saved. Site updates on next page load.`;
+  }catch(e){log('❌ '+e.message,'err');btn.disabled=false;btn.textContent='✓ Save to Firebase & Update Site';}
+};
+
+// ── SUBMIT MANUAL ─────────────────────────────────────────
+window.submitManual=async()=>{
+  if(!selectedGame){alert('Please select a game first.');return;}
+  const away=TEAMS.find(t=>t.id===selectedGame.away);
+  const home=TEAMS.find(t=>t.id===selectedGame.home);
+  const as=parseInt(document.getElementById('m-as').value)||0;
+  const hs=parseInt(document.getElementById('m-hs').value)||0;
+  const btn=document.getElementById('m-btn');
+  btn.disabled=true;btn.textContent='Saving...';
+  const logEl=document.getElementById('m-log');
+  logEl.className='log-box show';logEl.innerHTML='';
+  const log=(m,t='info')=>{logEl.innerHTML+=`<div class="l-${t}">${m}</div>`;logEl.scrollTop=logEl.scrollHeight;};
+  try{
+    await saveGame({
+      awayTeam:away,homeTeam:home,awayScore:as,homeScore:hs,
+      awayBatters:awayRoster.filter(r=>r.playing).map(r=>({player:r.player,stats:r.stats,isNew:r.player?.isNew||false,raw:r.player?.name||''})),
+      homeBatters:homeRoster.filter(r=>r.playing).map(r=>({player:r.player,stats:r.stats,isNew:r.player?.isNew||false,raw:r.player?.name||''})),
+      awayPitchers:collectPitchers('manual','away'),homePitchers:collectPitchers('manual','home'),
+      gameId:selectedGame.id,
+      date:selectedGame.date,wk:selectedGame.wk,field:selectedGame.field,
+      recap:document.getElementById('m-recap').value.trim()
+    },log);
+    document.getElementById('m-success').className='success-box show';
+    document.getElementById('m-success-msg').textContent=`${away?.name} ${as}–${hs} ${home?.name} saved. Site updates on next page load.`;
+  }catch(e){log('❌ '+e.message,'err');btn.disabled=false;btn.textContent='✓ Save to Firebase & Update Site';}
+};
+window.resetManual=()=>{
+  document.getElementById('step3').style.display='none';
+  document.getElementById('m-success').className='success-box';
+  document.getElementById('m-btn').disabled=false;
+  document.getElementById('m-btn').textContent='✓ Save to Firebase & Update Site';
+  document.getElementById('m-log').className='log-box';
+  selectedGame=null;
+  document.querySelectorAll('.game-pick-btn').forEach(b=>b.classList.remove('selected'));
+};
+
+// ── CORE SAVE ─────────────────────────────────────────────
+async function saveGame(d,log){
+  const{awayTeam,homeTeam,awayScore,homeScore,awayBatters,homeBatters,awayPitchers,homePitchers,date,wk,field,recap,gameId}=d;
+  const awayWin=awayScore>homeScore;
+
+  // 1. Game record
+  log('📋 Saving game score...','info');
+  let gId=gameId||null;
+  if(!gId&&awayTeam&&homeTeam){
+    const g=GAMES.find(x=>!x.done&&((x.away===awayTeam.id&&x.home===homeTeam.id)||(x.away===homeTeam.id&&x.home===awayTeam.id)));
+    if(g)gId=g.id;
+  }
+  if(gId){
+    const gData=GAMES.find(g=>g.id===gId);
+    const flip=gData?.away===homeTeam?.id;
+    await updateDoc(doc(db,'games',gId),{
+      away_score:flip?homeScore:awayScore,
+      home_score:flip?awayScore:homeScore,done:true
+    });
+    log(`✓ Score saved: ${awayScore}–${homeScore}`,'ok');
+  }else{
+    const ref=await addDoc(collection(db,'games'),{
+      wk:wk||0,date:date||'',day:'',time:'',field:field||'',
+      away:awayTeam?.id||'',home:homeTeam?.id||'',
+      away_score:awayScore,home_score:homeScore,done:true,season:2026
+    });
+    gId=ref.id;
+    log('✓ New game record created','ok');
+  }
+
+  // 2. Standings
+  log('📊 Updating standings...','info');
+  const tSnap=await getDocs(collection(db,'teams'));
+  for(const td of tSnap.docs){
+    const t=td.data();
+    const isA=td.id===awayTeam?.id,isH=td.id===homeTeam?.id;
+    if(!isA&&!isH)continue;
+    const win=isA?awayWin:!awayWin;
+    const scored=isA?awayScore:homeScore,conceded=isA?homeScore:awayScore;
+    const w=(t.w||0)+(win?1:0),l=(t.l||0)+(win?0:1);
+    const str=t.streak||'';const sl=win?'W':'L';
+    const sn=(str.startsWith(sl)?parseInt(str.slice(1)||'0'):0)+1;
+    await updateDoc(doc(db,'teams',td.id),{
+      w,l,pct:w+l>0?parseFloat((w/(w+l)).toFixed(3)):0,
+      rs:(t.rs||0)+scored,ra:(t.ra||0)+conceded,streak:`${sl}${sn}`
+    });
+    log(`✓ ${t.name}: ${w}-${l} (${sl}${sn})`,'ok');
+  }
+
+  // 3. Batter stats
+  log('👤 Updating player stats...','info');
+  const allBatters=[...(awayBatters||[]),...(homeBatters||[])];
+  for(const entry of allBatters){
+    if(!entry?.stats)continue;
+    const{player,stats,isNew,raw}=entry;
+    const{ab=0,r=0,h=0,hr=0,rbi=0,bb=0,so=0,dbl=0,tpl=0}=stats;
+    if(isNew||!player||!player.id){
+      const teamId=awayBatters.includes(entry)?awayTeam?.id:homeTeam?.id;
+      await addDoc(collection(db,'players'),{
+        name:raw||'Unknown',num:'??',team:teamId||'',pos:entry.player?.pos||'??',
+        avg:ab>0?parseFloat((h/ab).toFixed(3)):0,
+        hr,rbi,h,ab,r,bb,
+        slg:ab>0?parseFloat(((h+hr)/ab).toFixed(3)):0,ops:0,
+        needs_review:true,added_from:'box_score'
+      });
+      log(`⚠ New player added (review needed): ${raw}`,'warn');
+    }else{
+      const ps=await getDoc(doc(db,'players',player.id));
+      if(!ps.exists())continue;
+      const pd=ps.data();
+      const tH=(pd.h||0)+h,tAB=(pd.ab||0)+ab,tHR=(pd.hr||0)+hr;
+      const tRBI=(pd.rbi||0)+rbi,tR=(pd.r||0)+r,tBB=(pd.bb||0)+bb;
+      const avg=tAB>0?parseFloat((tH/tAB).toFixed(3)):0;
+      const slg=tAB>0?parseFloat(((tH+tHR)/tAB).toFixed(3)):0;
+      const obp=(tAB+tBB)>0?parseFloat(((tH+tBB)/(tAB+tBB)).toFixed(3)):0;
+      await updateDoc(doc(db,'players',player.id),{
+        h:tH,ab:tAB,hr:tHR,rbi:tRBI,r:tR,bb:tBB,
+        avg,slg,ops:parseFloat((slg+obp).toFixed(3))
+      });
+      log(`✓ ${pd.name}: .${String(Math.round(avg*1000)).padStart(3,'0')} · ${tHR}HR · ${tRBI}RBI`,'ok');
+    }
+  }
+
+  // 4. Recap
+  if(recap){
+    await addDoc(collection(db,'recaps'),{
+      game_id:gId||null,date:date||'',wk:wk||0,
+      away:awayTeam?.id||'',home:homeTeam?.id||'',
+      away_score:awayScore,home_score:homeScore,
+      field:field||'',text:recap,stars:[],
+      created_at:new Date().toISOString()
+    });
+    log('✓ Recap saved','ok');
+  }
+
+  log('','info');
+  log('🎉 All done! Scores · Standings · Stats · Recaps all updated.','ok');
+}
+</script>
+</body>
+</html>
