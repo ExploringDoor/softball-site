@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DVSL Admin Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#002D72;--navy-light:rgba(0,45,114,.08);--navy-mid:rgba(0,45,114,.15);
+  --bg:#f5f6f8;--card:#ffffff;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.06);
+  --text:#1a1a1a;--muted:#6b7280;--muted2:#9ca3af;
+  --green:#16a34a;--green-bg:rgba(22,163,74,.1);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.1);
+  --yellow:#ca8a04;--yellow-bg:rgba(202,138,4,.1);
+  --blue:#2563eb;--blue-bg:rgba(37,99,235,.1);
+  --sidebar-w:240px;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.5;min-height:100vh}
+
+/* ── LOGIN ── */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:var(--bg)}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:48px 40px;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.06)}
+.login-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);text-align:center;margin-bottom:6px}
+.login-sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:32px}
+.form-group{margin-bottom:18px}
+.form-label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.form-input{width:100%;padding:11px 14px;font-size:14px;font-family:'Inter',sans-serif;border:1px solid var(--border);border-radius:8px;outline:none;transition:border-color .2s,box-shadow .2s;background:#fff;color:var(--text)}
+.form-input:focus{border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-light)}
+textarea.form-input{resize:vertical;min-height:80px}
+select.form-input{cursor:pointer}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;border-radius:8px;padding:11px 22px;cursor:pointer;transition:all .15s;text-decoration:none}
+.btn-primary{background:var(--navy);color:#fff}.btn-primary:hover{background:#003d99}
+.btn-success{background:var(--green);color:#fff}.btn-success:hover{background:#15803d}
+.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-warning{background:var(--yellow);color:#fff}.btn-warning:hover{background:#a16207}
+.btn-outline{background:transparent;color:var(--navy);border:1px solid var(--border)}.btn-outline:hover{border-color:var(--navy);background:var(--navy-light)}
+.btn-sm{padding:7px 14px;font-size:11px}
+.btn-full{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.login-error{background:var(--red-bg);color:var(--red);font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:16px;display:none}
+
+/* ── LAYOUT ── */
+.app{display:none;min-height:100vh}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);background:var(--card);border-right:1px solid var(--border);display:flex;flex-direction:column;z-index:100;transition:transform .3s}
+.sidebar-brand{padding:20px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.sidebar-brand-text{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy)}
+.sidebar-brand small{font-weight:600;font-size:10px;letter-spacing:.1em;color:var(--muted);display:block;margin-top:2px}
+.sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);transition:all .15s;margin-bottom:2px;user-select:none}
+.nav-item:hover{background:rgba(0,0,0,.04);color:var(--text)}
+.nav-item.active{background:var(--navy-light);color:var(--navy)}
+.nav-item .icon{font-size:17px;width:24px;text-align:center;flex-shrink:0}
+.sidebar-footer{padding:14px 10px;border-top:1px solid var(--border)}
+.sidebar-user{font-size:12px;color:var(--muted);padding:4px 14px;margin-bottom:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.main{margin-left:var(--sidebar-w);padding:28px 36px 60px;min-height:100vh}
+.main-header{margin-bottom:28px}
+.main-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;text-transform:uppercase;letter-spacing:-.01em;color:var(--text)}
+.main-subtitle{font-size:13px;color:var(--muted);margin-top:4px}
+
+/* Mobile hamburger */
+.mob-toggle{display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:20px;line-height:1}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:90}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .sidebar-overlay.open{display:block}
+  .mob-toggle{display:block}
+  .main{margin-left:0;padding:70px 16px 60px}
+  :root{--sidebar-w:260px}
+}
+
+/* ── SECTION PANELS ── */
+.section{display:none}.section.active{display:block}
+
+/* ── STAT CARDS ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:28px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.stat-card .val{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:36px;color:var(--navy);line-height:1}
+.stat-card .lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+
+/* ── TABLES ── */
+.tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 16px;text-align:left;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)}
+.tbl td{font-size:13px;padding:12px 16px;border-bottom:1px solid var(--border2)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(0,0,0,.02)}
+.tbl .actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── CARDS / PANELS ── */
+.panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:20px}
+.panel-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:14px}
+
+/* ── INLINE FORMS ── */
+.inline-form{background:rgba(0,45,114,.03);border:1px solid var(--navy-mid);border-radius:10px;padding:18px;margin:10px 0}
+.form-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.form-row:last-child{margin-bottom:0}
+.form-col{display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px}
+.form-col-sm{flex:0 0 100px;min-width:80px}
+
+/* ── BADGES ── */
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px}
+.badge-done{background:var(--green-bg);color:var(--green)}
+.badge-pending{background:var(--yellow-bg);color:var(--yellow)}
+.badge-info{background:var(--blue-bg);color:var(--blue)}
+
+/* ── TOAST ── */
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.15);animation:toastIn .3s ease;max-width:360px}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+.toast.info{background:var(--navy)}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateY(-8px)}}
+
+/* ── BANNER PREVIEW ── */
+.banner-preview{padding:14px 20px;border-radius:8px;font-size:14px;font-weight:600;text-align:center;margin:14px 0}
+.banner-preview.info-type{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(37,99,235,.2)}
+.banner-preview.warning-type{background:var(--yellow-bg);color:var(--yellow);border:1px solid rgba(202,138,4,.2)}
+.banner-preview.cancel-type{background:var(--red-bg);color:var(--red);border:1px solid rgba(220,38,38,.2)}
+
+/* ── ACTIVITY LOG ── */
+.activity-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border2)}
+.activity-item:last-child{border-bottom:none}
+.activity-dot{width:8px;height:8px;border-radius:50%;background:var(--navy);margin-top:6px;flex-shrink:0}
+.activity-text{font-size:13px;color:var(--text)}
+.activity-time{font-size:11px;color:var(--muted2);margin-top:2px}
+
+/* ── GAME CARDS (Scores section) ── */
+.week-group{margin-bottom:28px}
+.week-header{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:var(--navy);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--navy-light)}
+.game-row-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.game-row-card .teams{font-weight:700;font-size:15px;min-width:200px}
+.game-row-card .teams .vs{color:var(--muted);font-weight:400;margin:0 6px}
+.game-row-card .meta{font-size:12px;color:var(--muted);min-width:160px}
+.game-row-card .score-display{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:var(--navy);min-width:80px;text-align:center}
+
+/* ── TOGGLE SWITCH ── */
+.toggle{position:relative;width:48px;height:26px;display:inline-block}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:#ccc;border-radius:13px;cursor:pointer;transition:.2s}
+.toggle .slider::before{content:'';position:absolute;width:20px;height:20px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s}
+.toggle input:checked+.slider{background:var(--green)}
+.toggle input:checked+.slider::before{transform:translateX(22px)}
+
+/* ── EMPTY STATE ── */
+.empty{padding:40px;text-align:center;color:var(--muted);font-size:14px}
+
+/* ── RECAP CARD ── */
+.recap-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:8px;cursor:pointer;transition:border-color .15s}
+.recap-item:hover{border-color:var(--navy-mid)}
+.recap-item .ri-match{font-weight:700;font-size:14px}
+.recap-item .ri-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.recap-item .ri-status{font-size:11px;margin-top:4px}
+
+/* ── LOADING ── */
+.loading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:20px}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN SCREEN ═══ -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">DVSL</div>
+    <div class="login-sub">Admin Dashboard</div>
+    <div id="login-error" class="login-error"></div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input type="email" id="login-email" class="form-input" placeholder="admin@dvsl.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" id="login-pass" class="form-input" placeholder="Enter password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-full" id="login-btn" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<!-- ═══ ADMIN APP ═══ -->
+<button class="mob-toggle" onclick="toggleSidebar()">&#9776;</button>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<div id="app" class="app">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div>
+        <div class="sidebar-brand-text">DVSL</div>
+        <small>Admin Panel</small>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item active" data-section="dashboard" onclick="showSection('dashboard')"><span class="icon">&#128202;</span> Dashboard</div>
+      <div class="nav-item" data-section="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
+      <div class="nav-item" data-section="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
+      <div class="nav-item" data-section="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
+      <div class="nav-item" data-section="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
+      <div class="nav-item" data-section="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
+      <div class="nav-item" data-section="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
+      <div class="nav-item" data-section="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sidebar-user" id="sidebar-user"></div>
+      <button class="btn btn-outline btn-sm btn-full" onclick="doLogout()">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div class="section active" id="sec-dashboard">
+      <div class="main-header">
+        <div class="main-title">Dashboard</div>
+        <div class="main-subtitle">Overview of the DVSL season</div>
+      </div>
+      <div class="stat-grid" id="dash-stats"></div>
+      <div class="panel" id="dash-next-game">
+        <div class="panel-title">Next Upcoming Game</div>
+        <div id="next-game-content" class="empty">Loading...</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Recent Activity</div>
+        <div id="activity-log">
+          <div class="loading"><div class="spinner"></div> Loading activity...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SCORES ═══ -->
+    <div class="section" id="sec-scores">
+      <div class="main-header">
+        <div class="main-title">Scores</div>
+        <div class="main-subtitle">Enter and manage game scores</div>
+      </div>
+      <div id="scores-content">
+        <div class="loading"><div class="spinner"></div> Loading games...</div>
+      </div>
+    </div>
+
+    <!-- ═══ SCHEDULE ═══ -->
+    <div class="section" id="sec-schedule">
+      <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="main-title">Schedule</div>
+          <div class="main-subtitle">Manage the game schedule</div>
+        </div>
+        <button class="btn btn-primary" onclick="openAddGame()">+ Add Game</button>
+      </div>
+      <div id="add-game-form" style="display:none"></div>
+      <div id="schedule-content">
+        <div class="loading"><div class="spinner"></div> Loading schedule...</div>
+      </div>
+    </div>
+
+    <!-- ═══ ROSTERS ═══ -->
+    <div class="section" id="sec-rosters">
+      <div class="main-header">
+        <div class="main-title">Rosters</div>
+        <div class="main-subtitle">Manage team rosters</div>
+      </div>
+      <div class="form-row" style="margin-bottom:20px">
+        <div class="form-col" style="max-width:300px">
+          <label class="form-label">Select Team</label>
+          <select class="form-input" id="roster-team-select" onchange="loadRoster()">
+            <option value="">-- Choose a team --</option>
+          </select>
+        </div>
+        <div style="padding-bottom:2px">
+          <button class="btn btn-primary btn-sm" id="add-player-btn" onclick="openAddPlayer()" style="display:none">+ Add Player</button>
+        </div>
+      </div>
+      <div id="add-player-form" style="display:none"></div>
+      <div id="roster-content"></div>
+    </div>
+
+    <!-- ═══ STANDINGS ═══ -->
+    <div class="section" id="sec-standings">
+      <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="main-title">Standings</div>
+          <div class="main-subtitle">View and manage team standings</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-warning" onclick="autoCalcStandings()">Auto-Calculate</button>
+          <button class="btn btn-success" onclick="saveAllStandings()">Save All</button>
+        </div>
+      </div>
+      <div id="standings-content">
+        <div class="loading"><div class="spinner"></div> Loading standings...</div>
+      </div>
+    </div>
+
+    <!-- ═══ RECAPS ═══ -->
+    <div class="section" id="sec-recaps">
+      <div class="main-header">
+        <div class="main-title">Recaps</div>
+        <div class="main-subtitle">Write and manage game recaps</div>
+      </div>
+      <div id="recap-editor" style="display:none"></div>
+      <div id="recaps-content">
+        <div class="loading"><div class="spinner"></div> Loading games...</div>
+      </div>
+    </div>
+
+    <!-- ═══ BANNER / ALERTS ═══ -->
+    <div class="section" id="sec-banner">
+      <div class="main-header">
+        <div class="main-title">Banner / Alerts</div>
+        <div class="main-subtitle">Manage the site-wide banner notification</div>
+      </div>
+      <div class="panel">
+        <div class="form-row">
+          <div style="display:flex;align-items:center;gap:12px">
+            <label class="form-label" style="margin:0">Banner Active</label>
+            <label class="toggle">
+              <input type="checkbox" id="banner-active">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:16px">
+          <div class="form-col">
+            <label class="form-label">Banner Text</label>
+            <input type="text" id="banner-text" class="form-input" placeholder="Enter banner message..." oninput="updateBannerPreview()">
+          </div>
+          <div class="form-col" style="max-width:200px">
+            <label class="form-label">Type</label>
+            <select class="form-input" id="banner-type" onchange="updateBannerPreview()">
+              <option value="info">Info (Blue)</option>
+              <option value="warning">Warning (Yellow)</option>
+              <option value="cancel">Cancellation (Red)</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel-title" style="margin-top:18px;margin-bottom:8px">Preview</div>
+        <div id="banner-preview" class="banner-preview info-type">Banner preview will appear here</div>
+        <div style="margin-top:18px">
+          <button class="btn btn-primary" onclick="saveBanner()">Save Banner</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ EMAIL BLAST ═══ -->
+    <div class="section" id="sec-email">
+      <div class="main-header">
+        <div class="main-title">Email Blast</div>
+        <div class="main-subtitle">Send announcements to teams</div>
+      </div>
+      <div class="panel">
+        <div style="background:var(--blue-bg);color:var(--blue);font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:16px">
+          Note: Messages are saved to Firebase. Actual email delivery requires Firebase Cloud Functions to be configured separately.
+        </div>
+        <div class="form-row">
+          <div class="form-col" style="max-width:300px">
+            <label class="form-label">To</label>
+            <select class="form-input" id="email-to">
+              <option value="all">All Teams</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-col">
+            <label class="form-label">Subject</label>
+            <input type="text" class="form-input" id="email-subject" placeholder="Announcement subject...">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-col">
+            <label class="form-label">Message</label>
+            <textarea class="form-input" id="email-body" rows="6" placeholder="Write your message..."></textarea>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="sendAnnouncement()">Save Announcement</button>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Past Announcements</div>
+        <div id="announcements-list">
+          <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<script type="module">
+// ═══════════════════════════════════════════════════════════════════
+// FIREBASE SETUP
+// ═══════════════════════════════════════════════════════════════════
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+};
+
+const app = initializeApp(FIREBASE_CONFIG);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// ═══════════════════════════════════════════════════════════════════
+// GLOBAL STATE
+// ═══════════════════════════════════════════════════════════════════
+let TEAMS = [];
+let GAMES = [];
+let PLAYERS = [];
+let RECAPS_DATA = [];
+let currentUser = null;
+
+// ═══════════════════════════════════════════════════════════════════
+// TOAST NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════
+window.toast = function(msg, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.animation = 'toastOut .3s ease forwards'; setTimeout(() => el.remove(), 300); }, 3500);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// ACTIVITY LOG
+// ═══════════════════════════════════════════════════════════════════
+async function logActivity(action, details) {
+  try {
+    await addDoc(collection(db, 'activity_log'), {
+      action,
+      details,
+      timestamp: Timestamp.now(),
+      user: currentUser?.email || 'unknown'
+    });
+  } catch(e) { console.error('Failed to log activity:', e); }
+}
+window.logActivity = logActivity;
+
+async function loadActivityLog() {
+  const el = document.getElementById('activity-log');
+  try {
+    const q2 = query(collection(db, 'activity_log'), orderBy('timestamp', 'desc'));
+    const snap = await getDocs(q2);
+    const items = snap.docs.slice(0, 10).map(d => d.data());
+    if (!items.length) { el.innerHTML = '<div class="empty">No activity yet</div>'; return; }
+    el.innerHTML = items.map(a => {
+      const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
+      return `<div class="activity-item">
+        <div class="activity-dot"></div>
+        <div><div class="activity-text"><strong>${esc(a.action)}</strong> &mdash; ${esc(a.details)}</div>
+        <div class="activity-time">${t.toLocaleDateString()} ${t.toLocaleTimeString()} &bull; ${esc(a.user||'')}</div></div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Could not load activity log</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════════
+window.doLogin = async function() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!email || !pass) { errEl.textContent = 'Please enter email and password.'; errEl.style.display = 'block'; return; }
+  try {
+    document.getElementById('login-btn').disabled = true;
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch(e) {
+    let msg = e.message || 'Login failed';
+    if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') {
+      msg = 'Invalid email or password.';
+    } else if (e.code === 'auth/configuration-not-found' || e.code === 'auth/operation-not-allowed') {
+      msg = 'Firebase Auth may not be enabled. Go to Firebase Console > Authentication > Sign-in method > Enable Email/Password.';
+    } else if (e.code === 'auth/network-request-failed') {
+      msg = 'Network error. Check your internet connection.';
+    }
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+    document.getElementById('login-btn').disabled = false;
+  }
+};
+
+window.doLogout = async function() {
+  await signOut(auth);
+  location.reload();
+};
+
+// Listen for auth state
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    document.getElementById('sidebar-user').textContent = user.email;
+    await loadAllData();
+  } else {
+    currentUser = null;
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+// Enter key on login
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') window.doLogin(); });
+document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-pass').focus(); });
+
+// ═══════════════════════════════════════════════════════════════════
+// SIDEBAR NAVIGATION
+// ═══════════════════════════════════════════════════════════════════
+window.showSection = function(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name)?.classList.add('active');
+  document.querySelector(`.nav-item[data-section="${name}"]`)?.classList.add('active');
+  // Close mobile sidebar
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+};
+
+window.toggleSidebar = function() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('open');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// DATA LOADING
+// ═══════════════════════════════════════════════════════════════════
+async function fbFetch(coll, orderField) {
+  const q2 = orderField ? query(collection(db, coll), orderBy(orderField)) : collection(db, coll);
+  const snap = await getDocs(q2);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadAllData() {
+  try {
+    const [teams, games, players, recaps] = await Promise.all([
+      fbFetch('teams', 'name'),
+      fbFetch('games', 'wk'),
+      fbFetch('players').catch(() => []),
+      fbFetch('recaps', 'wk').catch(() => [])
+    ]);
+    TEAMS = teams.filter(t => t.active !== false).sort((a,b) => (b.pct||0) - (a.pct||0));
+    GAMES = games.sort((a,b) => (a.wk||0) - (b.wk||0) || (a.time||'').localeCompare(b.time||''));
+    PLAYERS = players;
+    RECAPS_DATA = recaps;
+
+    renderDashboard();
+    renderScores();
+    renderSchedule();
+    populateTeamDropdowns();
+    renderStandings();
+    renderRecaps();
+    loadBanner();
+    loadAnnouncements();
+    loadActivityLog();
+  } catch(e) {
+    console.error('Data load failed:', e);
+    toast('Failed to load data: ' + e.message, 'error');
+  }
+}
+
+function getTeamName(id) {
+  const t = TEAMS.find(t => t.id === id);
+  return t ? (t.short || t.name) : (id || '???').toUpperCase();
+}
+function getTeamFull(id) {
+  const t = TEAMS.find(t => t.id === id);
+  return t ? t.name : (id || '???');
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════
+function renderDashboard() {
+  const played = GAMES.filter(g => g.done);
+  const remaining = GAMES.filter(g => !g.done);
+  const next = remaining[0];
+
+  document.getElementById('dash-stats').innerHTML = `
+    <div class="stat-card"><div class="val">${TEAMS.length}</div><div class="lbl">Teams</div></div>
+    <div class="stat-card"><div class="val">${PLAYERS.length}</div><div class="lbl">Players</div></div>
+    <div class="stat-card"><div class="val">${GAMES.length}</div><div class="lbl">Total Games</div></div>
+    <div class="stat-card"><div class="val">${played.length}</div><div class="lbl">Games Played</div></div>
+    <div class="stat-card"><div class="val">${remaining.length}</div><div class="lbl">Remaining</div></div>
+  `;
+
+  const ngEl = document.getElementById('next-game-content');
+  if (next) {
+    ngEl.innerHTML = `<div style="font-size:16px;font-weight:700">${getTeamName(next.away)} <span style="color:var(--muted);font-weight:400">@</span> ${getTeamName(next.home)}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">Week ${next.wk} &bull; ${next.date} ${next.day} &bull; ${next.time} &bull; ${next.field||''}</div>`;
+  } else {
+    ngEl.innerHTML = '<div class="empty">No upcoming games</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SCORES
+// ═══════════════════════════════════════════════════════════════════
+function renderScores() {
+  const el = document.getElementById('scores-content');
+  const byWeek = {};
+  GAMES.forEach(g => {
+    const w = g.wk || 0;
+    if (!byWeek[w]) byWeek[w] = [];
+    byWeek[w].push(g);
+  });
+  const weeks = Object.keys(byWeek).sort((a,b) => a - b);
+  if (!weeks.length) { el.innerHTML = '<div class="empty">No games found</div>'; return; }
+
+  el.innerHTML = weeks.map(w => `
+    <div class="week-group">
+      <div class="week-header">Week ${w}</div>
+      ${byWeek[w].map(g => {
+        const done = g.done;
+        return `<div class="game-row-card" id="score-game-${g.id}">
+          <div class="teams">${getTeamName(g.away)} <span class="vs">@</span> ${getTeamName(g.home)}</div>
+          <div class="meta">${g.date||''} ${g.day||''} &bull; ${g.time||''} &bull; ${g.field||''}</div>
+          ${done
+            ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div>
+               <span class="badge badge-done">Final</span>
+               <button class="btn btn-outline btn-sm" onclick="editScore('${g.id}')">Edit Score</button>`
+            : `<span class="badge badge-pending">Pending</span>
+               <button class="btn btn-primary btn-sm" onclick="editScore('${g.id}')">Enter Score</button>`
+          }
+          <div id="score-form-${g.id}" style="display:none;width:100%;margin-top:10px"></div>
+        </div>`;
+      }).join('')}
+    </div>
+  `).join('');
+}
+
+window.editScore = function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const formEl = document.getElementById('score-form-' + gameId);
+  if (formEl.style.display !== 'none') { formEl.style.display = 'none'; return; }
+  formEl.style.display = 'block';
+  formEl.innerHTML = `
+    <div class="inline-form">
+      <div class="form-row">
+        <div class="form-col form-col-sm">
+          <label class="form-label">${getTeamName(g.away)} Score</label>
+          <input type="number" class="form-input" id="as-${gameId}" min="0" value="${g.away_score ?? ''}">
+        </div>
+        <div class="form-col form-col-sm">
+          <label class="form-label">${getTeamName(g.home)} Score</label>
+          <input type="number" class="form-input" id="hs-${gameId}" min="0" value="${g.home_score ?? ''}">
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
+          <button class="btn btn-success btn-sm" onclick="saveScore('${gameId}', true)">Mark Final</button>
+          <button class="btn btn-outline btn-sm" onclick="saveScore('${gameId}', false)">Save Draft</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('score-form-${gameId}').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+};
+
+window.saveScore = async function(gameId, markDone) {
+  const as = parseInt(document.getElementById('as-' + gameId).value);
+  const hs = parseInt(document.getElementById('hs-' + gameId).value);
+  if (isNaN(as) || isNaN(hs)) { toast('Please enter both scores', 'error'); return; }
+  try {
+    await updateDoc(doc(db, 'games', gameId), { away_score: as, home_score: hs, done: markDone });
+    const g = GAMES.find(x => x.id === gameId);
+    if (g) { g.away_score = as; g.home_score = hs; g.done = markDone; }
+    toast(markDone ? 'Score saved and marked final!' : 'Score saved as draft');
+    await logActivity('Score Entry', `${getTeamName(g?.away)} ${as} - ${getTeamName(g?.home)} ${hs}${markDone ? ' (Final)' : ' (Draft)'}`);
+    if (markDone) await recalcStandingsFromGames();
+    renderScores();
+    renderDashboard();
+    renderStandings();
+  } catch(e) {
+    toast('Failed to save score: ' + e.message, 'error');
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// STANDINGS AUTO-CALCULATE
+// ═══════════════════════════════════════════════════════════════════
+async function recalcStandingsFromGames() {
+  const stats = {};
+  TEAMS.forEach(t => { stats[t.id] = { w:0, l:0, rs:0, ra:0, results:[] }; });
+
+  // Sort games by date for streak calc
+  const doneGames = GAMES.filter(g => g.done).sort((a,b) => (a.wk||0) - (b.wk||0));
+  doneGames.forEach(g => {
+    const as = g.away_score || 0, hs = g.home_score || 0;
+    if (stats[g.away]) {
+      stats[g.away].rs += as; stats[g.away].ra += hs;
+      if (as > hs) { stats[g.away].w++; stats[g.away].results.push('W'); }
+      else if (as < hs) { stats[g.away].l++; stats[g.away].results.push('L'); }
+    }
+    if (stats[g.home]) {
+      stats[g.home].rs += hs; stats[g.home].ra += as;
+      if (hs > as) { stats[g.home].w++; stats[g.home].results.push('W'); }
+      else if (hs < as) { stats[g.home].l++; stats[g.home].results.push('L'); }
+    }
+  });
+
+  // Calculate PCT, GB, Streak
+  let maxWinDiff = -Infinity;
+  Object.values(stats).forEach(s => {
+    s.pct = (s.w + s.l) > 0 ? (s.w / (s.w + s.l)) : 0;
+    const wd = s.w - s.l;
+    if (wd > maxWinDiff) maxWinDiff = wd;
+    // Streak
+    let streak = '-';
+    const r = s.results;
+    if (r.length > 0) {
+      let last = r[r.length - 1];
+      let count = 0;
+      for (let i = r.length - 1; i >= 0 && r[i] === last; i--) count++;
+      streak = last + count;
+    }
+    s.streak = streak;
+  });
+  Object.values(stats).forEach(s => {
+    const diff = maxWinDiff - (s.w - s.l);
+    s.gb = diff === 0 ? '-' : (diff / 2).toString();
+  });
+
+  // Update Firebase and local state
+  for (const t of TEAMS) {
+    const s = stats[t.id];
+    if (!s) continue;
+    try {
+      await updateDoc(doc(db, 'teams', t.id), {
+        w: s.w, l: s.l, pct: parseFloat(s.pct.toFixed(3)),
+        rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
+      });
+      t.w = s.w; t.l = s.l; t.pct = parseFloat(s.pct.toFixed(3));
+      t.rs = s.rs; t.ra = s.ra; t.gb = s.gb; t.streak = s.streak;
+    } catch(e) { console.error('Failed to update team', t.id, e); }
+  }
+  TEAMS.sort((a,b) => (b.pct||0) - (a.pct||0));
+}
+
+window.autoCalcStandings = async function() {
+  if (!confirm('Recalculate all standings from game results? This will overwrite current standings.')) return;
+  try {
+    toast('Recalculating standings...', 'info');
+    await recalcStandingsFromGames();
+    await logActivity('Standings', 'Auto-calculated standings from game results');
+    renderStandings();
+    renderDashboard();
+    toast('Standings recalculated!');
+  } catch(e) {
+    toast('Failed: ' + e.message, 'error');
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// STANDINGS
+// ═══════════════════════════════════════════════════════════════════
+function renderStandings() {
+  const el = document.getElementById('standings-content');
+  if (!TEAMS.length) { el.innerHTML = '<div class="empty">No teams found</div>'; return; }
+  const sorted = [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
+  el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Actions</th></tr></thead>
+    <tbody>${sorted.map((t, i) => `<tr id="standing-row-${t.id}">
+      <td>${i+1}</td>
+      <td><strong>${esc(t.name)}</strong></td>
+      <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.w||0}" id="st-w-${t.id}" min="0"></td>
+      <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.l||0}" id="st-l-${t.id}" min="0"></td>
+      <td>${(t.pct||0).toFixed(3)}</td>
+      <td>${t.gb||'-'}</td>
+      <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.rs||0}" id="st-rs-${t.id}" min="0"></td>
+      <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.ra||0}" id="st-ra-${t.id}" min="0"></td>
+      <td>${t.streak||'-'}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="saveOneStanding('${t.id}')">Save</button></td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+window.saveOneStanding = async function(teamId) {
+  const w = parseInt(document.getElementById('st-w-' + teamId).value) || 0;
+  const l = parseInt(document.getElementById('st-l-' + teamId).value) || 0;
+  const rs = parseInt(document.getElementById('st-rs-' + teamId).value) || 0;
+  const ra = parseInt(document.getElementById('st-ra-' + teamId).value) || 0;
+  const pct = (w + l) > 0 ? parseFloat((w / (w + l)).toFixed(3)) : 0;
+  try {
+    await updateDoc(doc(db, 'teams', teamId), { w, l, pct, rs, ra });
+    const t = TEAMS.find(x => x.id === teamId);
+    if (t) { t.w = w; t.l = l; t.pct = pct; t.rs = rs; t.ra = ra; }
+    toast('Saved standings for ' + getTeamName(teamId));
+    await logActivity('Standings', `Updated ${getTeamFull(teamId)}: ${w}-${l}`);
+  } catch(e) {
+    toast('Failed: ' + e.message, 'error');
+  }
+};
+
+window.saveAllStandings = async function() {
+  if (!confirm('Save all standings changes?')) return;
+  try {
+    for (const t of TEAMS) {
+      await window.saveOneStanding(t.id);
+    }
+    renderStandings();
+    toast('All standings saved!');
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// SCHEDULE
+// ═══════════════════════════════════════════════════════════════════
+function renderSchedule() {
+  const el = document.getElementById('schedule-content');
+  if (!GAMES.length) { el.innerHTML = '<div class="empty">No games in schedule</div>'; return; }
+
+  el.innerHTML = `<div class="tbl-wrap"><table class="tbl" id="schedule-table">
+    <thead><tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Away</th><th>Home</th><th>Field</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>${GAMES.map(g => `<tr id="sched-row-${g.id}">
+      <td>${g.wk||''}</td><td>${esc(g.date||'')}</td><td>${esc(g.day||'')}</td><td>${esc(g.time||'')}</td>
+      <td><strong>${getTeamName(g.away)}</strong></td><td><strong>${getTeamName(g.home)}</strong></td>
+      <td>${esc(g.field||'')}</td>
+      <td>${g.done ? '<span class="badge badge-done">Final</span>' : '<span class="badge badge-pending">Pending</span>'}</td>
+      <td class="actions">
+        <button class="btn btn-outline btn-sm" onclick="editGame('${g.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteGame('${g.id}')">Delete</button>
+      </td>
+    </tr>
+    <tr id="sched-edit-${g.id}" style="display:none"><td colspan="9" id="sched-edit-cell-${g.id}"></td></tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+function teamOptionsHtml(selected) {
+  return '<option value="">--</option>' + TEAMS.map(t =>
+    `<option value="${t.id}" ${t.id === selected ? 'selected' : ''}>${esc(t.short || t.name)}</option>`
+  ).join('');
+}
+
+window.openAddGame = function() {
+  const el = document.getElementById('add-game-form');
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="inline-form" style="margin-bottom:20px">
+    <div class="panel-title">Add New Game</div>
+    <div class="form-row">
+      <div class="form-col form-col-sm"><label class="form-label">Week</label><input type="number" class="form-input" id="ag-wk" min="1"></div>
+      <div class="form-col"><label class="form-label">Date</label><input type="text" class="form-input" id="ag-date" placeholder="e.g. Apr 14"></div>
+      <div class="form-col form-col-sm"><label class="form-label">Day</label><input type="text" class="form-input" id="ag-day" placeholder="e.g. Tue"></div>
+      <div class="form-col"><label class="form-label">Time</label><input type="text" class="form-input" id="ag-time" placeholder="e.g. 7:00 PM"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Away Team</label><select class="form-input" id="ag-away">${teamOptionsHtml('')}</select></div>
+      <div class="form-col"><label class="form-label">Home Team</label><select class="form-input" id="ag-home">${teamOptionsHtml('')}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Field</label><input type="text" class="form-input" id="ag-field" placeholder="e.g. Mondauk 4"></div>
+      <div class="form-col"><label class="form-label">Address</label><input type="text" class="form-input" id="ag-addr" placeholder="e.g. 1451 Dillon Rd, Ambler PA"></div>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-success" onclick="saveNewGame()">Save Game</button>
+      <button class="btn btn-outline" onclick="document.getElementById('add-game-form').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+};
+
+window.saveNewGame = async function() {
+  const data = {
+    wk: parseInt(document.getElementById('ag-wk').value) || 1,
+    date: document.getElementById('ag-date').value.trim(),
+    day: document.getElementById('ag-day').value.trim(),
+    time: document.getElementById('ag-time').value.trim(),
+    away: document.getElementById('ag-away').value,
+    home: document.getElementById('ag-home').value,
+    field: document.getElementById('ag-field').value.trim(),
+    addr: document.getElementById('ag-addr').value.trim(),
+    done: false, away_score: null, home_score: null
+  };
+  if (!data.away || !data.home) { toast('Select both teams', 'error'); return; }
+  try {
+    const ref = await addDoc(collection(db, 'games'), data);
+    data.id = ref.id;
+    GAMES.push(data);
+    GAMES.sort((a,b) => (a.wk||0) - (b.wk||0));
+    document.getElementById('add-game-form').style.display = 'none';
+    toast('Game added!');
+    await logActivity('Schedule', `Added game: ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk}`);
+    renderSchedule();
+    renderScores();
+    renderDashboard();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.editGame = function(gameId) {
+  const row = document.getElementById('sched-edit-' + gameId);
+  if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+  row.style.display = 'table-row';
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  document.getElementById('sched-edit-cell-' + gameId).innerHTML = `
+    <div class="inline-form">
+      <div class="form-row">
+        <div class="form-col form-col-sm"><label class="form-label">Week</label><input type="number" class="form-input" id="eg-wk-${gameId}" value="${g.wk||''}" min="1"></div>
+        <div class="form-col"><label class="form-label">Date</label><input type="text" class="form-input" id="eg-date-${gameId}" value="${esc(g.date||'')}"></div>
+        <div class="form-col form-col-sm"><label class="form-label">Day</label><input type="text" class="form-input" id="eg-day-${gameId}" value="${esc(g.day||'')}"></div>
+        <div class="form-col"><label class="form-label">Time</label><input type="text" class="form-input" id="eg-time-${gameId}" value="${esc(g.time||'')}"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-col"><label class="form-label">Away</label><select class="form-input" id="eg-away-${gameId}">${teamOptionsHtml(g.away)}</select></div>
+        <div class="form-col"><label class="form-label">Home</label><select class="form-input" id="eg-home-${gameId}">${teamOptionsHtml(g.home)}</select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-col"><label class="form-label">Field</label><input type="text" class="form-input" id="eg-field-${gameId}" value="${esc(g.field||'')}"></div>
+        <div class="form-col"><label class="form-label">Address</label><input type="text" class="form-input" id="eg-addr-${gameId}" value="${esc(g.addr||'')}"></div>
+      </div>
+      <div class="form-row">
+        <button class="btn btn-success btn-sm" onclick="saveEditGame('${gameId}')">Save</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('sched-edit-${gameId}').style.display='none'">Cancel</button>
+      </div>
+    </div>`;
+};
+
+window.saveEditGame = async function(gameId) {
+  const data = {
+    wk: parseInt(document.getElementById('eg-wk-' + gameId).value) || 1,
+    date: document.getElementById('eg-date-' + gameId).value.trim(),
+    day: document.getElementById('eg-day-' + gameId).value.trim(),
+    time: document.getElementById('eg-time-' + gameId).value.trim(),
+    away: document.getElementById('eg-away-' + gameId).value,
+    home: document.getElementById('eg-home-' + gameId).value,
+    field: document.getElementById('eg-field-' + gameId).value.trim(),
+    addr: document.getElementById('eg-addr-' + gameId).value.trim()
+  };
+  try {
+    await updateDoc(doc(db, 'games', gameId), data);
+    const g = GAMES.find(x => x.id === gameId);
+    if (g) Object.assign(g, data);
+    toast('Game updated!');
+    await logActivity('Schedule', `Edited game: ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk}`);
+    renderSchedule();
+    renderScores();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.deleteGame = async function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!confirm(`Delete game: ${getTeamName(g?.away)} @ ${getTeamName(g?.home)}?`)) return;
+  try {
+    await deleteDoc(doc(db, 'games', gameId));
+    GAMES = GAMES.filter(x => x.id !== gameId);
+    toast('Game deleted');
+    await logActivity('Schedule', `Deleted game: ${getTeamName(g?.away)} @ ${getTeamName(g?.home)} Wk ${g?.wk}`);
+    renderSchedule();
+    renderScores();
+    renderDashboard();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// ROSTERS
+// ═══════════════════════════════════════════════════════════════════
+function populateTeamDropdowns() {
+  const opts = '<option value="">-- Choose a team --</option>' + TEAMS.map(t =>
+    `<option value="${t.id}">${esc(t.name)} (${esc(t.short)})</option>`
+  ).join('');
+  document.getElementById('roster-team-select').innerHTML = opts;
+
+  // Email dropdown
+  const emailOpts = '<option value="all">All Teams</option>' + TEAMS.map(t =>
+    `<option value="${t.id}">${esc(t.name)}</option>`
+  ).join('');
+  document.getElementById('email-to').innerHTML = emailOpts;
+}
+
+window.loadRoster = function() {
+  const teamId = document.getElementById('roster-team-select').value;
+  const el = document.getElementById('roster-content');
+  const addBtn = document.getElementById('add-player-btn');
+  document.getElementById('add-player-form').style.display = 'none';
+  if (!teamId) { el.innerHTML = ''; addBtn.style.display = 'none'; return; }
+  addBtn.style.display = 'inline-flex';
+
+  const teamPlayers = PLAYERS.filter(p => p.team === teamId).sort((a,b) => (a.num||99) - (b.num||99));
+  if (!teamPlayers.length) {
+    el.innerHTML = `<div class="empty">No players found for this team</div>`;
+    return;
+  }
+  el.innerHTML = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">${teamPlayers.length} player(s)</div>
+    <div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Actions</th></tr></thead>
+    <tbody>${teamPlayers.map(p => `<tr id="player-row-${p.id}">
+      <td>${p.num||'-'}</td><td><strong>${esc(p.name)}</strong></td><td>${esc(p.pos||'-')}</td>
+      <td class="actions">
+        <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>
+      </td>
+    </tr>
+    <tr id="player-edit-${p.id}" style="display:none"><td colspan="4" id="player-edit-cell-${p.id}"></td></tr>`).join('')}
+    </tbody></table></div>`;
+};
+
+window.openAddPlayer = function() {
+  const el = document.getElementById('add-player-form');
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="inline-form" style="margin-bottom:16px">
+    <div class="panel-title">Add Player</div>
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ap-name" placeholder="Player name"></div>
+      <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ap-num" placeholder="#" min="0"></div>
+      <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ap-pos" placeholder="e.g. SS, CF, P"></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
+        <button class="btn btn-success btn-sm" onclick="saveNewPlayer()">Add</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('add-player-form').style.display='none'">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+};
+
+window.saveNewPlayer = async function() {
+  const teamId = document.getElementById('roster-team-select').value;
+  if (!teamId) return;
+  const data = {
+    name: document.getElementById('ap-name').value.trim(),
+    num: parseInt(document.getElementById('ap-num').value) || 0,
+    pos: document.getElementById('ap-pos').value.trim(),
+    team: teamId
+  };
+  if (!data.name) { toast('Enter a player name', 'error'); return; }
+  try {
+    const ref = await addDoc(collection(db, 'players'), data);
+    data.id = ref.id;
+    PLAYERS.push(data);
+    document.getElementById('add-player-form').style.display = 'none';
+    toast('Player added!');
+    await logActivity('Roster', `Added ${data.name} to ${getTeamFull(teamId)}`);
+    window.loadRoster();
+    renderDashboard();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.editPlayer = function(playerId) {
+  const row = document.getElementById('player-edit-' + playerId);
+  if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+  row.style.display = 'table-row';
+  const p = PLAYERS.find(x => x.id === playerId);
+  if (!p) return;
+  document.getElementById('player-edit-cell-' + playerId).innerHTML = `
+    <div class="inline-form">
+      <div class="form-row">
+        <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ep-name-${playerId}" value="${esc(p.name)}"></div>
+        <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ep-num-${playerId}" value="${p.num||''}" min="0"></div>
+        <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ep-pos-${playerId}" value="${esc(p.pos||'')}"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
+          <button class="btn btn-success btn-sm" onclick="saveEditPlayer('${playerId}')">Save</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('player-edit-${playerId}').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+};
+
+window.saveEditPlayer = async function(playerId) {
+  const data = {
+    name: document.getElementById('ep-name-' + playerId).value.trim(),
+    num: parseInt(document.getElementById('ep-num-' + playerId).value) || 0,
+    pos: document.getElementById('ep-pos-' + playerId).value.trim()
+  };
+  if (!data.name) { toast('Enter a name', 'error'); return; }
+  try {
+    await updateDoc(doc(db, 'players', playerId), data);
+    const p = PLAYERS.find(x => x.id === playerId);
+    if (p) Object.assign(p, data);
+    toast('Player updated!');
+    await logActivity('Roster', `Edited ${data.name}`);
+    window.loadRoster();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.removePlayer = async function(playerId) {
+  const p = PLAYERS.find(x => x.id === playerId);
+  if (!confirm(`Remove ${p?.name || 'this player'}?`)) return;
+  try {
+    await deleteDoc(doc(db, 'players', playerId));
+    PLAYERS = PLAYERS.filter(x => x.id !== playerId);
+    toast('Player removed');
+    await logActivity('Roster', `Removed ${p?.name} from ${getTeamFull(p?.team)}`);
+    window.loadRoster();
+    renderDashboard();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// RECAPS
+// ═══════════════════════════════════════════════════════════════════
+function renderRecaps() {
+  const el = document.getElementById('recaps-content');
+  const doneGames = GAMES.filter(g => g.done).sort((a,b) => (b.wk||0) - (a.wk||0));
+  if (!doneGames.length) { el.innerHTML = '<div class="empty">No completed games yet</div>'; return; }
+
+  el.innerHTML = doneGames.map(g => {
+    const recap = RECAPS_DATA.find(r =>
+      (r.away === g.away || r.away === getTeamName(g.away)) &&
+      (r.home === g.home || r.home === getTeamName(g.home)) &&
+      r.wk === g.wk
+    );
+    const hasRecap = recap && recap.text;
+    return `<div class="recap-item" onclick="openRecapEditor('${g.id}')">
+      <div class="ri-match">${getTeamName(g.away)} ${g.away_score??'-'} - ${getTeamName(g.home)} ${g.home_score??'-'}</div>
+      <div class="ri-meta">Week ${g.wk} &bull; ${g.date||''} &bull; ${g.field||''}</div>
+      <div class="ri-status">${hasRecap ? '<span class="badge badge-done">Recap Written</span>' : '<span class="badge badge-pending">No Recap</span>'}</div>
+    </div>`;
+  }).join('');
+}
+
+window.openRecapEditor = function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const edEl = document.getElementById('recap-editor');
+
+  // Find existing recap
+  const recap = RECAPS_DATA.find(r =>
+    (r.away === g.away || r.away === getTeamName(g.away)) &&
+    (r.home === g.home || r.home === getTeamName(g.home)) &&
+    r.wk === g.wk
+  );
+
+  edEl.style.display = 'block';
+  edEl.innerHTML = `<div class="panel" style="border-color:var(--navy-mid)">
+    <div class="panel-title">${getTeamName(g.away)} ${g.away_score??''} - ${getTeamName(g.home)} ${g.home_score??''} (Week ${g.wk})</div>
+    <div class="form-row">
+      <div class="form-col">
+        <label class="form-label">Recap Text</label>
+        <textarea class="form-input" id="recap-text" rows="8" placeholder="Write the game recap...">${esc(recap?.text || '')}</textarea>
+      </div>
+    </div>
+    <div class="panel-title" style="margin-top:16px">Stars of the Game</div>
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Star 1</label><input type="text" class="form-input" id="recap-star1" value="${esc(recap?.stars?.[0] || '')}" placeholder="Player name"></div>
+      <div class="form-col"><label class="form-label">Star 2</label><input type="text" class="form-input" id="recap-star2" value="${esc(recap?.stars?.[1] || '')}" placeholder="Player name"></div>
+      <div class="form-col"><label class="form-label">Star 3</label><input type="text" class="form-input" id="recap-star3" value="${esc(recap?.stars?.[2] || '')}" placeholder="Player name"></div>
+    </div>
+    <div class="form-row" style="margin-top:12px">
+      <button class="btn btn-success" onclick="saveRecap('${gameId}', '${recap?.id || ''}')">Save Recap</button>
+      <button class="btn btn-outline" onclick="document.getElementById('recap-editor').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+  edEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.saveRecap = async function(gameId, existingRecapId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const text = document.getElementById('recap-text').value.trim();
+  const stars = [
+    document.getElementById('recap-star1').value.trim(),
+    document.getElementById('recap-star2').value.trim(),
+    document.getElementById('recap-star3').value.trim()
+  ].filter(Boolean);
+
+  const data = {
+    date: g.date || '', wk: g.wk || 0,
+    away: getTeamName(g.away), home: getTeamName(g.home),
+    away_score: g.away_score, home_score: g.home_score,
+    field: g.field || '', text, stars
+  };
+
+  try {
+    if (existingRecapId) {
+      await updateDoc(doc(db, 'recaps', existingRecapId), data);
+    } else {
+      const ref = await addDoc(collection(db, 'recaps'), data);
+      data.id = ref.id;
+      RECAPS_DATA.push(data);
+    }
+    // Update local
+    if (existingRecapId) {
+      const r = RECAPS_DATA.find(x => x.id === existingRecapId);
+      if (r) Object.assign(r, data);
+    }
+    toast('Recap saved!');
+    await logActivity('Recap', `Saved recap for ${getTeamName(g.away)} vs ${getTeamName(g.home)} Wk ${g.wk}`);
+    document.getElementById('recap-editor').style.display = 'none';
+    renderRecaps();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// BANNER
+// ═══════════════════════════════════════════════════════════════════
+async function loadBanner() {
+  try {
+    const snap = await getDoc(doc(db, 'site_config', 'banner'));
+    if (snap.exists()) {
+      const d = snap.data();
+      document.getElementById('banner-active').checked = d.active || false;
+      document.getElementById('banner-text').value = d.text || '';
+      document.getElementById('banner-type').value = d.type || 'info';
+      updateBannerPreview();
+    }
+  } catch(e) { console.log('No banner config found'); }
+}
+
+window.updateBannerPreview = function() {
+  const text = document.getElementById('banner-text').value || 'Banner preview will appear here';
+  const type = document.getElementById('banner-type').value;
+  const preview = document.getElementById('banner-preview');
+  preview.textContent = text;
+  preview.className = 'banner-preview ' + type + '-type';
+};
+
+window.saveBanner = async function() {
+  const data = {
+    active: document.getElementById('banner-active').checked,
+    text: document.getElementById('banner-text').value.trim(),
+    type: document.getElementById('banner-type').value
+  };
+  try {
+    await setDoc(doc(db, 'site_config', 'banner'), data);
+    toast('Banner saved!');
+    await logActivity('Banner', `${data.active ? 'Activated' : 'Deactivated'} banner: "${data.text}"`);
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// EMAIL / ANNOUNCEMENTS
+// ═══════════════════════════════════════════════════════════════════
+window.sendAnnouncement = async function() {
+  const to = document.getElementById('email-to').value;
+  const subject = document.getElementById('email-subject').value.trim();
+  const body = document.getElementById('email-body').value.trim();
+  if (!subject || !body) { toast('Enter a subject and message', 'error'); return; }
+  try {
+    await addDoc(collection(db, 'announcements'), {
+      to: to === 'all' ? 'All Teams' : getTeamFull(to),
+      to_id: to,
+      subject, body,
+      timestamp: Timestamp.now(),
+      sent_by: currentUser?.email || 'unknown'
+    });
+    toast('Announcement saved!');
+    await logActivity('Email', `Announcement: "${subject}"`);
+    document.getElementById('email-subject').value = '';
+    document.getElementById('email-body').value = '';
+    loadAnnouncements();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+async function loadAnnouncements() {
+  const el = document.getElementById('announcements-list');
+  try {
+    const q2 = query(collection(db, 'announcements'), orderBy('timestamp', 'desc'));
+    const snap = await getDocs(q2);
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!items.length) { el.innerHTML = '<div class="empty">No announcements yet</div>'; return; }
+    el.innerHTML = items.map(a => {
+      const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
+      return `<div style="padding:12px 0;border-bottom:1px solid var(--border2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <strong style="font-size:14px">${esc(a.subject)}</strong>
+          <span class="badge badge-info">${esc(a.to || 'All Teams')}</span>
+        </div>
+        <div style="font-size:13px;color:var(--text);margin-top:6px;white-space:pre-wrap">${esc(a.body)}</div>
+        <div style="font-size:11px;color:var(--muted2);margin-top:4px">${t.toLocaleDateString()} ${t.toLocaleTimeString()} &bull; ${esc(a.sent_by||'')}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Could not load announcements</div>';
+  }
+}
+
+</script>
+</body>
+</html>
