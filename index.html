@@ -488,11 +488,10 @@ body.ci-active .nav{opacity:0;pointer-events:none}
 
 /* ── ESPN-STYLE SCORE TICKER ─────────────────────────────────────────── */
 #score-ticker{
-  position:fixed;top:4px;left:0;right:0;z-index:200;
+  position:fixed;top:0;left:0;right:0;z-index:200;
   background:#002D72;border-bottom:1px solid rgba(0,0,0,.15);
-  height:44px;display:flex;align-items:stretch;overflow:hidden;
+  height:48px;display:flex;align-items:stretch;overflow:visible;
   transition:transform .3s ease,opacity .3s ease;color:#ffffff;
-}
 }
 #score-ticker.hidden{transform:translateY(-100%);opacity:0;pointer-events:none;transition:transform .3s ease,opacity .3s ease}
 .st-label{
@@ -621,8 +620,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 
 /* ── SCHEDULE PREVIEW CARDS ── */
 .preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:24px 0}
-.preview-card{background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:20px;transition:box-shadow .15s}
-.preview-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.preview-card{background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:20px;transition:box-shadow .15s,transform .15s}
+.preview-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.12);transform:translateY(-2px)}
 .preview-time{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:rgba(0,0,0,.45);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,.08)}
 .preview-teams{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
 .preview-team-row{display:flex;align-items:center;gap:10px}
@@ -940,8 +939,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 
 /* ── SCHEDULE PREVIEW CARDS ── */
 .preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;padding:24px 0}
-.preview-card{background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:20px;transition:box-shadow .15s}
-.preview-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.preview-card{background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:20px;transition:box-shadow .15s,transform .15s}
+.preview-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.12);transform:translateY(-2px)}
 .preview-time{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:rgba(0,0,0,.45);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,.08)}
 .preview-teams{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
 .preview-team-row{display:flex;align-items:center;gap:10px}
@@ -1742,24 +1741,26 @@ thead th.sorted-col .sarrow{opacity:1}
 
   <div class="divider"></div>
 
-  <!-- SCHEDULE PREVIEW -->
+  <!-- SCHEDULE + STANDINGS (two-column) -->
   <section class="sec" style="background:var(--bg2)">
     <div class="container">
-      <div class="sec-eyebrow" style="text-align:center">Season Schedule</div>
-      <div class="sec-title" style="text-align:center">Scores</div>
-      <div class="sched-wrap" id="sched-wrap" style="max-width:900px;margin:16px auto 0"></div>
-      <div style="text-align:center;margin-top:28px;display:flex;gap:12px;justify-content:center"><a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('scores'),80)" class="btn-outline">Full Schedule →</a><button class="btn-outline" onclick="goPage('history')">League History →</button></div>
-    </div>
-  </section>
-
-  <div class="divider"></div>
-
-  <!-- STANDINGS -->
-  <section class="sec">
-    <div class="container">
-      <div class="sec-eyebrow">2026 Season</div>
-      <div class="sec-title">Standings</div>
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><div class="standings-wrap" id="standings-wrap"></div></div>
+      <div style="display:flex;gap:32px;align-items:flex-start">
+        <!-- Left: Schedule -->
+        <div style="flex:1;min-width:0">
+          <div class="sec-eyebrow">2026 Season</div>
+          <div class="sec-title">Upcoming Schedule</div>
+          <div class="sched-wrap" id="sched-wrap" style="margin-top:16px"></div>
+          <div style="margin-top:20px"><a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)" style="font-size:14px;font-weight:600;color:#002D72;text-decoration:none">Full Schedule →</a></div>
+        </div>
+        <!-- Right: Standings sidebar -->
+        <div style="width:300px;flex-shrink:0">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;color:#1a1a1a">Standings</div>
+            <a href="javascript:void(0)" onclick="goPage('standings')" style="font-size:13px;font-weight:600;color:#002D72;text-decoration:none">Full →</a>
+          </div>
+          <div id="home-standings-sidebar" style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;overflow:hidden"></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -2488,9 +2489,9 @@ function initNextGame(){
   const g = NEXT_GAME_DATA;
   const awayT = getTeamByShort(g.away), homeT = getTeamByShort(g.home);
   document.getElementById('ng-away').textContent = g.away;
-  document.getElementById('ng-away').style.color = awayT?.color || 'var(--white)';
+  document.getElementById('ng-away').style.color = 'var(--white)';
   document.getElementById('ng-home').textContent = g.home;
-  document.getElementById('ng-home').style.color = homeT?.color || 'var(--white)';
+  document.getElementById('ng-home').style.color = 'var(--white)';
   document.getElementById('ng-date').textContent = g.date;
   document.getElementById('ng-time').textContent = g.time;
   document.getElementById('ng-field').textContent = g.field;
@@ -2573,7 +2574,7 @@ function filterPlayerSearch(query){
   grid.innerHTML = players.map(p => {
     const t = getTeam(p.team);
     return `<div class="pcard" onclick="openModal('${p.id}')">
-      <div class="pcard-team" style="color:${t?.color||'var(--gold)'}"><div class="pcard-dot" style="background:${t?.color||'var(--gold)'}"></div>${t?.name||''}</div>
+      <div class="pcard-team"><div class="pcard-dot" style="background:${t?.color||'var(--gold)'}"></div>${t?.name||''}</div>
       <div class="pcard-name">${p.name}</div>
       <div class="pcard-stats">
         <div class="pstat"><div class="pstat-val">${avg(p.avg)}</div><div class="pstat-lbl">AVG</div></div>
@@ -2691,7 +2692,7 @@ function buildLeadersPage(statKey, dir){
           onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(p.name)}&background=111&color=F5C842&size=38'">
         <div class="lt-info">
           <div class="lt-name">${p.name}</div>
-          <div class="lt-team" style="color:${t?.color||'var(--muted)'}">${t?.name||''}</div>
+          <div class="lt-team">${t?.name||''}</div>
         </div>
       </td>
       <td class="lt-val highlight">${cat.fmt(p)}</td>
@@ -2903,97 +2904,69 @@ function buildStandings(){
   </div>`;
 }
 
+function buildHomeSidebar(){
+  const el=document.getElementById('home-standings-sidebar');
+  if(!el) return;
+  const sorted=[...TEAMS].filter(t=>t.active!==false).sort((a,b)=>b.pct-a.pct||b.w-a.w);
+  const top8=sorted.slice(0,8);
+  el.innerHTML=top8.map((t,i)=>`<div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:12px" onclick="goPage('team','${t.id}')">
+    <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;color:rgba(0,0,0,.35);width:18px">${i+1}</span>
+    <span style="width:8px;height:8px;border-radius:50%;background:${t.color};flex-shrink:0"></span>
+    <span style="font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:#1a1a1a;flex:1">${t.name}</span>
+    <span style="font-family:'Oswald',sans-serif;font-weight:700;font-size:16px;color:#1a1a1a">${t.w}-${t.l}</span>
+  </div>`).join('');
+}
+
 // ════════════════════════════ SCHEDULE PREVIEW ═══════════════════════════
 function buildSchedule(){
-  const PITCHER_STATS={
-    GOLD:{wl:'7-3',era:'2.84'},SA:{wl:'8-2',era:'2.11'},KI:{wl:'6-4',era:'3.22'},
-    BOB:{wl:'5-5',era:'3.98'},TBIR:{wl:'7-3',era:'2.65'},AJ:{wl:'4-6',era:'4.12'},
-    TSMC:{wl:'3-7',era:'4.55'},BSMC:{wl:'2-8',era:'5.10'}
-  };
-  const pStats=t=>PITCHER_STATS[t]||{wl:'—',era:'—'};
-  const STAR={
-    GOLD:'Josh Weinberg',SA:'Carlos Rivera',KI:'Kevin Park',BOB:'Bobby Marchetti',
-    TBIR:'Tom Birnbaum',AJ:'Al Jacobs',TSMC:'Dan Cohen',BSMC:'Ari Feldman'
-  };
   const wrap=document.getElementById('sched-wrap');
-  const nextIdx=SCHEDULE_PREVIEW.findIndex(g=>!g.done);
-  const doneGames = SCHEDULE_PREVIEW.filter(g=>g.done);
-  const upcomingGames = SCHEDULE_PREVIEW.filter(g=>!g.done);
+  if(!wrap) return;
+  if(!SCHEDULE_PREVIEW.length){ wrap.innerHTML=''; return; }
 
-  function renderHomeGame(g, i){
-    const isNext=i===nextIdx;
-    const atm=getTeamByShort(g.away); const htm=getTeamByShort(g.home);
-    const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
-    const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${(atm?.short||g.away).toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
-    const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${(htm?.short||g.home).toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
-    const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:``; const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:``;
-    if(g.done){
-      const aw=g.as>g.hs;
-      const wTeam=aw?g.away:g.home, lTeam=aw?g.home:g.away;
-      const wc=aw?ac:hc, lc=aw?hc:ac;
-      const aH=Math.floor(g.as*2.1), hH=Math.floor(g.hs*2.1);
-      return `<div class="sched-game-block${isNext?' next':''}" onclick="openRecap(${i})">
-        <div class="gb-left">
-          <div class="gb-rhe-hdr-row"><span class="gb-rhe-lbl" style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
-          <div class="gb-team-row">${logoA}
-            <span class="gb-name ${aw?'winner':'loser'}" data-short="${g.away}" style="color:${aw?ac:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.away)?.id||''}')"><span>${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${aRec}</span></span>
-            <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">—</span><span class="gb-rhe-val">0</span>
-          </div>
-          <div class="gb-team-row">${logoH}
-            <span class="gb-name ${!aw?'winner':'loser'}" data-short="${g.home}" style="color:${!aw?hc:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.home)?.id||''}')"><span>${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${hRec}</span></span>
-            <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">—</span><span class="gb-rhe-val">0</span>
-          </div>
-          <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px">FINAL</div>
-        </div>
-
-        <div class="gb-actions">
-          <button class="gb-btn" onclick="event.stopPropagation();openBsm(${i})">Recap</button>
-          <button class="gb-btn" onclick="event.stopPropagation();openBsm(${i})">Box Score</button>
-        </div>
-      </div>`;
-    } else {
-      return `<div class="sched-game-block${isNext?' next':''}">
-        <div class="gb-left">
-          <div class="gb-team-row">${logoA}<span class="gb-name winner" data-short="${g.away}" style="color:${ac};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.away)?.id||''}')"><span>${g.away}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${aRec}</span></span></div>
-          <div class="gb-team-row">${logoH}<span class="gb-name winner" data-short="${g.home}" style="color:${hc};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goPage('team','${getTeamByShort(g.home)?.id||''}')"><span>${g.home}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${hRec}</span></span></div>
-          <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);padding-top:2px;padding-left:44px">${isNext?'▶ NEXT':'UPCOMING'}</div>
-        </div>
-        <div class="gb-mid">
-          <div class="gb-time" style="font-size:28px">${g.time}</div>
-          <div style="font-size:16px;color:var(--white);font-weight:700;margin-top:4px">${g.date}</div>
-        </div>
-        <div class="gb-wl" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 12px">
-          <div class="gb-field" style="font-size:18px;font-weight:700;color:var(--white);text-align:center">${g.field}</div>
-        </div>
-        <div class="gb-actions"><button class="gb-btn gold" onclick="event.stopPropagation();openBsm(${i})">Gameday</button></div>
-      </div>`;
-    }
-  }
-
-  // Find the current week: first week with upcoming games, or last week with completed games
+  // Find the current week: first week with upcoming games
   const wkMap={};
   SCHEDULE_PREVIEW.forEach(g=>{
     if(!wkMap[g.wk])wkMap[g.wk]=[];
     wkMap[g.wk].push(g);
   });
   const allWkNums=Object.keys(wkMap).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
-  // Current week = first week that has any upcoming game
   let currentWk=allWkNums.find(w=>wkMap[w].some(g=>!g.done));
-  if(!currentWk) currentWk=allWkNums[allWkNums.length-1]; // all done, show last week
+  if(!currentWk) currentWk=allWkNums[allWkNums.length-1];
   if(!currentWk){ wrap.innerHTML=''; return; }
 
   const weekGames=wkMap[currentWk];
-  const weekDone=weekGames.filter(g=>g.done);
-  const weekUp=weekGames.filter(g=>!g.done);
+  const upGames=weekGames.filter(g=>!g.done);
+  const gamesToShow=upGames.length?upGames:weekGames;
 
-  const doneHtml = weekDone.map(g=>renderHomeGame(g, SCHEDULE_PREVIEW.indexOf(g))).join('');
-  const upcomingHtml = weekUp.map(g=>renderHomeGame(g, SCHEDULE_PREVIEW.indexOf(g))).join('');
+  // Render as preview cards (reuse scheduleBlock which now outputs preview-card for upcoming)
+  const cards=gamesToShow.slice(0,6).map(g=>{
+    const atm=getTeamByShort(g.away), htm=getTeamByShort(g.home);
+    const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
+    const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
+    const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
+    return `<div class="preview-card">
+      <div class="preview-time">${g.time||'TBD'} · ${g.date||''}</div>
+      <div class="preview-teams">
+        <div class="preview-team-row">
+          <div class="preview-logo" style="color:${ac};border-color:${ac}88;background:${ac}11">${g.away}</div>
+          <span class="preview-name">${atm?.name||g.away}</span>
+          <span class="preview-rec">${aRec}</span>
+        </div>
+        <div class="preview-team-row">
+          <div class="preview-logo" style="color:${hc};border-color:${hc}88;background:${hc}11">${g.home}</div>
+          <span class="preview-name">${htm?.name||g.home}</span>
+          <span class="preview-rec">${hRec}</span>
+        </div>
+      </div>
+      <div class="preview-field">${g.field||''}</div>
+      <span class="preview-link" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Preview</span>
+    </div>`;
+  }).join('');
 
   const wkLabel=String(currentWk).startsWith('PL')?'Playoffs':'Week '+currentWk;
   wrap.innerHTML =
-    `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;text-align:center">${wkLabel}</div>` +
-    (weekDone.length ? `<div class="home-scores-grid">${doneHtml}</div>` : '') +
-    (weekUp.length ? `<div class="home-upcoming-list">${upcomingHtml}</div>` : '');
+    `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:rgba(0,0,0,.4);margin-bottom:12px">${wkLabel}</div>` +
+    `<div class="preview-grid">${cards}</div>`;
 }
 
 // ════════════════════════════ LEADERBOARD ════════════════════════════════
@@ -3026,7 +2999,7 @@ function buildLeaderboard(){
         <div class="ldr-headshot-info">
           <div class="ldr-val" style="font-size:42px;line-height:1">${cat.fmt(top)}</div>
           <div class="ldr-name" style="font-size:15px">${top.name}</div>
-          <div class="ldr-team" style="color:${t?.color||'var(--gold)'}">${t?.name||''}</div>
+          <div class="ldr-team">${t?.name||''}</div>
         </div>
       </div>
       <div class="ldr-runners">${sorted.slice(1,6).map((p,j)=>{
@@ -3404,9 +3377,9 @@ function buildRecaps(){
       <div class="recap-top">
         <div>
           <div class="recap-match">
-            <span style="color:${at?.color||'var(--white)'};cursor:pointer" onclick="goPage('team','${at?.id}')">${r.away}</span>
+            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${at?.id}')">${r.away}</span>
             <span style="color:var(--muted);font-size:18px;margin:0 10px">vs</span>
-            <span style="color:${ht?.color||'var(--white)'};cursor:pointer" onclick="goPage('team','${ht?.id}')">${r.home}</span>
+            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${ht?.id}')">${r.home}</span>
           </div>
           <div class="recap-meta">📅 ${r.date} · 📍 ${r.field} · Week ${r.wk}</div>
         </div>
@@ -3476,6 +3449,7 @@ window._dataPromise = loadAllData();
 window._dataPromise.then(() => {
   buildTicker();
   buildStandings();
+  buildHomeSidebar();
   buildSchedule();
   initNextGame();
   buildLeaderboard();
@@ -3994,12 +3968,12 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         <div class="gb-rhe-hdr-row"><span style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name ${aW?'winner':'loser'}" data-short="${g.away}" style="color:${aW?ac:'rgba(239,239,239,.38)'}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
+          <span class="gb-name ${aW?'winner':'loser'}" data-short="${g.away}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
           <span class="gb-score ${aW?'winner':'loser'}">${as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">${aE}</span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name ${!aW?'winner':'loser'}" data-short="${g.home}" style="color:${!aW?hc:'rgba(239,239,239,.38)'}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
+          <span class="gb-name ${!aW?'winner':'loser'}" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
           <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">${hE}</span>
         </div>
         <div class="gb-status-lbl final">FINAL</div>
@@ -4018,11 +3992,11 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name winner" data-short="${g.away}" style="color:${ac}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
+          <span class="gb-name winner" data-short="${g.away}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name winner" data-short="${g.home}" style="color:${hc}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
+          <span class="gb-name winner" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
         </div>
         <div style="padding-left:38px;margin-top:4px;font-size:13px;color:var(--gold);font-weight:700;font-family:'Oswald',sans-serif">${time} <span style="color:var(--muted);font-size:11px;font-family:'Inter',sans-serif;font-weight:500">· ${field}</span></div>
       </div>
