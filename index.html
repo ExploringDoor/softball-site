@@ -4194,14 +4194,19 @@ function openBox(away,home,as,hs,field,date){
 
 function openGameday(away,home,field,time){
   const ac=tc(away),hc=tc(home);
-  const realPlayers = (teamShort) => {
-    const stars = STAR_NAMES[teamShort] || [];
-    const positions = ['CF','SS','1B','LF','3B','RF','2B','C','DH'];
-    return stars.map((name,i) => ({name, pos:positions[i]||'OF', avg:'.'+( 265+Math.floor((name.charCodeAt(0)*7+i*13)%120)), hr: (i*3+2)%9+1, rbi: (i*7+8)%25+8}));
+  const at=TEAMS.find(t=>t.short===away);
+  const ht=TEAMS.find(t=>t.short===home);
+  // Get real roster from PLAYERS array
+  const getRoster=(teamId)=>{
+    return PLAYERS.filter(p=>p.team===teamId).map(p=>({
+      name:p.name, num:p.num||'', pos:p.pos||''
+    }));
   };
-  const mkRows=(lu,teamShort)=>{
-    const players = teamShort ? realPlayers(teamShort) : lu;
-    return players.map(p=>`<tr style="cursor:pointer" onclick="window.location='index.html'" title="View ${p.name} stats"><td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
+  const awayRoster=at?getRoster(at.id):[];
+  const homeRoster=ht?getRoster(ht.id):[];
+  const mkRows=(roster)=>{
+    if(!roster.length) return '<tr><td colspan="2" style="color:var(--muted);font-style:italic;padding:12px">No roster available</td></tr>';
+    return roster.map(p=>`<tr><td><span style="color:var(--white);font-weight:600">${p.name}</span>${p.num?' <span style="font-size:10px;color:var(--muted2)">#'+p.num+'</span>':''}</td><td style="color:var(--muted2)">${p.pos||'—'}</td></tr>`).join('');
   };
   document.getElementById('scPopContent').innerHTML=`
     <div class="pop-hd">
@@ -4216,10 +4221,10 @@ function openGameday(away,home,field,time){
       <div class="pop-meta"><span>📍 ${field}</span></div>
     </div>
     <div class="pop-body">
-      <div class="pop-sec-title">Last Game Lineups</div>
+      <div class="pop-sec-title">Rosters</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP,away)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(LINEUP,home)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${at?.name||away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(awayRoster)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${ht?.name||home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(homeRoster)}</tbody></table></div>
       </div>
     </div>`;
   openScPop();
