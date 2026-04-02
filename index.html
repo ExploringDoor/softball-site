@@ -3793,44 +3793,38 @@ function fakeScore(away,home,seed){
   return{a,h};
 }
 
-function buildScoresNav(){
-  // For scores: show weeks with done games; for schedule: show all weeks
+function getWeekList(){
   const wkMap={};
-  SCHEDULE_PREVIEW.forEach((g,gi)=>{
-    const k=g.wk;
-    if(!wkMap[k])wkMap[k]={wk:k,date:g.date,games:[],hasDone:false};
-    wkMap[k].games.push(g);
-    if(g.done)wkMap[k].hasDone=true;
+  SCHEDULE_PREVIEW.forEach(g=>{
+    if(!wkMap[g.wk])wkMap[g.wk]={wk:g.wk,date:g.date,hasDone:false};
+    if(g.done)wkMap[g.wk].hasDone=true;
   });
-  const relevantWks=view==='scores'
-    ? Object.values(wkMap).filter(w=>w.hasDone).sort((a,b)=>a.wk-b.wk)
-    : Object.values(wkMap).sort((a,b)=>a.wk-b.wk);
-  if(!relevantWks.length)return;
+  const all=Object.values(wkMap).sort((a,b)=>String(a.wk).localeCompare(String(b.wk),(undefined),{numeric:true}));
+  return view==='scores'?all.filter(w=>w.hasDone):all;
+}
 
-  // weekOffset is absolute index into relevantWks
-  const clampedOff=Math.min(Math.max(0,weekOffset),relevantWks.length-1);
-  const center=clampedOff;
-  const start=Math.max(0,center-3), end=Math.min(relevantWks.length-1,center+3);
-  const slots=relevantWks.slice(start,end+1);
-  document.getElementById('dnSlots').innerHTML=slots.map((w,i)=>{
-    const abs=start+i, active=abs===clampedOff;
-    return`<div class="dn-slot${active?' active':''}" onclick="setWeekAbs(${abs})">
-      <div class="wk-label">WK ${w.wk}</div>
+function buildScoresNav(){
+  const wks=getWeekList();
+  if(!wks.length){document.getElementById('dnSlots').innerHTML='';return;}
+  const off=Math.min(Math.max(0,weekOffset<0?wks.length-1:weekOffset),wks.length-1);
+  if(weekOffset<0)weekOffset=off;
+  document.getElementById('dnSlots').innerHTML=wks.map((w,i)=>{
+    const label=String(w.wk).startsWith('PL')?w.wk:'WK '+w.wk;
+    return`<div class="dn-slot${i===off?' active':''}" onclick="setWeekAbs(${i})">
+      <div class="wk-label">${label}</div>
       <div class="wk-date">${w.date||''}</div>
     </div>`;
   }).join('');
+  // Scroll active tab into view
+  setTimeout(()=>{const a=document.querySelector('#dnSlots .dn-slot.active');if(a)a.scrollIntoView({inline:'center',behavior:'smooth'});},50);
 }
 
 function setWeekAbs(idx){weekOffset=idx;buildScoresNav();renderScores();}
 function setWeek(off){weekOffset=off;buildScoresNav();renderScores();}
 function shiftNav(d){
-  const wkMap={};
-  SCHEDULE_PREVIEW.forEach(g=>{if(!wkMap[g.wk])wkMap[g.wk]={wk:g.wk,date:g.date,games:[],hasDone:false};wkMap[g.wk].games.push(g);if(g.done)wkMap[g.wk].hasDone=true;});
-  const relevantWks2=view==='scores'
-    ? Object.values(wkMap).filter(w=>w.hasDone).sort((a,b)=>a.wk-b.wk)
-    : Object.values(wkMap).sort((a,b)=>a.wk-b.wk);
-  const ni=weekOffset+(d*4);
-  if(ni<0||ni>=relevantWks2.length)return;
+  const wks=getWeekList();
+  const ni=weekOffset+(d);
+  if(ni<0||ni>=wks.length)return;
   weekOffset=ni;buildScoresNav();renderScores();
 }
 function setView(v){
@@ -3990,44 +3984,39 @@ function openRecap2(away,home,as,hs,field,date){
 function renderScores(){
   const wrap=document.getElementById('sbWrap');
   if(!SCHEDULE_PREVIEW||!SCHEDULE_PREVIEW.length){
-    wrap.innerHTML='<div class="no-games">Loading schedule...</div>';return;
+    wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⏳</div><div style="font-size:18px;font-weight:700">Loading...</div></div>';return;
   }
 
-  // Group SCHEDULE_PREVIEW by week number
+  // Build week map from SCHEDULE_PREVIEW
   const wkMap={};
   SCHEDULE_PREVIEW.forEach((g,gi)=>{
     const k=g.wk;
     if(!wkMap[k])wkMap[k]={wk:k,date:g.date,games:[]};
     wkMap[k].games.push({...g,_gi:gi});
   });
-  const allWks=Object.keys(wkMap).map(k=>wkMap[k]).sort((a,b)=>a.wk-b.wk);
+  const allWks=Object.values(wkMap).sort((a,b)=>String(a.wk).localeCompare(String(b.wk),undefined,{numeric:true}));
   const nextGi=SCHEDULE_PREVIEW.findIndex(g=>!g.done);
 
   if(view==='scores'){
-    // Scores page: show completed games by week
     const doneWks=allWks.filter(w=>w.games.some(g=>g.done));
-    if(!doneWks.length){wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⚾</div><div style="font-size:20px;font-weight:700;margin-bottom:8px">Season Starts April 14!</div><div style="color:var(--muted);font-size:14px">No completed games yet. Check the Schedule tab for upcoming games.</div></div>';return;}
-    // Auto-set to last completed week on first render
-    if(weekOffset<0)weekOffset=doneWks.length-1;
-    const idx=Math.min(Math.max(0,weekOffset),doneWks.length-1);
-    const w=doneWks[idx];
-    if(!w){wrap.innerHTML='<div class="no-games">No games found.</div>';return;}
+    if(!doneWks.length){
+      wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⚾</div><div style="font-size:20px;font-weight:700;margin-bottom:8px">Season Starts April 14!</div><div style="color:var(--muted);font-size:14px">No completed games yet. Check the Schedule tab for upcoming games.</div></div>';
+      return;
+    }
+    const off=Math.min(Math.max(0,weekOffset<0?doneWks.length-1:weekOffset),doneWks.length-1);
+    weekOffset=off;
+    const w=doneWks[off];
     const doneGames=w.games.filter(g=>g.done);
-    wrap.innerHTML=`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
+    wrap.innerHTML=`<div class="sb-week-head">Week ${w.wk} · ${w.date} <span style="font-size:13px;color:var(--muted);font-weight:400">${doneGames.length} game${doneGames.length!==1?'s':''}</span></div>`
       +`<div class="sched-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px;">`
       +doneGames.map(g=>scheduleBlock(g,false)).join('')
       +`</div>`;
   } else {
-    // Schedule page: show all games for selected week
-    if(weekOffset<0){
-      // Default to next upcoming week
-      const nextWkIdx=allWks.findIndex(w=>w.games.some(g=>!g.done));
-      weekOffset=nextWkIdx>=0?nextWkIdx:0;
-    }
-    const idx=Math.min(Math.max(0,weekOffset),allWks.length-1);
-    const w=allWks[idx];
-    if(!w){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
-    wrap.innerHTML=`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
+    const off=Math.min(Math.max(0,weekOffset<0?(()=>{const i=allWks.findIndex(w=>w.games.some(g=>!g.done));return i>=0?i:0;})():weekOffset),allWks.length-1);
+    weekOffset=off;
+    const w=allWks[off];
+    const wkLabel=String(w.wk).startsWith('PL')?'Playoffs':('Week '+w.wk);
+    wrap.innerHTML=`<div class="sb-week-head">${wkLabel} · ${w.date} <span style="font-size:13px;color:var(--muted);font-weight:400">${w.games.length} game${w.games.length!==1?'s':''}</span></div>`
       +`<div class="sched-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px;">`
       +w.games.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
       +`</div>`;
