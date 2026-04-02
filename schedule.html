@@ -847,8 +847,9 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
   if(isPast){
     const{a:as,h:hs}=fakeScore(g.away,g.home,wkIdx*10+gi);
     const aW=as>hs;
-    const aH=Math.floor(as*2.1), hH=Math.floor(hs*2.1);
-    const aE=gi%3?0:1, hE=gi%5?0:1;
+    const seed1=(g.away.charCodeAt(0)*31+g.home.charCodeAt(0)*17+as*7+hs*13);
+    const aH=as+Math.floor(seed1%3)+2, hH=hs+Math.floor((seed1+97)%3)+2;
+    const aE=seed1%4===0?1:0, hE=(seed1+97)%4===0?1:0;
     const wTeam=aW?g.away:g.home, lTeam=aW?g.home:g.away;
     const wStar=starName(wTeam,0), lStar=starName(lTeam,0);
     const wc=aW?ac:hc, lc=aW?hc:ac;
@@ -918,20 +919,19 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
 
 function render(){
   const wrap=document.getElementById('sbWrap');
+  const idx=CURRENT_WK_IDX+weekOffset;
   if(view==='scores'){
-    // Show 3 most recent completed weeks
-    const past=weeks.map((w,i)=>({w,i})).filter(({i})=>i<CURRENT_WK_IDX&&weeks[i].games.length);
-    if(!past.length){wrap.innerHTML='<div class="no-games">No completed games yet.</div>';return;}
-    const shown=past.slice(-3).reverse();
-    wrap.innerHTML=shown.map(({w,i})=>{
-      const byDay={};
-      w.games.forEach(g=>{(byDay[g.day]=byDay[g.day]||[]).push(g);});
-      const days=['mon','tue','wed','thu'].filter(d=>byDay[d]);
-      return`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
-        +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`+byDay[d].map((g,gi)=>gameBlock(g,i,gi,true,false)).join('')).join('');
-    }).join('<div style="height:16px"></div>');
+    // Show selected week's completed games
+    const week=weeks[idx];
+    if(!week||!week.games.length||idx>=CURRENT_WK_IDX){
+      wrap.innerHTML='<div class="no-games">No completed games for this week.</div>';return;
+    }
+    const byDay={};
+    week.games.forEach(g=>{(byDay[g.day]=byDay[g.day]||[]).push(g);});
+    const days=['mon','tue','wed','thu'].filter(d=>byDay[d]);
+    wrap.innerHTML=`<div class="sb-week-head">Week ${week.wk} · ${week.date}</div>`
+      +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`+byDay[d].map((g,gi)=>gameBlock(g,idx,gi,true,false)).join('')).join('');
   } else {
-    const idx=CURRENT_WK_IDX+weekOffset;
     const week=weeks[idx];
     if(!week||!week.games.length){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
     const isPast=idx<CURRENT_WK_IDX, isCurrent=idx===CURRENT_WK_IDX;
@@ -969,17 +969,50 @@ function openRecap(away,home,as,hs,field,date){
   openPop();
 }
 
+function genGameStats(players,runs,seed){
+  // Generate per-player game AB/H/R/RBI that sum correctly
+  const n=Math.max(players.length,9);
+  const lineup=players.slice(0,n);
+  const totalAB=Math.max(n*3,runs+8);
+  const totalH=runs+Math.floor(seed%3)+2; // hits >= runs
+  const totalR=runs;
+  const totalRBI=Math.max(runs-1,Math.floor(runs*.85));
+  const totalE=seed%4===0?1:0;
+  // distribute among players
+  const stats=lineup.map((_,i)=>{
+    const ab=Math.floor(totalAB/n)+(i<(totalAB%n)?1:0);
+    return{ab,h:0,r:0,rbi:0};
+  });
+  // distribute hits
+  for(let i=0;i<totalH;i++) stats[(seed*7+i*3)%n].h++;
+  // ensure h<=ab
+  stats.forEach(s=>{if(s.h>s.ab)s.h=s.ab;});
+  // distribute runs
+  for(let i=0;i<totalR;i++) stats[(seed*11+i*5)%n].r++;
+  // distribute rbi
+  for(let i=0;i<totalRBI;i++) stats[(seed*13+i*7)%n].rbi++;
+  const sumH=stats.reduce((a,s)=>a+s.h,0);
+  const sumR=stats.reduce((a,s)=>a+s.r,0);
+  const sumRBI=stats.reduce((a,s)=>a+s.rbi,0);
+  return{lineup:lineup.map((p,i)=>({name:p.name,pos:p.pos,id:p.id,ab:stats[i].ab,h:stats[i].h,r:stats[i].r,rbi:stats[i].rbi})),totH:sumH,totR:sumR,totRBI:sumRBI,totE:totalE};
+}
+
 function openBox(away,home,as,hs,field,date){
   const ac=tc(away),hc=tc(home),aW=as>hs;
-  const aH=Math.floor(as*2.1),hH=Math.floor(hs*2.1);
-  // Get real players for each team from PLAYERS array
   const awayTeam=TEAMS.find(t=>t.short===away)||HIST_TEAMS.find(t=>t.short===away);
   const homeTeam=TEAMS.find(t=>t.short===home)||HIST_TEAMS.find(t=>t.short===home);
   const awayPlayers=awayTeam?PLAYERS.filter(p=>p.team===awayTeam.id):[];
   const homePlayers=homeTeam?PLAYERS.filter(p=>p.team===homeTeam.id):[];
-  const useLineup=(players)=>players.length?players.map(p=>({name:p.name,pos:p.pos,avg:p.avg.toFixed(3).replace(/^0/,''),hr:p.hr,rbi:p.rbi,id:p.id})):LINEUP.map(p=>({...p,id:null}));
-  const mkRows=(lu,teamShort)=>lu.map(p=>`<tr style="cursor:pointer" onclick="${p.id?`window.location='index.html#player-${p.id}'`:''}" title="${p.id?'View player stats':''}">
-        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
+  const usePlayers=(pl)=>pl.length?pl.map(p=>({name:p.name,pos:p.pos,id:p.id})):LINEUP.map(p=>({name:p.name,pos:p.pos,id:null}));
+  const seed1=(away.charCodeAt(0)*31+home.charCodeAt(0)*17+as*7+hs*13);
+  const seed2=seed1+97;
+  const aStats=genGameStats(usePlayers(awayPlayers),as,seed1);
+  const hStats=genGameStats(usePlayers(homePlayers),hs,seed2);
+  const mkRows=(gs)=>gs.lineup.map(p=>{
+    const avg=p.ab>0?(p.h/p.ab).toFixed(3).replace(/^0/,''):'.000';
+    return`<tr style="cursor:pointer" onclick="${p.id?`window.location='index.html#player-${p.id}'`:''}" title="${p.id?'View player stats':''}">
+        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.ab}</td><td>${p.h}</td><td>${p.r}</td><td>${p.rbi}</td></tr>`;
+  }).join('')+`<tr style="font-weight:700;border-top:2px solid var(--border2)"><td>TOTAL</td><td>${gs.lineup.reduce((a,p)=>a+p.ab,0)}</td><td>${gs.totH}</td><td>${gs.totR}</td><td>${gs.totRBI}</td></tr>`;
   document.getElementById('popContent').innerHTML=`
     <div class="pop-hd">
       <div class="pop-matchup">
@@ -997,14 +1030,14 @@ function openBox(away,home,as,hs,field,date){
       <table class="ptbl" style="margin-bottom:20px">
         <thead><tr><th>Team</th><th>R</th><th>H</th><th>E</th></tr></thead>
         <tbody>
-          <tr><td style="color:${ac};font-weight:700">${away}</td><td>${as}</td><td>${aH}</td><td>0</td></tr>
-          <tr><td style="color:${hc};font-weight:700">${home}</td><td>${hs}</td><td>${hH}</td><td>0</td></tr>
+          <tr><td style="color:${ac};font-weight:700">${away}</td><td>${as}</td><td>${aStats.totH}</td><td>${aStats.totE}</td></tr>
+          <tr><td style="color:${hc};font-weight:700">${home}</td><td>${hs}</td><td>${hStats.totH}</td><td>${hStats.totE}</td></tr>
         </tbody>
       </table>
       <div class="pop-sec-title">Batting</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closePop();goTeam('${away}')">${away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(useLineup(awayPlayers),away)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closePop();goTeam('${home}')">${home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(useLineup(homePlayers),home)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closePop();goTeam('${away}')">${away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th></tr></thead><tbody>${mkRows(aStats)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closePop();goTeam('${home}')">${home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th></tr></thead><tbody>${mkRows(hStats)}</tbody></table></div>
       </div>
     </div>`;
   openPop();
@@ -1055,8 +1088,11 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closePop();});
 // Auto-switch to Schedule tab if ?tab=schedule in URL
 const urlParams = new URLSearchParams(window.location.search);
 if(urlParams.get('tab') === 'schedule'){
+  buildNav();
   setView('schedule');
 } else {
+  // Default scores view to most recent completed week
+  weekOffset = -1;
   buildNav();
   render();
 }
