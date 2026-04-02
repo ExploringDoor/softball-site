@@ -3043,6 +3043,7 @@ function buildTeamsBigCards(){
           <span onclick="goPage('team','${t.id}');setTimeout(()=>renderTeamTab('schedule'),80)">Schedule</span>
           <span class="sep">|</span>
           <span onclick="goPage('team','${t.id}');setTimeout(()=>renderTeamTab('roster'),80)">Roster</span>
+          ${t.id==='tbir'?'<span class="sep">|</span><a href="tbir-stats.html" style="color:#002D72;text-decoration:none;font-weight:500">Career Stats</a>':''}
         </div>
       </div>
     </div>`;
@@ -3077,6 +3078,18 @@ function loadTeam(teamId){
   document.getElementById('team-big-name').innerHTML=`${t.name} <span style="color:${t.color}">·</span> ${t.short}`;
   document.getElementById('team-rec').innerHTML=`<strong>${t.w}–${t.l}</strong>&nbsp;·&nbsp;${t.pct.toFixed(3).replace(/^0\./,'.')}&nbsp;PCT&nbsp;·&nbsp;${t.rs} RS&nbsp;·&nbsp;${t.ra} RA&nbsp;·&nbsp;<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`;
   document.getElementById('team-blob').style.background=`linear-gradient(135deg,${t.color},transparent 60%)`;
+  // Add career stats link for teams that have historical data
+  const ttabs=document.getElementById('ttabs');
+  const existingCareer=ttabs.querySelector('.ttab-career');
+  if(existingCareer) existingCareer.remove();
+  if(t.id==='tbir'){
+    const btn=document.createElement('a');
+    btn.href='tbir-stats.html';
+    btn.className='ttab ttab-career';
+    btn.textContent='Career Stats';
+    btn.style.cssText='text-decoration:none;color:#002D72;font-weight:700';
+    ttabs.appendChild(btn);
+  }
   // Calendar button in hero
   const calBtn = document.getElementById('team-cal-btn');
   if(calBtn){
@@ -3102,7 +3115,7 @@ let _teamStatSort = {key:'avg', dir:'desc'};
 function renderTeamStats(t, players, sortKey, sortDir){
   _teamStatSort = {key:sortKey||'avg', dir:sortDir||'desc'};
   const cols = [
-    {key:'name', label:'Player',  fmt:p=>`<span style="font-weight:600;color:${t.color}">${p.name}</span> <span style="font-size:10px;color:var(--muted)">${p.pos}</span>`, align:'left'},
+    {key:'name', label:'Player',  fmt:p=>`<span style="font-weight:600">${p.name}</span> <span style="font-size:10px;color:var(--muted)">${p.pos}</span>`, align:'left'},
     {key:'ab',   label:'AB',      fmt:p=>p.ab},
     {key:'h',    label:'H',       fmt:p=>p.h},
     {key:'avg',  label:'AVG',     fmt:p=>`<strong>${avg(p.avg)}</strong>`},
@@ -3221,7 +3234,7 @@ let _teamStatSort = {key:'avg', dir:'desc'};
 function renderTeamStats(t, players, sortKey, sortDir){
   _teamStatSort = {key:sortKey||'avg', dir:sortDir||'desc'};
   const cols = [
-    {key:'name', label:'Player',  fmt:p=>`<span style="font-weight:600;color:${t.color}">${p.name}</span> <span style="font-size:10px;color:var(--muted)">${p.pos}</span>`, align:'left'},
+    {key:'name', label:'Player',  fmt:p=>`<span style="font-weight:600">${p.name}</span> <span style="font-size:10px;color:var(--muted)">${p.pos}</span>`, align:'left'},
     {key:'ab',   label:'AB',      fmt:p=>p.ab},
     {key:'h',    label:'H',       fmt:p=>p.h},
     {key:'avg',  label:'AVG',     fmt:p=>`<strong>${avg(p.avg)}</strong>`},
