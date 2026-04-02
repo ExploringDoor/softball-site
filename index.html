@@ -3625,72 +3625,62 @@ window._dataPromise.then(() => {
 })();
 
 // ══════════════════════ SCORE TICKER ════════════════════════════════════
-const TICKER_GAMES = [
-  {away:'SA',   home:'KI',   as:null, hs:null, status:'Apr 21 · 7:00 PM', field:'Southampton'},
-  {away:'GOLD', home:'BSMC', as:null, hs:null, status:'Apr 21 · 7:00 PM', field:'Mondauk 4'},
-  {away:'BOB',  home:'AJ',   as:null, hs:null, status:'Apr 21 · 8:15 PM', field:'Sunnybrook'},
-  {away:'TBIR', home:'TSMC', as:null, hs:null, status:'Apr 21 · 8:15 PM', field:'Warwick'},
-  {away:'KI',   home:'GOLD', as:null, hs:null, status:'Apr 28 · 7:00 PM', field:'Mondauk 5'},
-  {away:'SA',   home:'BOB',  as:null, hs:null, status:'Apr 28 · 7:00 PM', field:'Southampton'},
-  {away:'TSMC', home:'AJ',   as:null, hs:null, status:'Apr 28 · 8:15 PM', field:'Horsham'},
-  {away:'BSMC', home:'TBIR', as:null, hs:null, status:'Apr 28 · 8:15 PM', field:'Ridgeway'},
-  {away:'GOLD', home:'SA',   as:null, hs:null, status:'May 5 · 7:00 PM',  field:'Mondauk 4'},
-  {away:'AJ',   home:'KI',   as:null, hs:null, status:'May 5 · 7:00 PM',  field:'Plymouth'},
-];
-
-function tickerGoGame(away,home){
-  // Find the week containing this matchup
-  const gi=SCHEDULE_PREVIEW.findIndex(g=>g.away===away&&g.home===home);
-  if(gi<0){goPage('scores');return;}
-  const game=SCHEDULE_PREVIEW[gi];
-  const done=game.done;
-  const targetView=done?'scores':'schedule';
-  goPage('scores');
-  setTimeout(()=>{
-    setView(targetView);
-    // After setView resets weekOffset and renders, override to correct week
-    const wks=getWeekList();
-    const wkIdx=wks.findIndex(w=>w.wk===game.wk);
-    if(wkIdx>=0){
-      weekOffset=wkIdx;
-      buildScoresNav();
-      renderScores();
-    }
-  },80);
+function getTickerGames(){
+  if(!SCHEDULE_PREVIEW.length) return [];
+  // Find current week (first with upcoming games)
+  const wkMap={};
+  SCHEDULE_PREVIEW.forEach(g=>{
+    if(!wkMap[g.wk])wkMap[g.wk]=[];
+    wkMap[g.wk].push(g);
+  });
+  const allWks=Object.keys(wkMap).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
+  const curWk=allWks.find(w=>wkMap[w].some(g=>!g.done));
+  if(!curWk) return SCHEDULE_PREVIEW.slice(-10); // all done, show last 10
+  // Show current week + next week
+  const curIdx=allWks.indexOf(curWk);
+  const wksToShow=allWks.slice(curIdx, curIdx+2);
+  const games=[];
+  wksToShow.forEach(w=>games.push(...wkMap[w]));
+  return games;
 }
 
 function buildTicker2(){
   const track = document.getElementById('st-track');
   if(!track) return;
+  const tickerGames = getTickerGames();
+  if(!tickerGames.length) return;
   const makeGame = g => {
-    const ac = getTeamByShort(g.away)?.color || '#9ca3af';
-    const hc = getTeamByShort(g.home)?.color || '#9ca3af';
-    const done = g.as !== null && g.hs !== null;
-    const aWin = done && g.as > g.hs;
-    const hWin = done && g.hs > g.as;
     const at = getTeamByShort(g.away);
     const ht = getTeamByShort(g.home);
-    const aRec = at ? at.w+'-'+at.l : '';
-    const hRec = ht ? ht.w+'-'+ht.l : '';
-    return '<div class="st-game" onclick="tickerGoGame(\''+g.away+'\',\''+g.home+'\')">'
+    const aRec = at ? '('+at.w+'-'+at.l+')' : '';
+    const hRec = ht ? '('+ht.w+'-'+ht.l+')' : '';
+    const done = g.done && g.as !== null && g.hs !== null;
+    const aWin = done && g.as > g.hs;
+    const hWin = done && g.hs > g.as;
+    const status = done ? 'Final' : (g.date+' · '+g.time);
+    const field = g.field||'';
+    const timeStr = g.time||'TBD';
+    // Click opens gameday popup for upcoming, or recap for completed
+    const onclick = done
+      ? "openRecap2('"+g.away+"','"+g.home+"',"+g.as+","+g.hs+",'"+field+"','"+g.date+"')"
+      : "openGameday('"+g.away+"','"+g.home+"','"+field+"','"+timeStr+"')";
+    return '<div class="st-game" onclick="'+onclick+'">'
       +'<div class="st-game-inner">'
-      +'<div class="st-datetime">'+(done?'Final':g.status)+'</div>'
+      +'<div class="st-datetime">'+status+'</div>'
       +'<div class="st-row">'
-        +'<span class="st-abbr '+(aWin?'winner':done?'loser':'upcoming')+'" style="color:'+(aWin||!done?ac:ac+'88')+'">'+g.away+'</span>'
+        +'<span class="st-abbr'+(aWin?' winner':done?' loser':'')+'" style="color:#fff">'+g.away+'</span>'
         +'<span class="st-rec">'+aRec+'</span>'
-        +(done?'<span class="st-score '+(aWin?'winner':'loser')+'">'+g.as+'</span>':'')
+        +(done?'<span class="st-score'+(aWin?' winner':' loser')+'">'+g.as+'</span>':'')
       +'</div>'
       +'<div class="st-row">'
-        +'<span class="st-abbr '+(hWin?'winner':done?'loser':'upcoming')+'" style="color:'+(hWin||!done?hc:hc+'88')+'">'+g.home+'</span>'
+        +'<span class="st-abbr'+(hWin?' winner':done?' loser':'')+'" style="color:#fff">'+g.home+'</span>'
         +'<span class="st-rec">'+hRec+'</span>'
-        +(done?'<span class="st-score '+(hWin?'winner':'loser')+'">'+g.hs+'</span>':'')
+        +(done?'<span class="st-score'+(hWin?' winner':' loser')+'">'+g.hs+'</span>':'')
       +'</div>'
       +'</div>'
       +'</div>';
   };
-  // Duplicate for seamless loop
-  const html = TICKER_GAMES.map(makeGame).join('');
-  track.innerHTML = html;
+  track.innerHTML = tickerGames.map(makeGame).join('');
 }
 
 // Ticker hides on scroll, nav ALWAYS stays fixed
