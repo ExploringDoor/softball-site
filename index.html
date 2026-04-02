@@ -1605,6 +1605,12 @@ thead th.sorted-col .sarrow{opacity:1}
   <div class="st-full" onclick="goPage('scores');setTimeout(()=>setView('scores'),80)">Full Schedule »</div>
 </div>
 
+<!-- ══ SITE BANNER ══ -->
+<div id="site-banner" style="display:none;position:fixed;top:48px;left:0;right:0;z-index:350;padding:10px 48px;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;text-align:center;transition:transform .3s ease">
+  <span id="site-banner-text"></span>
+  <button onclick="document.getElementById('site-banner').style.display='none'" style="background:none;border:none;color:inherit;font-size:18px;cursor:pointer;position:absolute;right:16px;top:50%;transform:translateY(-50%);opacity:.7">×</button>
+</div>
+
 <!-- ══ DUST INTRO ══ -->
 <div id="ci" onclick="skipCI()">
   <canvas id="ci-canvas"></canvas>
@@ -3483,8 +3489,24 @@ window._dataPromise.then(() => {
   buildRecaps();
   buildHistory();
   buildTeamsBigCards();
+  loadSiteBanner();
   setTimeout(observeAll, 100);
 });
+
+async function loadSiteBanner(){
+  try {
+    const db = await getDb();
+    const { getDoc, doc } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    const snap = await getDoc(doc(db, 'site_config', 'banner'));
+    if(!snap.exists()) return;
+    const b = snap.data();
+    if(!b.active || !b.text) return;
+    const banner = document.getElementById('site-banner');
+    const colors = {info:'background:#002D72;color:#fff', warning:'background:#f59e0b;color:#000', cancel:'background:#c8102e;color:#fff'};
+    banner.style.cssText += ';display:block;' + (colors[b.type] || colors.info);
+    document.getElementById('site-banner-text').textContent = b.text;
+  } catch(e){ console.log('Banner load skipped:', e.message); }
+}
 
 // Handle cross-page navigation — check BEFORE hash routing
 (function(){
