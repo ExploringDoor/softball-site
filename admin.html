@@ -210,6 +210,9 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
       <div class="nav-item" data-section="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
       <div class="nav-item" data-section="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
+      <div style="height:1px;background:var(--border);margin:8px 14px"></div>
+      <div class="nav-item" data-section="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
+      <div class="nav-item" data-section="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-user"></div>
@@ -390,6 +393,35 @@ select.form-input{cursor:pointer}
         <div id="announcements-list">
           <div class="loading"><div class="spinner"></div> Loading...</div>
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ CAPTAINS ═══ -->
+    <div class="section" id="sec-captains">
+      <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="main-title">Manage Captains</div>
+          <div class="main-subtitle">Assign team captains for the Captain Portal</div>
+        </div>
+        <button class="btn btn-primary" onclick="openAddCaptain()">+ Add Captain</button>
+      </div>
+      <div style="background:var(--blue-bg);color:var(--blue);font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:16px">
+        After adding a captain here, you also need to create their login in <strong>Firebase Console &gt; Authentication &gt; Users &gt; Add User</strong> with the same email address. Then they can sign in at <strong>captain.html</strong>.
+      </div>
+      <div id="add-captain-form" style="display:none"></div>
+      <div id="captains-content">
+        <div class="loading"><div class="spinner"></div> Loading captains...</div>
+      </div>
+    </div>
+
+    <!-- ═══ SCORE REVIEWS ═══ -->
+    <div class="section" id="sec-score-reviews">
+      <div class="main-header">
+        <div class="main-title">Score Reviews</div>
+        <div class="main-subtitle">Review and approve score submissions from team captains</div>
+      </div>
+      <div id="score-reviews-content">
+        <div class="loading"><div class="spinner"></div> Loading submissions...</div>
       </div>
     </div>
 
@@ -576,6 +608,8 @@ async function loadAllData() {
     loadBanner();
     loadAnnouncements();
     loadActivityLog();
+    loadCaptains();
+    loadScoreReviews();
   } catch(e) {
     console.error('Data load failed:', e);
     toast('Failed to load data: ' + e.message, 'error');
@@ -1290,6 +1324,215 @@ async function loadAnnouncements() {
     el.innerHTML = '<div class="empty">Could not load announcements</div>';
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAINS MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════
+let CAPTAINS = [];
+
+async function loadCaptains() {
+  const el = document.getElementById('captains-content');
+  try {
+    const snap = await getDocs(collection(db, 'captains'));
+    CAPTAINS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderCaptains();
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Could not load captains</div>';
+  }
+}
+
+function renderCaptains() {
+  const el = document.getElementById('captains-content');
+  if (!CAPTAINS.length) {
+    el.innerHTML = '<div class="empty">No captains assigned yet. Click "+ Add Captain" to get started.</div>';
+    return;
+  }
+  el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Team</th><th>Captain Email</th><th>Actions</th></tr></thead>
+    <tbody>${CAPTAINS.map(c => `<tr>
+      <td><strong>${esc(c.team_name || c.team_id)}</strong></td>
+      <td>${esc(c.email)}</td>
+      <td class="actions">
+        <button class="btn btn-danger btn-sm" onclick="removeCaptain('${c.id}', '${esc(c.email)}')">Remove</button>
+      </td>
+    </tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+window.openAddCaptain = function() {
+  const el = document.getElementById('add-captain-form');
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const teamOpts = '<option value="">-- Select a team --</option>' + TEAMS.map(t =>
+    `<option value="${t.id}" data-name="${esc(t.name)}">${esc(t.name)} (${esc(t.short || '')})</option>`
+  ).join('');
+  el.innerHTML = `<div class="inline-form" style="margin-bottom:16px">
+    <div class="panel-title">Add Captain</div>
+    <div class="form-row">
+      <div class="form-col">
+        <label class="form-label">Team</label>
+        <select class="form-input" id="ac-team">${teamOpts}</select>
+      </div>
+      <div class="form-col">
+        <label class="form-label">Captain Email</label>
+        <input type="email" class="form-input" id="ac-email" placeholder="captain@example.com">
+      </div>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-success" onclick="saveNewCaptain()">Add Captain</button>
+      <button class="btn btn-outline" onclick="document.getElementById('add-captain-form').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+};
+
+window.saveNewCaptain = async function() {
+  const teamId = document.getElementById('ac-team').value;
+  const email = document.getElementById('ac-email').value.trim().toLowerCase();
+  if (!teamId) { toast('Please select a team', 'error'); return; }
+  if (!email) { toast('Please enter an email address', 'error'); return; }
+  const teamName = TEAMS.find(t => t.id === teamId)?.name || teamId;
+  try {
+    const ref = await addDoc(collection(db, 'captains'), {
+      email: email,
+      team_id: teamId,
+      team_name: teamName
+    });
+    CAPTAINS.push({ id: ref.id, email, team_id: teamId, team_name: teamName });
+    document.getElementById('add-captain-form').style.display = 'none';
+    toast('Captain added! Remember to create their Firebase Auth user too.');
+    await logActivity('Captains', `Assigned ${email} as captain of ${teamName}`);
+    renderCaptains();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.removeCaptain = async function(captainId, email) {
+  if (!confirm(`Remove captain ${email}? They will no longer be able to access the Captain Portal.`)) return;
+  try {
+    await deleteDoc(doc(db, 'captains', captainId));
+    CAPTAINS = CAPTAINS.filter(c => c.id !== captainId);
+    toast('Captain removed');
+    await logActivity('Captains', `Removed captain ${email}`);
+    renderCaptains();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// SCORE REVIEWS
+// ═══════════════════════════════════════════════════════════════════
+let SCORE_SUBMISSIONS = [];
+
+async function loadScoreReviews() {
+  const el = document.getElementById('score-reviews-content');
+  try {
+    const snap = await getDocs(query(collection(db, 'score_submissions'), orderBy('timestamp', 'desc')));
+    SCORE_SUBMISSIONS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderScoreReviews();
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Could not load score submissions</div>';
+  }
+}
+
+function renderScoreReviews() {
+  const el = document.getElementById('score-reviews-content');
+  const pending = SCORE_SUBMISSIONS.filter(s => s.status === 'pending');
+  const reviewed = SCORE_SUBMISSIONS.filter(s => s.status !== 'pending');
+
+  let html = '';
+
+  // Pending section
+  html += '<div style="margin-bottom:28px">';
+  html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:var(--navy);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--navy-light)">Pending Review (' + pending.length + ')</div>';
+  if (!pending.length) {
+    html += '<div class="empty">No pending score submissions</div>';
+  } else {
+    html += `<div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Game</th><th>Submitted Score</th><th>Submitted By</th><th>Time</th><th>Actions</th></tr></thead>
+      <tbody>${pending.map(s => {
+        const t = s.timestamp?.toDate ? s.timestamp.toDate() : new Date();
+        return `<tr>
+          <td><strong>${getTeamName(s.away)}</strong> <span style="color:var(--muted)">@</span> <strong>${getTeamName(s.home)}</strong><br><span style="font-size:11px;color:var(--muted)">Wk ${s.wk||'?'}</span></td>
+          <td style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;color:var(--navy)">${s.away_score} &ndash; ${s.home_score}</td>
+          <td><span style="font-size:12px">${esc(s.submitted_by)}</span><br><span style="font-size:11px;color:var(--muted)">${esc(s.team_name||'')}</span></td>
+          <td style="font-size:12px;color:var(--muted)">${t.toLocaleDateString()} ${t.toLocaleTimeString()}</td>
+          <td class="actions">
+            <button class="btn btn-success btn-sm" onclick="approveScore('${s.id}')">Approve</button>
+            <button class="btn btn-danger btn-sm" onclick="rejectScore('${s.id}')">Reject</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  }
+  html += '</div>';
+
+  // Reviewed section
+  if (reviewed.length) {
+    html += '<div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:var(--navy);margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid var(--navy-light)">Previously Reviewed</div>';
+    html += `<div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Game</th><th>Score</th><th>Submitted By</th><th>Status</th></tr></thead>
+      <tbody>${reviewed.slice(0, 20).map(s => {
+        const statusClass = s.status === 'approved' ? 'badge-done' : 'badge-pending';
+        const statusStyle = s.status === 'rejected' ? 'background:var(--red-bg);color:var(--red)' : '';
+        return `<tr>
+          <td><strong>${getTeamName(s.away)}</strong> @ <strong>${getTeamName(s.home)}</strong> <span style="font-size:11px;color:var(--muted)">Wk ${s.wk||'?'}</span></td>
+          <td style="font-weight:700">${s.away_score} - ${s.home_score}</td>
+          <td style="font-size:12px">${esc(s.submitted_by)}</td>
+          <td><span class="badge ${statusClass}" style="${statusStyle}">${s.status === 'approved' ? 'Approved' : s.status === 'rejected' ? 'Rejected' : s.status}</span></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+window.approveScore = async function(submissionId) {
+  const s = SCORE_SUBMISSIONS.find(x => x.id === submissionId);
+  if (!s) return;
+  if (!confirm(`Approve score: ${getTeamName(s.away)} ${s.away_score} - ${getTeamName(s.home)} ${s.home_score}?\n\nThis will update the game as Final and recalculate standings.`)) return;
+
+  try {
+    // Find the game document
+    let gameId = s.game_id;
+    if (gameId) {
+      // Update the game directly
+      await updateDoc(doc(db, 'games', gameId), {
+        away_score: s.away_score,
+        home_score: s.home_score,
+        done: true
+      });
+      // Update local GAMES state
+      const g = GAMES.find(x => x.id === gameId);
+      if (g) { g.away_score = s.away_score; g.home_score = s.home_score; g.done = true; }
+    }
+
+    // Mark submission as approved
+    await updateDoc(doc(db, 'score_submissions', submissionId), { status: 'approved' });
+    s.status = 'approved';
+
+    toast('Score approved and game marked as final!');
+    await logActivity('Score Review', `Approved: ${getTeamName(s.away)} ${s.away_score} - ${getTeamName(s.home)} ${s.home_score}`);
+
+    // Recalculate standings
+    await recalcStandingsFromGames();
+    renderScoreReviews();
+    renderScores();
+    renderStandings();
+    renderDashboard();
+  } catch(e) { toast('Failed to approve: ' + e.message, 'error'); }
+};
+
+window.rejectScore = async function(submissionId) {
+  const s = SCORE_SUBMISSIONS.find(x => x.id === submissionId);
+  if (!s) return;
+  if (!confirm(`Reject this score submission from ${s.submitted_by}?`)) return;
+  try {
+    await updateDoc(doc(db, 'score_submissions', submissionId), { status: 'rejected' });
+    s.status = 'rejected';
+    toast('Score submission rejected');
+    await logActivity('Score Review', `Rejected submission from ${s.submitted_by}: ${getTeamName(s.away)} ${s.away_score} - ${getTeamName(s.home)} ${s.home_score}`);
+    renderScoreReviews();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
 
 </script>
 </body>

@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DVSL Captain Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#002D72;--navy-light:rgba(0,45,114,.08);--navy-mid:rgba(0,45,114,.15);
+  --bg:#f5f6f8;--card:#ffffff;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.06);
+  --text:#1a1a1a;--muted:#6b7280;--muted2:#9ca3af;
+  --green:#16a34a;--green-bg:rgba(22,163,74,.1);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.1);
+  --yellow:#ca8a04;--yellow-bg:rgba(202,138,4,.1);
+  --blue:#2563eb;--blue-bg:rgba(37,99,235,.1);
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.5;min-height:100vh}
+
+/* ── LOGIN ── */
+.login-wrap{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:var(--bg)}
+.login-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:48px 40px;width:100%;max-width:400px;box-shadow:0 8px 32px rgba(0,0,0,.06)}
+.login-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);text-align:center;margin-bottom:6px}
+.login-sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:32px}
+.form-group{margin-bottom:18px}
+.form-label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.form-input{width:100%;padding:11px 14px;font-size:14px;font-family:'Inter',sans-serif;border:1px solid var(--border);border-radius:8px;outline:none;transition:border-color .2s,box-shadow .2s;background:#fff;color:var(--text)}
+.form-input:focus{border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-light)}
+textarea.form-input{resize:vertical;min-height:80px}
+select.form-input{cursor:pointer}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;border-radius:8px;padding:11px 22px;cursor:pointer;transition:all .15s;text-decoration:none}
+.btn-primary{background:var(--navy);color:#fff}.btn-primary:hover{background:#003d99}
+.btn-success{background:var(--green);color:#fff}.btn-success:hover{background:#15803d}
+.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-warning{background:var(--yellow);color:#fff}.btn-warning:hover{background:#a16207}
+.btn-outline{background:transparent;color:var(--navy);border:1px solid var(--border)}.btn-outline:hover{border-color:var(--navy);background:var(--navy-light)}
+.btn-sm{padding:7px 14px;font-size:11px}
+.btn-full{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.login-error{background:var(--red-bg);color:var(--red);font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:16px;display:none}
+
+/* ── APP LAYOUT ── */
+.app{display:none;min-height:100vh}
+
+/* ── TOP HEADER BAR ── */
+.top-bar{background:var(--card);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
+.top-bar-brand{display:flex;align-items:center;gap:12px}
+.top-bar-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy)}
+.top-bar-team{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
+.team-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.top-bar-right{display:flex;align-items:center;gap:12px}
+.top-bar-user{font-size:12px;color:var(--muted)}
+
+/* ── TAB NAVIGATION ── */
+.tab-nav{background:var(--card);border-bottom:1px solid var(--border);padding:0 28px;display:flex;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab-item{padding:14px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap;user-select:none}
+.tab-item:hover{color:var(--text);background:rgba(0,0,0,.02)}
+.tab-item.active{color:var(--navy);border-bottom-color:var(--navy)}
+
+/* ── MAIN CONTENT ── */
+.main-content{max-width:900px;margin:0 auto;padding:28px 28px 80px}
+.section{display:none}.section.active{display:block}
+.section-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;text-transform:uppercase;letter-spacing:-.01em;color:var(--text);margin-bottom:4px}
+.section-sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+
+/* ── STAT CARDS ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;text-align:center}
+.stat-card .val{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:var(--navy);line-height:1}
+.stat-card .lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+
+/* ── TABLES ── */
+.tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 16px;text-align:left;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)}
+.tbl td{font-size:13px;padding:12px 16px;border-bottom:1px solid var(--border2)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:rgba(0,0,0,.02)}
+.tbl .actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── PANELS ── */
+.panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:20px}
+.panel-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:14px}
+
+/* ── INLINE FORMS ── */
+.inline-form{background:rgba(0,45,114,.03);border:1px solid var(--navy-mid);border-radius:10px;padding:18px;margin:10px 0}
+.form-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px}
+.form-row:last-child{margin-bottom:0}
+.form-col{display:flex;flex-direction:column;gap:4px;flex:1;min-width:120px}
+.form-col-sm{flex:0 0 100px;min-width:80px}
+
+/* ── BADGES ── */
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px}
+.badge-done{background:var(--green-bg);color:var(--green)}
+.badge-pending{background:var(--yellow-bg);color:var(--yellow)}
+.badge-rejected{background:var(--red-bg);color:var(--red)}
+.badge-info{background:var(--blue-bg);color:var(--blue)}
+
+/* ── GAME CARDS ── */
+.game-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.game-card .teams{font-weight:700;font-size:15px;min-width:180px}
+.game-card .teams .vs{color:var(--muted);font-weight:400;margin:0 6px}
+.game-card .meta{font-size:12px;color:var(--muted);min-width:140px}
+.game-card .score-display{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:var(--navy);min-width:80px;text-align:center}
+
+/* ── ANNOUNCEMENT CARDS ── */
+.announcement-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px 22px;margin-bottom:12px}
+.announcement-card .ann-subject{font-weight:700;font-size:15px;color:var(--text);margin-bottom:4px}
+.announcement-card .ann-body{font-size:13px;color:var(--text);white-space:pre-wrap;line-height:1.6;margin-bottom:8px}
+.announcement-card .ann-meta{font-size:11px;color:var(--muted2)}
+
+/* ── TOAST ── */
+.toast-container{position:fixed;bottom:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.15);animation:toastIn .3s ease;max-width:360px}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+.toast.info{background:var(--navy)}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateY(-8px)}}
+
+/* ── EMPTY STATE ── */
+.empty{padding:40px;text-align:center;color:var(--muted);font-size:14px}
+
+/* ── LOADING ── */
+.loading{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;padding:30px}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── WELCOME CARD ── */
+.welcome-card{background:linear-gradient(135deg,var(--navy),#003d99);color:#fff;border-radius:14px;padding:28px 32px;margin-bottom:24px}
+.welcome-card h2{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;text-transform:uppercase;margin-bottom:6px}
+.welcome-card p{font-size:14px;opacity:.8}
+
+/* ── RESPONSIVE ── */
+@media(max-width:600px){
+  .top-bar{padding:12px 16px;flex-wrap:wrap}
+  .top-bar-user{display:none}
+  .tab-nav{padding:0 12px}
+  .tab-item{padding:12px 14px;font-size:12px}
+  .main-content{padding:20px 16px 60px}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .game-card{flex-direction:column;align-items:flex-start}
+  .form-row{flex-direction:column}
+  .form-col-sm{flex:1}
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">DVSL</div>
+    <div class="login-sub">Team Captain Portal</div>
+    <div id="login-error" class="login-error"></div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input type="email" id="login-email" class="form-input" placeholder="your.email@example.com" autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" id="login-pass" class="form-input" placeholder="Enter password" autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-full" id="login-btn" onclick="doLogin()">Sign In</button>
+    <div style="text-align:center;margin-top:16px">
+      <a href="index.html" style="font-size:12px;color:var(--muted);text-decoration:none">&larr; Back to DVSL site</a>
+    </div>
+  </div>
+</div>
+
+<!-- CAPTAIN APP -->
+<div id="app" class="app">
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="top-bar-brand">
+      <div class="top-bar-logo">DVSL</div>
+      <div class="top-bar-team" id="top-team-name">
+        <span class="team-dot" id="top-team-dot"></span>
+        <span id="top-team-label">Loading...</span>
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <span class="top-bar-user" id="top-user-email"></span>
+      <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- TAB NAVIGATION -->
+  <div class="tab-nav">
+    <div class="tab-item active" data-tab="team" onclick="showTab('team')">My Team</div>
+    <div class="tab-item" data-tab="roster" onclick="showTab('roster')">Roster</div>
+    <div class="tab-item" data-tab="schedule" onclick="showTab('schedule')">Schedule</div>
+    <div class="tab-item" data-tab="scores" onclick="showTab('scores')">Submit Score</div>
+    <div class="tab-item" data-tab="announcements" onclick="showTab('announcements')">Announcements</div>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content">
+
+    <!-- MY TEAM -->
+    <div class="section active" id="sec-team">
+      <div class="welcome-card">
+        <h2 id="welcome-team">Welcome, Captain</h2>
+        <p>Manage your team, view your schedule, and submit game scores.</p>
+      </div>
+      <div class="stat-grid" id="team-stats">
+        <div class="loading"><div class="spinner"></div> Loading...</div>
+      </div>
+      <div class="panel" id="team-info-panel">
+        <div class="panel-title">Team Overview</div>
+        <div id="team-info-content">
+          <div class="loading"><div class="spinner"></div> Loading team data...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROSTER -->
+    <div class="section" id="sec-roster">
+      <div class="section-title">Roster</div>
+      <div class="section-sub">Manage your team's players</div>
+      <div style="margin-bottom:16px">
+        <button class="btn btn-primary btn-sm" id="add-player-btn" onclick="openAddPlayer()">+ Add Player</button>
+      </div>
+      <div id="add-player-form" style="display:none"></div>
+      <div id="roster-content">
+        <div class="loading"><div class="spinner"></div> Loading roster...</div>
+      </div>
+    </div>
+
+    <!-- SCHEDULE -->
+    <div class="section" id="sec-schedule">
+      <div class="section-title">Schedule</div>
+      <div class="section-sub">Your team's upcoming and past games</div>
+      <div id="schedule-content">
+        <div class="loading"><div class="spinner"></div> Loading schedule...</div>
+      </div>
+    </div>
+
+    <!-- SUBMIT SCORE -->
+    <div class="section" id="sec-scores">
+      <div class="section-title">Submit Score</div>
+      <div class="section-sub">Submit final scores for your games. An admin will review and approve them.</div>
+      <div class="panel-title" style="margin-top:8px">Games Awaiting Scores</div>
+      <div id="pending-games">
+        <div class="loading"><div class="spinner"></div> Loading games...</div>
+      </div>
+      <div class="panel-title" style="margin-top:28px">Your Submissions</div>
+      <div id="past-submissions">
+        <div class="loading"><div class="spinner"></div> Loading...</div>
+      </div>
+    </div>
+
+    <!-- ANNOUNCEMENTS -->
+    <div class="section" id="sec-announcements">
+      <div class="section-title">Announcements</div>
+      <div class="section-sub">League news and updates from the admin</div>
+      <div id="announcements-content">
+        <div class="loading"><div class="spinner"></div> Loading announcements...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toast-container"></div>
+
+<script type="module">
+// ═══════════════════════════════════════════════════════════════════
+// FIREBASE SETUP
+// ═══════════════════════════════════════════════════════════════════
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+};
+
+const app = initializeApp(FIREBASE_CONFIG);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// ═══════════════════════════════════════════════════════════════════
+// GLOBAL STATE
+// ═══════════════════════════════════════════════════════════════════
+let currentUser = null;
+let captainData = null;  // { email, team_id, team_name }
+let MY_TEAM = null;
+let ALL_TEAMS = [];
+let MY_GAMES = [];
+let MY_PLAYERS = [];
+let MY_SUBMISSIONS = [];
+
+// ═══════════════════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════════════════
+function toast(msg, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.animation = 'toastOut .3s ease forwards'; setTimeout(() => el.remove(), 300); }, 3500);
+}
+window.toast = toast;
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+function getTeamName(id) {
+  const t = ALL_TEAMS.find(t => t.id === id);
+  return t ? (t.short || t.name) : (id || '???').toUpperCase();
+}
+
+function getTeamFull(id) {
+  const t = ALL_TEAMS.find(t => t.id === id);
+  return t ? t.name : (id || '???');
+}
+
+async function logActivity(action, details) {
+  try {
+    await addDoc(collection(db, 'activity_log'), {
+      action,
+      details,
+      timestamp: Timestamp.now(),
+      user: currentUser?.email || 'unknown'
+    });
+  } catch(e) { console.error('Failed to log activity:', e); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════════
+window.doLogin = async function() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!email || !pass) { errEl.textContent = 'Please enter email and password.'; errEl.style.display = 'block'; return; }
+  try {
+    document.getElementById('login-btn').disabled = true;
+    document.getElementById('login-btn').textContent = 'Signing in...';
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch(e) {
+    let msg = e.message || 'Login failed';
+    if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') {
+      msg = 'Invalid email or password. Please try again.';
+    } else if (e.code === 'auth/configuration-not-found' || e.code === 'auth/operation-not-allowed') {
+      msg = 'Login is not configured yet. Please contact the league administrator.';
+    } else if (e.code === 'auth/network-request-failed') {
+      msg = 'Network error. Please check your internet connection.';
+    } else if (e.code === 'auth/too-many-requests') {
+      msg = 'Too many failed attempts. Please wait a few minutes and try again.';
+    }
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+    document.getElementById('login-btn').disabled = false;
+    document.getElementById('login-btn').textContent = 'Sign In';
+  }
+};
+
+window.doLogout = async function() {
+  await signOut(auth);
+  location.reload();
+};
+
+// Listen for auth state
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    currentUser = user;
+    // Look up captain assignment
+    try {
+      const captainSnap = await getDocs(query(collection(db, 'captains'), where('email', '==', user.email)));
+      if (captainSnap.empty) {
+        // Not assigned as captain
+        document.getElementById('login-screen').style.display = 'flex';
+        document.getElementById('app').style.display = 'none';
+        const errEl = document.getElementById('login-error');
+        errEl.textContent = 'Your account is not assigned to a team. Contact the league administrator.';
+        errEl.style.display = 'block';
+        document.getElementById('login-btn').disabled = false;
+        document.getElementById('login-btn').textContent = 'Sign In';
+        return;
+      }
+      captainData = { id: captainSnap.docs[0].id, ...captainSnap.docs[0].data() };
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('top-user-email').textContent = user.email;
+      await loadAllData();
+    } catch(e) {
+      console.error('Captain lookup failed:', e);
+      const errEl = document.getElementById('login-error');
+      errEl.textContent = 'Error loading your team data. Please try again or contact the administrator.';
+      errEl.style.display = 'block';
+      document.getElementById('login-btn').disabled = false;
+      document.getElementById('login-btn').textContent = 'Sign In';
+    }
+  } else {
+    currentUser = null;
+    captainData = null;
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+// Enter key on login
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') window.doLogin(); });
+document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-pass').focus(); });
+
+// ═══════════════════════════════════════════════════════════════════
+// TAB NAVIGATION
+// ═══════════════════════════════════════════════════════════════════
+window.showTab = function(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+  document.getElementById('sec-' + name)?.classList.add('active');
+  document.querySelector(`.tab-item[data-tab="${name}"]`)?.classList.add('active');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// DATA LOADING
+// ═══════════════════════════════════════════════════════════════════
+async function fbFetch(coll, orderField) {
+  const q2 = orderField ? query(collection(db, coll), orderBy(orderField)) : collection(db, coll);
+  const snap = await getDocs(q2);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+async function loadAllData() {
+  try {
+    const [teams, games, players, submissions, announcements] = await Promise.all([
+      fbFetch('teams', 'name'),
+      fbFetch('games', 'wk'),
+      fbFetch('players').catch(() => []),
+      fbFetch('score_submissions').catch(() => []),
+      fbFetch('announcements').catch(() => [])
+    ]);
+
+    ALL_TEAMS = teams.filter(t => t.active !== false).sort((a,b) => (b.pct||0) - (a.pct||0));
+    const allGames = games.sort((a,b) => (a.wk||0) - (b.wk||0) || (a.time||'').localeCompare(b.time||''));
+
+    // Find my team
+    MY_TEAM = ALL_TEAMS.find(t => t.id === captainData.team_id) || null;
+
+    // Filter to my team's data only
+    const myId = captainData.team_id;
+    MY_GAMES = allGames.filter(g => g.away === myId || g.home === myId);
+    MY_PLAYERS = players.filter(p => p.team === myId).sort((a,b) => (a.num||99) - (b.num||99));
+    MY_SUBMISSIONS = submissions.filter(s => s.submitted_by === currentUser.email).sort((a,b) => {
+      const ta = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(0);
+      const tb = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(0);
+      return tb - ta;
+    });
+
+    // Store announcements
+    window._announcements = announcements.sort((a2,b2) => {
+      const ta = a2.timestamp?.toDate ? a2.timestamp.toDate() : new Date(0);
+      const tb = b2.timestamp?.toDate ? b2.timestamp.toDate() : new Date(0);
+      return tb - ta;
+    });
+
+    // Update header
+    const teamColor = MY_TEAM?.color || '#002D72';
+    document.getElementById('top-team-dot').style.background = teamColor;
+    document.getElementById('top-team-label').textContent = MY_TEAM?.name || captainData.team_name || 'My Team';
+    document.getElementById('welcome-team').textContent = `Welcome, ${MY_TEAM?.name || captainData.team_name || 'Captain'}`;
+
+    renderTeam();
+    renderRoster();
+    renderSchedule();
+    renderPendingGames();
+    renderSubmissions();
+    renderAnnouncements();
+  } catch(e) {
+    console.error('Data load failed:', e);
+    toast('Failed to load data: ' + e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MY TEAM
+// ═══════════════════════════════════════════════════════════════════
+function renderTeam() {
+  const statsEl = document.getElementById('team-stats');
+  const infoEl = document.getElementById('team-info-content');
+
+  if (!MY_TEAM) {
+    statsEl.innerHTML = '<div class="empty">Team data not found</div>';
+    infoEl.innerHTML = '<div class="empty">Could not load team details</div>';
+    return;
+  }
+
+  const t = MY_TEAM;
+  const w = t.w || 0;
+  const l = t.l || 0;
+  const pct = t.pct || 0;
+  const rank = ALL_TEAMS.findIndex(x => x.id === t.id) + 1;
+  const gamesPlayed = MY_GAMES.filter(g => g.done).length;
+  const gamesLeft = MY_GAMES.filter(g => !g.done).length;
+
+  statsEl.innerHTML = `
+    <div class="stat-card"><div class="val">${w}-${l}</div><div class="lbl">Record</div></div>
+    <div class="stat-card"><div class="val">${pct.toFixed(3)}</div><div class="lbl">Win Pct</div></div>
+    <div class="stat-card"><div class="val">#${rank}</div><div class="lbl">Standings</div></div>
+    <div class="stat-card"><div class="val">${MY_PLAYERS.length}</div><div class="lbl">Players</div></div>
+    <div class="stat-card"><div class="val">${gamesPlayed}</div><div class="lbl">Played</div></div>
+    <div class="stat-card"><div class="val">${gamesLeft}</div><div class="lbl">Remaining</div></div>
+  `;
+
+  const gb = t.gb || '-';
+  const streak = t.streak || '-';
+  const rs = t.rs || 0;
+  const ra = t.ra || 0;
+
+  infoEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:14px">
+      <div><span style="color:var(--muted);font-size:12px;text-transform:uppercase;font-weight:600;letter-spacing:.06em">Games Back</span><br><strong>${gb}</strong></div>
+      <div><span style="color:var(--muted);font-size:12px;text-transform:uppercase;font-weight:600;letter-spacing:.06em">Streak</span><br><strong>${streak}</strong></div>
+      <div><span style="color:var(--muted);font-size:12px;text-transform:uppercase;font-weight:600;letter-spacing:.06em">Runs Scored</span><br><strong>${rs}</strong></div>
+      <div><span style="color:var(--muted);font-size:12px;text-transform:uppercase;font-weight:600;letter-spacing:.06em">Runs Against</span><br><strong>${ra}</strong></div>
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ROSTER
+// ═══════════════════════════════════════════════════════════════════
+function renderRoster() {
+  const el = document.getElementById('roster-content');
+  if (!MY_PLAYERS.length) {
+    el.innerHTML = '<div class="empty">No players on the roster yet. Add your first player above.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${MY_PLAYERS.length} player(s)</div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Actions</th></tr></thead>
+      <tbody>${MY_PLAYERS.map(p => `<tr>
+        <td>${p.num || '-'}</td>
+        <td><strong>${esc(p.name)}</strong></td>
+        <td>${esc(p.pos || '-')}</td>
+        <td class="actions">
+          <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>
+        </td>
+      </tr>
+      <tr id="player-edit-${p.id}" style="display:none"><td colspan="4" id="player-edit-cell-${p.id}"></td></tr>`).join('')}
+      </tbody>
+    </table></div>
+  `;
+}
+
+window.openAddPlayer = function() {
+  const el = document.getElementById('add-player-form');
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="inline-form" style="margin-bottom:16px">
+    <div class="panel-title">Add Player</div>
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ap-name" placeholder="Player name"></div>
+      <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ap-num" placeholder="#" min="0"></div>
+      <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ap-pos" placeholder="e.g. SS, CF, P"></div>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-success btn-sm" onclick="saveNewPlayer()">Add Player</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('add-player-form').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+};
+
+window.saveNewPlayer = async function() {
+  const data = {
+    name: document.getElementById('ap-name').value.trim(),
+    num: parseInt(document.getElementById('ap-num').value) || 0,
+    pos: document.getElementById('ap-pos').value.trim(),
+    team: captainData.team_id
+  };
+  if (!data.name) { toast('Please enter the player\'s name.', 'error'); return; }
+  try {
+    const ref = await addDoc(collection(db, 'players'), data);
+    data.id = ref.id;
+    MY_PLAYERS.push(data);
+    MY_PLAYERS.sort((a,b) => (a.num||99) - (b.num||99));
+    document.getElementById('add-player-form').style.display = 'none';
+    toast('Player added to roster!');
+    await logActivity('Roster (Captain)', `Added ${data.name} to ${captainData.team_name}`);
+    renderRoster();
+    renderTeam();
+  } catch(e) { toast('Failed to add player: ' + e.message, 'error'); }
+};
+
+window.editPlayer = function(playerId) {
+  const row = document.getElementById('player-edit-' + playerId);
+  if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+  row.style.display = 'table-row';
+  const p = MY_PLAYERS.find(x => x.id === playerId);
+  if (!p) return;
+  document.getElementById('player-edit-cell-' + playerId).innerHTML = `
+    <div class="inline-form">
+      <div class="form-row">
+        <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ep-name-${playerId}" value="${esc(p.name)}"></div>
+        <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ep-num-${playerId}" value="${p.num||''}" min="0"></div>
+        <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ep-pos-${playerId}" value="${esc(p.pos||'')}"></div>
+      </div>
+      <div class="form-row">
+        <button class="btn btn-success btn-sm" onclick="saveEditPlayer('${playerId}')">Save</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('player-edit-${playerId}').style.display='none'">Cancel</button>
+      </div>
+    </div>`;
+};
+
+window.saveEditPlayer = async function(playerId) {
+  const data = {
+    name: document.getElementById('ep-name-' + playerId).value.trim(),
+    num: parseInt(document.getElementById('ep-num-' + playerId).value) || 0,
+    pos: document.getElementById('ep-pos-' + playerId).value.trim()
+  };
+  if (!data.name) { toast('Please enter a name.', 'error'); return; }
+  try {
+    await updateDoc(doc(db, 'players', playerId), data);
+    const p = MY_PLAYERS.find(x => x.id === playerId);
+    if (p) Object.assign(p, data);
+    toast('Player updated!');
+    await logActivity('Roster (Captain)', `Edited ${data.name} on ${captainData.team_name}`);
+    renderRoster();
+  } catch(e) { toast('Failed to update player: ' + e.message, 'error'); }
+};
+
+window.removePlayer = async function(playerId) {
+  const p = MY_PLAYERS.find(x => x.id === playerId);
+  if (!confirm(`Remove ${p?.name || 'this player'} from the roster?`)) return;
+  try {
+    await deleteDoc(doc(db, 'players', playerId));
+    MY_PLAYERS = MY_PLAYERS.filter(x => x.id !== playerId);
+    toast('Player removed from roster.');
+    await logActivity('Roster (Captain)', `Removed ${p?.name} from ${captainData.team_name}`);
+    renderRoster();
+    renderTeam();
+  } catch(e) { toast('Failed to remove player: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// SCHEDULE
+// ═══════════════════════════════════════════════════════════════════
+function renderSchedule() {
+  const el = document.getElementById('schedule-content');
+  if (!MY_GAMES.length) {
+    el.innerHTML = '<div class="empty">No games scheduled yet.</div>';
+    return;
+  }
+
+  el.innerHTML = MY_GAMES.map(g => {
+    const isHome = g.home === captainData.team_id;
+    const opponent = isHome ? g.away : g.home;
+    const homeAway = isHome ? 'vs' : '@';
+    const done = g.done;
+    return `<div class="game-card">
+      <div class="teams">
+        <strong>${esc(getTeamName(captainData.team_id))}</strong>
+        <span class="vs">${homeAway}</span>
+        <strong>${esc(getTeamName(opponent))}</strong>
+      </div>
+      <div class="meta">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}<br>${esc(g.field || '')}</div>
+      ${done
+        ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div><span class="badge badge-done">Final</span>`
+        : `<span class="badge badge-pending">Upcoming</span>`
+      }
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SUBMIT SCORE
+// ═══════════════════════════════════════════════════════════════════
+function renderPendingGames() {
+  const el = document.getElementById('pending-games');
+  const pending = MY_GAMES.filter(g => !g.done);
+
+  if (!pending.length) {
+    el.innerHTML = '<div class="empty">All your games have final scores. Nothing to submit.</div>';
+    return;
+  }
+
+  el.innerHTML = pending.map(g => {
+    const isHome = g.home === captainData.team_id;
+    const opponent = isHome ? g.away : g.home;
+    const homeAway = isHome ? 'vs' : '@';
+    // Check if already submitted
+    const existing = MY_SUBMISSIONS.find(s => s.game_id === g.id && s.status === 'pending');
+    return `<div class="game-card" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <div class="teams">
+            <strong>${esc(getTeamName(captainData.team_id))}</strong>
+            <span class="vs">${homeAway}</span>
+            <strong>${esc(getTeamName(opponent))}</strong>
+          </div>
+          <div class="meta" style="margin-top:4px">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}</div>
+        </div>
+        ${existing
+          ? `<span class="badge badge-pending">Pending Approval</span>`
+          : `<button class="btn btn-primary btn-sm" onclick="openScoreForm('${g.id}')">Submit Score</button>`
+        }
+      </div>
+      <div id="score-form-${g.id}" style="display:none"></div>
+    </div>`;
+  }).join('');
+}
+
+window.openScoreForm = function(gameId) {
+  const formEl = document.getElementById('score-form-' + gameId);
+  if (formEl.style.display !== 'none') { formEl.style.display = 'none'; return; }
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+
+  formEl.style.display = 'block';
+  formEl.innerHTML = `
+    <div class="inline-form" style="margin-top:12px">
+      <div class="form-row">
+        <div class="form-col form-col-sm">
+          <label class="form-label">${esc(getTeamName(g.away))} (Away)</label>
+          <input type="number" class="form-input" id="ss-away-${gameId}" min="0" placeholder="0">
+        </div>
+        <div class="form-col form-col-sm">
+          <label class="form-label">${esc(getTeamName(g.home))} (Home)</label>
+          <input type="number" class="form-input" id="ss-home-${gameId}" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <button class="btn btn-success btn-sm" onclick="submitScore('${gameId}')">Submit Score</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('score-form-${gameId}').style.display='none'">Cancel</button>
+      </div>
+    </div>`;
+};
+
+window.submitScore = async function(gameId) {
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const awayScore = parseInt(document.getElementById('ss-away-' + gameId).value);
+  const homeScore = parseInt(document.getElementById('ss-home-' + gameId).value);
+  if (isNaN(awayScore) || isNaN(homeScore)) { toast('Please enter both scores.', 'error'); return; }
+
+  const data = {
+    game_id: gameId,
+    away: g.away,
+    home: g.home,
+    away_score: awayScore,
+    home_score: homeScore,
+    submitted_by: currentUser.email,
+    team_id: captainData.team_id,
+    team_name: captainData.team_name,
+    wk: g.wk || 0,
+    timestamp: Timestamp.now(),
+    status: 'pending'
+  };
+
+  try {
+    const ref = await addDoc(collection(db, 'score_submissions'), data);
+    data.id = ref.id;
+    MY_SUBMISSIONS.unshift(data);
+    toast('Score submitted! The admin will review and approve it.');
+    await logActivity('Score Submission', `${captainData.team_name}: ${getTeamName(g.away)} ${awayScore} - ${getTeamName(g.home)} ${homeScore}`);
+    renderPendingGames();
+    renderSubmissions();
+  } catch(e) { toast('Failed to submit score: ' + e.message, 'error'); }
+};
+
+function renderSubmissions() {
+  const el = document.getElementById('past-submissions');
+  if (!MY_SUBMISSIONS.length) {
+    el.innerHTML = '<div class="empty">You haven\'t submitted any scores yet.</div>';
+    return;
+  }
+
+  el.innerHTML = MY_SUBMISSIONS.map(s => {
+    const t = s.timestamp?.toDate ? s.timestamp.toDate() : new Date();
+    const statusClass = s.status === 'approved' ? 'badge-done' : s.status === 'rejected' ? 'badge-rejected' : 'badge-pending';
+    const statusLabel = s.status === 'approved' ? 'Approved' : s.status === 'rejected' ? 'Rejected' : 'Pending';
+    return `<div class="game-card">
+      <div>
+        <div class="teams">${esc(getTeamName(s.away))} <span class="vs">@</span> ${esc(getTeamName(s.home))}</div>
+        <div class="meta" style="margin-top:2px">Wk ${s.wk || '?'} &bull; ${t.toLocaleDateString()} ${t.toLocaleTimeString()}</div>
+      </div>
+      <div class="score-display">${s.away_score} &ndash; ${s.home_score}</div>
+      <span class="badge ${statusClass}">${statusLabel}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ANNOUNCEMENTS
+// ═══════════════════════════════════════════════════════════════════
+function renderAnnouncements() {
+  const el = document.getElementById('announcements-content');
+  const items = window._announcements || [];
+
+  if (!items.length) {
+    el.innerHTML = '<div class="empty">No announcements yet. Check back later!</div>';
+    return;
+  }
+
+  el.innerHTML = items.map(a => {
+    const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
+    return `<div class="announcement-card">
+      <div class="ann-subject">${esc(a.subject)}</div>
+      <div class="ann-body">${esc(a.body)}</div>
+      <div class="ann-meta">${t.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} &bull; ${esc(a.to || 'All Teams')}</div>
+    </div>`;
+  }).join('');
+}
+
+</script>
+</body>
+</html>
