@@ -62,7 +62,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;over
 .fade-in.visible{opacity:1;transform:translateY(0)}
 
 /* ── HERO ── */
-.hero{height:calc(100vw / 3.26);max-height:500px;min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0;position:relative;overflow:hidden;gap:0}
+.hero{height:calc(100vw / 5.5);max-height:280px;min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:0;position:relative;overflow:hidden;gap:0}
 /* Full-bleed background image */
 #pg-home .hero-img-bg{position:absolute;inset:0;background:url('bannersoftball.jpg') center center/100% auto no-repeat;background-color:#06080f;z-index:0}
 .hero-mobile-logo{display:none;position:absolute;top:20px;left:0;right:0;width:100%;z-index:1;pointer-events:none}
@@ -1975,8 +1975,8 @@ thead th.sorted-col .sarrow{opacity:1}
 <!-- ═══ STANDINGS PAGE ═══ -->
 <div class="page" id="pg-standings">
 <!-- HERO -->
-<div style="padding:80px 48px 28px;background:var(--bg)">
-  <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(32px,4.5vw,58px);text-transform:uppercase;line-height:.95;white-space:nowrap">Season <span style="color:var(--gold)">Standings</span></h1>
+<div style="padding:100px 48px 28px;background:var(--bg)">
+  <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(32px,4.5vw,58px);text-transform:uppercase;line-height:.95">SEASON <span style="color:var(--gold)">STANDINGS</span></h1>
   <p style="font-size:14px;color:var(--muted);margin-top:12px;max-width:560px;line-height:1.7">Full final standings for every DVSL season on record — wins, losses, points for/against, differential, and streaks.</p>
 </div>
 
@@ -2841,8 +2841,8 @@ function buildSchedule(){
     const isNext=i===nextIdx;
     const atTeam=getTeamByShort(g.away), htTeam=getTeamByShort(g.home);
     const ac=atTeam?.color||'#9ca3af', hc=htTeam?.color||'#9ca3af';
-    const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${g.away.toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
-    const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${g.home.toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
+    const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${(atm?.short||g.away).toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
+    const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${(htm?.short||g.home).toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
     const atm=getTeamByShort(g.away); const htm=getTeamByShort(g.home);
     const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:``; const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:``;
     if(g.done){
@@ -2855,11 +2855,11 @@ function buildSchedule(){
           <div class="gb-rhe-hdr-row"><span class="gb-rhe-lbl" style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
           <div class="gb-team-row">${logoA}
             <span class="gb-name ${aw?'winner':'loser'}" data-short="${g.away}" style="color:${aw?ac:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.away)?.id||''}')"><span>${g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${aRec}</span></span>
-            <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">0</span>
+            <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">—</span><span class="gb-rhe-val">0</span>
           </div>
           <div class="gb-team-row">${logoH}
             <span class="gb-name ${!aw?'winner':'loser'}" data-short="${g.home}" style="color:${!aw?hc:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();closeModal&&closeModal();goPage('team','${getTeamByShort(g.home)?.id||''}')"><span>${g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span><span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px;pointer-events:none">${hRec}</span></span>
-            <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">0</span>
+            <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">—</span><span class="gb-rhe-val">0</span>
           </div>
           <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px">FINAL</div>
         </div>
@@ -3783,7 +3783,7 @@ const LINEUP = [
 ];
 
 const CURRENT_WK_IDX = 9; // weeks index treated as "current"
-let weekOffset = 0;
+let weekOffset = -1; // -1 = auto-set to last completed week on first render
 let view = 'scores';
 
 function fakeScore(away,home,seed){
@@ -3794,28 +3794,48 @@ function fakeScore(away,home,seed){
 }
 
 function buildScoresNav(){
-  const center=CURRENT_WK_IDX+weekOffset;
-  const start=Math.max(0,center-3), end=Math.min(weeks.length-1,center+3);
-  const slots=weeks.slice(start,end+1);
+  // For scores: show weeks with done games; for schedule: show all weeks
+  const wkMap={};
+  SCHEDULE_PREVIEW.forEach((g,gi)=>{
+    const k=g.wk;
+    if(!wkMap[k])wkMap[k]={wk:k,date:g.date,games:[],hasDone:false};
+    wkMap[k].games.push(g);
+    if(g.done)wkMap[k].hasDone=true;
+  });
+  const relevantWks=view==='scores'
+    ? Object.values(wkMap).filter(w=>w.hasDone).sort((a,b)=>a.wk-b.wk)
+    : Object.values(wkMap).sort((a,b)=>a.wk-b.wk);
+  if(!relevantWks.length)return;
+
+  // weekOffset is absolute index into relevantWks
+  const clampedOff=Math.min(Math.max(0,weekOffset),relevantWks.length-1);
+  const center=clampedOff;
+  const start=Math.max(0,center-3), end=Math.min(relevantWks.length-1,center+3);
+  const slots=relevantWks.slice(start,end+1);
   document.getElementById('dnSlots').innerHTML=slots.map((w,i)=>{
-    const abs=start+i, active=abs===(CURRENT_WK_IDX+weekOffset);
-    const [mon,day]=(w.date||'').split(' ');
-    const mo={'April':'Apr','May':'May','June':'Jun','July':'Jul','August':'Aug'}[mon]||mon;
-    return`<div class="dn-slot${active?' active':''}" onclick="setWeek(${abs-CURRENT_WK_IDX})">
+    const abs=start+i, active=abs===clampedOff;
+    return`<div class="dn-slot${active?' active':''}" onclick="setWeekAbs(${abs})">
       <div class="wk-label">WK ${w.wk}</div>
-      <div class="wk-date">${mo} ${day}</div>
+      <div class="wk-date">${w.date||''}</div>
     </div>`;
   }).join('');
 }
 
-function setWeek(off){weekOffset=off;buildScoresNav();render();}
+function setWeekAbs(idx){weekOffset=idx;buildScoresNav();renderScores();}
+function setWeek(off){weekOffset=off;buildScoresNav();renderScores();}
 function shiftNav(d){
-  const ni=CURRENT_WK_IDX+weekOffset+(d*4);
-  if(ni<0||ni>=weeks.length)return;
-  weekOffset+=d*4;buildScoresNav();renderScores();
+  const wkMap={};
+  SCHEDULE_PREVIEW.forEach(g=>{if(!wkMap[g.wk])wkMap[g.wk]={wk:g.wk,date:g.date,games:[],hasDone:false};wkMap[g.wk].games.push(g);if(g.done)wkMap[g.wk].hasDone=true;});
+  const relevantWks2=view==='scores'
+    ? Object.values(wkMap).filter(w=>w.hasDone).sort((a,b)=>a.wk-b.wk)
+    : Object.values(wkMap).sort((a,b)=>a.wk-b.wk);
+  const ni=weekOffset+(d*4);
+  if(ni<0||ni>=relevantWks2.length)return;
+  weekOffset=ni;buildScoresNav();renderScores();
 }
 function setView(v){
   document.title = v==='schedule' ? 'Schedule — DVSL Softball' : 'Scores — DVSL Softball';
+  weekOffset=-1; // reset to auto-select correct week for each view
   view=v;
   document.getElementById('btn-scores').classList.toggle('active',v==='scores');
   document.getElementById('btn-schedule').classList.toggle('active',v==='schedule');
@@ -3851,12 +3871,12 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         <div class="gb-rhe-hdr-row"><span style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name ${aW?'winner':'loser'}" data-short="${g.away}" style="color:${aW?ac:'rgba(239,239,239,.38)'}" onclick="event.stopPropagation();goTeam('${g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
+          <span class="gb-name ${aW?'winner':'loser'}" data-short="${g.away}" style="color:${aW?ac:'rgba(239,239,239,.38)'}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
           <span class="gb-score ${aW?'winner':'loser'}">${as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">${aE}</span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name ${!aW?'winner':'loser'}" data-short="${g.home}" style="color:${!aW?hc:'rgba(239,239,239,.38)'}" onclick="event.stopPropagation();goTeam('${g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
+          <span class="gb-name ${!aW?'winner':'loser'}" data-short="${g.home}" style="color:${!aW?hc:'rgba(239,239,239,.38)'}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
           <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">${hE}</span>
         </div>
         <div class="gb-status-lbl final">FINAL</div>
@@ -3875,11 +3895,11 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
-          <span class="gb-name winner" data-short="${g.away}" style="color:${ac}" onclick="event.stopPropagation();goTeam('${g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
+          <span class="gb-name winner" data-short="${g.away}" style="color:${ac}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
-          <span class="gb-name winner" data-short="${g.home}" style="color:${hc}" onclick="event.stopPropagation();goTeam('${g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
+          <span class="gb-name winner" data-short="${g.home}" style="color:${hc}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
         </div>
         <div style="padding-left:38px;margin-top:4px;font-size:13px;color:var(--gold);font-weight:700;font-family:'Oswald',sans-serif">${time} <span style="color:var(--muted);font-size:11px;font-family:'Inter',sans-serif;font-weight:500">· ${field}</span></div>
       </div>
@@ -3897,34 +3917,34 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
 
 // ════ SCHEDULE BLOCK — mirrors home page sched-game-block style ═══════════
 function scheduleBlock(g, isNext){
-  const atm=TEAMS.find(t=>t.short===g.away)||HIST_TEAMS.find(t=>t.short===g.away);
-  const htm=TEAMS.find(t=>t.short===g.home)||HIST_TEAMS.find(t=>t.short===g.home);
+  // Teams may be stored by id (lowercase) or short (uppercase) — check both
+  const atm=TEAMS.find(t=>t.id===g.away||t.short===g.away||t.short===g.away?.toUpperCase())||HIST_TEAMS.find(t=>t.id===g.away||t.short===g.away);
+  const htm=TEAMS.find(t=>t.id===g.home||t.short===g.home||t.short===g.home?.toUpperCase())||HIST_TEAMS.find(t=>t.id===g.home||t.short===g.home);
   const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
   const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:``; 
   const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:``;
-  const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${g.away.toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
-  const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${g.home.toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
+  const logoA=`<div class="gb-logo" style="color:${ac};border-color:${ac}55;background-color:${ac}11;background-image:url('logos/${(atm?.short||g.away).toLowerCase()}.svg');background-size:cover;background-position:center">${g.away}</div>`;
+  const logoH=`<div class="gb-logo" style="color:${hc};border-color:${hc}55;background-color:${hc}11;background-image:url('logos/${(htm?.short||g.home).toLowerCase()}.svg');background-size:cover;background-position:center">${g.home}</div>`;
   
   if(g.done){
     const aw=g.as>g.hs;
-    const aH=Math.floor(g.as*2.1), hH=Math.floor(g.hs*2.1);
     const away_recap=g.away, home_recap=g.home, as_recap=g.as, hs_recap=g.hs;
     return `<div class="sched-game-block${isNext?' next':''}" onclick="openRecap2('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">
       <div class="gb-left">
         <div class="gb-rhe-hdr-row"><span class="gb-rhe-lbl" style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         <div class="gb-team-row">${logoA}
-          <span class="gb-name ${aw?'winner':'loser'}" style="color:${aw?ac:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.away}')">
-            <span>${atm?.name||g.away}${aw?'<span class="gb-arrow">◀</span>':''}</span>
+          <span class="gb-name ${aw?'winner':'loser'}" style="color:${aw?ac:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')">
+            <span>${atm?.name||(atm?.short||g.away)?.toUpperCase()}${aw?'<span class="gb-arrow">◀</span>':''}</span>
             <span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${aRec}</span>
           </span>
-          <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">0</span>
+          <span class="gb-score ${aw?'winner':'loser'}">${g.as}</span><span class="gb-rhe-val">—</span><span class="gb-rhe-val">0</span>
         </div>
         <div class="gb-team-row">${logoH}
-          <span class="gb-name ${!aw?'winner':'loser'}" style="color:${!aw?hc:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.home}')">
-            <span>${htm?.name||g.home}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
+          <span class="gb-name ${!aw?'winner':'loser'}" style="color:${!aw?hc:'rgba(239,239,239,.38)'};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')">
+            <span>${htm?.name||(htm?.short||g.home)?.toUpperCase()}${!aw?'<span class="gb-arrow">◀</span>':''}</span>
             <span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${hRec}</span>
           </span>
-          <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">0</span>
+          <span class="gb-score ${!aw?'winner':'loser'}">${g.hs}</span><span class="gb-rhe-val">—</span><span class="gb-rhe-val">0</span>
         </div>
         <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);padding-top:2px;padding-left:44px">FINAL</div>
       </div>
@@ -3938,13 +3958,13 @@ function scheduleBlock(g, isNext){
     return `<div class="sched-game-block${isNext?' next':''}" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${timeStr}')">
       <div class="gb-left">
         <div class="gb-team-row">${logoA}
-          <span class="gb-name winner" style="color:${ac};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.away}')">
+          <span class="gb-name winner" style="color:${ac};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')">
             <span>${atm?.name||g.away}</span>
             <span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${aRec}</span>
           </span>
         </div>
         <div class="gb-team-row">${logoH}
-          <span class="gb-name winner" style="color:${hc};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${g.home}')">
+          <span class="gb-name winner" style="color:${hc};cursor:pointer;display:flex;flex-direction:column;line-height:1" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')">
             <span>${htm?.name||g.home}</span>
             <span style="font-size:11px;font-family:'Inter',sans-serif;font-weight:500;opacity:.55;margin-top:2px">${hRec}</span>
           </span>
@@ -3969,39 +3989,47 @@ function openRecap2(away,home,as,hs,field,date){
 }
 function renderScores(){
   const wrap=document.getElementById('sbWrap');
+  if(!SCHEDULE_PREVIEW||!SCHEDULE_PREVIEW.length){
+    wrap.innerHTML='<div class="no-games">Loading schedule...</div>';return;
+  }
+
+  // Group SCHEDULE_PREVIEW by week number
+  const wkMap={};
+  SCHEDULE_PREVIEW.forEach((g,gi)=>{
+    const k=g.wk;
+    if(!wkMap[k])wkMap[k]={wk:k,date:g.date,games:[]};
+    wkMap[k].games.push({...g,_gi:gi});
+  });
+  const allWks=Object.keys(wkMap).map(k=>wkMap[k]).sort((a,b)=>a.wk-b.wk);
+  const nextGi=SCHEDULE_PREVIEW.findIndex(g=>!g.done);
+
   if(view==='scores'){
-    // Show 3 most recent completed weeks
-    const past=weeks.map((w,i)=>({w,i})).filter(({i})=>i<CURRENT_WK_IDX&&weeks[i].games.length);
-    if(!past.length){wrap.innerHTML='<div class="no-games">No completed games yet.</div>';return;}
-    const shown=past.slice(-3).reverse();
-    wrap.innerHTML=shown.map(({w,i})=>{
-      const byDay={};
-      w.games.forEach(g=>{(byDay[g.day]=byDay[g.day]||[]).push(g);});
-      const days=['mon','tue','wed','thu'].filter(d=>byDay[d]);
-      return`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
-        +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`+byDay[d].map((g,gi)=>gameBlock(g,i,gi,true,false)).join('')).join('');
-    }).join('<div style="height:16px"></div>');
-  } else {
-    // Schedule view: use weeks[] for full schedule, merged with SCHEDULE_PREVIEW scores
-    const nextGlobalIdx = SCHEDULE_PREVIEW.findIndex(g=>!g.done);
-    const nextGlobalWk = nextGlobalIdx>=0 ? SCHEDULE_PREVIEW[nextGlobalIdx].wk : 999;
-    const idx = CURRENT_WK_IDX + weekOffset;
-    const week = weeks[idx];
-    if(!week||!week.games.length){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
-    // Build a lookup of SCHEDULE_PREVIEW results by away+home
-    const spLookup={};
-    SCHEDULE_PREVIEW.forEach((g,gi)=>{ spLookup[g.away+'_'+g.home]={...g,_gi:gi}; });
-    const nextSPGame = SCHEDULE_PREVIEW[nextGlobalIdx];
-    wrap.innerHTML=`<div class="sb-week-head">Week ${week.wk} · ${week.date}</div>`
+    // Scores page: show completed games by week
+    const doneWks=allWks.filter(w=>w.games.some(g=>g.done));
+    if(!doneWks.length){wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⚾</div><div style="font-size:20px;font-weight:700;margin-bottom:8px">Season Starts April 14!</div><div style="color:var(--muted);font-size:14px">No completed games yet. Check the Schedule tab for upcoming games.</div></div>';return;}
+    // Auto-set to last completed week on first render
+    if(weekOffset<0)weekOffset=doneWks.length-1;
+    const idx=Math.min(Math.max(0,weekOffset),doneWks.length-1);
+    const w=doneWks[idx];
+    if(!w){wrap.innerHTML='<div class="no-games">No games found.</div>';return;}
+    const doneGames=w.games.filter(g=>g.done);
+    wrap.innerHTML=`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
       +`<div class="sched-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px;">`
-      +week.games.map((g)=>{
-        // Merge score data from SCHEDULE_PREVIEW if it exists
-        const sp = spLookup[g.away+'_'+g.home];
-        const merged = sp ? {...g, done:sp.done, as:sp.as, hs:sp.hs, date:sp.date||week.date, time:sp.time||g.time||'7:00 PM', addr:sp.addr||g.addr||''} 
-                          : {...g, done:false, date:week.date, time:g.time||'7:00 PM', addr:g.addr||''};
-        const isNext = sp && sp._gi===nextGlobalIdx;
-        return scheduleBlock(merged, isNext);
-      }).join('')
+      +doneGames.map(g=>scheduleBlock(g,false)).join('')
+      +`</div>`;
+  } else {
+    // Schedule page: show all games for selected week
+    if(weekOffset<0){
+      // Default to next upcoming week
+      const nextWkIdx=allWks.findIndex(w=>w.games.some(g=>!g.done));
+      weekOffset=nextWkIdx>=0?nextWkIdx:0;
+    }
+    const idx=Math.min(Math.max(0,weekOffset),allWks.length-1);
+    const w=allWks[idx];
+    if(!w){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
+    wrap.innerHTML=`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
+      +`<div class="sched-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px;">`
+      +w.games.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
       +`</div>`;
   }
 }
@@ -4034,15 +4062,19 @@ function openRecap(away,home,as,hs,field,date){
 
 function openBox(away,home,as,hs,field,date){
   const ac=tc(away),hc=tc(home),aW=as>hs;
-  const aH=Math.floor(as*2.1),hH=Math.floor(hs*2.1);
   // Get real players for each team from PLAYERS array
-  const awayTeam=TEAMS.find(t=>t.short===away)||HIST_TEAMS.find(t=>t.short===away);
-  const homeTeam=TEAMS.find(t=>t.short===home)||HIST_TEAMS.find(t=>t.short===home);
-  const awayPlayers=awayTeam?PLAYERS.filter(p=>p.team===awayTeam.id):[];
-  const homePlayers=homeTeam?PLAYERS.filter(p=>p.team===homeTeam.id):[];
-  const useLineup=(players)=>players.length?players.map(p=>({name:p.name,pos:p.pos,avg:p.avg.toFixed(3).replace(/^0/,''),hr:p.hr,rbi:p.rbi,id:p.id})):LINEUP.map(p=>({...p,id:null}));
-  const mkRows=(lu,teamShort)=>lu.map(p=>`<tr style="cursor:pointer" onclick="${p.id?`window.location='index.html#player-${p.id}'`:''}" title="${p.id?'View player stats':''}">
-        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
+  const awayTeam=TEAMS.find(t=>t.id===away||t.short===away||t.short===away?.toUpperCase())||HIST_TEAMS.find(t=>t.id===away||t.short===away);
+  const homeTeam=TEAMS.find(t=>t.id===home||t.short===home||t.short===home?.toUpperCase())||HIST_TEAMS.find(t=>t.id===home||t.short===home);
+  const awayPlayers=awayTeam?PLAYERS.filter(p=>p.team===awayTeam.id).sort((a,b)=>b.avg-a.avg):[];
+  const homePlayers=homeTeam?PLAYERS.filter(p=>p.team===homeTeam.id).sort((a,b)=>b.avg-a.avg):[];
+  // Show season stats for players on each team
+  const mkRows=(players)=>players.length
+    ? players.map(p=>`<tr>
+        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos||''}</span></td>
+        <td>${(p.avg||0).toFixed(3).replace(/^0/,'')}</td>
+        <td>${p.hr||0}</td>
+        <td>${p.rbi||0}</td></tr>`).join('')
+    : `<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px">No roster data yet</td></tr>`;
   document.getElementById('scPopContent').innerHTML=`
     <div class="pop-hd">
       <div class="pop-matchup">
