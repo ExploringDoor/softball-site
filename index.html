@@ -105,7 +105,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;over
 /* ── SCHEDULE PREVIEW ── */
 .sched-wrap{display:flex;flex-direction:column;gap:0;margin-top:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px}
 /* Homepage scores — identical classes to scores page */
-.sched-game-block{display:grid;grid-template-columns:minmax(280px,300px) auto auto auto;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:0;column-gap:0;cursor:pointer;transition:background .12s;}
+.sched-game-block{display:grid;grid-template-columns:minmax(280px,1fr) auto auto auto;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:0;column-gap:0;cursor:pointer;transition:background .12s;}
 .sched-game-block:last-child{border-bottom:none}
 .sched-game-block:hover{background:rgba(255,255,255,.025)}
 
@@ -3582,6 +3582,27 @@ const TICKER_GAMES = [
   {away:'AJ',   home:'KI',   as:null, hs:null, status:'May 5 · 7:00 PM',  field:'Plymouth'},
 ];
 
+function tickerGoGame(away,home){
+  // Find the week containing this matchup
+  const gi=SCHEDULE_PREVIEW.findIndex(g=>g.away===away&&g.home===home);
+  if(gi<0){goPage('scores');return;}
+  const game=SCHEDULE_PREVIEW[gi];
+  const done=game.done;
+  const targetView=done?'scores':'schedule';
+  goPage('scores');
+  setTimeout(()=>{
+    setView(targetView);
+    // After setView resets weekOffset and renders, override to correct week
+    const wks=getWeekList();
+    const wkIdx=wks.findIndex(w=>w.wk===game.wk);
+    if(wkIdx>=0){
+      weekOffset=wkIdx;
+      buildScoresNav();
+      renderScores();
+    }
+  },80);
+}
+
 function buildTicker2(){
   const track = document.getElementById('st-track');
   if(!track) return;
@@ -3595,7 +3616,7 @@ function buildTicker2(){
     const ht = getTeamByShort(g.home);
     const aRec = at ? at.w+'-'+at.l : '';
     const hRec = ht ? ht.w+'-'+ht.l : '';
-    return '<div class="st-game" onclick="goPage(\'scores\')">'
+    return '<div class="st-game" onclick="tickerGoGame(\''+g.away+'\',\''+g.home+'\')">'
       +'<div class="st-game-inner">'
       +'<div class="st-datetime">'+(done?'Final':g.status)+'</div>'
       +'<div class="st-row">'
