@@ -2474,20 +2474,31 @@ window.addEventListener('popstate',e=>{
 // ════════════════════════════ TICKER ═════════════════════════════════════
 
 // ════ NEXT GAME DATA ════
-const NEXT_GAME_DATA = {
-  date: 'Apr 18, 2026',
-  time: '7:00 PM',
-  day: 'Sat',
-  field: 'Mondauk 4',
-  addr: '1451 Dillon Rd, Ambler PA',
-  away: 'GOLD', awayId: 'gold',
-  home: 'TBIR', homeId: 'tbir',
+let NEXT_GAME_DATA = {
+  date: '', time: '', day: '', field: '', addr: '',
+  away: '', awayId: '', home: '', homeId: '',
   lat: 40.1523, lon: -75.2265
 };
 
 function initNextGame(){
+  // Find first upcoming game from real schedule
+  const upcoming = SCHEDULE_PREVIEW.find(g => !g.done);
+  if(upcoming){
+    const atm = getTeamByShort(upcoming.away);
+    const htm = getTeamByShort(upcoming.home);
+    NEXT_GAME_DATA = {
+      date: upcoming.date + ', 2026',
+      time: upcoming.time || '7:00 PM',
+      day: upcoming.day || '',
+      field: upcoming.field || 'TBD',
+      addr: upcoming.addr || '',
+      away: upcoming.away, awayId: atm?.id || upcoming.away.toLowerCase(),
+      home: upcoming.home, homeId: htm?.id || upcoming.home.toLowerCase(),
+      lat: 40.1523, lon: -75.2265
+    };
+  }
   const g = NEXT_GAME_DATA;
-  const awayT = getTeamByShort(g.away), homeT = getTeamByShort(g.home);
+  if(!g.away){ return; }
   document.getElementById('ng-away').textContent = g.away;
   document.getElementById('ng-away').style.color = 'var(--white)';
   document.getElementById('ng-home').textContent = g.home;
@@ -2495,7 +2506,7 @@ function initNextGame(){
   document.getElementById('ng-date').textContent = g.date;
   document.getElementById('ng-time').textContent = g.time;
   document.getElementById('ng-field').textContent = g.field;
-  document.getElementById('wx-field-name').textContent = g.field + ' · ' + g.addr;
+  document.getElementById('wx-field-name').textContent = g.field + (g.addr ? ' · ' + g.addr : '');
   startCountdown(g.date + ' ' + g.time);
   fetchWeather(g.lat, g.lon);
 }
