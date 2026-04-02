@@ -1976,7 +1976,7 @@ thead th.sorted-col .sarrow{opacity:1}
 <div class="page" id="pg-standings">
 <!-- HERO -->
 <div style="padding:80px 48px 28px;background:var(--bg)">
-  <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(28px,4vw,52px);text-transform:uppercase;line-height:.95;white-space:nowrap">Season <span style="color:var(--gold)">Standings</span></h1>
+  <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(32px,4.5vw,58px);text-transform:uppercase;line-height:.95;white-space:nowrap">Season <span style="color:var(--gold)">Standings</span></h1>
   <p style="font-size:14px;color:var(--muted);margin-top:12px;max-width:560px;line-height:1.7">Full final standings for every DVSL season on record — wins, losses, points for/against, differential, and streaks.</p>
 </div>
 
@@ -3783,7 +3783,7 @@ const LINEUP = [
 ];
 
 const CURRENT_WK_IDX = 9; // weeks index treated as "current"
-let weekOffset = -1; // -1 = auto-set to last completed week on first render
+let weekOffset = 0;
 let view = 'scores';
 
 function fakeScore(away,home,seed){
@@ -3794,48 +3794,28 @@ function fakeScore(away,home,seed){
 }
 
 function buildScoresNav(){
-  // For scores: show weeks with done games; for schedule: show all weeks
-  const wkMap={};
-  SCHEDULE_PREVIEW.forEach((g,gi)=>{
-    const k=g.wk;
-    if(!wkMap[k])wkMap[k]={wk:k,date:g.date,games:[],hasDone:false};
-    wkMap[k].games.push(g);
-    if(g.done)wkMap[k].hasDone=true;
-  });
-  const relevantWks=view==='scores'
-    ? Object.values(wkMap).filter(w=>w.hasDone).sort((a,b)=>a.wk-b.wk)
-    : Object.values(wkMap).sort((a,b)=>a.wk-b.wk);
-  if(!relevantWks.length)return;
-
-  // weekOffset is absolute index into relevantWks
-  const clampedOff=Math.min(Math.max(0,weekOffset),relevantWks.length-1);
-  const center=clampedOff;
-  const start=Math.max(0,center-3), end=Math.min(relevantWks.length-1,center+3);
-  const slots=relevantWks.slice(start,end+1);
+  const center=CURRENT_WK_IDX+weekOffset;
+  const start=Math.max(0,center-3), end=Math.min(weeks.length-1,center+3);
+  const slots=weeks.slice(start,end+1);
   document.getElementById('dnSlots').innerHTML=slots.map((w,i)=>{
-    const abs=start+i, active=abs===clampedOff;
-    return`<div class="dn-slot${active?' active':''}" onclick="setWeekAbs(${abs})">
+    const abs=start+i, active=abs===(CURRENT_WK_IDX+weekOffset);
+    const [mon,day]=(w.date||'').split(' ');
+    const mo={'April':'Apr','May':'May','June':'Jun','July':'Jul','August':'Aug'}[mon]||mon;
+    return`<div class="dn-slot${active?' active':''}" onclick="setWeek(${abs-CURRENT_WK_IDX})">
       <div class="wk-label">WK ${w.wk}</div>
-      <div class="wk-date">${w.date||''}</div>
+      <div class="wk-date">${mo} ${day}</div>
     </div>`;
   }).join('');
 }
 
-function setWeekAbs(idx){weekOffset=idx;buildScoresNav();renderScores();}
-function setWeek(off){weekOffset=off;buildScoresNav();renderScores();}
+function setWeek(off){weekOffset=off;buildScoresNav();render();}
 function shiftNav(d){
-  const wkMap={};
-  SCHEDULE_PREVIEW.forEach(g=>{if(!wkMap[g.wk])wkMap[g.wk]={wk:g.wk,date:g.date,games:[],hasDone:false};wkMap[g.wk].games.push(g);if(g.done)wkMap[g.wk].hasDone=true;});
-  const relevantWks2=view==='scores'
-    ? Object.values(wkMap).filter(w=>w.hasDone).sort((a,b)=>a.wk-b.wk)
-    : Object.values(wkMap).sort((a,b)=>a.wk-b.wk);
-  const ni=weekOffset+(d*4);
-  if(ni<0||ni>=relevantWks2.length)return;
-  weekOffset=ni;buildScoresNav();renderScores();
+  const ni=CURRENT_WK_IDX+weekOffset+(d*4);
+  if(ni<0||ni>=weeks.length)return;
+  weekOffset+=d*4;buildScoresNav();renderScores();
 }
 function setView(v){
   document.title = v==='schedule' ? 'Schedule — DVSL Softball' : 'Scores — DVSL Softball';
-  weekOffset=-1; // reset to auto-select correct week for each view
   view=v;
   document.getElementById('btn-scores').classList.toggle('active',v==='scores');
   document.getElementById('btn-schedule').classList.toggle('active',v==='schedule');
@@ -3989,47 +3969,39 @@ function openRecap2(away,home,as,hs,field,date){
 }
 function renderScores(){
   const wrap=document.getElementById('sbWrap');
-  if(!SCHEDULE_PREVIEW||!SCHEDULE_PREVIEW.length){
-    wrap.innerHTML='<div class="no-games">Loading schedule...</div>';return;
-  }
-
-  // Group SCHEDULE_PREVIEW by week number
-  const wkMap={};
-  SCHEDULE_PREVIEW.forEach((g,gi)=>{
-    const k=g.wk;
-    if(!wkMap[k])wkMap[k]={wk:k,date:g.date,games:[]};
-    wkMap[k].games.push({...g,_gi:gi});
-  });
-  const allWks=Object.keys(wkMap).map(k=>wkMap[k]).sort((a,b)=>a.wk-b.wk);
-  const nextGi=SCHEDULE_PREVIEW.findIndex(g=>!g.done);
-
   if(view==='scores'){
-    // Scores page: show completed games by week
-    const doneWks=allWks.filter(w=>w.games.some(g=>g.done));
-    if(!doneWks.length){wrap.innerHTML='<div class="no-games">No completed games yet — season starts April 14!</div>';return;}
-    // Auto-set to last completed week on first render
-    if(weekOffset<0)weekOffset=doneWks.length-1;
-    const idx=Math.min(Math.max(0,weekOffset),doneWks.length-1);
-    const w=doneWks[idx];
-    if(!w){wrap.innerHTML='<div class="no-games">No games found.</div>';return;}
-    const doneGames=w.games.filter(g=>g.done);
-    wrap.innerHTML=`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
-      +`<div class="sched-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px;">`
-      +doneGames.map(g=>scheduleBlock(g,false)).join('')
-      +`</div>`;
+    // Show 3 most recent completed weeks
+    const past=weeks.map((w,i)=>({w,i})).filter(({i})=>i<CURRENT_WK_IDX&&weeks[i].games.length);
+    if(!past.length){wrap.innerHTML='<div class="no-games">No completed games yet.</div>';return;}
+    const shown=past.slice(-3).reverse();
+    wrap.innerHTML=shown.map(({w,i})=>{
+      const byDay={};
+      w.games.forEach(g=>{(byDay[g.day]=byDay[g.day]||[]).push(g);});
+      const days=['mon','tue','wed','thu'].filter(d=>byDay[d]);
+      return`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
+        +days.map(d=>`<div class="sb-day-head">${DAY_FULL[d]}</div>`+byDay[d].map((g,gi)=>gameBlock(g,i,gi,true,false)).join('')).join('');
+    }).join('<div style="height:16px"></div>');
   } else {
-    // Schedule page: show all games for selected week
-    if(weekOffset<0){
-      // Default to next upcoming week
-      const nextWkIdx=allWks.findIndex(w=>w.games.some(g=>!g.done));
-      weekOffset=nextWkIdx>=0?nextWkIdx:0;
-    }
-    const idx=Math.min(Math.max(0,weekOffset),allWks.length-1);
-    const w=allWks[idx];
-    if(!w){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
-    wrap.innerHTML=`<div class="sb-week-head">Week ${w.wk} · ${w.date}</div>`
+    // Schedule view: use weeks[] for full schedule, merged with SCHEDULE_PREVIEW scores
+    const nextGlobalIdx = SCHEDULE_PREVIEW.findIndex(g=>!g.done);
+    const nextGlobalWk = nextGlobalIdx>=0 ? SCHEDULE_PREVIEW[nextGlobalIdx].wk : 999;
+    const idx = CURRENT_WK_IDX + weekOffset;
+    const week = weeks[idx];
+    if(!week||!week.games.length){wrap.innerHTML='<div class="no-games">No games this week.</div>';return;}
+    // Build a lookup of SCHEDULE_PREVIEW results by away+home
+    const spLookup={};
+    SCHEDULE_PREVIEW.forEach((g,gi)=>{ spLookup[g.away+'_'+g.home]={...g,_gi:gi}; });
+    const nextSPGame = SCHEDULE_PREVIEW[nextGlobalIdx];
+    wrap.innerHTML=`<div class="sb-week-head">Week ${week.wk} · ${week.date}</div>`
       +`<div class="sched-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:1060px;">`
-      +w.games.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
+      +week.games.map((g)=>{
+        // Merge score data from SCHEDULE_PREVIEW if it exists
+        const sp = spLookup[g.away+'_'+g.home];
+        const merged = sp ? {...g, done:sp.done, as:sp.as, hs:sp.hs, date:sp.date||week.date, time:sp.time||g.time||'7:00 PM', addr:sp.addr||g.addr||''} 
+                          : {...g, done:false, date:week.date, time:g.time||'7:00 PM', addr:g.addr||''};
+        const isNext = sp && sp._gi===nextGlobalIdx;
+        return scheduleBlock(merged, isNext);
+      }).join('')
       +`</div>`;
   }
 }
@@ -4062,19 +4034,15 @@ function openRecap(away,home,as,hs,field,date){
 
 function openBox(away,home,as,hs,field,date){
   const ac=tc(away),hc=tc(home),aW=as>hs;
+  const aH=Math.floor(as*2.1),hH=Math.floor(hs*2.1);
   // Get real players for each team from PLAYERS array
   const awayTeam=TEAMS.find(t=>t.short===away)||HIST_TEAMS.find(t=>t.short===away);
   const homeTeam=TEAMS.find(t=>t.short===home)||HIST_TEAMS.find(t=>t.short===home);
-  const awayPlayers=awayTeam?PLAYERS.filter(p=>p.team===awayTeam.id).sort((a,b)=>b.avg-a.avg):[];
-  const homePlayers=homeTeam?PLAYERS.filter(p=>p.team===homeTeam.id).sort((a,b)=>b.avg-a.avg):[];
-  // Show season stats for players on each team
-  const mkRows=(players)=>players.length
-    ? players.map(p=>`<tr>
-        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos||''}</span></td>
-        <td>${(p.avg||0).toFixed(3).replace(/^0/,'')}</td>
-        <td>${p.hr||0}</td>
-        <td>${p.rbi||0}</td></tr>`).join('')
-    : `<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px">No roster data yet</td></tr>`;
+  const awayPlayers=awayTeam?PLAYERS.filter(p=>p.team===awayTeam.id):[];
+  const homePlayers=homeTeam?PLAYERS.filter(p=>p.team===homeTeam.id):[];
+  const useLineup=(players)=>players.length?players.map(p=>({name:p.name,pos:p.pos,avg:p.avg.toFixed(3).replace(/^0/,''),hr:p.hr,rbi:p.rbi,id:p.id})):LINEUP.map(p=>({...p,id:null}));
+  const mkRows=(lu,teamShort)=>lu.map(p=>`<tr style="cursor:pointer" onclick="${p.id?`window.location='index.html#player-${p.id}'`:''}" title="${p.id?'View player stats':''}">
+        <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td><td>${p.avg}</td><td>${p.hr}</td><td>${p.rbi}</td></tr>`).join('');
   document.getElementById('scPopContent').innerHTML=`
     <div class="pop-hd">
       <div class="pop-matchup">
