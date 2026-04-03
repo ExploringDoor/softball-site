@@ -42,7 +42,7 @@ body.dark .score-btn:hover{background:#5b9aff!important;color:#fff!important}
 body.dark .teams-list-item{border-color:rgba(255,255,255,.06)!important}
 body.dark .teams-list-name:hover{color:#5b9aff!important}
 body.dark .teams-list-links a,body.dark .teams-list-links span:not(.sep){color:#5b9aff!important}
-body.dark .mob-menu{background:#0d0d11!important}
+body.dark .mob-menu{background:#0d0d11!important}body.dark .mob-menu a,body.dark .mob-menu span{color:#ededed!important}
 body.dark .tab-btn{color:rgba(237,237,237,.5)!important}
 body.dark .tab-btn.active{color:#5b9aff!important;border-bottom-color:#5b9aff!important}
 body.dark .dn-slot .wk-label{color:rgba(237,237,237,.4)!important}
@@ -4614,6 +4614,14 @@ function renderStats(){
   const sk = getSortKey();
   const col = cols.find(c=>c.key===sk);
   const lowerBetter = col && col.lowerBetter;
+
+  // Empty state if no players have at-bats
+  if(ctx==='player' && !PLAYERS.some(p => p.ab > 0)){
+    document.getElementById('statsHead').innerHTML = '';
+    document.getElementById('statsBody').innerHTML = '<tr><td style="text-align:center;padding:60px 20px;font-size:16px;color:var(--muted)">No stats yet — the season hasn\'t started.</td></tr>';
+    document.getElementById('statsFoot').innerHTML = '';
+    return;
+  }
 
   // Sort
   let rows = getRows();
