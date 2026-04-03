@@ -3499,7 +3499,18 @@ function renderTeamTab(tab){
             <td>${p.seasons.length}</td><td>${p.gp}</td><td>${p.ab}</td><td>${p.h}</td><td>${p.d}</td><td>${p.t}</td><td>${p.hr}</td><td>${p.rbi}</td><td>${p.r}</td><td>${p.bb}</td>
             <td>${fmtR(p._avg)}</td><td>${fmtR(p._obp)}</td><td>${fmtR(p._slg)}</td><td>${fmtR(p._ops)}</td>
           </tr>`;
-        }).join('')}</tbody>
+        }).join('')}
+        ${(()=>{
+          const tot={gp:0,ab:0,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0};
+          careerList.forEach(p=>{tot.gp+=p.gp;tot.ab+=p.ab;tot.h+=p.h;tot.s+=p.s;tot.d+=p.d;tot.t+=p.t;tot.hr+=p.hr;tot.rbi+=p.rbi;tot.r+=p.r;tot.bb+=p.bb;});
+          const tr=calcR(tot);
+          return `<tr class="career-total">
+            <td style="text-align:left">Team Totals</td>
+            <td>—</td><td>${tot.gp}</td><td>${tot.ab}</td><td>${tot.h}</td><td>${tot.d}</td><td>${tot.t}</td><td>${tot.hr}</td><td>${tot.rbi}</td><td>${tot.r}</td><td>${tot.bb}</td>
+            <td>${fmtR(tr.avg)}</td><td>${fmtR(tr.obp)}</td><td>${fmtR(tr.slg)}</td><td>${fmtR(tr.ops)}</td>
+          </tr>`;
+        })()}
+        </tbody>
       </table></div>`;
   } else {
     renderTeamStats(t, players, 'avg', 'desc');
@@ -3882,6 +3893,18 @@ async function loadSiteBanner(){
     if(ci) ci.style.display='none';
     buildLeaderboard();buildRecaps();buildHistory();setTimeout(observeAll,100);
     setTimeout(()=>openModal(pid),100);
+    return;
+  }
+  const pname = sessionStorage.getItem('dvsl_goPlayerName');
+  if(pname){
+    sessionStorage.removeItem('dvsl_goPlayerName');
+    sessionStorage.setItem('ci_played','1');
+    document.body.classList.remove('ci-active');
+    document.body.classList.add('intro-done');
+    const ci = document.getElementById('ci');
+    if(ci) ci.style.display='none';
+    const found = PLAYERS.find(p=>p.name.toLowerCase()===pname.toLowerCase());
+    if(found) setTimeout(()=>openModal(found.id),100);
     return;
   }
   // Normal hash routing — supports #team/gold format
