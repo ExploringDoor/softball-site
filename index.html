@@ -1716,7 +1716,7 @@ thead th.sorted-col .sarrow{opacity:1}
     <li><a href="photos.html">Gallery</a></li>
   </ul>
   <div class="nav-right"><span class="live-badge" id="liveBadge" onclick="goPage('scores');setTimeout(()=>setView('scores'),80)"><span class="live-dot"></span>Live</span>
-    <button class="nav-signup-btn" onclick="document.getElementById('signup-anchor').scrollIntoView({behavior:'smooth'});goPage('home')">🔔 Alerts</button>
+    <button class="nav-signup-btn" onclick="window.location='notifications.html'">🔔 Alerts</button>
     <button id="darkToggle" onclick="toggleDarkMode()" style="background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;transition:all .2s" title="Toggle dark mode">🌙</button>
     <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
   </div>
@@ -3348,8 +3348,8 @@ function downloadCalendar(teamShort){
     const startHH=String(hh).padStart(2,'0');
     const endHH=String(hh+1).padStart(2,'0');
 
-    const dtStart=`20260${mm==='10'||mm==='11'||mm==='12'?'':''}${mm}${dd}T${startHH}${mins}00`;
-    const dtEnd=`20260${mm==='10'||mm==='11'||mm==='12'?'':''}${mm}${dd}T${endHH}${mins}00`;
+    const dtStart=`2026${mm}${dd}T${startHH}${mins}00`;
+    const dtEnd=`2026${mm}${dd}T${endHH}${mins}00`;
     const dtStamp=`20260314T120000Z`;
 
     const summary=`DVSL: ${t.name} ${isH?'vs':'@'} ${oppName}`;
@@ -3375,6 +3375,46 @@ function downloadCalendar(teamShort){
   const a=document.createElement('a');
   a.href=url;
   a.download=`DVSL-${teamShort}-2026.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadFullSchedule(){
+  const games=SCHEDULE_PREVIEW;
+  if(!games.length) return;
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//DVSL Softball//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:DVSL 2026 Schedule'];
+  const months={'Jan':'01','Feb':'02','Mar':'03','Apr':'04','May':'05','Jun':'06','Jul':'07','Aug':'08','Sep':'09','Oct':'10','Nov':'11','Dec':'12'};
+  games.forEach((g,i)=>{
+    const [mon,day]=g.date.split(' ');
+    const mm=months[mon]||'01';
+    const dd=String(parseInt(day)).padStart(2,'0');
+    let [timeStr,ampm]=g.time.split(' ');
+    let [hh,mins]=timeStr.split(':');
+    hh=parseInt(hh);
+    if(ampm==='PM'&&hh!==12) hh+=12;
+    if(ampm==='AM'&&hh===12) hh=0;
+    const startHH=String(hh).padStart(2,'0');
+    const endHH=String(hh+1).padStart(2,'0');
+    const dtStart=`2026${mm}${dd}T${startHH}${mins}00`;
+    const dtEnd=`2026${mm}${dd}T${endHH}${mins}00`;
+    const atm=getTeamByShort(g.away), htm=getTeamByShort(g.home);
+    const awayName=atm?atm.name:g.away, homeName=htm?htm.name:g.home;
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:dvsl-game${i}-2026@dvslsoftball.com`);
+    lines.push(`DTSTAMP:20260314T120000Z`);
+    lines.push(`DTSTART:${dtStart}`);
+    lines.push(`DTEND:${dtEnd}`);
+    lines.push(`SUMMARY:${awayName} vs ${homeName}`);
+    lines.push(`DESCRIPTION:DVSL Softball - Week ${g.wk}`);
+    lines.push(`LOCATION:${g.field||''}${g.addr?', '+g.addr:''}`);
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const blob=new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='DVSL_2026_Schedule.ics';
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -4230,7 +4270,8 @@ function renderScores(){
     weekOffset=off;
     const w=allWks[off];
     const wkLabel=String(w.wk).startsWith('PL')?'Playoffs':('Week '+w.wk);
-    wrap.innerHTML=`<div class="sb-week-head">${wkLabel} · ${w.date} <span style="font-size:13px;color:var(--muted);font-weight:400">${w.games.length} game${w.games.length!==1?'s':''}</span></div>`
+    wrap.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px"><div class="sb-week-head" style="margin-bottom:0">${wkLabel} · ${w.date} <span style="font-size:13px;color:var(--muted);font-weight:400">${w.games.length} game${w.games.length!==1?'s':''}</span></div>`
+      +`<button onclick="downloadFullSchedule()" style="display:flex;align-items:center;gap:6px;background:var(--gold);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap">📅 Download Full Schedule</button></div>`
       +`<div class="preview-grid">`
       +w.games.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
       +`</div>`;
