@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Player Profile — DVSL Softball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;600;700;800;900&family=Barlow:wght@300;400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff; --bg2: #f5f5f5; --card: #ffffff; --card2: #f8f8f8;
+  --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.15);
+  --gold: #002D72; --gold2: #001a45; --gold-dim: rgba(0,45,114,0.08);
+  --white: #1a1a1a; --muted: rgba(0,0,0,0.45); --red: #c8102e;
+  --green: #22c55e; --blue: #002D72;
+}
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--white); font-family: 'Barlow', sans-serif; overflow-x: hidden; line-height: 1.6; }
+
+/* NAV */
+nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; height: 62px; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; background: rgba(255,255,255,.97); backdrop-filter: blur(24px) saturate(180%); border-bottom: 1px solid var(--border); }
+.nav-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 19px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); text-decoration: none; display: flex; align-items: center; gap: 10px; }
+.nav-logo img { height: 28px; opacity: .85; }
+.nav-links { display: flex; gap: 2px; list-style: none; margin: 0 auto; padding: 0; }
+.nav-links a { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); text-decoration: none; padding: 7px 13px; border-radius: 6px; transition: color .15s, background .15s; white-space: nowrap; }
+.nav-links a:hover { color: var(--white); background: rgba(0,0,0,.06); }
+.nav-links a.active { color: var(--gold); }
+.hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; background: none; border: none; padding: 4px; }
+.hamburger span { display: block; width: 22px; height: 2px; background: var(--white); border-radius: 2px; transition: all .3s; }
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.mob-menu { display: none; position: fixed; top: 62px; left: 0; right: 0; z-index: 199; background: rgba(255,255,255,.97); backdrop-filter: blur(24px); border-bottom: 1px solid var(--border); flex-direction: column; padding: 16px 20px 24px; }
+.mob-menu.open { display: flex; }
+.mob-menu a { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 26px; text-transform: uppercase; color: var(--white); text-decoration: none; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,.06); }
+.mob-menu a:last-child { border-bottom: none; }
+
+/* PAGE */
+.page-wrap { padding-top: 62px; min-height: 100vh; }
+
+/* LOADING / ERROR */
+.loading-wrap { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 16px; }
+.loading-wrap .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-wrap .msg { font-size: 14px; color: var(--muted); }
+.error-wrap { display: flex; align-items: center; justify-content: center; min-height: 60vh; flex-direction: column; gap: 12px; }
+.error-wrap h2 { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 32px; text-transform: uppercase; }
+.error-wrap p { color: var(--muted); font-size: 15px; }
+.error-wrap a { color: var(--gold); font-weight: 600; text-decoration: none; }
+.error-wrap a:hover { text-decoration: underline; }
+
+/* PLAYER HEADER */
+.player-header { padding: 40px 48px 32px; border-bottom: 1px solid var(--border); background: var(--bg2); }
+.player-header-inner { max-width: 1100px; margin: 0 auto; }
+.player-meta { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.player-team-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.team-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.player-num { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; color: var(--muted); background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+.player-pos { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; color: var(--muted); background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; text-transform: uppercase; }
+.player-name { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: clamp(36px, 6vw, 56px); text-transform: uppercase; line-height: .95; letter-spacing: -.01em; }
+
+/* SEASON STATS CARD */
+.stats-section { padding: 40px 48px; max-width: 1100px; margin: 0 auto; }
+.section-label { font-size: 11px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; color: var(--gold); margin-bottom: 16px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.stat-cell { background: var(--card); padding: 16px 12px; text-align: center; }
+.stat-val { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 28px; color: var(--gold); line-height: 1; }
+.stat-lbl { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+/* GAME LOG */
+.gamelog-section { padding: 0 48px 60px; max-width: 1100px; margin: 0 auto; }
+.gamelog-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.gamelog-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+.gamelog-table thead th { background: var(--bg2); font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.gamelog-table thead th:not(.col-date):not(.col-opp):not(.col-result) { text-align: right; }
+.gamelog-table tbody tr { border-bottom: 1px solid rgba(0,0,0,.04); cursor: pointer; transition: background .12s; }
+.gamelog-table tbody tr:hover { background: rgba(0,45,114,.04); }
+.gamelog-table tbody tr:last-child { border-bottom: none; }
+.gamelog-table td { padding: 10px 14px; color: var(--white); }
+.gamelog-table td:not(.col-date):not(.col-opp):not(.col-result) { text-align: right; }
+.col-date { white-space: nowrap; }
+.col-opp { white-space: nowrap; font-weight: 600; }
+.col-result { white-space: nowrap; }
+.badge-w { background: rgba(34,197,94,.12); color: #16a34a; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; display: inline-block; }
+.badge-l { background: rgba(200,16,46,.1); color: #c8102e; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 700; display: inline-block; }
+.no-data { text-align: center; padding: 48px 24px; color: var(--muted); font-size: 15px; }
+
+/* FOOTER */
+footer { padding: 40px 48px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; background: var(--bg2); }
+.ft-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 17px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.ft-links { display: flex; gap: 0; flex-wrap: wrap; }
+.ft-links a { font-size: 11px; color: var(--muted); text-decoration: none; padding: 2px 14px; border-right: 1px solid var(--border); transition: color .15s; }
+.ft-links a:last-child { border-right: none; }
+.ft-links a:hover { color: var(--white); }
+.ft-copy { font-size: 11px; color: rgba(0,0,0,.35); }
+
+/* MOBILE */
+@media (max-width: 768px) {
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .hamburger { display: flex; }
+  .player-header { padding: 32px 20px 24px; }
+  .stats-section { padding: 32px 20px; }
+  .gamelog-section { padding: 0 20px 48px; }
+  .stat-grid { grid-template-columns: repeat(3, 1fr); }
+  .stat-val { font-size: 22px; }
+  .stat-cell { padding: 12px 8px; }
+  footer { flex-direction: column; padding: 32px 20px; gap: 16px; text-align: center; }
+  .ft-links { justify-content: center; }
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #ffffff; }
+::-webkit-scrollbar-thumb { background: rgba(0,45,114,0.3); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">
+    <img src="dvsl-logo-dark.png" alt="DVSL">DVSL
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="schedule.html">Scores</a></li>
+    <li><a href="schedule.html?tab=schedule">Schedule</a></li>
+    <li><a href="standings-history.html">Standings</a></li>
+    <li><a href="stats.html">Stats</a></li>
+    <li><a href="index.html#players">Teams</a></li>
+    <li><a href="playoffs.html">Brackets</a></li>
+    <li><a href="rules.html">Field Guide</a></li>
+    <li><a href="photos.html">Gallery</a></li>
+  </ul>
+  <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
+</nav>
+<div class="mob-menu" id="mobMenu">
+  <a href="index.html">Home</a>
+  <a href="schedule.html">Scores</a>
+  <a href="schedule.html?tab=schedule">Schedule</a>
+  <a href="standings-history.html">Standings</a>
+  <a href="stats.html">Stats</a>
+  <a href="index.html#players">Teams</a>
+  <a href="playoffs.html">Brackets</a>
+  <a href="rules.html">Field Guide</a>
+  <a href="photos.html">Gallery</a>
+</div>
+
+<!-- PAGE CONTENT -->
+<div class="page-wrap">
+  <div id="content">
+    <div class="loading-wrap" id="loadingState">
+      <div class="spinner"></div>
+      <div class="msg">Loading player profile...</div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="ft-logo">&#x2B21; DVSL</div>
+  <div class="ft-links"><a href="index.html">Home</a><a href="schedule.html">Scores</a><a href="schedule.html?tab=schedule">Schedule</a><a href="standings-history.html">Standings</a><a href="stats.html">Stats</a><a href="index.html#players">Teams</a><a href="playoffs.html">Brackets</a><a href="rules.html">Field Guide</a><a href="photos.html">Gallery</a></div>
+  <div class="ft-copy">&copy; 2026 DVSL &middot; Delaware Valley Synagogue League</div>
+</footer>
+
+<script>
+// ============ FIREBASE CONFIG ============
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+};
+
+let _db = null;
+let _fbMods = null;
+
+async function getDb() {
+  if (_db) return _db;
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
+  const fb = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+  const app = initializeApp(FIREBASE_CONFIG);
+  _db = fb.getFirestore(app);
+  _fbMods = fb;
+  return _db;
+}
+
+// ============ HAMBURGER ============
+const hb = document.getElementById('hbg');
+const mm = document.getElementById('mobMenu');
+if (hb) hb.addEventListener('click', () => { hb.classList.toggle('open'); mm.classList.toggle('open'); });
+if (mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); }));
+
+// ============ HELPERS ============
+function normalizeName(n) {
+  return (n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '—';
+  // Expect "YYYY-MM-DD" or similar
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return parseInt(parts[1]) + '/' + parseInt(parts[2]);
+  }
+  return dateStr;
+}
+
+// ============ MAIN ============
+async function loadPlayer() {
+  const params = new URLSearchParams(window.location.search);
+  const playerId = params.get('id');
+  const playerName = params.get('name');
+  const playerTeam = params.get('team');
+  const contentEl = document.getElementById('content');
+
+  if (!playerId && !playerName) {
+    contentEl.innerHTML = `
+      <div class="error-wrap">
+        <h2>Player Not Found</h2>
+        <p>No player ID or name was provided.</p>
+        <a href="stats.html">View all player stats</a>
+      </div>`;
+    return;
+  }
+
+  try {
+    const db = await getDb();
+    const { collection, getDocs, getDoc, doc, query, where } = _fbMods;
+
+    // 1. Load player document
+    let player = null;
+
+    if (playerId) {
+      // Look up by document ID
+      const playerDoc = await getDoc(doc(db, 'players', playerId));
+      if (playerDoc.exists()) {
+        player = { id: playerDoc.id, ...playerDoc.data() };
+      }
+    }
+
+    if (!player && playerName) {
+      // Look up by name (and optionally team)
+      const playersSnap = await getDocs(collection(db, 'players'));
+      const allPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const needle = normalizeName(playerName);
+      player = allPlayers.find(p => {
+        const nameMatch = normalizeName(p.name) === needle;
+        if (playerTeam) return nameMatch && p.team === playerTeam;
+        return nameMatch;
+      });
+    }
+
+    if (!player) {
+      contentEl.innerHTML = `
+        <div class="error-wrap">
+          <h2>Player Not Found</h2>
+          <p>We couldn't find a player matching that name or ID.</p>
+          <a href="stats.html">View all player stats</a>
+        </div>`;
+      return;
+    }
+
+    // 2. Load team info
+    let team = null;
+    if (player.team) {
+      const teamsSnap = await getDocs(collection(db, 'teams'));
+      const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      team = allTeams.find(t => t.id === player.team || t.short === player.team);
+    }
+
+    // 3. Load box scores
+    const bsSnap = await getDocs(collection(db, 'box_scores'));
+    const allBoxScores = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Find games this player appeared in
+    const playerNorm = normalizeName(player.name);
+    const gameLog = [];
+
+    for (const bs of allBoxScores) {
+      if (bs.status === 'draft') continue; // skip drafts
+      let found = null;
+      let side = null; // 'away' or 'home'
+
+      if (bs.away_lineup && Array.isArray(bs.away_lineup)) {
+        found = bs.away_lineup.find(p => normalizeName(p.name) === playerNorm);
+        if (found) side = 'away';
+      }
+      if (!found && bs.home_lineup && Array.isArray(bs.home_lineup)) {
+        found = bs.home_lineup.find(p => normalizeName(p.name) === playerNorm);
+        if (found) side = 'home';
+      }
+
+      if (found) {
+        const oppSide = side === 'away' ? 'home' : 'away';
+        const playerTeamId = bs[side];
+        const oppTeamId = bs[oppSide];
+        const playerScore = side === 'away' ? bs.away_score : bs.home_score;
+        const oppScore = side === 'away' ? bs.home_score : bs.away_score;
+        const won = playerScore > oppScore;
+
+        gameLog.push({
+          boxScoreId: bs.id,
+          gameId: bs.game_id,
+          date: bs.date || '',
+          wk: bs.wk || 0,
+          opponent: oppTeamId,
+          playerTeam: playerTeamId,
+          result: won ? 'W' : 'L',
+          score: playerScore + '-' + oppScore,
+          ab: parseInt(found.ab) || 0,
+          r: parseInt(found.r) || 0,
+          h: parseInt(found.h) || 0,
+          rbi: parseInt(found.rbi) || 0,
+          bb: parseInt(found.bb) || 0,
+          so: parseInt(found.so) || 0,
+        });
+      }
+    }
+
+    // Sort by date descending
+    gameLog.sort((a, b) => {
+      if (a.date && b.date) return b.date.localeCompare(a.date);
+      return (b.wk || 0) - (a.wk || 0);
+    });
+
+    // 4. Compute season totals
+    const totals = { gp: gameLog.length, ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0 };
+    for (const g of gameLog) {
+      totals.ab += g.ab;
+      totals.r += g.r;
+      totals.h += g.h;
+      totals.rbi += g.rbi;
+      totals.bb += g.bb;
+      totals.so += g.so;
+    }
+    const avg = totals.ab > 0 ? (totals.h / totals.ab) : 0;
+
+    // 5. Load all teams for name lookup
+    let teamsMap = {};
+    if (team) {
+      const teamsSnap2 = await getDocs(collection(db, 'teams'));
+      teamsSnap2.docs.forEach(d => {
+        const t = { id: d.id, ...d.data() };
+        teamsMap[t.id] = t;
+        if (t.short) teamsMap[t.short] = t;
+      });
+    } else {
+      const teamsSnap2 = await getDocs(collection(db, 'teams'));
+      teamsSnap2.docs.forEach(d => {
+        const t = { id: d.id, ...d.data() };
+        teamsMap[t.id] = t;
+        if (t.short) teamsMap[t.short] = t;
+      });
+    }
+
+    function getTeamName(id) {
+      const t = teamsMap[id];
+      return t ? (t.short || t.name || id).toUpperCase() : (id || '—').toUpperCase();
+    }
+    function getTeamColor(id) {
+      const t = teamsMap[id];
+      return t ? (t.color || '#002D72') : '#002D72';
+    }
+
+    // 6. Render page
+    document.title = player.name + ' — DVSL Softball';
+
+    let html = '';
+
+    // Player header
+    html += `<div class="player-header"><div class="player-header-inner">`;
+    html += `<div class="player-meta">`;
+    if (team) {
+      html += `<span class="player-team-badge"><span class="team-dot" style="background:${team.color || '#002D72'}"></span>${team.name || team.short || player.team}</span>`;
+    }
+    if (player.num) {
+      html += `<span class="player-num">#${player.num}</span>`;
+    }
+    if (player.pos) {
+      html += `<span class="player-pos">${player.pos}</span>`;
+    }
+    html += `</div>`;
+    html += `<h1 class="player-name">${player.name}</h1>`;
+    html += `</div></div>`;
+
+    // Season stats
+    html += `<div class="stats-section">`;
+    html += `<div class="section-label">2026 Season Stats</div>`;
+
+    if (gameLog.length > 0) {
+      html += `<div class="stat-grid">`;
+      const stats = [
+        { lbl: 'GP', val: totals.gp },
+        { lbl: 'AB', val: totals.ab },
+        { lbl: 'R', val: totals.r },
+        { lbl: 'H', val: totals.h },
+        { lbl: 'RBI', val: totals.rbi },
+        { lbl: 'BB', val: totals.bb },
+        { lbl: 'SO', val: totals.so },
+        { lbl: 'AVG', val: avg.toFixed(3) },
+      ];
+      for (const s of stats) {
+        html += `<div class="stat-cell"><div class="stat-val">${s.val}</div><div class="stat-lbl">${s.lbl}</div></div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div class="no-data">No game data yet</div>`;
+    }
+
+    html += `</div>`;
+
+    // Game log
+    html += `<div class="gamelog-section">`;
+    html += `<div class="section-label">Game Log</div>`;
+
+    if (gameLog.length > 0) {
+      html += `<div class="gamelog-table-wrap"><table class="gamelog-table">`;
+      html += `<thead><tr>
+        <th class="col-date">Date</th>
+        <th class="col-opp">Opponent</th>
+        <th class="col-result">Result</th>
+        <th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th>
+      </tr></thead><tbody>`;
+
+      for (const g of gameLog) {
+        const resultBadge = g.result === 'W'
+          ? `<span class="badge-w">W ${g.score}</span>`
+          : `<span class="badge-l">L ${g.score}</span>`;
+
+        const oppName = getTeamName(g.opponent);
+        const oppColor = getTeamColor(g.opponent);
+
+        // Link to scores page for that game
+        const rowClick = g.gameId
+          ? `onclick="window.location.href='schedule.html?game=${g.gameId}'"`
+          : '';
+
+        html += `<tr ${rowClick}>
+          <td class="col-date">${formatDate(g.date)}</td>
+          <td class="col-opp"><span class="team-dot" style="background:${oppColor};display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>${oppName}</td>
+          <td class="col-result">${resultBadge}</td>
+          <td>${g.ab}</td><td>${g.r}</td><td>${g.h}</td><td>${g.rbi}</td><td>${g.bb}</td><td>${g.so}</td>
+        </tr>`;
+      }
+
+      html += `</tbody></table></div>`;
+    } else {
+      html += `<div class="no-data">No game log available yet</div>`;
+    }
+
+    html += `</div>`;
+
+    contentEl.innerHTML = html;
+
+  } catch (err) {
+    console.error('Error loading player:', err);
+    contentEl.innerHTML = `
+      <div class="error-wrap">
+        <h2>Error Loading Player</h2>
+        <p>${err.message}</p>
+        <a href="stats.html">View all player stats</a>
+      </div>`;
+  }
+}
+
+loadPlayer();
+</script>
+</body>
+</html>
