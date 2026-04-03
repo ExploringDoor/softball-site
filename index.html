@@ -3322,16 +3322,16 @@ function loadTeam(teamId){
   document.getElementById('team-big-name').innerHTML=`${t.name} <span style="color:${t.color}">·</span> ${t.short}`;
   document.getElementById('team-rec').innerHTML=`<strong>${t.w}–${t.l}</strong>&nbsp;·&nbsp;${t.pct.toFixed(3).replace(/^0\./,'.')}&nbsp;PCT&nbsp;·&nbsp;${t.rs} RS&nbsp;·&nbsp;${t.ra} RA&nbsp;·&nbsp;<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`;
   document.getElementById('team-blob').style.background=`linear-gradient(135deg,${t.color},transparent 60%)`;
-  // Add career stats link for teams that have historical data
+  // Add career stats tab for teams that have historical data
   const ttabs=document.getElementById('ttabs');
   const existingCareer=ttabs.querySelector('.ttab-career');
   if(existingCareer) existingCareer.remove();
   if(t.id==='tbir'){
-    const btn=document.createElement('a');
-    btn.href='tbir-stats.html';
+    const btn=document.createElement('button');
     btn.className='ttab ttab-career';
     btn.textContent='Career Stats';
-    btn.style.cssText='text-decoration:none;color:#002D72;font-weight:700';
+    btn.dataset.tab='career';
+    btn.onclick=()=>{document.querySelectorAll('.ttab').forEach(x=>x.classList.remove('on'));btn.classList.add('on');renderTeamTab('career');};
     ttabs.appendChild(btn);
   }
   // Calendar button in hero
@@ -3467,6 +3467,40 @@ function renderTeamTab(tab){
     <div style="margin-top:16px;padding:12px 16px;background:rgba(0,0,0,.02);border-radius:8px;border:1px solid rgba(0,0,0,.08);font-size:12px;color:var(--muted)">
       📅 Tap <strong style="color:var(--white)">Add to My Calendar</strong> to sync the full ${t.name} schedule to iPhone Calendar, Google Calendar, or Outlook — with date, time, field, and opponent for every game.
     </div>`;
+  } else if(tab==='career' && TBIR_SEASONS){
+    // Build career stats table from historical data
+    const careerPlayers = {};
+    for(const [year, roster] of Object.entries(TBIR_SEASONS)){
+      for(const p of roster){
+        const key = p.last+'|'+p.first;
+        if(!careerPlayers[key]) careerPlayers[key]={first:p.first,last:p.last,num:p.num,gp:0,ab:0,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0,seasons:[]};
+        const c=careerPlayers[key];
+        c.gp+=p.gp;c.ab+=p.ab;c.h+=p.h;c.s+=p.s;c.d+=p.d;c.t+=p.t;c.hr+=p.hr;c.rbi+=p.rbi;c.r+=p.r;c.bb+=p.bb;c.so+=p.so;
+        c.seasons.push(year);
+        if(p.num!=='-') c.num=p.num;
+      }
+    }
+    const calcR=p=>{const a=p.ab>0?p.h/p.ab:0;const obp=(p.ab+p.bb)>0?(p.h+p.bb)/(p.ab+p.bb):0;const s=p.ab>0?(p.s+2*p.d+3*p.t+4*p.hr)/p.ab:0;return{avg:a,obp,slg:s,ops:obp+s};};
+    const fmtR=v=>v>0?(v<1?v.toFixed(3).replace(/^0/,''):v.toFixed(3)):'.000';
+    let careerList=Object.values(careerPlayers).map(p=>{const r=calcR(p);return{...p,_avg:r.avg,_obp:r.obp,_slg:r.slg,_ops:r.ops};});
+    careerList.sort((a,b)=>b._avg-a._avg);
+    // Match to PLAYERS for modal click
+    const findPid=(first,last)=>{const p=PLAYERS.find(x=>x.name.toLowerCase()===`${first} ${last}`.toLowerCase());return p?p.id:null;};
+    body.innerHTML=`
+      <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:6px;color:${t.color}">Career Batting Stats</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px">${careerList.length} players · ${Object.keys(TBIR_SEASONS).length} seasons (${Object.keys(TBIR_SEASONS).sort()[0]}–${Object.keys(TBIR_SEASONS).sort().pop()})</p>
+      <div class="career-wrap"><table class="career-tbl">
+        <thead><tr><th style="text-align:left">Player</th><th>Yrs</th><th>GP</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead>
+        <tbody>${careerList.map(p=>{
+          const pid=findPid(p.first,p.last);
+          const click=pid?`onclick="openModal('${pid}')" style="cursor:pointer"`:'';
+          return `<tr ${click}>
+            <td style="text-align:left;font-weight:600">${p.first} ${p.last}</td>
+            <td>${p.seasons.length}</td><td>${p.gp}</td><td>${p.ab}</td><td>${p.h}</td><td>${p.d}</td><td>${p.t}</td><td>${p.hr}</td><td>${p.rbi}</td><td>${p.r}</td><td>${p.bb}</td>
+            <td>${fmtR(p._avg)}</td><td>${fmtR(p._obp)}</td><td>${fmtR(p._slg)}</td><td>${fmtR(p._ops)}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>`;
   } else {
     renderTeamStats(t, players, 'avg', 'desc');
   }
@@ -4594,14 +4628,14 @@ function openGameday(away,home,field,time){
   // Get real roster from PLAYERS array
   const getRoster=(teamId)=>{
     return PLAYERS.filter(p=>p.team===teamId).map(p=>({
-      name:p.name, num:p.num||'', pos:p.pos||''
+      id:p.id, name:p.name, num:p.num||'', pos:p.pos||''
     }));
   };
   const awayRoster=at?getRoster(at.id):[];
   const homeRoster=ht?getRoster(ht.id):[];
   const mkRows=(roster)=>{
     if(!roster.length) return '<tr><td colspan="2" style="color:var(--muted);font-style:italic;padding:12px">No roster available</td></tr>';
-    return roster.map(p=>`<tr><td><span style="color:var(--white);font-weight:600">${p.name}</span>${p.num?' <span style="font-size:10px;color:var(--muted2)">#'+p.num+'</span>':''}</td><td style="color:var(--muted2)">${p.pos||'—'}</td></tr>`).join('');
+    return roster.map(p=>`<tr style="cursor:pointer" onclick="closeScPop();openModal('${p.id}')"><td><span style="color:var(--white);font-weight:600">${p.name}</span>${p.num?' <span style="font-size:10px;color:var(--muted2)">#'+p.num+'</span>':''}</td><td style="color:var(--muted2)">${p.pos||'—'}</td></tr>`).join('');
   };
   document.getElementById('scPopContent').innerHTML=`
     <div class="pop-hd">
