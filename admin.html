@@ -796,6 +796,9 @@ window.saveScore = async function(gameId, markDone) {
 let bsAwayLineup = [], bsHomeLineup = [], bsGameId = null, bsGameData = null;
 let bsAwayPitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
 let bsHomePitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
+let bsInnings = {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
+let bsAwayErrors = 0;
+let bsHomeErrors = 0;
 
 window.openBoxScore = async function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
@@ -832,6 +835,9 @@ window.openBoxScore = async function(gameId) {
   // Support old single pitcher format and new array format
   bsAwayPitchers = existing?.away_pitchers || (existing?.away_pitcher ? [existing.away_pitcher] : [defP()]);
   bsHomePitchers = existing?.home_pitchers || (existing?.home_pitcher ? [existing.home_pitcher] : [defP()]);
+  bsInnings = existing?.innings ? {away:[...existing.innings.away], home:[...existing.innings.home]} : {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
+  bsAwayErrors = existing?.away_errors || 0;
+  bsHomeErrors = existing?.home_errors || 0;
 
   document.getElementById('sec-scores').querySelector('.main-header').style.display = 'none';
   document.getElementById('scores-content').style.display = 'none';
@@ -973,6 +979,46 @@ function renderBoxScore(awayName, homeName, g) {
           <span style="font-size:38px;color:#002D72" id="bs-home-total">${homeR}</span> ${homeName}
         </div>
       </div>
+      ${(() => {
+        const awayInningR = bsInnings.away.reduce((s,v)=>s+(parseInt(v)||0),0);
+        const homeInningR = bsInnings.home.reduce((s,v)=>s+(parseInt(v)||0),0);
+        const awayH = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.h)||0),0);
+        const homeH = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.h)||0),0);
+        const awayMismatch = awayInningR !== awayR;
+        const homeMismatch = homeInningR !== homeR;
+        const thStyle = 'padding:6px 4px;font-size:11px;font-weight:700;color:rgba(0,0,0,.4);text-align:center;min-width:36px';
+        const tdStyle = 'padding:4px 2px;text-align:center';
+        const inputStyle = 'width:36px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:3px;font-size:13px;font-family:Oswald,sans-serif;background:#fff';
+        const totalStyle = 'padding:6px 4px;text-align:center;font-family:Oswald,sans-serif;font-size:15px;font-weight:700';
+        return `<div style="overflow-x:auto;margin:20px 0">
+          <table style="border-collapse:collapse;margin:0 auto;font-family:Oswald,sans-serif">
+            <thead><tr>
+              <th style="min-width:120px;text-align:left;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(0,0,0,.4)">TEAM</th>
+              ${bsInnings.away.map((_,i) => '<th style="'+thStyle+'">'+(i+1)+'</th>').join('')}
+              <th style="${thStyle};border-left:2px solid rgba(0,0,0,.15)">R</th>
+              <th style="${thStyle}">H</th>
+              <th style="${thStyle}">E</th>
+            </tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
+                <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
+                ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
+                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${awayInningR}${awayMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+awayR+'</div>':''}</td>
+                <td style="${totalStyle}">${awayH}</td>
+                <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
+              </tr>
+              <tr>
+                <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
+                ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
+                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${homeInningR}${homeMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+homeR+'</div>':''}</td>
+                <td style="${totalStyle}">${homeH}</td>
+                <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
+        </div>`;
+      })()}
       <div style="display:flex;flex-direction:column;gap:32px;margin-top:16px">
         ${renderPanel(bsAwayLineup, awayName, 'away')}
         ${renderPanel(bsHomeLineup, homeName, 'home')}
@@ -1026,6 +1072,19 @@ window.bsUpdateStat = function(side, idx, stat, val) {
   if(at) at.textContent=ar; if(ht) ht.textContent=hr;
 };
 window.bsUpdatePos = function(side, idx, val) { (side==='away'?bsAwayLineup:bsHomeLineup)[idx].pos = val; };
+window.bsUpdateInning = function(side, idx, val) {
+  bsInnings[side][idx] = parseInt(val) || 0;
+  bsRerender();
+};
+window.bsAddInning = function() {
+  bsInnings.away.push(0);
+  bsInnings.home.push(0);
+  bsRerender();
+};
+window.bsUpdateErrors = function(side, val) {
+  if (side === 'away') bsAwayErrors = parseInt(val) || 0;
+  else bsHomeErrors = parseInt(val) || 0;
+};
 window.bsToggleDnp = function(side, idx, checked) {
   const p = (side==='away'?bsAwayLineup:bsHomeLineup)[idx];
   p.dnp = checked;
@@ -1065,6 +1124,8 @@ window.saveBoxScore = async function(markFinal) {
     home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>({name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,h:parseInt(p.h)||0,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
     away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
     home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
+    innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
+    away_errors: bsAwayErrors, home_errors: bsHomeErrors,
     away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
   };
   try {
