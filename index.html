@@ -3851,6 +3851,13 @@ window._dataPromise.then(() => {
   buildTeamsBigCards();
   loadSiteBanner();
   setTimeout(observeAll, 100);
+  // Open player modal if navigated from external page by name
+  const _pn = sessionStorage.getItem('dvsl_goPlayerName');
+  if(_pn){
+    sessionStorage.removeItem('dvsl_goPlayerName');
+    const _found = PLAYERS.find(p=>p.name.toLowerCase()===_pn.toLowerCase());
+    if(_found) setTimeout(()=>openModal(_found.id),200);
+  }
 });
 
 async function loadSiteBanner(){
@@ -3897,19 +3904,12 @@ async function loadSiteBanner(){
   }
   const pname = sessionStorage.getItem('dvsl_goPlayerName');
   if(pname){
-    sessionStorage.removeItem('dvsl_goPlayerName');
+    // Skip intro — modal will be opened in _dataPromise.then()
     sessionStorage.setItem('ci_played','1');
     document.body.classList.remove('ci-active');
     document.body.classList.add('intro-done');
     const ci = document.getElementById('ci');
     if(ci) ci.style.display='none';
-    // PLAYERS may not be loaded yet — wait for data
-    if(window._dataPromise){
-      window._dataPromise.then(()=>{
-        const found = PLAYERS.find(p=>p.name.toLowerCase()===pname.toLowerCase());
-        if(found) openModal(found.id);
-      });
-    }
     return;
   }
   // Normal hash routing — supports #team/gold format
