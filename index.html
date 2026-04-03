@@ -3839,25 +3839,25 @@ function observeAll(){document.querySelectorAll('.div-card,.ldr-card,.game-row,.
 // ── INIT: Load from Supabase then render ──────────────────────
 window._dataPromise = loadAllData();
 window._dataPromise.then(() => {
-  buildTicker();
-  buildTicker2();
-  buildStandings();
-  buildHomeSidebar();
-  buildSchedule();
-  initNextGame();
-  buildLeaderboard();
-  buildRecaps();
-  buildHistory();
-  buildTeamsBigCards();
-  loadSiteBanner();
-  setTimeout(observeAll, 100);
-  // Open player modal if navigated from external page by name
+  // Check for cross-page player navigation first (before anything can crash)
   const _pn = sessionStorage.getItem('dvsl_goPlayerName');
   if(_pn){
     sessionStorage.removeItem('dvsl_goPlayerName');
     const _found = PLAYERS.find(p=>p.name.toLowerCase()===_pn.toLowerCase());
-    if(_found) setTimeout(()=>openModal(_found.id),200);
+    if(_found) setTimeout(()=>openModal(_found.id),300);
   }
+  try{ buildTicker(); }catch(e){}
+  try{ buildTicker2(); }catch(e){}
+  try{ buildStandings(); }catch(e){}
+  try{ buildHomeSidebar(); }catch(e){}
+  try{ buildSchedule(); }catch(e){}
+  try{ initNextGame(); }catch(e){}
+  try{ buildLeaderboard(); }catch(e){}
+  try{ buildRecaps(); }catch(e){}
+  try{ buildHistory(); }catch(e){}
+  try{ buildTeamsBigCards(); }catch(e){}
+  loadSiteBanner();
+  setTimeout(observeAll, 100);
 });
 
 async function loadSiteBanner(){
