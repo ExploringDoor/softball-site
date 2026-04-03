@@ -347,6 +347,14 @@ body.dark .bsm-inner{background:#0f0f14!important}
 .glog-tbl td{font-size:13px;padding:10px 12px;border-bottom:1px solid rgba(0,0,0,.06)}
 .glog-tbl tr:last-child td{border-bottom:none}
 .glog-tbl tr:hover td{background:rgba(0,0,0,.02)}
+.career-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:8px}
+.career-tbl{width:100%;border-collapse:collapse;min-width:600px}
+.career-tbl th{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:8px 8px;text-align:right;border-bottom:2px solid var(--border);white-space:nowrap}
+.career-tbl th:first-child,.career-tbl td:first-child{text-align:left}
+.career-tbl td{font-size:13px;padding:8px 8px;text-align:right;border-bottom:1px solid rgba(0,0,0,.06)}
+.career-tbl tr:nth-child(even) td{background:rgba(0,0,0,.02)}
+.career-tbl tr:hover td{background:rgba(0,45,114,.04)}
+.career-tbl tr.career-total td{font-weight:800;border-top:2px solid var(--border);background:rgba(0,45,114,.05)}
 
 /* ── TEAM PAGE ── */
 .team-hero{padding:80px 48px 40px;position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
@@ -2311,6 +2319,151 @@ let ALL_TEAMS = [];
 let PLAYERS = [];
 let SCHEDULE_PREVIEW = [];
 let RECAPS = [];
+
+// ── TBIR Historical Seasons Data (2019-2025) ──
+const TBIR_SEASONS = {
+"2019":[
+{num:"13",last:"Sherman",first:"Scott",gp:1,pa:3,ab:3,h:2,s:2,d:0,t:0,hr:0,rbi:1,r:1,bb:0,so:0},
+{num:"22",last:"Miller",first:"Adam",gp:16,pa:54,ab:51,h:26,s:22,d:1,t:2,hr:1,rbi:10,r:14,bb:3,so:0},
+{num:"11",last:"Cutler",first:"Howard",gp:12,pa:29,ab:27,h:12,s:10,d:2,t:0,hr:0,rbi:4,r:5,bb:2,so:0},
+{num:"44",last:"Kaplan",first:"Jared",gp:16,pa:44,ab:38,h:15,s:14,d:1,t:0,hr:0,rbi:4,r:8,bb:6,so:0},
+{num:"24",last:"Berwager",first:"Shawn",gp:6,pa:18,ab:18,h:7,s:4,d:0,t:2,hr:1,rbi:6,r:5,bb:0,so:0},
+{num:"20",last:"Shindell",first:"Jordan",gp:14,pa:43,ab:39,h:14,s:13,d:0,t:1,hr:0,rbi:5,r:6,bb:3,so:1},
+{num:"2",last:"Cohen",first:"David",gp:11,pa:37,ab:34,h:12,s:11,d:1,t:0,hr:0,rbi:8,r:7,bb:3,so:1},
+{num:"33",last:"Parmenter",first:"Scott",gp:7,pa:22,ab:20,h:7,s:7,d:0,t:0,hr:0,rbi:2,r:3,bb:2,so:1},
+{num:"3",last:"Dorfman",first:"Jon",gp:14,pa:44,ab:43,h:15,s:10,d:4,t:0,hr:1,rbi:7,r:11,bb:1,so:1},
+{num:"8",last:"Rosen",first:"Brett",gp:1,pa:3,ab:3,h:1,s:1,d:0,t:0,hr:0,rbi:0,r:1,bb:0,so:0},
+{num:"16",last:"Schwartz",first:"Mark",gp:16,pa:54,ab:48,h:16,s:12,d:2,t:0,hr:2,rbi:12,r:8,bb:6,so:0},
+{num:"33",last:"Lefkoe",first:"Jason",gp:4,pa:12,ab:12,h:4,s:4,d:0,t:0,hr:0,rbi:3,r:4,bb:0,so:0},
+{num:"58",last:"Kramer",first:"Todd",gp:14,pa:45,ab:40,h:13,s:7,d:3,t:2,hr:1,rbi:13,r:9,bb:5,so:1},
+{num:"88",last:"Perel",first:"Andrew",gp:9,pa:29,ab:29,h:9,s:7,d:1,t:1,hr:0,rbi:4,r:5,bb:0,so:1},
+{num:"23",last:"Saylor",first:"Jason",gp:13,pa:46,ab:41,h:11,s:9,d:2,t:0,hr:0,rbi:6,r:9,bb:5,so:3},
+{num:"28",last:"Jacobs",first:"Neal",gp:11,pa:29,ab:27,h:7,s:6,d:0,t:1,hr:0,rbi:4,r:7,bb:2,so:0},
+{num:"7",last:"Snyderman",first:"Jason",gp:11,pa:32,ab:31,h:8,s:6,d:0,t:2,hr:0,rbi:5,r:4,bb:1,so:1},
+{num:"9",last:"Seder",first:"Ryan",gp:9,pa:28,ab:23,h:4,s:4,d:0,t:0,hr:0,rbi:4,r:4,bb:4,so:0}
+],
+"2021":[
+{num:"22",last:"Miller",first:"Adam",gp:10,pa:36,ab:36,h:24,s:20,d:4,t:0,hr:0,rbi:7,r:17,bb:0,so:0},
+{num:"24",last:"Berwager",first:"Shawn",gp:11,pa:39,ab:38,h:23,s:16,d:4,t:1,hr:2,rbi:24,r:10,bb:1,so:0},
+{num:"27",last:"Snyderman",first:"Andrew",gp:13,pa:44,ab:42,h:20,s:12,d:3,t:4,hr:1,rbi:7,r:13,bb:1,so:1},
+{num:"44",last:"Kaplan",first:"Jared",gp:12,pa:40,ab:39,h:16,s:15,d:1,t:0,hr:0,rbi:3,r:12,bb:1,so:0},
+{num:"58",last:"Kramer",first:"Todd",gp:12,pa:38,ab:37,h:15,s:12,d:2,t:0,hr:1,rbi:9,r:5,bb:0,so:0},
+{num:"20",last:"Shindell",first:"Jordan",gp:12,pa:37,ab:37,h:14,s:12,d:2,t:0,hr:0,rbi:5,r:5,bb:0,so:2},
+{num:"23",last:"Saylor",first:"Jason",gp:14,pa:45,ab:43,h:16,s:12,d:0,t:3,hr:1,rbi:12,r:10,bb:2,so:4},
+{num:"7",last:"Snyderman",first:"Jason",gp:12,pa:38,ab:35,h:13,s:12,d:1,t:0,hr:0,rbi:0,r:4,bb:3,so:0},
+{num:"88",last:"Perel",first:"Andrew",gp:14,pa:47,ab:46,h:17,s:16,d:1,t:0,hr:0,rbi:9,r:5,bb:1,so:1},
+{num:"3",last:"Dorfman",first:"Jon",gp:11,pa:31,ab:29,h:10,s:9,d:0,t:0,hr:1,rbi:4,r:4,bb:1,so:1},
+{num:"16",last:"Schwartz",first:"Mark",gp:15,pa:46,ab:45,h:15,s:13,d:2,t:0,hr:0,rbi:7,r:7,bb:1,so:2},
+{num:"11",last:"Cutler",first:"Howard",gp:10,pa:27,ab:25,h:7,s:7,d:0,t:0,hr:0,rbi:2,r:7,bb:2,so:1},
+{num:"28",last:"Jacobs",first:"Neal",gp:9,pa:24,ab:20,h:5,s:4,d:0,t:1,hr:0,rbi:5,r:2,bb:3,so:0},
+{num:"9",last:"Seder",first:"Ryan",gp:11,pa:34,ab:30,h:6,s:6,d:0,t:0,hr:0,rbi:2,r:6,bb:3,so:0},
+{num:"2",last:"Cohen",first:"David",gp:3,pa:12,ab:11,h:2,s:1,d:1,t:0,hr:0,rbi:0,r:2,bb:1,so:0}
+],
+"2022":[
+{num:"-",last:"Drossner",first:"Hailey",gp:1,pa:3,ab:3,h:2,s:2,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0},
+{num:"11",last:"Cutler",first:"Howard",gp:2,pa:7,ab:5,h:3,s:3,d:0,t:0,hr:0,rbi:3,r:1,bb:2,so:0},
+{num:"24",last:"Berwager",first:"Shawn",gp:11,pa:42,ab:39,h:23,s:17,d:2,t:3,hr:1,rbi:15,r:17,bb:3,so:0},
+{num:"7",last:"Kramer",first:"Todd",gp:10,pa:35,ab:33,h:16,s:10,d:3,t:2,hr:1,rbi:12,r:7,bb:2,so:0},
+{num:"22",last:"Miller",first:"Adam",gp:15,pa:59,ab:57,h:27,s:21,d:5,t:1,hr:0,rbi:10,r:18,bb:2,so:0},
+{num:"23",last:"Saylor",first:"Jason",gp:14,pa:49,ab:39,h:18,s:14,d:3,t:0,hr:1,rbi:15,r:11,bb:9,so:1},
+{num:"4",last:"Drossner",first:"Eric",gp:13,pa:49,ab:46,h:21,s:14,d:2,t:4,hr:1,rbi:11,r:13,bb:3,so:2},
+{num:"3",last:"Dorfman",first:"Jon",gp:15,pa:45,ab:44,h:20,s:14,d:2,t:4,hr:0,rbi:12,r:12,bb:1,so:0},
+{num:"44",last:"Kaplan",first:"Jared",gp:13,pa:38,ab:38,h:16,s:14,d:1,t:1,hr:0,rbi:6,r:7,bb:0,so:0},
+{num:"9",last:"Seder",first:"Ryan",gp:5,pa:12,ab:12,h:5,s:4,d:1,t:0,hr:0,rbi:3,r:1,bb:0,so:0},
+{num:"20",last:"Shindell",first:"Jordan",gp:11,pa:38,ab:36,h:14,s:13,d:1,t:0,hr:0,rbi:5,r:6,bb:1,so:0},
+{num:"88",last:"Perel",first:"Andrew",gp:14,pa:54,ab:52,h:17,s:15,d:2,t:0,hr:0,rbi:9,r:12,bb:1,so:0},
+{num:"27",last:"Snyderman",first:"Andrew",gp:15,pa:59,ab:58,h:18,s:13,d:3,t:1,hr:1,rbi:11,r:19,bb:1,so:1},
+{num:"7",last:"Snyderman",first:"Jason",gp:16,pa:50,ab:46,h:12,s:12,d:0,t:0,hr:0,rbi:7,r:8,bb:3,so:2},
+{num:"16",last:"Schwartz",first:"Mark",gp:17,pa:51,ab:48,h:10,s:8,d:2,t:0,hr:0,rbi:8,r:6,bb:3,so:2}
+],
+"2023":[
+{num:"4",last:"Drossner",first:"Eric",gp:11,pa:42,ab:40,h:21,s:15,d:4,t:1,hr:1,rbi:13,r:12,bb:2,so:0},
+{num:"22",last:"Miller",first:"Adam",gp:14,pa:50,ab:42,h:22,s:17,d:2,t:0,hr:3,rbi:8,r:19,bb:8,so:0},
+{num:"24",last:"Berwager",first:"Shawn",gp:1,pa:4,ab:4,h:2,s:2,d:0,t:0,hr:0,rbi:1,r:1,bb:0,so:0},
+{num:"33",last:"Drossner",first:"Ryan",gp:4,pa:13,ab:12,h:6,s:6,d:0,t:0,hr:0,rbi:0,r:4,bb:1,so:1},
+{num:"13",last:"Schwartz",first:"Ben",gp:9,pa:29,ab:28,h:13,s:12,d:1,t:0,hr:0,rbi:5,r:5,bb:1,so:0},
+{num:"16",last:"Schwartz",first:"Mark",gp:15,pa:49,ab:45,h:20,s:17,d:3,t:0,hr:0,rbi:6,r:11,bb:4,so:0},
+{num:"7",last:"Kramer",first:"Todd",gp:5,pa:14,ab:14,h:6,s:4,d:1,t:1,hr:0,rbi:1,r:2,bb:0,so:0},
+{num:"-",last:"Drossner",first:"Haley",gp:2,pa:7,ab:7,h:3,s:3,d:0,t:0,hr:0,rbi:3,r:3,bb:0,so:0},
+{num:"88",last:"Perel",first:"Andrew",gp:14,pa:49,ab:47,h:20,s:19,d:1,t:0,hr:0,rbi:11,r:11,bb:0,so:0},
+{num:"27",last:"Snyderman",first:"Andrew",gp:14,pa:50,ab:45,h:18,s:11,d:2,t:2,hr:3,rbi:14,r:15,bb:5,so:0},
+{num:"11",last:"Kessel",first:"Ben",gp:6,pa:20,ab:19,h:7,s:6,d:1,t:0,hr:0,rbi:3,r:1,bb:1,so:0},
+{num:"3",last:"Dorfman",first:"Jon",gp:14,pa:44,ab:42,h:14,s:13,d:1,t:0,hr:0,rbi:11,r:7,bb:2,so:4},
+{num:"20",last:"Shindell",first:"Jordan",gp:12,pa:38,ab:34,h:11,s:5,d:4,t:2,hr:0,rbi:11,r:9,bb:4,so:2},
+{num:"9",last:"Seder",first:"Ryan",gp:14,pa:43,ab:41,h:12,s:12,d:0,t:0,hr:0,rbi:6,r:4,bb:1,so:1},
+{num:"23",last:"Saylor",first:"Jason",gp:14,pa:46,ab:43,h:11,s:11,d:0,t:0,hr:0,rbi:10,r:4,bb:2,so:0},
+{num:"7",last:"Snyderman",first:"Jason",gp:15,pa:46,ab:44,h:11,s:10,d:0,t:1,hr:0,rbi:7,r:8,bb:2,so:1},
+{num:"44",last:"Kaplan",first:"Jared",gp:3,pa:7,ab:7,h:1,s:1,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0},
+{num:"98",last:"Dorfman",first:"Leo",gp:3,pa:8,ab:8,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0},
+{num:"-",last:"Sokalsky",first:"Jake",gp:1,pa:3,ab:2,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:1,bb:1,so:0}
+],
+"2024":[
+{num:"11",last:"Kessel",first:"Ben",gp:11,pa:39,ab:35,h:20,s:13,d:1,t:1,hr:5,rbi:24,r:12,bb:1,so:0},
+{num:"22",last:"Miller",first:"Adam",gp:11,pa:41,ab:41,h:22,s:13,d:4,t:2,hr:3,rbi:9,r:20,bb:0,so:0},
+{num:"4",last:"Drossner",first:"Eric",gp:15,pa:55,ab:52,h:27,s:21,d:2,t:2,hr:2,rbi:20,r:19,bb:2,so:0},
+{num:"-",last:"Drossner",first:"Haley",gp:1,pa:4,ab:4,h:2,s:2,d:0,t:0,hr:0,rbi:2,r:0,bb:0,so:0},
+{num:"33",last:"Drossner",first:"Ryan",gp:7,pa:22,ab:19,h:9,s:9,d:0,t:0,hr:0,rbi:5,r:7,bb:2,so:0},
+{num:"13",last:"Schwartz",first:"Ben",gp:14,pa:47,ab:45,h:20,s:14,d:2,t:0,hr:4,rbi:16,r:15,bb:2,so:1},
+{num:"88",last:"Perel",first:"Andrew",gp:11,pa:37,ab:35,h:14,s:13,d:1,t:0,hr:0,rbi:5,r:10,bb:2,so:0},
+{num:"16",last:"Schwartz",first:"Mark",gp:17,pa:53,ab:49,h:18,s:16,d:2,t:0,hr:0,rbi:8,r:6,bb:3,so:3},
+{num:"9",last:"Seder",first:"Ryan",gp:13,pa:40,ab:36,h:13,s:12,d:1,t:0,hr:0,rbi:12,r:7,bb:4,so:0},
+{num:"27",last:"Snyderman",first:"Andrew",gp:12,pa:38,ab:32,h:11,s:9,d:1,t:1,hr:0,rbi:1,r:4,bb:6,so:1},
+{num:"10",last:"Kramer",first:"Todd",gp:2,pa:6,ab:6,h:2,s:2,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0},
+{num:"11",last:"Cutler",first:"Howard",gp:2,pa:3,ab:3,h:1,s:1,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0},
+{num:"-",last:"Cutler",first:"Matthew",gp:1,pa:3,ab:3,h:1,s:1,d:0,t:0,hr:0,rbi:1,r:0,bb:0,so:0},
+{num:"20",last:"Shindell",first:"Jordan",gp:14,pa:45,ab:44,h:14,s:14,d:0,t:0,hr:0,rbi:13,r:13,bb:0,so:3},
+{num:"3",last:"Dorfman",first:"Jon",gp:14,pa:40,ab:35,h:10,s:9,d:0,t:0,hr:1,rbi:5,r:7,bb:5,so:1},
+{num:"23",last:"Saylor",first:"Jason",gp:13,pa:40,ab:36,h:9,s:9,d:0,t:0,hr:0,rbi:3,r:7,bb:4,so:0},
+{num:"7",last:"Snyderman",first:"Jason",gp:14,pa:38,ab:35,h:7,s:7,d:0,t:0,hr:0,rbi:2,r:9,bb:3,so:0},
+{num:"98",last:"Dorfman",first:"Leo",gp:2,pa:7,ab:6,h:1,s:1,d:0,t:0,hr:0,rbi:0,r:1,bb:1,so:1},
+{num:"-",last:"Rosen",first:"Brett",gp:2,pa:7,ab:6,h:1,s:1,d:0,t:0,hr:0,rbi:0,r:1,bb:1,so:0},
+{num:"-",last:"Lewis",first:"Harry",gp:7,pa:19,ab:14,h:2,s:1,d:1,t:0,hr:0,rbi:5,r:2,bb:3,so:3}
+],
+"2025":[
+{num:"22",last:"Miller",first:"Adam",gp:16,pa:59,ab:55,h:35,s:27,d:2,t:3,hr:3,rbi:19,r:24,bb:4,so:0},
+{num:"27",last:"Snyderman",first:"Andrew",gp:16,pa:50,ab:44,h:22,s:12,d:3,t:5,hr:2,rbi:14,r:17,bb:4,so:1},
+{num:"-",last:"Rosen",first:"Brett",gp:2,pa:6,ab:6,h:3,s:3,d:0,t:0,hr:0,rbi:1,r:2,bb:0,so:0},
+{num:"4",last:"Drossner",first:"Eric",gp:11,pa:36,ab:32,h:14,s:11,d:1,t:2,hr:0,rbi:9,r:5,bb:3,so:0},
+{num:"13",last:"Schwartz",first:"Ben",gp:16,pa:55,ab:50,h:21,s:21,d:0,t:0,hr:0,rbi:16,r:8,bb:3,so:0},
+{num:"33",last:"Drossner",first:"Ryan",gp:14,pa:48,ab:47,h:17,s:16,d:1,t:0,hr:0,rbi:8,r:11,bb:0,so:0},
+{num:"23",last:"Saylor",first:"Jason",gp:14,pa:41,ab:37,h:13,s:12,d:1,t:0,hr:0,rbi:6,r:5,bb:4,so:2},
+{num:"88",last:"Perel",first:"Andrew",gp:12,pa:37,ab:35,h:12,s:11,d:1,t:0,hr:0,rbi:5,r:3,bb:2,so:0},
+{num:"3",last:"Dorfman",first:"Jon",gp:14,pa:37,ab:33,h:11,s:11,d:0,t:0,hr:0,rbi:8,r:5,bb:3,so:1},
+{num:"9",last:"Seder",first:"Ryan",gp:14,pa:44,ab:42,h:14,s:13,d:0,t:1,hr:0,rbi:7,r:10,bb:2,so:1},
+{num:"-",last:"Saylor",first:"Ethan",gp:5,pa:16,ab:15,h:5,s:5,d:0,t:0,hr:0,rbi:1,r:2,bb:1,so:1},
+{num:"7",last:"Snyderman",first:"Jason",gp:17,pa:46,ab:41,h:13,s:12,d:1,t:0,hr:0,rbi:3,r:9,bb:5,so:0},
+{num:"16",last:"Schwartz",first:"Mark",gp:18,pa:49,ab:45,h:13,s:13,d:0,t:0,hr:0,rbi:3,r:10,bb:4,so:1},
+{num:"20",last:"Shindell",first:"Jordan",gp:15,pa:42,ab:40,h:10,s:8,d:2,t:0,hr:0,rbi:6,r:7,bb:2,so:1},
+{num:"11",last:"Kessel",first:"Ben",gp:9,pa:28,ab:27,h:6,s:5,d:0,t:1,hr:0,rbi:5,r:3,bb:1,so:0},
+{num:"-",last:"Delia",first:"Alex",gp:4,pa:12,ab:12,h:2,s:2,d:0,t:0,hr:0,rbi:1,r:1,bb:0,so:1},
+{num:"-",last:"Schwartz",first:"Zach",gp:3,pa:8,ab:7,h:1,s:1,d:0,t:0,hr:0,rbi:1,r:2,bb:0,so:1}
+]
+};
+
+function getCareerStats(playerName){
+  const parts = playerName.trim().split(/\s+/);
+  if(parts.length < 2) return null;
+  const first = parts[0], last = parts.slice(1).join(' ');
+  const seasons = [];
+  const totals = {gp:0,pa:0,ab:0,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0};
+  for(const [year, roster] of Object.entries(TBIR_SEASONS)){
+    const p = roster.find(r => r.first.toLowerCase()===first.toLowerCase() && r.last.toLowerCase()===last.toLowerCase());
+    if(p){
+      seasons.push({year, ...p});
+      for(const k of Object.keys(totals)) totals[k] += (p[k]||0);
+    }
+  }
+  if(!seasons.length) return null;
+  seasons.sort((a,b) => a.year - b.year);
+  const fmtAvg = v => v > 0 ? (v < 1 ? v.toFixed(3).replace(/^0/,'') : v.toFixed(3)) : '.000';
+  const calcR = p => {
+    const a = p.ab>0 ? p.h/p.ab : 0;
+    const obp = (p.ab+p.bb)>0 ? (p.h+p.bb)/(p.ab+p.bb) : 0;
+    const s = p.ab>0 ? (p.s+2*p.d+3*p.t+4*p.hr)/p.ab : 0;
+    return {avg:fmtAvg(a), obp:fmtAvg(obp), slg:fmtAvg(s), ops:fmtAvg(obp+s)};
+  };
+  return {seasons: seasons.map(s=>({...s, rates:calcR(s)})), totals:{...totals, rates:calcR(totals)}, numSeasons:seasons.length};
+}
 let HISTORY = [];
 let TEAM_CALENDARS_DB = {};
 
@@ -3513,6 +3666,27 @@ function openModal(playerId){
       <td>${g.ab}</td><td>${g.h}</td><td>${g.hr||'—'}</td><td>${g.rbi}</td><td>${g.bb||0}</td><td>${g.r}</td>
       <td><span class="${g.res[0]==='W'?'badge-w':'badge-l'}">${g.res}</span></td>
     </tr>`).join('')}</tbody></table>`;
+  // Career stats (TBIR players)
+  const career = getCareerStats(p.name);
+  if(career){
+    inner.innerHTML += `
+    <div class="modal-sec" style="margin-top:24px">Career Batting</div>
+    <div class="career-wrap"><table class="career-tbl">
+      <thead><tr><th style="text-align:left">Season</th><th>GP</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead>
+      <tbody>
+      ${career.seasons.map(s=>`<tr>
+        <td style="text-align:left;font-weight:600">${s.year}</td>
+        <td>${s.gp}</td><td>${s.ab}</td><td>${s.h}</td><td>${s.d}</td><td>${s.t}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.r}</td><td>${s.bb}</td>
+        <td>${s.rates.avg}</td><td>${s.rates.obp}</td><td>${s.rates.slg}</td><td>${s.rates.ops}</td>
+      </tr>`).join('')}
+      <tr class="career-total">
+        <td style="text-align:left">Career</td>
+        <td>${career.totals.gp}</td><td>${career.totals.ab}</td><td>${career.totals.h}</td><td>${career.totals.d}</td><td>${career.totals.t}</td><td>${career.totals.hr}</td><td>${career.totals.rbi}</td><td>${career.totals.r}</td><td>${career.totals.bb}</td>
+        <td>${career.totals.rates.avg}</td><td>${career.totals.rates.obp}</td><td>${career.totals.rates.slg}</td><td>${career.totals.rates.ops}</td>
+      </tr>
+      </tbody>
+    </table></div>`;
+  }
   document.getElementById('modal-bg').classList.add('open');
   document.body.style.overflow='hidden';
 }
