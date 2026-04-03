@@ -3903,8 +3903,13 @@ async function loadSiteBanner(){
     document.body.classList.add('intro-done');
     const ci = document.getElementById('ci');
     if(ci) ci.style.display='none';
-    const found = PLAYERS.find(p=>p.name.toLowerCase()===pname.toLowerCase());
-    if(found) setTimeout(()=>openModal(found.id),100);
+    // PLAYERS may not be loaded yet — wait for data
+    if(window._dataPromise){
+      window._dataPromise.then(()=>{
+        const found = PLAYERS.find(p=>p.name.toLowerCase()===pname.toLowerCase());
+        if(found) openModal(found.id);
+      });
+    }
     return;
   }
   // Normal hash routing — supports #team/gold format
