@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>League Leaders — DVSL Softball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,700;1,900&family=Inter:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #ffffff; --bg2: #f5f5f5; --card: #ffffff; --card2: #f8f8f8;
+  --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.15);
+  --gold: #002D72; --gold2: #001a45; --gold-dim: rgba(0,45,114,0.08);
+  --gold-glow: rgba(0,45,114,0.1);
+  --white: #1a1a1a; --muted: rgba(0,0,0,0.45); --muted2: rgba(0,0,0,0.3);
+  --red: #c8102e; --green: #22c55e; --blue: #002D72;
+}
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--white); font-family: 'Inter', sans-serif; overflow-x: hidden; line-height: 1.6; }
+
+/* NAV */
+nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; height: 62px; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; background: rgba(255,255,255,.97); backdrop-filter: blur(24px) saturate(180%); border-bottom: 1px solid var(--border); }
+.nav-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 19px; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); text-decoration: none; display: flex; align-items: center; gap: 10px; }
+.nav-logo img { height: 28px; opacity: .85; }
+.nav-links { display: flex; gap: 2px; list-style: none; margin: 0 auto; padding: 0; }
+.nav-links a { font-size: 11.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); text-decoration: none; padding: 7px 13px; border-radius: 6px; transition: color .15s, background .15s; white-space: nowrap; }
+.nav-links a:hover { color: var(--white); background: rgba(0,0,0,.06); }
+.nav-links a.active { color: var(--gold); }
+.hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; background: none; border: none; padding: 4px; }
+.hamburger span { display: block; width: 22px; height: 2px; background: var(--white); border-radius: 2px; transition: all .3s; }
+.hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.mob-menu { display: none; position: fixed; top: 62px; left: 0; right: 0; z-index: 199; background: rgba(255,255,255,.97); backdrop-filter: blur(24px); border-bottom: 1px solid var(--border); flex-direction: column; padding: 16px 20px 24px; }
+.mob-menu.open { display: flex; }
+.mob-menu a { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 26px; text-transform: uppercase; color: var(--white); text-decoration: none; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,.06); }
+.mob-menu a:last-child { border-bottom: none; }
+
+/* PAGE */
+.page-wrap { padding-top: 62px; min-height: 100vh; }
+
+/* PAGE HEADER */
+.page-header { padding: 130px 48px 28px; }
+.page-header-inner { max-width: 1100px; margin: 0 auto; }
+.page-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: clamp(36px, 6vw, 54px); text-transform: uppercase; line-height: .95; letter-spacing: -.01em; }
+
+/* LOADING / EMPTY */
+.loading-wrap { display: flex; align-items: center; justify-content: center; min-height: 40vh; flex-direction: column; gap: 16px; }
+.loading-wrap .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-wrap .msg { font-size: 14px; color: var(--muted); }
+.empty-msg { text-align: center; padding: 80px 24px; color: var(--muted); font-size: 15px; line-height: 1.7; }
+
+/* LEADER CARDS */
+.leader-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; max-width: 1100px; margin: 0 auto; padding: 0 48px 32px; }
+.leader-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px 16px; text-align: center; transition: box-shadow .2s, transform .2s; cursor: default; }
+.leader-card:hover { box-shadow: 0 4px 20px rgba(0,45,114,.08); transform: translateY(-2px); }
+.leader-card.active-card { border-color: var(--gold); background: var(--gold-dim); }
+.lc-label { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.lc-value { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 36px; color: var(--gold); line-height: 1; }
+.lc-name { font-size: 13px; font-weight: 600; color: var(--white); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lc-team { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* STAT TABS */
+.stat-tabs { display: flex; gap: 0; max-width: 1100px; margin: 0 auto; padding: 0 48px; border-bottom: 2px solid var(--border); }
+.stat-tab { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: none; border: none; border-bottom: 3px solid transparent; padding: 12px 20px; cursor: pointer; transition: all .15s; margin-bottom: -2px; }
+.stat-tab:hover { color: var(--white); }
+.stat-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* LEADERS TABLE */
+.leaders-section { max-width: 1100px; margin: 0 auto; padding: 24px 48px 80px; }
+.leaders-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+.leaders-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 500px; }
+.leaders-table thead th { background: var(--bg2); font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 12px 18px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.leaders-table thead th.col-stat { text-align: right; }
+.leaders-table tbody tr { border-bottom: 1px solid rgba(0,0,0,.05); transition: background .12s; }
+.leaders-table tbody tr:hover { background: rgba(0,45,114,.03); }
+.leaders-table tbody tr:last-child { border-bottom: none; }
+.leaders-table td { padding: 12px 18px; }
+.leaders-table .col-rank { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; color: var(--muted2); width: 50px; }
+.leaders-table .col-player { font-weight: 600; }
+.leaders-table .col-player a { color: var(--white); text-decoration: none; transition: color .15s; }
+.leaders-table .col-player a:hover { color: var(--gold); }
+.leaders-table .col-team { white-space: nowrap; color: var(--muted); font-size: 13px; }
+.leaders-table .col-stat { text-align: right; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 18px; }
+.team-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+/* Rank 1 highlight */
+.leaders-table tbody tr.rank-1 { background: linear-gradient(90deg, rgba(0,45,114,.06), transparent 70%); }
+.leaders-table tbody tr.rank-1 .col-rank { color: #D4A017; font-size: 16px; }
+.leaders-table tbody tr.rank-1 .col-stat { color: var(--gold); font-size: 22px; }
+.leaders-table tbody tr.rank-1 .col-player a { color: var(--gold); }
+
+/* FOOTER */
+footer { padding: 40px 48px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; background: var(--bg2); }
+.ft-logo { font-family: 'Barlow Condensed', sans-serif; font-weight: 900; font-size: 17px; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); }
+.ft-links { display: flex; gap: 0; flex-wrap: wrap; }
+.ft-links a { font-size: 11px; color: var(--muted); text-decoration: none; padding: 2px 14px; border-right: 1px solid var(--border); transition: color .15s; }
+.ft-links a:last-child { border-right: none; }
+.ft-links a:hover { color: var(--white); }
+.ft-copy { font-size: 11px; color: rgba(0,0,0,.35); }
+
+/* MOBILE */
+@media (max-width: 768px) {
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .hamburger { display: flex; }
+  .page-header { padding: 100px 20px 20px; }
+  .leader-cards { padding: 0 20px 24px; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .lc-value { font-size: 28px; }
+  .leader-card { padding: 14px 10px; }
+  .stat-tabs { padding: 0 20px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .stat-tab { padding: 10px 14px; font-size: 13px; flex-shrink: 0; }
+  .leaders-section { padding: 16px 20px 60px; }
+  footer { flex-direction: column; padding: 32px 20px; gap: 16px; text-align: center; }
+  .ft-links { justify-content: center; }
+}
+@media (max-width: 480px) {
+  .leader-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #ffffff; }
+::-webkit-scrollbar-thumb { background: rgba(0,45,114,0.3); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">
+    <img src="dvsl-logo-dark.png" alt="DVSL">DVSL
+  </a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="schedule.html">Scores</a></li>
+    <li><a href="schedule.html?tab=schedule">Schedule</a></li>
+    <li><a href="standings-history.html">Standings</a></li>
+    <li><a href="stats.html">Stats</a></li>
+    <li><a href="leaders.html" class="active">Leaders</a></li>
+    <li><a href="index.html#players">Teams</a></li>
+    <li><a href="playoffs.html">Brackets</a></li>
+    <li><a href="rules.html">Field Guide</a></li>
+    <li><a href="photos.html">Gallery</a></li>
+  </ul>
+  <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
+</nav>
+<div class="mob-menu" id="mobMenu">
+  <a href="index.html">Home</a>
+  <a href="schedule.html">Scores</a>
+  <a href="schedule.html?tab=schedule">Schedule</a>
+  <a href="standings-history.html">Standings</a>
+  <a href="stats.html">Stats</a>
+  <a href="leaders.html">Leaders</a>
+  <a href="index.html#players">Teams</a>
+  <a href="playoffs.html">Brackets</a>
+  <a href="rules.html">Field Guide</a>
+  <a href="photos.html">Gallery</a>
+</div>
+
+<!-- PAGE CONTENT -->
+<div class="page-wrap">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="page-header-inner">
+      <h1 class="page-title">League Leaders</h1>
+    </div>
+  </div>
+
+  <!-- Main content container -->
+  <div id="content">
+    <div class="loading-wrap" id="loadingState">
+      <div class="spinner"></div>
+      <div class="msg">Loading league leaders...</div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="ft-logo">&#x2B21; DVSL</div>
+  <div class="ft-links"><a href="index.html">Home</a><a href="schedule.html">Scores</a><a href="schedule.html?tab=schedule">Schedule</a><a href="standings-history.html">Standings</a><a href="stats.html">Stats</a><a href="leaders.html">Leaders</a><a href="index.html#players">Teams</a><a href="playoffs.html">Brackets</a><a href="rules.html">Field Guide</a><a href="photos.html">Gallery</a></div>
+  <div class="ft-copy">&copy; 2026 DVSL &middot; Delaware Valley Synagogue League</div>
+</footer>
+
+<script>
+// ============ FIREBASE CONFIG ============
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+};
+
+let _db = null;
+let _fbMods = null;
+
+async function getDb() {
+  if (_db) return _db;
+  const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
+  const fb = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+  const app = initializeApp(FIREBASE_CONFIG);
+  _db = fb.getFirestore(app);
+  _fbMods = fb;
+  return _db;
+}
+
+// ============ HAMBURGER ============
+const hb = document.getElementById('hbg');
+const mm = document.getElementById('mobMenu');
+if (hb) hb.addEventListener('click', () => { hb.classList.toggle('open'); mm.classList.toggle('open'); });
+if (mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); }));
+
+// ============ HELPERS ============
+function normalizeName(n) {
+  return (n || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// ============ STAT CATEGORIES ============
+const CATEGORIES = [
+  { key: 'avg', label: 'AVG', format: v => v.toFixed(3), isRate: true },
+  { key: 'hr',  label: 'HR',  format: v => v, isRate: false },
+  { key: 'rbi', label: 'RBI', format: v => v, isRate: false },
+  { key: 'r',   label: 'R',   format: v => v, isRate: false },
+  { key: 'h',   label: 'H',   format: v => v, isRate: false },
+  { key: 'bb',  label: 'BB',  format: v => v, isRate: false },
+  { key: 'so',  label: 'SO',  format: v => v, isRate: false },
+];
+
+let allPlayers = [];
+let teamsMap = {};
+let currentCat = 'avg';
+
+// ============ MAIN ============
+async function loadLeaders() {
+  const contentEl = document.getElementById('content');
+
+  try {
+    const db = await getDb();
+    const { collection, getDocs } = _fbMods;
+
+    // Load teams
+    const teamsSnap = await getDocs(collection(db, 'teams'));
+    teamsSnap.docs.forEach(d => {
+      const t = { id: d.id, ...d.data() };
+      teamsMap[t.id] = t;
+      if (t.short) teamsMap[t.short] = t;
+    });
+
+    // Load all box scores
+    const bsSnap = await getDocs(collection(db, 'box_scores'));
+    const boxScores = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Filter to final only
+    const finalBoxScores = boxScores.filter(bs => bs.status === 'final');
+
+    if (finalBoxScores.length === 0) {
+      contentEl.innerHTML = `<div class="empty-msg">League leaders will appear once games are played and box scores are entered.</div>`;
+      return;
+    }
+
+    // Aggregate player stats across all games
+    const playerMap = {}; // key: normalized name + team
+
+    for (const bs of finalBoxScores) {
+      const sides = [
+        { lineup: bs.away_lineup, teamId: bs.away },
+        { lineup: bs.home_lineup, teamId: bs.home },
+      ];
+
+      for (const { lineup, teamId } of sides) {
+        if (!Array.isArray(lineup)) continue;
+        for (const p of lineup) {
+          const name = (p.name || '').trim();
+          if (!name) continue;
+          const key = normalizeName(name) + '||' + (teamId || '');
+
+          if (!playerMap[key]) {
+            playerMap[key] = {
+              name: name,
+              team: teamId || '',
+              gp: 0, ab: 0, r: 0, h: 0, hr: 0, rbi: 0, bb: 0, so: 0,
+            };
+          }
+
+          const s = playerMap[key];
+          // Use the properly cased name from first appearance or latest
+          if (name.length > s.name.length || (name[0] === name[0].toUpperCase() && s.name[0] !== s.name[0].toUpperCase())) {
+            s.name = name;
+          }
+          s.gp += 1;
+          s.ab  += parseInt(p.ab) || 0;
+          s.r   += parseInt(p.r) || 0;
+          s.h   += parseInt(p.h) || 0;
+          s.hr  += parseInt(p.hr) || 0;
+          s.rbi += parseInt(p.rbi) || 0;
+          s.bb  += parseInt(p.bb) || 0;
+          s.so  += parseInt(p.so) || 0;
+        }
+      }
+    }
+
+    // Compute AVG
+    allPlayers = Object.values(playerMap).map(p => ({
+      ...p,
+      avg: p.ab > 0 ? p.h / p.ab : 0,
+    }));
+
+    // Render the full UI
+    renderUI();
+
+  } catch (err) {
+    console.error('Error loading leaders:', err);
+    contentEl.innerHTML = `<div class="empty-msg">Error loading league leaders. Please try again later.</div>`;
+  }
+}
+
+function getTeamName(id) {
+  const t = teamsMap[id];
+  return t ? (t.short || t.name || id) : (id || '--');
+}
+
+function getTeamColor(id) {
+  const t = teamsMap[id];
+  return t ? (t.color || '#002D72') : '#002D72';
+}
+
+function getTeamFullName(id) {
+  const t = teamsMap[id];
+  return t ? (t.name || t.short || id) : (id || '--');
+}
+
+function getTopPlayer(cat) {
+  const c = CATEGORIES.find(c => c.key === cat);
+  let pool = [...allPlayers];
+  if (c && c.isRate) {
+    pool = pool.filter(p => p.ab >= 10);
+  }
+  // For SO, lower is better? No -- SO leaders means most SO. Keep descending.
+  pool.sort((a, b) => b[cat] - a[cat]);
+  return pool[0] || null;
+}
+
+function getTopPlayers(cat, limit) {
+  const c = CATEGORIES.find(c => c.key === cat);
+  let pool = [...allPlayers];
+  if (c && c.isRate) {
+    pool = pool.filter(p => p.ab >= 10);
+  }
+  pool.sort((a, b) => b[cat] - a[cat]);
+  return pool.slice(0, limit);
+}
+
+function renderUI() {
+  const contentEl = document.getElementById('content');
+
+  // Build leader cards
+  let cardsHtml = '<div class="leader-cards">';
+  for (const cat of CATEGORIES) {
+    const top = getTopPlayer(cat.key);
+    const isActive = cat.key === currentCat;
+    cardsHtml += `<div class="leader-card${isActive ? ' active-card' : ''}" data-cat="${cat.key}" onclick="switchCat('${cat.key}')">`;
+    cardsHtml += `<div class="lc-label">${cat.label} Leader</div>`;
+    if (top) {
+      cardsHtml += `<div class="lc-value">${cat.format(top[cat.key])}</div>`;
+      cardsHtml += `<div class="lc-name">${top.name}</div>`;
+      cardsHtml += `<div class="lc-team">${getTeamFullName(top.team)}</div>`;
+    } else {
+      cardsHtml += `<div class="lc-value">--</div>`;
+      cardsHtml += `<div class="lc-name">--</div>`;
+      cardsHtml += `<div class="lc-team">--</div>`;
+    }
+    cardsHtml += `</div>`;
+  }
+  cardsHtml += '</div>';
+
+  // Build tabs
+  let tabsHtml = '<div class="stat-tabs">';
+  for (const cat of CATEGORIES) {
+    tabsHtml += `<button class="stat-tab${cat.key === currentCat ? ' active' : ''}" data-cat="${cat.key}" onclick="switchCat('${cat.key}')">${cat.label}</button>`;
+  }
+  tabsHtml += '</div>';
+
+  // Build table
+  const activeCat = CATEGORIES.find(c => c.key === currentCat);
+  const top20 = getTopPlayers(currentCat, 20);
+
+  let tableHtml = '<div class="leaders-section">';
+  if (top20.length === 0) {
+    tableHtml += '<div class="empty-msg">No qualifying players for this category yet.</div>';
+  } else {
+    tableHtml += '<div class="leaders-table-wrap"><table class="leaders-table">';
+    tableHtml += `<thead><tr>
+      <th>Rank</th>
+      <th>Player</th>
+      <th>Team</th>
+      <th class="col-stat">${activeCat.label}</th>
+    </tr></thead><tbody>`;
+
+    for (let i = 0; i < top20.length; i++) {
+      const p = top20[i];
+      const rank = i + 1;
+      const rowClass = rank === 1 ? ' class="rank-1"' : '';
+      const playerUrl = `player.html?name=${encodeURIComponent(p.name)}&team=${encodeURIComponent(p.team)}`;
+      const teamAbbr = getTeamName(p.team);
+      const teamColor = getTeamColor(p.team);
+      const statVal = activeCat.format(p[currentCat]);
+
+      tableHtml += `<tr${rowClass}>
+        <td class="col-rank">${rank}</td>
+        <td class="col-player"><a href="${playerUrl}">${p.name}</a></td>
+        <td class="col-team"><span class="team-dot" style="background:${teamColor}"></span>${teamAbbr}</td>
+        <td class="col-stat">${statVal}</td>
+      </tr>`;
+    }
+
+    tableHtml += '</tbody></table></div>';
+
+    // Qualifier note for rate stats
+    if (activeCat.isRate) {
+      tableHtml += '<div style="font-size:11px;color:var(--muted);margin-top:12px;font-style:italic;">Minimum 10 at-bats to qualify for rate stats.</div>';
+    }
+  }
+  tableHtml += '</div>';
+
+  contentEl.innerHTML = cardsHtml + tabsHtml + tableHtml;
+}
+
+function switchCat(cat) {
+  currentCat = cat;
+  renderUI();
+  // Scroll tabs into view on mobile
+  const activeTab = document.querySelector('.stat-tab.active');
+  if (activeTab) activeTab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+}
+
+// Start
+loadLeaders();
+</script>
+</body>
+</html>
