@@ -794,6 +794,8 @@ window.saveScore = async function(gameId, markDone) {
 
 // ═══════════════════════════ BOX SCORE ═════════════════════════════
 let bsAwayLineup = [], bsHomeLineup = [], bsGameId = null, bsGameData = null;
+let bsAwayPitcher = {name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''};
+let bsHomePitcher = {name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''};
 
 window.openBoxScore = async function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
@@ -826,6 +828,8 @@ window.openBoxScore = async function(gameId) {
   bsHomeLineup = existing?.home_lineup || homePlayers.map(p => ({
     name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, dnp: false
   }));
+  bsAwayPitcher = existing?.away_pitcher || {name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''};
+  bsHomePitcher = existing?.home_pitcher || {name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''};
 
   document.getElementById('sec-scores').querySelector('.main-header').style.display = 'none';
   document.getElementById('scores-content').style.display = 'none';
@@ -899,6 +903,51 @@ function renderBoxScore(awayName, homeName, g) {
           </table>
         </div>
         <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="bsAddGuest('${side}')">+ Guest Player</button>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:2px solid #002D72">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,0,0,.5);margin-bottom:10px">Pitching</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <div style="flex:1;min-width:140px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">Pitcher</label>
+              <select style="width:100%;padding:6px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;background:#fff" onchange="bsUpdatePitcher('${side}','name',this.value)">
+                <option value="">Select pitcher...</option>
+                ${lineup.map(p => `<option value="${p.name}"${(side==='away'?bsAwayPitcher:bsHomePitcher).name===p.name?' selected':''}>${p.name}</option>`).join('')}
+              </select>
+            </div>
+            <div style="width:52px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">IP</label>
+              <input type="text" style="width:100%;padding:5px 4px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${(side==='away'?bsAwayPitcher:bsHomePitcher).ip}" oninput="bsUpdatePitcher('${side}','ip',this.value)" placeholder="0.0">
+            </div>
+            <div style="width:44px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">H</label>
+              <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${(side==='away'?bsAwayPitcher:bsHomePitcher).h}" min="0" oninput="bsUpdatePitcher('${side}','h',this.value)">
+            </div>
+            <div style="width:44px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">R</label>
+              <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${(side==='away'?bsAwayPitcher:bsHomePitcher).r}" min="0" oninput="bsUpdatePitcher('${side}','r',this.value)">
+            </div>
+            <div style="width:44px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">ER</label>
+              <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${(side==='away'?bsAwayPitcher:bsHomePitcher).er}" min="0" oninput="bsUpdatePitcher('${side}','er',this.value)">
+            </div>
+            <div style="width:44px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">BB</label>
+              <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${(side==='away'?bsAwayPitcher:bsHomePitcher).bb}" min="0" oninput="bsUpdatePitcher('${side}','bb',this.value)">
+            </div>
+            <div style="width:44px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">SO</label>
+              <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${(side==='away'?bsAwayPitcher:bsHomePitcher).so}" min="0" oninput="bsUpdatePitcher('${side}','so',this.value)">
+            </div>
+            <div style="width:60px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">Dec</label>
+              <select style="width:100%;padding:5px 4px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:12px;background:#fff" onchange="bsUpdatePitcher('${side}','decision',this.value)">
+                <option value=""${(side==='away'?bsAwayPitcher:bsHomePitcher).decision===''?' selected':''}>—</option>
+                <option value="W"${(side==='away'?bsAwayPitcher:bsHomePitcher).decision==='W'?' selected':''}>W</option>
+                <option value="L"${(side==='away'?bsAwayPitcher:bsHomePitcher).decision==='L'?' selected':''}>L</option>
+              </select>
+            </div>
+          </div>
+        </div>
       </div>`;
   }
 
@@ -975,6 +1024,15 @@ window.bsToggleDnp = function(side, idx, checked) {
   if(checked){p.ab=0;p.r=0;p.h=0;p.rbi=0;p.bb=0;p.so=0;}
   bsRerender();
 };
+window.bsUpdatePitcher = function(side, field, val) {
+  const p = side === 'away' ? bsAwayPitcher : bsHomePitcher;
+  if (field === 'h' || field === 'r' || field === 'er' || field === 'bb' || field === 'so') {
+    p[field] = parseInt(val) || 0;
+  } else {
+    p[field] = val;
+  }
+};
+
 window.bsAddGuest = function(side) {
   const name = prompt('Guest player name:');
   if(!name) return;
@@ -989,6 +1047,8 @@ window.saveBoxScore = async function(markFinal) {
     away: bsGameData.away, home: bsGameData.home,
     away_lineup: bsAwayLineup.filter(p=>!p.dnp).map(p=>({name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,h:parseInt(p.h)||0,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
     home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>({name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,h:parseInt(p.h)||0,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
+    away_pitcher: {...bsAwayPitcher, h:parseInt(bsAwayPitcher.h)||0, r:parseInt(bsAwayPitcher.r)||0, er:parseInt(bsAwayPitcher.er)||0, bb:parseInt(bsAwayPitcher.bb)||0, so:parseInt(bsAwayPitcher.so)||0},
+    home_pitcher: {...bsHomePitcher, h:parseInt(bsHomePitcher.h)||0, r:parseInt(bsHomePitcher.r)||0, er:parseInt(bsHomePitcher.er)||0, bb:parseInt(bsHomePitcher.bb)||0, so:parseInt(bsHomePitcher.so)||0},
     away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
   };
   try {
