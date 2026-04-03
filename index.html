@@ -3012,6 +3012,7 @@ function buildSchedule(){
       </div>
       <div class="preview-field">${g.field||''}</div>
       <span class="preview-link" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Preview</span>
+      ${g.done?`<span class="preview-link" style="margin-top:4px" onclick="event.stopPropagation();shareGame('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Share</span>`:''}
     </div>`;
   }).join('');
 
@@ -4140,6 +4141,7 @@ function scheduleBlock(g, isNext){
       <div class="score-actions">
         <button class="score-btn" onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Box Score</button>
         <button class="score-btn" onclick="openRecap2('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Recap</button>
+        <button class="score-btn" onclick="event.stopPropagation();shareGame('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Share</button>
       </div>
     </div>`;
   } else {
@@ -4168,6 +4170,30 @@ function scheduleBlock(g, isNext){
 // openRecap2 bridges the full-schedule recap popup
 function openRecap2(away,home,as,hs,field,date){
   openRecap(away,home,as,hs,field,date);
+}
+function shareGame(away,home,as,hs,field,date){
+  const winner=as>hs?away:home;
+  const loser=as>hs?home:away;
+  const ws=as>hs?as:hs;
+  const ls=as>hs?hs:as;
+  const text=`\u26be ${winner} ${ws}, ${loser} ${ls}\n\ud83d\udcc5 ${date} \u00b7 \ud83d\udccd ${field}\n\ud83c\udfc6 DVSL Softball 2026\n\n${window.location.origin}`;
+  if(navigator.share){
+    navigator.share({title:`${away} vs ${home} - DVSL`,text}).catch(()=>{});
+  } else {
+    navigator.clipboard.writeText(text).then(()=>{showToast('Copied to clipboard!');}).catch(()=>{showToast('Could not copy');});
+  }
+}
+function showToast(msg){
+  let t=document.getElementById('share-toast');
+  if(!t){
+    t=document.createElement('div');
+    t.id='share-toast';
+    t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 24px;border-radius:8px;font-size:14px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;
+  t.style.opacity='1';
+  setTimeout(()=>{t.style.opacity='0';},2500);
 }
 function renderScores(){
   const wrap=document.getElementById('sbWrap');
