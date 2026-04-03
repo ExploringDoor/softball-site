@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Game Day Alerts — DVSL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,700;1,900&family=Inter:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f5f5f5;--card:#ffffff;--card2:#f8f8f8;--card3:#f0f0f0;
+  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.15);
+  --navy:#002D72;--navy-light:rgba(0,45,114,0.08);
+  --white:#1a1a1a;--muted:rgba(0,0,0,0.5);--muted2:rgba(0,0,0,0.35);
+  --red:#c8102e;--green:#22c55e;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line-height:1.6;min-height:100vh}
+
+/* Nav bar */
+.nav{position:fixed;top:0;left:0;right:0;z-index:400;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(255,255,255,0.97);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border)}
+.nav-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);cursor:pointer;user-select:none;text-decoration:none;display:flex;align-items:center;gap:10px}
+.nav-back{font-family:'Inter',sans-serif;font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;display:flex;align-items:center;gap:6px;transition:color .2s}
+.nav-back:hover{color:var(--white)}
+
+/* Main content */
+.main{max-width:640px;margin:0 auto;padding:110px 24px 80px}
+
+.page-eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--navy);margin-bottom:10px}
+.page-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(34px,5vw,48px);text-transform:uppercase;line-height:.95;letter-spacing:-.01em;margin-bottom:16px}
+.page-desc{font-size:15px;color:var(--muted);line-height:1.7;margin-bottom:40px;max-width:480px}
+
+/* Enable button */
+.btn-enable{display:inline-flex;align-items:center;gap:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:16px 36px;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px rgba(0,45,114,.25)}
+.btn-enable:hover{background:#003d99;transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,45,114,.3)}
+.btn-enable:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+
+.btn-disable{display:inline-flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;background:transparent;color:var(--red);border:1px solid rgba(200,16,46,.3);border-radius:6px;padding:10px 24px;cursor:pointer;transition:all .2s;margin-top:24px}
+.btn-disable:hover{background:rgba(200,16,46,.06);border-color:rgba(200,16,46,.5)}
+
+/* Status badge */
+.status-badge{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:32px}
+.status-badge.enabled{background:rgba(34,197,94,.1);color:#16a34a}
+.status-badge.disabled{background:rgba(0,0,0,.04);color:var(--muted)}
+
+/* Category toggles */
+.categories{margin-top:32px}
+.categories h3{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--white);margin-bottom:16px}
+.cat-item{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border)}
+.cat-item:last-child{border-bottom:none}
+.cat-info{display:flex;flex-direction:column;gap:2px}
+.cat-name{font-size:14px;font-weight:600;color:var(--white)}
+.cat-desc{font-size:12px;color:var(--muted2)}
+
+/* Toggle switch */
+.toggle{position:relative;width:44px;height:24px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;cursor:pointer;inset:0;background:var(--card3);border-radius:24px;transition:.3s}
+.toggle .slider::before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.toggle input:checked+.slider{background:var(--navy)}
+.toggle input:checked+.slider::before{transform:translateX(20px)}
+
+/* Info box */
+.info-box{margin-top:48px;padding:20px 24px;background:var(--bg2);border:1px solid var(--border);border-radius:10px}
+.info-box h4{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);margin-bottom:8px}
+.info-box p,.info-box li{font-size:13px;color:var(--muted);line-height:1.7}
+.info-box ol{padding-left:20px;margin-top:8px}
+.info-box li{margin-bottom:4px}
+.info-box code{background:rgba(0,45,114,.06);padding:1px 6px;border-radius:4px;font-size:12px;color:var(--navy)}
+
+/* Coming soon banner */
+.coming-soon{padding:24px;background:linear-gradient(135deg,rgba(0,45,114,.06),rgba(0,45,114,.02));border:1px solid rgba(0,45,114,.12);border-radius:10px;text-align:center;margin-bottom:32px}
+.coming-soon p{font-size:14px;color:var(--muted);line-height:1.7}
+.coming-soon strong{color:var(--navy)}
+
+/* Hidden state */
+.hidden{display:none!important}
+
+@media(max-width:600px){
+  .nav{padding:0 20px}
+  .main{padding:90px 16px 60px}
+}
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav">
+  <a href="index.html" class="nav-brand">DVSL</a>
+  <a href="index.html" class="nav-back">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Back to Site
+  </a>
+</nav>
+
+<!-- Main -->
+<div class="main">
+  <div class="page-eyebrow">Notifications</div>
+  <h1 class="page-title">Game Day Alerts</h1>
+  <p class="page-desc">Get notified about score updates, rainouts, schedule changes, and playoff results — right on your phone or desktop.</p>
+
+  <!-- Coming soon banner (shown when VAPID key is not configured) -->
+  <div class="coming-soon" id="comingSoon">
+    <p><strong>Notifications coming soon!</strong><br>Push notifications are being set up. Check back after the admin configures push notifications in the Firebase Console.</p>
+  </div>
+
+  <!-- Status badge -->
+  <div class="status-badge disabled" id="statusBadge">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13.3 4L6 11.3 2.7 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span id="statusText">Notifications disabled</span>
+  </div>
+
+  <!-- Enable button -->
+  <div id="enableSection">
+    <button class="btn-enable" id="btnEnable" onclick="enableNotifications()">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6z" stroke="#fff" stroke-width="1.5"/><path d="M8 14a2 2 0 104 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Enable Notifications
+    </button>
+  </div>
+
+  <!-- Enabled state: categories + disable -->
+  <div id="enabledSection" class="hidden">
+    <div class="categories">
+      <h3>Notification Categories</h3>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">Score Updates</div>
+          <div class="cat-desc">Final scores and live game updates</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="scores" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">Rainout Alerts</div>
+          <div class="cat-desc">Game cancellations and weather delays</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="rainouts" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">Schedule Changes</div>
+          <div class="cat-desc">Rescheduled games and field changes</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="schedule" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">Playoff Updates</div>
+          <div class="cat-desc">Bracket updates and elimination results</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="playoffs" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <button class="btn-disable" id="btnDisable" onclick="disableNotifications()">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      Disable Notifications
+    </button>
+  </div>
+
+  <!-- Admin / backend info -->
+  <div class="info-box">
+    <h4>How Push Notifications Work</h4>
+    <p>This page collects notification tokens and preferences. To actually <strong>send</strong> push notifications (e.g., from the admin page), a Firebase Cloud Functions backend is required. The notification infrastructure (service worker, token storage) is in place and ready for when the backend is set up.</p>
+  </div>
+
+  <!-- Setup instructions for admin -->
+  <div class="info-box" style="margin-top:16px">
+    <h4>Admin Setup Instructions</h4>
+    <p>To activate push notifications:</p>
+    <ol>
+      <li>Go to <strong>Firebase Console</strong> &gt; Project Settings &gt; Cloud Messaging</li>
+      <li>Under "Web Push certificates", click <strong>Generate key pair</strong> to get a VAPID key</li>
+      <li>Replace <code>YOUR_VAPID_KEY_HERE</code> in this page's source code with the generated key</li>
+      <li>Deploy a Cloud Function to send notifications using tokens from the <code>notification_tokens</code> Firestore collection</li>
+    </ol>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getMessaging, getToken, deleteToken, onMessage } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging.js';
+import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+};
+
+// IMPORTANT: Replace this with your actual VAPID key from Firebase Console
+const VAPID_KEY = 'YOUR_VAPID_KEY_HERE';
+
+const app = initializeApp(FIREBASE_CONFIG);
+const db = getFirestore(app);
+let messaging = null;
+
+// Check if VAPID key is configured
+const isConfigured = VAPID_KEY !== 'YOUR_VAPID_KEY_HERE';
+
+// Check browser support
+const isSupported = 'Notification' in window && 'serviceWorker' in navigator;
+
+// DOM elements
+const comingSoon = document.getElementById('comingSoon');
+const statusBadge = document.getElementById('statusBadge');
+const statusText = document.getElementById('statusText');
+const enableSection = document.getElementById('enableSection');
+const enabledSection = document.getElementById('enabledSection');
+const btnEnable = document.getElementById('btnEnable');
+
+function init() {
+  if (!isSupported) {
+    comingSoon.querySelector('p').innerHTML = '<strong>Browser Not Supported</strong><br>Push notifications require a modern browser. Please try Chrome, Firefox, or Edge.';
+    comingSoon.classList.remove('hidden');
+    enableSection.classList.add('hidden');
+    return;
+  }
+
+  if (!isConfigured) {
+    comingSoon.classList.remove('hidden');
+    enableSection.classList.add('hidden');
+    return;
+  }
+
+  // VAPID key is set, hide the coming soon banner
+  comingSoon.classList.add('hidden');
+  enableSection.classList.remove('hidden');
+
+  try {
+    messaging = getMessaging(app);
+  } catch(e) {
+    console.error('Failed to init messaging:', e);
+    comingSoon.querySelector('p').innerHTML = '<strong>Setup Error</strong><br>Could not initialize push notifications. Check the browser console for details.';
+    comingSoon.classList.remove('hidden');
+    enableSection.classList.add('hidden');
+    return;
+  }
+
+  // Check if already subscribed
+  const savedToken = localStorage.getItem('dvsl-notif-token');
+  if (savedToken) {
+    updateUI(true);
+    loadSavedCategories();
+  }
+
+  // Listen for foreground messages
+  onMessage(messaging, (payload) => {
+    const title = payload.notification?.title || 'DVSL Update';
+    const body = payload.notification?.body || '';
+    if (Notification.permission === 'granted') {
+      new Notification(title, {
+        body,
+        icon: '/dvsl-logo-dark.png'
+      });
+    }
+  });
+}
+
+function updateUI(enabled) {
+  if (enabled) {
+    statusBadge.className = 'status-badge enabled';
+    statusText.textContent = 'Notifications enabled';
+    enableSection.classList.add('hidden');
+    enabledSection.classList.remove('hidden');
+  } else {
+    statusBadge.className = 'status-badge disabled';
+    statusText.textContent = 'Notifications disabled';
+    enableSection.classList.remove('hidden');
+    enabledSection.classList.add('hidden');
+  }
+}
+
+function loadSavedCategories() {
+  const saved = localStorage.getItem('dvsl-notif-categories');
+  if (saved) {
+    try {
+      const cats = JSON.parse(saved);
+      document.querySelectorAll('[data-cat]').forEach(cb => {
+        cb.checked = cats.includes(cb.dataset.cat);
+      });
+    } catch(e) {}
+  }
+}
+
+window.enableNotifications = async function() {
+  if (!messaging) return;
+  btnEnable.disabled = true;
+  btnEnable.textContent = 'Setting up...';
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      btnEnable.disabled = false;
+      btnEnable.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6z" stroke="#fff" stroke-width="1.5"/><path d="M8 14a2 2 0 104 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg> Enable Notifications';
+      alert('Notification permission was denied. Please allow notifications in your browser settings and try again.');
+      return;
+    }
+
+    // Register the service worker
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+
+    const token = await getToken(messaging, {
+      vapidKey: VAPID_KEY,
+      serviceWorkerRegistration: registration
+    });
+
+    if (!token) {
+      throw new Error('No token received');
+    }
+
+    const categories = ['scores', 'rainouts', 'schedule', 'playoffs'];
+
+    // Save token to Firestore
+    await addDoc(collection(db, 'notification_tokens'), {
+      token,
+      categories,
+      timestamp: new Date()
+    });
+
+    localStorage.setItem('dvsl-notif-token', token);
+    localStorage.setItem('dvsl-notif-categories', JSON.stringify(categories));
+
+    updateUI(true);
+  } catch(err) {
+    console.error('Notification setup failed:', err);
+    btnEnable.disabled = false;
+    btnEnable.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6z" stroke="#fff" stroke-width="1.5"/><path d="M8 14a2 2 0 104 0" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg> Enable Notifications';
+    alert('Failed to enable notifications. Please try again. Error: ' + err.message);
+  }
+};
+
+window.disableNotifications = async function() {
+  try {
+    const token = localStorage.getItem('dvsl-notif-token');
+    if (token) {
+      // Remove from Firestore
+      const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        await deleteDoc(doc(db, 'notification_tokens', d.id));
+      }
+
+      // Delete FCM token
+      if (messaging) {
+        try { await deleteToken(messaging); } catch(e) {}
+      }
+
+      localStorage.removeItem('dvsl-notif-token');
+      localStorage.removeItem('dvsl-notif-categories');
+    }
+    updateUI(false);
+  } catch(err) {
+    console.error('Failed to disable notifications:', err);
+    // Still update UI locally
+    localStorage.removeItem('dvsl-notif-token');
+    localStorage.removeItem('dvsl-notif-categories');
+    updateUI(false);
+  }
+};
+
+window.updateCategories = async function() {
+  const categories = [];
+  document.querySelectorAll('[data-cat]').forEach(cb => {
+    if (cb.checked) categories.push(cb.dataset.cat);
+  });
+
+  localStorage.setItem('dvsl-notif-categories', JSON.stringify(categories));
+
+  // Update in Firestore
+  const token = localStorage.getItem('dvsl-notif-token');
+  if (token) {
+    try {
+      const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        await updateDoc(doc(db, 'notification_tokens', d.id), { categories });
+      }
+    } catch(err) {
+      console.error('Failed to update categories:', err);
+    }
+  }
+};
+
+init();
+</script>
+
+</body>
+</html>
