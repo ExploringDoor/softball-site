@@ -18,6 +18,38 @@
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;overflow-x:hidden;line-height:1.6}
 
+/* ── DARK MODE ── */
+body.dark{
+  --bg:#0d0d11;--bg2:#141418;--card:#1a1a1f;--card2:#22222a;--card3:#2a2a33;
+  --border:rgba(255,255,255,.08);--border2:rgba(255,255,255,.12);
+  --gold:#5b9aff;--gold2:#4a85e6;--gold-glow:rgba(91,154,255,.15);
+  --gold-dim:rgba(91,154,255,.1);--white:#ededed;--muted:rgba(237,237,237,.5);
+  --muted2:rgba(237,237,237,.35);--red:#f87171;--green:#4ade80;--blue:#5b9aff;
+}
+body.dark .nav{background:rgba(13,13,17,.95)!important;border-bottom-color:rgba(255,255,255,.08)!important}
+body.dark .nav-links li a,body.dark .nav-links li span{color:rgba(237,237,237,.55)!important}
+body.dark .nav-links li a:hover,body.dark .nav-links li span:hover{color:#ededed!important}
+body.dark .nav-links li a.active,body.dark .nav-links li .active{color:#5b9aff!important}
+body.dark .nav-brand{color:#5b9aff!important}
+body.dark .nav-signup-btn{background:#5b9aff!important}
+body.dark #darkToggle{border-color:rgba(255,255,255,.15)!important}
+body.dark #score-ticker{background:#1a1a2e!important}
+body.dark .preview-card{background:#1a1a1f!important;border-color:rgba(255,255,255,.08)!important}
+body.dark .preview-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.4)!important}
+body.dark .score-row:hover{background:rgba(255,255,255,.03)!important}
+body.dark .score-btn{background:#1a1a1f!important;color:#5b9aff!important;border-color:rgba(255,255,255,.1)!important}
+body.dark .score-btn:hover{background:#5b9aff!important;color:#fff!important}
+body.dark .teams-list-item{border-color:rgba(255,255,255,.06)!important}
+body.dark .teams-list-name:hover{color:#5b9aff!important}
+body.dark .teams-list-links a,body.dark .teams-list-links span:not(.sep){color:#5b9aff!important}
+body.dark .mob-menu{background:#0d0d11!important}
+body.dark .tab-btn{color:rgba(237,237,237,.5)!important}
+body.dark .tab-btn.active{color:#5b9aff!important;border-bottom-color:#5b9aff!important}
+body.dark .dn-slot .wk-label{color:rgba(237,237,237,.4)!important}
+body.dark .dn-slot .wk-date{color:#ededed!important}
+body.dark .dn-slot.active .wk-label,body.dark .dn-slot.active .wk-date{color:#5b9aff!important}
+body.dark .hamburger span{background:#ededed!important}
+
 /* ── NAV ── */
 .nav{position:fixed;top:48px;left:0;right:0;z-index:400;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(255,255,255,0.97);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border)}
 .nav-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);cursor:pointer;user-select:none;display:flex;align-items:center;gap:10px}
@@ -1685,6 +1717,7 @@ thead th.sorted-col .sarrow{opacity:1}
   </ul>
   <div class="nav-right"><span class="live-badge" id="liveBadge" onclick="goPage('scores');setTimeout(()=>setView('scores'),80)"><span class="live-dot"></span>Live</span>
     <button class="nav-signup-btn" onclick="document.getElementById('signup-anchor').scrollIntoView({behavior:'smooth'});goPage('home')">🔔 Alerts</button>
+    <button id="darkToggle" onclick="toggleDarkMode()" style="background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;transition:all .2s" title="Toggle dark mode">🌙</button>
     <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
   </div>
 </nav>
@@ -3455,6 +3488,22 @@ function buildHistory(){
 }
 
 // ════════════════════════════ SIGNUP ═════════════════════════════════════
+// ═══ DARK MODE ═══
+function toggleDarkMode(){
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('dvsl-dark', isDark ? '1' : '0');
+  document.getElementById('darkToggle').textContent = isDark ? '☀️' : '🌙';
+}
+// Restore preference on load
+(function(){
+  if(localStorage.getItem('dvsl-dark') === '1'){
+    document.body.classList.add('dark');
+    const btn = document.getElementById('darkToggle');
+    if(btn) btn.textContent = '☀️';
+  }
+})();
+
 function doSignup(){
   const e=document.getElementById('su-email').value;
   if(!e||!e.includes('@')){alert('Please enter a valid email.');return;}
