@@ -848,40 +848,48 @@ function renderBoxScore(awayName, homeName, g) {
       <div class="bs-panel" data-side="${side}">
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;padding:12px 0;border-bottom:2px solid #002D72">${teamName} <span style="font-weight:400;font-size:14px;color:rgba(0,0,0,.4)">(${totals.r} runs)</span></div>
         <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;min-width:520px">
+          <table style="width:100%;border-collapse:collapse;min-width:620px;table-layout:fixed">
+            <colgroup>
+              <col style="width:28px"><col style="width:24px"><col><col style="width:54px">
+              <col style="width:44px"><col style="width:44px"><col style="width:44px"><col style="width:44px"><col style="width:44px"><col style="width:44px"><col style="width:32px">
+            </colgroup>
             <thead><tr style="border-bottom:2px solid rgba(0,0,0,.1)">
-              <th style="width:24px"></th>
+              <th style="font-size:10px;color:rgba(0,0,0,.3);text-align:center">#</th>
+              <th></th>
               <th style="text-align:left;padding:8px 6px;font-size:11px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4)">Player</th>
-              <th style="width:54px;text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4)">Pos</th>
-              <th style="width:46px;text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">AB</th>
-              <th style="width:46px;text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">R</th>
-              <th style="width:46px;text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">H</th>
-              <th style="width:46px;text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">RBI</th>
-              <th style="width:46px;text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">BB</th>
-              <th style="width:46px;text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">SO</th>
-              <th style="width:32px;text-align:center;font-size:9px;color:rgba(0,0,0,.3)">DNP</th>
+              <th style="text-align:center;font-size:11px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4)">Pos</th>
+              <th style="text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">AB</th>
+              <th style="text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">R</th>
+              <th style="text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">H</th>
+              <th style="text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">RBI</th>
+              <th style="text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">BB</th>
+              <th style="text-align:center;font-size:11px;font-weight:700;color:rgba(0,0,0,.4)">SO</th>
+              <th style="text-align:center;font-size:9px;color:rgba(0,0,0,.3)">DNP</th>
             </tr></thead>
             <tbody id="bs-tbody-${side}">
-              ${lineup.map((p, i) => `
+              ${lineup.map((p, i) => {
+                const orderNum = p.dnp ? '' : (lineup.filter((x,j) => j < i && !x.dnp).length + 1);
+                return `
                 <tr class="bs-player-row${p.dnp?' dnp':''}" draggable="true" data-side="${side}" data-idx="${i}"
                     ondragstart="bsDragStart(event)" ondragover="bsDragOver(event)" ondragleave="bsDragLeave(event)" ondrop="bsDrop(event)" ondragend="bsDragEnd(event)"
                     style="border-bottom:1px solid rgba(0,0,0,.06);${p.dnp?'opacity:.35;':''}">
+                  <td style="text-align:center;font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;color:rgba(0,0,0,.25)">${orderNum}</td>
                   <td style="cursor:grab;text-align:center;color:rgba(0,0,0,.2);font-size:14px;user-select:none">≡</td>
-                  <td style="padding:6px;font-weight:600;font-size:13px">${p.name}${p.num?' <span style="color:rgba(0,0,0,.3);font-size:10px">#'+p.num+'</span>':''}${p.guest?' <span style="color:#002D72;font-size:9px;font-weight:700">GUEST</span>':''}</td>
-                  <td><select style="width:50px;padding:3px;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:11px;background:#fff" onchange="bsUpdatePos('${side}',${i},this.value)">
+                  <td style="padding:6px;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}${p.num?' <span style="color:rgba(0,0,0,.3);font-size:10px">#'+p.num+'</span>':''}${p.guest?' <span style="color:#002D72;font-size:9px;font-weight:700">GUEST</span>':''}</td>
+                  <td><select style="width:100%;padding:3px;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:11px;background:#fff" onchange="bsUpdatePos('${side}',${i},this.value)">
                     ${positions.map(pos => `<option value="${pos}"${p.pos===pos?' selected':''}>${pos||'—'}</option>`).join('')}
                   </select></td>
-                  <td><input type="number" style="width:42px;padding:4px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.ab}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'ab',this.value)"></td>
-                  <td><input type="number" style="width:42px;padding:4px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.r}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'r',this.value)"></td>
-                  <td><input type="number" style="width:42px;padding:4px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.h}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'h',this.value)"></td>
-                  <td><input type="number" style="width:42px;padding:4px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.rbi}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'rbi',this.value)"></td>
-                  <td><input type="number" style="width:42px;padding:4px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.bb}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'bb',this.value)"></td>
-                  <td><input type="number" style="width:42px;padding:4px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.so}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'so',this.value)"></td>
+                  <td><input type="number" style="width:100%;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.ab}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'ab',this.value)"></td>
+                  <td><input type="number" style="width:100%;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.r}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'r',this.value)"></td>
+                  <td><input type="number" style="width:100%;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.h}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'h',this.value)"></td>
+                  <td><input type="number" style="width:100%;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.rbi}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'rbi',this.value)"></td>
+                  <td><input type="number" style="width:100%;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.bb}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'bb',this.value)"></td>
+                  <td><input type="number" style="width:100%;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.so}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'so',this.value)"></td>
                   <td style="text-align:center"><input type="checkbox" ${p.dnp?'checked':''} onchange="bsToggleDnp('${side}',${i},this.checked)" title="Did not play"></td>
-                </tr>`).join('')}
+                </tr>`;}).join('')}
             </tbody>
             <tfoot><tr style="border-top:2px solid rgba(0,0,0,.15);font-weight:700">
-              <td></td><td style="padding:8px 6px;font-size:12px;font-weight:800">TOTALS</td><td></td>
+              <td></td><td></td><td style="padding:8px 6px;font-size:12px;font-weight:800">TOTALS</td><td></td>
               <td style="text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.ab}</td>
               <td style="text-align:center;font-family:'Oswald',sans-serif;font-size:15px;color:#002D72;font-weight:700">${totals.r}</td>
               <td style="text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.h}</td>
