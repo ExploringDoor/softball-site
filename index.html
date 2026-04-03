@@ -2754,8 +2754,16 @@ function buildLeadersPage(statKey, dir){
     `<button class="sf-btn ${s.key===statKey?'active':''}" onclick="buildLeadersPage('${s.key}','desc')">${s.desc}</button>`
   ).join('');
 
+  // Filter out players with no at-bats (season hasn't started)
+  const active = PLAYERS.filter(p => p.ab > 0);
+  if(active.length === 0){
+    document.getElementById('lp-thead').innerHTML = '';
+    document.getElementById('lp-tbody').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:60px 20px;font-size:16px;color:var(--muted)">No stats yet — the season hasn't started.</td></tr>`;
+    return;
+  }
+
   // Sort players
-  const sorted = [...PLAYERS].sort((a,b) => dir==='desc' ? b[statKey]-a[statKey] : a[statKey]-b[statKey]);
+  const sorted = active.sort((a,b) => dir==='desc' ? b[statKey]-a[statKey] : a[statKey]-b[statKey]);
   const maxVal = sorted[0][statKey];
 
   // Table header
