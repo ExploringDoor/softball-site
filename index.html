@@ -4127,8 +4127,12 @@ function setView(v){
     if(v==='scores' && a.href && a.href.includes('schedule.html') && !a.href.includes('tab=')) a.classList.add('active');
     if(v==='schedule' && a.href && a.href.includes('tab=schedule')) a.classList.add('active');
   });
-  buildScoresNav();
-  renderScores();
+  if(SCHEDULE_PREVIEW&&SCHEDULE_PREVIEW.length){
+    buildScoresNav();
+    renderScores();
+  } else if(window._dataPromise){
+    window._dataPromise.then(()=>{ buildScoresNav(); renderScores(); });
+  }
 }
 
 const DAY_FULL={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday'};
@@ -4293,7 +4297,11 @@ function renderScores(){
   const wrap=document.getElementById('sbWrap');
   if(!SCHEDULE_PREVIEW||!SCHEDULE_PREVIEW.length){
     wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⏳</div><div style="font-size:18px;font-weight:700">Loading...</div></div>';
-    if(window._dataPromise) window._dataPromise.then(()=>{ if(SCHEDULE_PREVIEW&&SCHEDULE_PREVIEW.length) renderScores(); });
+    if(!window._scoreRetry) { window._scoreRetry=0; }
+    if(window._scoreRetry < 20){
+      window._scoreRetry++;
+      setTimeout(()=>{ if(SCHEDULE_PREVIEW&&SCHEDULE_PREVIEW.length){ window._scoreRetry=0; renderScores(); } }, 500);
+    }
     return;
   }
 
