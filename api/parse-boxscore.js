@@ -1,5 +1,5 @@
 // Vercel Serverless Function — /api/parse-boxscore.js
-// Receives box score text + game info, sends to Claude API, writes to Firebase
+// Receives box score text or image + game info, sends to Claude API
 
 export default async function handler(req, res) {
   // CORS headers
@@ -9,15 +9,46 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { text, gameId, awayTeam, homeTeam, date, week, field } = req.body;
+  const { text, imageBase64, imageType, gameId, awayTeam, homeTeam, date, week, field } = req.body;
 
-  if (!text) return res.status(400).json({ error: 'No box score text provided' });
+  if (!text && !imageBase64) return res.status(400).json({ error: 'No box score content provided' });
 
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  const FIREBASE_URL = 'https://firestore.googleapis.com/v1/projects/dvsl-292dd/databases/(default)/documents';
+
+  const prompt = `You are parsing a softball box score. Extract ALL data and return ONLY valid JSON, no other text.
+
+Game info:
+- Away Team: ${awayTeam}
+- Home Team: ${homeTeam}
+- Date: ${date}
+- Week: ${week}
+- Field: ${field}
+
+Return this exact JSON structure:
+{
+  "awayScore": <number>,
+  "homeScore": <number>,
+  "awayBatters": [{"name":"","num":"","pos":"","ab":0,"r":0,"h":0,"rbi":0,"bb":0,"so":0,"hr":0,"doubles":0,"triples":0}],
+  "homeBatters": [<same>],
+  "awayPitchers": [{"name":"","num":"","ip":"","h":0,"r":0,"er":0,"bb":0,"so":0,"decision":""}],
+  "homePitchers": [<same>],
+  "linescore": {
+    "away": [<inning 1 runs>, ..., <inning 7 runs>],
+    "home": [<inning 1 runs>, ..., <inning 7 runs>],
+    "awayErrors": 0, "homeErrors": 0
+  }
+}
+Rules: names may be truncated — do your best. Missing stats = 0. Return ONLY the JSON.`;
+
+  // Build message content — vision for images, text for PDFs
+  const messageContent = imageBase64
+    ? [
+        { type: 'image', source: { type: 'base64', media_type: imageType || 'image/jpeg', data: imageBase64 } },
+        { type: 'text', text: prompt }
+      ]
+    : `${prompt}\n\nBox score text:\n${text}`;
 
   try {
-    // ── STEP 1: Send to Claude API ────────────────────────
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -26,75 +57,9 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5-20251001',
         max_tokens: 4000,
-        messages: [{
-          role: 'user',
-          content: `You are parsing a softball box score. Extract ALL data and return ONLY valid JSON, no other text.
-
-Game info:
-- Away Team: ${awayTeam}
-- Home Team: ${homeTeam}
-- Date: ${date}
-- Week: ${week}
-- Field: ${field}
-- Firebase Game ID: ${gameId}
-
-Box score text:
-${text}
-
-Return this exact JSON structure:
-{
-  "awayScore": <number>,
-  "homeScore": <number>,
-  "awayBatters": [
-    {
-      "name": "<full name as best you can determine>",
-      "num": "<jersey number>",
-      "pos": "<position>",
-      "ab": <number>,
-      "r": <number>,
-      "h": <number>,
-      "rbi": <number>,
-      "bb": <number>,
-      "so": <number>,
-      "hr": <number>,
-      "doubles": <number>,
-      "triples": <number>,
-      "errors": <number>
-    }
-  ],
-  "homeBatters": [<same structure>],
-  "awayPitchers": [
-    {
-      "name": "<name>",
-      "num": "<number>",
-      "ip": "<innings pitched>",
-      "h": <number>,
-      "r": <number>,
-      "er": <number>,
-      "bb": <number>,
-      "so": <number>,
-      "hr": <number>
-    }
-  ],
-  "homePitchers": [<same structure>],
-  "linescore": {
-    "away": [<inning 1>, <inning 2>, ..., <inning 7>],
-    "home": [<inning 1>, <inning 2>, ..., <inning 7>],
-    "awayHits": <number>,
-    "homeHits": <number>,
-    "awayErrors": <number>,
-    "homeErrors": <number>
-  },
-  "notes": "<any notable info like HR, 3B, win/loss pitcher>"
-}
-
-Important:
-- Names may be truncated in the PDF (e.g. "M Amers" = "M Amerstein", "B Schwar" = "B Schwartz") — do your best
-- If a stat is missing, use 0
-- Return ONLY the JSON object, nothing else`
-        }]
+        messages: [{ role: 'user', content: messageContent }]
       })
     });
 
@@ -102,22 +67,10 @@ Important:
     if (!claudeRes.ok) throw new Error(`Claude API error: ${claudeData.error?.message}`);
 
     const rawText = claudeData.content[0].text.trim();
-    // Strip any markdown code fences if present
     const jsonText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const parsed = JSON.parse(jsonText);
 
-    // Return the parsed data to the admin site
-    // The admin site will show it for confirmation, then call /api/update-firebase
-    return res.status(200).json({
-      success: true,
-      parsed,
-      gameId,
-      awayTeam,
-      homeTeam,
-      date,
-      week,
-      field
-    });
+    return res.status(200).json({ success: true, parsed, gameId, awayTeam, homeTeam, date, week, field });
 
   } catch (err) {
     console.error('parse-boxscore error:', err);

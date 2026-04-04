@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DVSL Admin Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -930,10 +931,12 @@ function renderScores() {
                <span class="badge badge-done">Final</span>
                <button class="btn btn-outline btn-sm" onclick="editScore('${g.id}')">Edit Score</button>
                <button class="btn btn-outline btn-sm" onclick="openBoxScore('${g.id}')">Box Score</button>
+               <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="openPdfUpload('${g.id}')">📄 Upload Sheet</button>
                <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${g.id}')">↺ Reset</button>`
             : `<span class="badge badge-pending">Pending</span>
                <button class="btn btn-primary btn-sm" onclick="editScore('${g.id}')">Quick Score</button>
-               <button class="btn btn-outline btn-sm" onclick="openBoxScore('${g.id}')">Box Score</button>`
+               <button class="btn btn-outline btn-sm" onclick="openBoxScore('${g.id}')">Box Score</button>
+               <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="openPdfUpload('${g.id}')">📄 Upload Sheet</button>`
           }
           <div id="score-form-${g.id}" style="display:none;width:100%;margin-top:10px"></div>
         </div>`;
@@ -1014,7 +1017,201 @@ let bsAwayOrderMode = false, bsHomeOrderMode = false;
 let bsAwayOrderMap = {}, bsHomeOrderMap = {};
 let bsAwayOrdered = false, bsHomeOrdered = false;
 
-window.openBoxScore = async function(gameId) {
+// ── PDF UPLOAD FLOW ──────────────────────────────────────────────
+window.openPdfUpload = async function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  bsGameId = gameId;
+  bsGameData = g;
+  const awayTeam = TEAMS.find(t => t.id === g.away || t.short === g.away);
+  const homeTeam = TEAMS.find(t => t.id === g.home || t.short === g.home);
+  const awayName = awayTeam?.name || g.away;
+  const homeName = homeTeam?.name || g.home;
+
+  const view = document.getElementById('box-score-view');
+  document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+  view.style.display = 'block';
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  view.innerHTML = `
+    <div style="padding:20px 0">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+        <a href="#" onclick="closePdfUpload();return false" style="font-size:13px;color:var(--muted);text-decoration:none">← Back to Scores</a>
+      </div>
+      <!-- Game header -->
+      <div style="background:#001a3e;border-radius:12px;padding:16px 24px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#fff;text-transform:uppercase;letter-spacing:.05em">${awayName} vs ${homeName}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">${g.date||''} &bull; ${g.field||''}</div>
+        </div>
+        <div style="font-size:28px">📄</div>
+      </div>
+
+      <!-- Upload zone -->
+      <div id="pdf-upload-zone" style="border:2px dashed #7c3aed;border-radius:14px;padding:48px 24px;text-align:center;background:rgba(124,58,237,.04);cursor:pointer;transition:all .2s;position:relative" ondragover="event.preventDefault();this.style.background='rgba(124,58,237,.1)'" ondragleave="this.style.background='rgba(124,58,237,.04)'" ondrop="event.preventDefault();this.style.background='rgba(124,58,237,.04)';handleCaptainUpload(event.dataTransfer.files[0])">
+        <input type="file" accept=".pdf,image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="handleCaptainUpload(this.files[0])">
+        <div style="font-size:48px;margin-bottom:12px">📋</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;color:#001a3e;margin-bottom:6px">Drop Game Sheet Here</div>
+        <div style="font-size:13px;color:var(--muted)">PDF or photo (JPG/PNG) — tap to browse on mobile</div>
+      </div>
+
+      <!-- Processing state (hidden) -->
+      <div id="pdf-processing" style="display:none;text-align:center;padding:48px 24px">
+        <div style="font-size:48px;margin-bottom:16px">⚙️</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;color:#001a3e;margin-bottom:8px" id="pdf-proc-title">Reading file...</div>
+        <div style="font-size:13px;color:var(--muted)" id="pdf-proc-msg">Extracting text from PDF</div>
+        <div style="width:60px;height:4px;background:#e5e7eb;border-radius:2px;margin:16px auto 0">
+          <div id="pdf-proc-bar" style="height:100%;background:#7c3aed;border-radius:2px;width:10%;transition:width .4s"></div>
+        </div>
+      </div>
+
+      <!-- Error state (hidden) -->
+      <div id="pdf-error" style="display:none;margin-top:16px;padding:16px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;font-size:13px;color:#dc2626"></div>
+    </div>
+  `;
+};
+
+window.closePdfUpload = function() {
+  document.getElementById('box-score-view').style.display = 'none';
+  document.getElementById('sec-scores').style.display = '';
+};
+
+window.handleCaptainUpload = async function(file) {
+  if (!file) return;
+  const zone = document.getElementById('pdf-upload-zone');
+  const proc = document.getElementById('pdf-processing');
+  const errEl = document.getElementById('pdf-error');
+  const procTitle = document.getElementById('pdf-proc-title');
+  const procMsg = document.getElementById('pdf-proc-msg');
+  const procBar = document.getElementById('pdf-proc-bar');
+
+  zone.style.display = 'none';
+  proc.style.display = 'block';
+  errEl.style.display = 'none';
+
+  const g = bsGameData;
+  const awayTeam = TEAMS.find(t => t.id === g.away || t.short === g.away);
+  const homeTeam = TEAMS.find(t => t.id === g.home || t.short === g.home);
+
+  try {
+    let payload = {
+      gameId: g.id, week: g.wk || g.week || '',
+      awayTeam: awayTeam?.name || g.away,
+      homeTeam: homeTeam?.name || g.home,
+      awayTeamId: awayTeam?.id || g.away,
+      homeTeamId: homeTeam?.id || g.home,
+      date: g.date || '', field: g.field || ''
+    };
+
+    if (file.type === 'application/pdf') {
+      // ── PDF path: extract text with PDF.js ──
+      procTitle.textContent = 'Reading PDF...';
+      procMsg.textContent = 'Extracting text from document';
+      procBar.style.width = '20%';
+
+      const pdfjsLib = window['pdfjs-dist/build/pdf'];
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const arrayBuf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(item => item.str).join(' ') + '\n';
+      }
+      procBar.style.width = '50%';
+      procTitle.textContent = 'Parsing with AI...';
+      procMsg.textContent = 'Claude is reading the box score';
+      payload.text = text;
+    } else {
+      // ── Image path: send base64 to Claude Vision ──
+      procTitle.textContent = 'Reading photo...';
+      procMsg.textContent = 'Preparing image for AI';
+      procBar.style.width = '20%';
+      const b64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      procBar.style.width = '50%';
+      procTitle.textContent = 'Parsing with AI...';
+      procMsg.textContent = 'Claude Vision is reading the game sheet';
+      payload.imageBase64 = b64;
+      payload.imageType = file.type;
+    }
+
+    // ── Call API ──
+    const resp = await fetch('/api/parse-boxscore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    procBar.style.width = '85%';
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${resp.status}`);
+    }
+    const { parsed } = await resp.json();
+    procBar.style.width = '100%';
+    procTitle.textContent = 'Done! Loading box score...';
+    procMsg.textContent = `Found ${(parsed.awayBatters||[]).length + (parsed.homeBatters||[]).length} players`;
+
+    await new Promise(r => setTimeout(r, 600));
+
+    // ── Pre-fill box score state ──
+    applyParsedToBoxScore(parsed);
+
+    // ── Open normal box score editor with pre-filled data ──
+    await openBoxScore(g.id, true /* skipClear */);
+
+  } catch(e) {
+    proc.style.display = 'none';
+    zone.style.display = 'block';
+    errEl.style.display = 'block';
+    errEl.textContent = '⚠️ ' + e.message + ' — fix the issue and try again, or enter stats manually using Box Score.';
+  }
+};
+
+function applyParsedToBoxScore(parsed) {
+  const toLineup = (batters) => (batters || []).map(p => {
+    const hr = parseInt(p.hr) || 0;
+    const d = parseInt(p.doubles) || 0;
+    const t = parseInt(p.triples) || 0;
+    const h = parseInt(p.h) || 0;
+    const s = Math.max(0, h - hr - d - t);
+    return {
+      name: p.name || '', num: p.num || '', pos: p.pos || '',
+      ab: parseInt(p.ab) || 0, r: parseInt(p.r) || 0,
+      s, d, t, hr, rbi: parseInt(p.rbi) || 0,
+      bb: parseInt(p.bb) || 0, so: parseInt(p.so) || 0,
+      dnp: false, guest: false
+    };
+  });
+  const toPitchers = (pitchers) => (pitchers || []).map(p => ({
+    name: p.name || '', num: p.num || '', ip: p.ip || '',
+    h: parseInt(p.h) || 0, r: parseInt(p.r) || 0,
+    er: parseInt(p.er) || 0, bb: parseInt(p.bb) || 0,
+    so: parseInt(p.so) || 0, decision: p.decision || ''
+  }));
+
+  const ls = parsed.linescore || {};
+  bsAwayLineup = toLineup(parsed.awayBatters);
+  bsHomeLineup = toLineup(parsed.homeBatters);
+  bsAwayPitchers = toPitchers(parsed.awayPitchers).length ? toPitchers(parsed.awayPitchers) : [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
+  bsHomePitchers = toPitchers(parsed.homePitchers).length ? toPitchers(parsed.homePitchers) : [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
+  bsInnings = {
+    away: (ls.away || [0,0,0,0,0,0,0]).slice(0,7).map(v => parseInt(v)||0),
+    home: (ls.home || [0,0,0,0,0,0,0]).slice(0,7).map(v => parseInt(v)||0)
+  };
+  bsAwayErrors = parseInt(ls.awayErrors) || 0;
+  bsHomeErrors = parseInt(ls.homeErrors) || 0;
+  bsAwayOrderMode = false; bsHomeOrderMode = false;
+  bsScoreOnlyMode = false;
+}
+
+window.openBoxScore = async function(gameId, skipClear) {
   const g = GAMES.find(x => x.id === gameId);
   if (!g) return;
   bsGameId = gameId;
@@ -1027,47 +1224,47 @@ window.openBoxScore = async function(gameId) {
   const awayName = awayTeam?.name || g.away;
   const homeName = homeTeam?.name || g.home;
 
-  // Check if box score already exists
-  let existing = null;
-  try {
-    const q2 = query(collection(db, 'box_scores'), where('game_id', '==', gameId));
-    const snap = await getDocs(q2);
-    if (!snap.empty) existing = { id: snap.docs[0].id, ...snap.docs[0].data() };
-  } catch(e) {}
+  if (!skipClear) {
+    // Check if box score already exists
+    let existing = null;
+    try {
+      const q2 = query(collection(db, 'box_scores'), where('game_id', '==', gameId));
+      const snap = await getDocs(q2);
+      if (!snap.empty) existing = { id: snap.docs[0].id, ...snap.docs[0].data() };
+    } catch(e) {}
 
-  // Load rosters
-  const awayPlayers = PLAYERS.filter(p => p.team === awayId);
-  const homePlayers = PLAYERS.filter(p => p.team === homeId);
+    // Load rosters
+    const awayPlayers = PLAYERS.filter(p => p.team === awayId);
+    const homePlayers = PLAYERS.filter(p => p.team === homeId);
 
-  // migrate: old records have 'h'; new records have s,d,t,hr
-  const migrateP = p => ({
-    name: p.name, num: p.num||'', pos: p.pos||'',
-    ab: p.ab||0, r: p.r||0,
-    s: p.s !== undefined ? p.s : (p.h && p.hr === undefined ? p.h : 0),
-    d: p.d||0, t: p.t||0, hr: p.hr||0,
-    rbi: p.rbi||0, bb: p.bb||0, so: p.so||0,
-    dnp: p.dnp||false, guest: p.guest||false
-  });
-  bsAwayLineup = (existing?.away_lineup || awayPlayers.map(p => ({
-    name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
-  }))).map(migrateP);
-  bsHomeLineup = (existing?.home_lineup || homePlayers.map(p => ({
-    name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
-  }))).map(migrateP);
-  bsAwayOrdered = !!existing; bsHomeOrdered = !!existing; // pre-ordered if loading existing
-  const isMobile = window.innerWidth < 768;
-  bsAwayOrderMode = !bsAwayOrdered; // on fresh entry always start in order mode
-  bsHomeOrderMode = !bsHomeOrdered;
-  bsAwayOrderMap = {}; bsHomeOrderMap = {};
-  bsScoreOnlyMode = false;
-  bsAwayScoreOverride = null; bsHomeScoreOverride = null;
-  const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''});
-  // Support old single pitcher format and new array format
-  bsAwayPitchers = existing?.away_pitchers || (existing?.away_pitcher ? [existing.away_pitcher] : [defP()]);
-  bsHomePitchers = existing?.home_pitchers || (existing?.home_pitcher ? [existing.home_pitcher] : [defP()]);
-  bsInnings = existing?.innings ? {away:[...existing.innings.away], home:[...existing.innings.home]} : {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
-  bsAwayErrors = existing?.away_errors || 0;
-  bsHomeErrors = existing?.home_errors || 0;
+    // migrate: old records have 'h'; new records have s,d,t,hr
+    const migrateP = p => ({
+      name: p.name, num: p.num||'', pos: p.pos||'',
+      ab: p.ab||0, r: p.r||0,
+      s: p.s !== undefined ? p.s : (p.h && p.hr === undefined ? p.h : 0),
+      d: p.d||0, t: p.t||0, hr: p.hr||0,
+      rbi: p.rbi||0, bb: p.bb||0, so: p.so||0,
+      dnp: p.dnp||false, guest: p.guest||false
+    });
+    bsAwayLineup = (existing?.away_lineup || awayPlayers.map(p => ({
+      name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
+    }))).map(migrateP);
+    bsHomeLineup = (existing?.home_lineup || homePlayers.map(p => ({
+      name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
+    }))).map(migrateP);
+    bsAwayOrdered = !!existing; bsHomeOrdered = !!existing;
+    bsAwayOrderMode = !bsAwayOrdered;
+    bsHomeOrderMode = !bsHomeOrdered;
+    bsAwayOrderMap = {}; bsHomeOrderMap = {};
+    bsScoreOnlyMode = false;
+    bsAwayScoreOverride = null; bsHomeScoreOverride = null;
+    const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''});
+    bsAwayPitchers = existing?.away_pitchers || (existing?.away_pitcher ? [existing.away_pitcher] : [defP()]);
+    bsHomePitchers = existing?.home_pitchers || (existing?.home_pitcher ? [existing.home_pitcher] : [defP()]);
+    bsInnings = existing?.innings ? {away:[...existing.innings.away], home:[...existing.innings.home]} : {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
+    bsAwayErrors = existing?.away_errors || 0;
+    bsHomeErrors = existing?.home_errors || 0;
+  }
 
   document.getElementById('sec-scores').querySelector('.main-header').style.display = 'none';
   document.getElementById('scores-content').style.display = 'none';
