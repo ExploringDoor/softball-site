@@ -1132,14 +1132,14 @@ function renderBoxScore(awayName, homeName, g) {
               <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
                 <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
                 ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
-                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${awayInningR}${awayMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+awayR+'</div>':''}</td>
+                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-away-r">${awayR}${awayMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+awayInningR+'\">inns: '+awayInningR+'</div>':''}</td>
                 <td style="${totalStyle}" id="bs-linescore-away-h">${awayH}</td>
                 <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
               </tr>
               <tr>
                 <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
                 ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
-                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${homeInningR}${homeMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+homeR+'</div>':''}</td>
+                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-home-r">${homeR}${homeMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+homeInningR+'\">inns: '+homeInningR+'</div>':''}</td>
                 <td style="${totalStyle}" id="bs-linescore-home-h">${homeH}</td>
                 <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
               </tr>
@@ -1219,9 +1219,11 @@ window.bsUpdateStat = function(side, idx, stat, val) {
   const ah = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),0);
   const hh = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),0);
   const at=document.getElementById('bs-away-total'), ht2=document.getElementById('bs-home-total');
-  const aH=document.getElementById('bs-linescore-away-h'), hH=document.getElementById('bs-linescore-home-h');
+  const aRcell=document.getElementById('bs-linescore-away-r'), hRcell=document.getElementById('bs-linescore-home-r');
+  const aHcell=document.getElementById('bs-linescore-away-h'), hHcell=document.getElementById('bs-linescore-home-h');
   if(at) at.textContent=ar; if(ht2) ht2.textContent=hr;
-  if(aH) aH.textContent=ah; if(hH) hH.textContent=hh;
+  if(aRcell) aRcell.textContent=ar; if(hRcell) hRcell.textContent=hr;
+  if(aHcell) aHcell.textContent=ah; if(hHcell) hHcell.textContent=hh;
 };
 window.bsUpdatePos = function(side, idx, val) { (side==='away'?bsAwayLineup:bsHomeLineup)[idx].pos = val; };
 window.bsUpdateInning = function(side, idx, val) {
