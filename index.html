@@ -2661,7 +2661,7 @@ function loadFallbackData() {
 // ════════════════════════════ HELPERS ════════════════════════════════════
 function getTeam(id){return TEAMS.find(t=>t.id===id)}
 function getTeamByShort(s){return TEAMS.find(t=>t.short===s)}
-function initials(name){return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}
+function initials(name){return (name||'?').split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase()||'?'}
 function avg(v){return (v||0).toFixed(3).replace(/^0\./,'.')}
 function slg(v){return (v||0).toFixed(3).replace(/^0\./,'.')}
 
@@ -3373,10 +3373,10 @@ function renderTeamTab(tab){
     </div></div>
     <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:18px;color:${t.color}">Roster</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(195px,1fr));gap:14px">
-    ${players.map(p=>`<div class="pcard" onclick="openModal('${p.id}')">
+    ${players.filter(p=>p.name).map(p=>`<div class="pcard" onclick="openModal('${p.id}')">
       <div class="pcard-avatar" style="background:${t.color}18;border-color:${t.color}44;color:${t.color}"><span>${initials(p.name)}</span></div>
-      <div class="pcard-num">#${p.num}</div>
-      <div class="pcard-name"><span style="font-size:12px;font-weight:500;color:var(--muted2);display:block;line-height:1;margin-bottom:2px">${p.name.split(' ')[0]}</span><span style="display:block;line-height:1">${p.name.split(' ').pop()}</span></div>
+      <div class="pcard-num">#${p.num||'??'}</div>
+      <div class="pcard-name"><span style="font-size:12px;font-weight:500;color:var(--muted2);display:block;line-height:1;margin-bottom:2px">${(p.name||'').split(' ')[0]}</span><span style="display:block;line-height:1">${(p.name||'').split(' ').pop()}</span></div>
       <div class="pcard-pos">${p.pos}</div>
       <div class="pcard-stats">
         <div><div class="pcs-val">${avg(p.avg)}</div><div class="pcs-lbl">AVG</div></div>
