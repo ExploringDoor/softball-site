@@ -161,6 +161,8 @@ select.form-input{cursor:pointer}
 .loading{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;padding:20px}
 .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+@keyframes alertGlow{0%,100%{box-shadow:0 0 8px #FFD700,0 0 16px rgba(255,215,0,.4)}50%{box-shadow:0 0 20px #FFD700,0 0 40px rgba(255,215,0,.6)}}
+@keyframes alertBlink{0%,100%{opacity:1}50%{opacity:0.2}}
 
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px}
@@ -380,36 +382,124 @@ select.form-input{cursor:pointer}
     <div class="section" id="sec-banner">
       <div class="main-header">
         <div class="main-title">Banner / Alerts</div>
-        <div class="main-subtitle">Manage the site-wide banner notification</div>
+        <div class="main-subtitle">Create rich alerts with formatting, scheduling, and mandatory popup</div>
       </div>
-      <div class="panel">
-        <div class="form-row">
-          <div style="display:flex;align-items:center;gap:12px">
-            <label class="form-label" style="margin:0">Banner Active</label>
-            <label class="toggle">
-              <input type="checkbox" id="banner-active">
-              <span class="slider"></span>
-            </label>
-          </div>
+
+      <!-- Status bar -->
+      <div id="alert-status-bar" style="margin-bottom:16px;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px;background:#f4f6f9;color:var(--muted)">
+        <span id="alert-status-dot" style="width:10px;height:10px;border-radius:50%;background:#aaa;display:inline-block"></span>
+        <span id="alert-status-text">Loading...</span>
+      </div>
+
+      <!-- Editor panel -->
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-title" style="margin-bottom:12px">Message Editor</div>
+
+        <!-- Emoji bar -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+          <span style="font-size:11px;font-weight:700;color:var(--muted);align-self:center;margin-right:4px">Emoji:</span>
+          ${['⚾','📢','⚠️','❌','✅','🌧️','☀️','🏆','📅','⏰','🚨','🎉','🔔','💬'].map(e =>
+            `<button onclick="alertInsertEmoji('${e}')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">${e}</button>`
+          ).join('')}
         </div>
-        <div class="form-row" style="margin-top:16px">
-          <div class="form-col">
-            <label class="form-label">Banner Text</label>
-            <input type="text" id="banner-text" class="form-input" placeholder="Enter banner message..." oninput="updateBannerPreview()">
-          </div>
-          <div class="form-col" style="max-width:200px">
-            <label class="form-label">Type</label>
-            <select class="form-input" id="banner-type" onchange="updateBannerPreview()">
-              <option value="info">Info (Blue)</option>
-              <option value="warning">Warning (Yellow)</option>
-              <option value="cancel">Cancellation (Red)</option>
+
+        <!-- Formatting toolbar -->
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;padding:8px;background:#f8f9fa;border-radius:8px;border:1px solid rgba(0,0,0,.08)">
+          <select onchange="alertFmt('fontName',this.value);this.value=''" style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff">
+            <option value="">Font</option>
+            <option value="Arial">Arial</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Oswald">Oswald</option>
+            <option value="Barlow Condensed">Barlow</option>
+            <option value="monospace">Mono</option>
+          </select>
+          <select onchange="alertFmt('fontSize',this.value);this.value=''" style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff">
+            <option value="">Size</option>
+            <option value="1">10px</option>
+            <option value="2">13px</option>
+            <option value="3">16px</option>
+            <option value="4">18px</option>
+            <option value="5">24px</option>
+            <option value="6">32px</option>
+          </select>
+          <button onclick="alertFmt('bold')" title="Bold" style="font-weight:900;font-size:13px;padding:3px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">B</button>
+          <button onclick="alertFmt('italic')" title="Italic" style="font-style:italic;font-size:13px;padding:3px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">I</button>
+          <button onclick="alertFmt('underline')" title="Underline" style="text-decoration:underline;font-size:13px;padding:3px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">U</button>
+          <button onclick="alertFmt('justifyLeft')" title="Left" style="font-size:13px;padding:3px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">⬅</button>
+          <button onclick="alertFmt('justifyCenter')" title="Center" style="font-size:13px;padding:3px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">↔</button>
+          <button onclick="alertFmt('justifyRight')" title="Right" style="font-size:13px;padding:3px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">➡</button>
+          <label style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer;display:flex;align-items:center;gap:4px">
+            🎨 Text <input type="color" id="alert-txt-color" onchange="alertFmt('foreColor',this.value)" style="width:20px;height:20px;border:none;padding:0;cursor:pointer">
+          </label>
+        </div>
+
+        <!-- Content editable -->
+        <div id="alert-editor" contenteditable="true" oninput="alertUpdatePreview()"
+          style="min-height:80px;padding:14px;border:2px solid rgba(0,0,0,.12);border-radius:8px;font-size:15px;background:#fff;outline:none;line-height:1.5"
+          placeholder="Type your alert message here..."></div>
+
+        <!-- Bg color + border -->
+        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;align-items:center">
+          <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+            Background:
+            <input type="color" id="alert-bg-color" value="#fff3cd" onchange="alertUpdatePreview()" style="width:32px;height:28px;border:1px solid rgba(0,0,0,.2);border-radius:4px;cursor:pointer;padding:2px">
+            <button onclick="alertSetBg('#fff3cd')" style="font-size:11px;padding:3px 8px;background:#fff3cd;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Yellow</button>
+            <button onclick="alertSetBg('#d1e7dd')" style="font-size:11px;padding:3px 8px;background:#d1e7dd;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Green</button>
+            <button onclick="alertSetBg('#f8d7da')" style="font-size:11px;padding:3px 8px;background:#f8d7da;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Red</button>
+            <button onclick="alertSetBg('#cfe2ff')" style="font-size:11px;padding:3px 8px;background:#cfe2ff;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Blue</button>
+            <button onclick="alertSetBg('#001a3e')" style="font-size:11px;padding:3px 8px;background:#001a3e;color:#FFD700;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Navy</button>
+          </label>
+          <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+            Border:
+            <select id="alert-border" onchange="alertUpdatePreview()" style="font-size:12px;padding:4px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px">
+              <option value="none">None</option>
+              <option value="solid">Solid</option>
+              <option value="dashed">Dashed</option>
+              <option value="glow">✨ Glow</option>
             </select>
+          </label>
+          <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+            <input type="checkbox" id="alert-blink" onchange="alertUpdatePreview()"> Blink
+          </label>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-title" style="margin-bottom:10px">Live Preview</div>
+        <div id="alert-preview-wrap">
+          <div id="alert-preview" style="padding:14px 20px;border-radius:8px;font-size:14px;font-weight:600;text-align:center;background:#fff3cd;border:1px solid rgba(0,0,0,.1)">Preview will appear here</div>
+        </div>
+      </div>
+
+      <!-- Scheduling -->
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-title" style="margin-bottom:12px">Scheduling (Optional)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px">
+          <div>
+            <label class="form-label">Go Live At</label>
+            <input type="datetime-local" id="alert-go-live" class="form-input" style="max-width:220px">
+          </div>
+          <div>
+            <label class="form-label">Auto-Expire At</label>
+            <input type="datetime-local" id="alert-expire" class="form-input" style="max-width:220px">
           </div>
         </div>
-        <div class="panel-title" style="margin-top:18px;margin-bottom:8px">Preview</div>
-        <div id="banner-preview" class="banner-preview info-type">Banner preview will appear here</div>
-        <div style="margin-top:18px">
-          <button class="btn btn-primary" onclick="saveBanner()">Save Banner</button>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px">Leave blank to publish immediately / never expire</div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px">
+        <button class="btn btn-primary" onclick="alertPublish()">📢 Publish Now</button>
+        <button class="btn btn-outline" onclick="alertSaveDraft()">💾 Save Draft</button>
+        <button class="btn btn-outline" onclick="alertClear()" style="color:var(--red)">✕ Clear / Deactivate</button>
+      </div>
+
+      <!-- Alert history -->
+      <div class="panel">
+        <div class="panel-title" style="margin-bottom:10px">Alert History <span style="font-weight:400;font-size:12px;color:var(--muted)">(last 5 — click to reload)</span></div>
+        <div id="alert-history-list">
+          <div style="color:var(--muted);font-size:13px">Loading history...</div>
         </div>
       </div>
     </div>
@@ -1835,40 +1925,216 @@ window.saveRecap = async function(gameId, existingRecapId) {
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// BANNER
+// RICH ALERT BANNER
 // ═══════════════════════════════════════════════════════════════════
 async function loadBanner() {
   try {
     const snap = await getDoc(doc(db, 'site_config', 'banner'));
     if (snap.exists()) {
       const d = snap.data();
-      document.getElementById('banner-active').checked = d.active || false;
-      document.getElementById('banner-text').value = d.text || '';
-      document.getElementById('banner-type').value = d.type || 'info';
-      updateBannerPreview();
+      // Load into rich editor
+      const editor = document.getElementById('alert-editor');
+      if (editor) editor.innerHTML = d.html || '';
+      const bg = document.getElementById('alert-bg-color');
+      if (bg) bg.value = d.bgColor || '#fff3cd';
+      const border = document.getElementById('alert-border');
+      if (border) border.value = d.border || 'none';
+      const blink = document.getElementById('alert-blink');
+      if (blink) blink.checked = d.blink || false;
+      const goLive = document.getElementById('alert-go-live');
+      if (goLive && d.goLiveAt) goLive.value = d.goLiveAt.replace('Z','').slice(0,16);
+      const expire = document.getElementById('alert-expire');
+      if (expire && d.expireAt) expire.value = d.expireAt.replace('Z','').slice(0,16);
+      alertUpdatePreview();
+      alertUpdateStatus(d);
+    } else {
+      alertUpdateStatus(null);
     }
-  } catch(e) { console.log('No banner config found'); }
+  } catch(e) { console.log('No banner config found'); alertUpdateStatus(null); }
+  alertLoadHistory();
 }
 
-window.updateBannerPreview = function() {
-  const text = document.getElementById('banner-text').value || 'Banner preview will appear here';
-  const type = document.getElementById('banner-type').value;
-  const preview = document.getElementById('banner-preview');
-  preview.textContent = text;
-  preview.className = 'banner-preview ' + type + '-type';
+function alertUpdateStatus(d) {
+  const dot = document.getElementById('alert-status-dot');
+  const txt = document.getElementById('alert-status-text');
+  const bar = document.getElementById('alert-status-bar');
+  if (!dot || !txt || !bar) return;
+  if (!d || !d.html) {
+    dot.style.background = '#aaa'; txt.textContent = 'No alert configured';
+    bar.style.background = '#f4f6f9'; bar.style.color = 'var(--muted)'; return;
+  }
+  const now = new Date();
+  const goLive = d.goLiveAt ? new Date(d.goLiveAt) : null;
+  const expire = d.expireAt ? new Date(d.expireAt) : null;
+  if (expire && now > expire) {
+    dot.style.background = '#ef4444'; txt.textContent = 'Expired — not showing on site';
+    bar.style.background = '#fff0f0'; bar.style.color = '#ef4444';
+  } else if (goLive && now < goLive) {
+    dot.style.background = '#f59e0b'; txt.textContent = `Scheduled — goes live ${goLive.toLocaleString()}`;
+    bar.style.background = '#fffbeb'; bar.style.color = '#b45309';
+  } else if (d.active) {
+    dot.style.background = '#22c55e'; txt.textContent = 'LIVE — showing on site as popup';
+    bar.style.background = '#f0fdf4'; bar.style.color = '#166534';
+  } else {
+    dot.style.background = '#94a3b8'; txt.textContent = 'Draft — saved but not active';
+    bar.style.background = '#f4f6f9'; bar.style.color = 'var(--muted)';
+  }
+}
+
+window.alertInsertEmoji = function(emoji) {
+  const editor = document.getElementById('alert-editor');
+  editor.focus();
+  document.execCommand('insertText', false, emoji);
+  alertUpdatePreview();
 };
 
-window.saveBanner = async function() {
+window.alertFmt = function(cmd, val) {
+  document.getElementById('alert-editor').focus();
+  document.execCommand(cmd, false, val || null);
+  alertUpdatePreview();
+};
+
+window.alertSetBg = function(color) {
+  document.getElementById('alert-bg-color').value = color;
+  alertUpdatePreview();
+};
+
+window.alertUpdatePreview = function() {
+  const editor = document.getElementById('alert-editor');
+  const preview = document.getElementById('alert-preview');
+  if (!editor || !preview) return;
+  const html = editor.innerHTML;
+  const bg = document.getElementById('alert-bg-color')?.value || '#fff3cd';
+  const border = document.getElementById('alert-border')?.value || 'none';
+  const blink = document.getElementById('alert-blink')?.checked;
+  preview.innerHTML = html || '<em style="color:#aaa">Preview will appear here</em>';
+  preview.style.background = bg;
+  // Pick text color based on bg brightness
+  const r = parseInt(bg.slice(1,3),16), g = parseInt(bg.slice(3,5),16), b = parseInt(bg.slice(5,7),16);
+  const lum = (0.299*r + 0.587*g + 0.114*b)/255;
+  preview.style.color = lum < 0.5 ? '#fff' : '#111';
+  // Border
+  if (border === 'none') { preview.style.border = '1px solid rgba(0,0,0,.1)'; preview.style.boxShadow = 'none'; preview.style.animation = ''; }
+  else if (border === 'solid') { preview.style.border = '2px solid #002D72'; preview.style.boxShadow = 'none'; preview.style.animation = ''; }
+  else if (border === 'dashed') { preview.style.border = '2px dashed #002D72'; preview.style.boxShadow = 'none'; preview.style.animation = ''; }
+  else if (border === 'glow') { preview.style.border = '2px solid #FFD700'; preview.style.boxShadow = '0 0 12px #FFD700, 0 0 24px rgba(255,215,0,.4)'; preview.style.animation = 'alertGlow 1.5s ease-in-out infinite'; }
+  if (blink) preview.style.animation = (preview.style.animation ? preview.style.animation + ',' : '') + 'alertBlink 1s step-start infinite';
+};
+
+window.alertPublish = async function() {
+  const editor = document.getElementById('alert-editor');
+  const html = editor.innerHTML.trim();
+  if (!html || html === '<br>') { toast('Enter a message first', 'error'); return; }
+  const goLiveRaw = document.getElementById('alert-go-live')?.value;
+  const expireRaw = document.getElementById('alert-expire')?.value;
   const data = {
-    active: document.getElementById('banner-active').checked,
-    text: document.getElementById('banner-text').value.trim(),
-    type: document.getElementById('banner-type').value
+    html, active: true,
+    bgColor: document.getElementById('alert-bg-color')?.value || '#fff3cd',
+    border: document.getElementById('alert-border')?.value || 'none',
+    blink: document.getElementById('alert-blink')?.checked || false,
+    goLiveAt: goLiveRaw ? new Date(goLiveRaw).toISOString() : null,
+    expireAt: expireRaw ? new Date(expireRaw).toISOString() : null,
+    createdAt: new Date().toISOString(),
+    label: editor.textContent.trim().slice(0,60) || 'Alert'
   };
   try {
     await setDoc(doc(db, 'site_config', 'banner'), data);
-    toast('Banner saved!');
-    await logActivity('Banner', `${data.active ? 'Activated' : 'Deactivated'} banner: "${data.text}"`);
+    // Save to history
+    await addDoc(collection(db, 'alert_history'), data);
+    toast('Alert published!');
+    alertUpdateStatus(data);
+    alertLoadHistory();
+    await logActivity('Alert', `Published alert: "${data.label}"`);
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.alertSaveDraft = async function() {
+  const editor = document.getElementById('alert-editor');
+  const html = editor.innerHTML.trim();
+  if (!html || html === '<br>') { toast('Enter a message first', 'error'); return; }
+  const goLiveRaw = document.getElementById('alert-go-live')?.value;
+  const expireRaw = document.getElementById('alert-expire')?.value;
+  const data = {
+    html, active: false,
+    bgColor: document.getElementById('alert-bg-color')?.value || '#fff3cd',
+    border: document.getElementById('alert-border')?.value || 'none',
+    blink: document.getElementById('alert-blink')?.checked || false,
+    goLiveAt: goLiveRaw ? new Date(goLiveRaw).toISOString() : null,
+    expireAt: expireRaw ? new Date(expireRaw).toISOString() : null,
+    createdAt: new Date().toISOString(),
+    label: editor.textContent.trim().slice(0,60) || 'Draft'
+  };
+  try {
+    await setDoc(doc(db, 'site_config', 'banner'), data);
+    toast('Draft saved');
+    alertUpdateStatus(data);
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.alertClear = async function() {
+  if (!confirm('Deactivate and clear the current alert?')) return;
+  try {
+    await setDoc(doc(db, 'site_config', 'banner'), { active: false, html: '', createdAt: new Date().toISOString() });
+    document.getElementById('alert-editor').innerHTML = '';
+    document.getElementById('alert-bg-color').value = '#fff3cd';
+    document.getElementById('alert-border').value = 'none';
+    document.getElementById('alert-blink').checked = false;
+    document.getElementById('alert-go-live').value = '';
+    document.getElementById('alert-expire').value = '';
+    alertUpdatePreview();
+    alertUpdateStatus(null);
+    toast('Alert cleared');
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+async function alertLoadHistory() {
+  const list = document.getElementById('alert-history-list');
+  if (!list) return;
+  try {
+    const { limit: lim } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    const snap = await getDocs(query(collection(db, 'alert_history'), orderBy('createdAt','desc'), lim(5)));
+    if (snap.empty) { list.innerHTML = '<div style="color:var(--muted);font-size:13px">No history yet</div>'; return; }
+    list.innerHTML = snap.docs.map((docSnap, i) => {
+      const d = docSnap.data();
+      const dt = d.createdAt ? new Date(d.createdAt).toLocaleString() : '—';
+      return `<div onclick="alertLoadFromHistory(${i})" data-hist="${encodeURIComponent(JSON.stringify(d))}"
+        style="padding:10px 14px;border-radius:6px;background:#f8f9fa;border:1px solid rgba(0,0,0,.07);cursor:pointer;margin-bottom:8px;display:flex;align-items:center;gap:12px"
+        onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#f8f9fa'">
+        <div style="width:10px;height:10px;border-radius:50%;background:${d.bgColor||'#fff3cd'};border:1px solid rgba(0,0,0,.2);flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.label||'Alert'}</div>
+          <div style="font-size:11px;color:var(--muted)">${dt}</div>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:${d.active?'#22c55e':'var(--muted)'}">${d.active?'LIVE':'DRAFT'}</div>
+      </div>`;
+    }).join('');
+    // Attach data to elements
+    snap.docs.forEach((docSnap, i) => {
+      const el = list.children[i];
+      if (el) el._histData = docSnap.data();
+    });
+  } catch(e) { list.innerHTML = '<div style="color:var(--muted);font-size:13px">Could not load history</div>'; }
+}
+
+window.alertLoadFromHistory = function(idx) {
+  const list = document.getElementById('alert-history-list');
+  const el = list?.children[idx];
+  if (!el || !el._histData) return;
+  const d = el._histData;
+  const editor = document.getElementById('alert-editor');
+  if (editor) editor.innerHTML = d.html || '';
+  const bg = document.getElementById('alert-bg-color');
+  if (bg) bg.value = d.bgColor || '#fff3cd';
+  const border = document.getElementById('alert-border');
+  if (border) border.value = d.border || 'none';
+  const blink = document.getElementById('alert-blink');
+  if (blink) blink.checked = d.blink || false;
+  const goLive = document.getElementById('alert-go-live');
+  if (goLive) goLive.value = d.goLiveAt ? d.goLiveAt.replace('Z','').slice(0,16) : '';
+  const expire = document.getElementById('alert-expire');
+  if (expire) expire.value = d.expireAt ? d.expireAt.replace('Z','').slice(0,16) : '';
+  alertUpdatePreview();
+  toast('Alert loaded from history — click Publish to go live');
 };
 
 // ═══════════════════════════════════════════════════════════════════
