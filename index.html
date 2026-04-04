@@ -4641,12 +4641,11 @@ function openRecap(away,home,as,hs,field,date){
 
 function openBox(away,home,as,hs,field,date){
   const ac=tc(away),hc=tc(home),aW=as>hs;
-  // Get real players for each team from PLAYERS array
+  const aH=Math.floor(as*2.1), hH=Math.floor(hs*2.1); // estimated hits
   const awayTeam=TEAMS.find(t=>t.id===away||t.short===away||t.short===away?.toUpperCase())||HIST_TEAMS.find(t=>t.id===away||t.short===away);
   const homeTeam=TEAMS.find(t=>t.id===home||t.short===home||t.short===home?.toUpperCase())||HIST_TEAMS.find(t=>t.id===home||t.short===home);
   const awayPlayers=awayTeam?PLAYERS.filter(p=>p.team===awayTeam.id).sort((a,b)=>b.avg-a.avg):[];
   const homePlayers=homeTeam?PLAYERS.filter(p=>p.team===homeTeam.id).sort((a,b)=>b.avg-a.avg):[];
-  // Show season stats for players on each team
   const mkRows=(players)=>players.length
     ? players.map(p=>`<tr>
         <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos||''}</span></td>
@@ -4677,8 +4676,8 @@ function openBox(away,home,as,hs,field,date){
       </table>
       <div class="pop-sec-title">Batting</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(useLineup(awayPlayers),away)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(useLineup(homePlayers),home)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(awayPlayers)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(homePlayers)}</tbody></table></div>
       </div>
     </div>`;
   openScPop();

@@ -1117,14 +1117,14 @@ function renderBoxScore(awayName, homeName, g) {
                 <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
                 ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
                 <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${awayInningR}${awayMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+awayR+'</div>':''}</td>
-                <td style="${totalStyle}">${awayH}</td>
+                <td style="${totalStyle}" id="bs-linescore-away-h">${awayH}</td>
                 <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
               </tr>
               <tr>
                 <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
                 ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
                 <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${homeInningR}${homeMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+homeR+'</div>':''}</td>
-                <td style="${totalStyle}">${homeH}</td>
+                <td style="${totalStyle}" id="bs-linescore-home-h">${homeH}</td>
                 <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
               </tr>
             </tbody>
@@ -1137,9 +1137,10 @@ function renderBoxScore(awayName, homeName, g) {
         ${renderPanel(bsAwayLineup, awayName, 'away')}
         ${renderPanel(bsHomeLineup, homeName, 'home')}
       </div>`}
-      <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1)">
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1);flex-wrap:wrap">
         <button class="btn btn-success" onclick="saveBoxScore(true)">Save & Mark Final</button>
         <button class="btn btn-outline" onclick="saveBoxScore(false)">Save Draft</button>
+        ${bsGameData?.done ? `<button class="btn btn-outline" style="color:#e65100;border-color:#e65100" onclick="bsReopenGame()" title="Reset game to in-progress so scores can be edited">↺ Reopen Game</button>` : ''}
         <button class="btn btn-outline" onclick="closeBoxScore()">Cancel</button>
       </div>
     </div>`;
@@ -1199,8 +1200,12 @@ window.bsUpdateStat = function(side, idx, stat, val) {
   p[stat] = newVal;
   const ar = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
   const hr = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
-  const at=document.getElementById('bs-away-total'), ht=document.getElementById('bs-home-total');
-  if(at) at.textContent=ar; if(ht) ht.textContent=hr;
+  const ah = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),0);
+  const hh = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),0);
+  const at=document.getElementById('bs-away-total'), ht2=document.getElementById('bs-home-total');
+  const aH=document.getElementById('bs-linescore-away-h'), hH=document.getElementById('bs-linescore-home-h');
+  if(at) at.textContent=ar; if(ht2) ht2.textContent=hr;
+  if(aH) aH.textContent=ah; if(hH) hH.textContent=hh;
 };
 window.bsUpdatePos = function(side, idx, val) { (side==='away'?bsAwayLineup:bsHomeLineup)[idx].pos = val; };
 window.bsUpdateInning = function(side, idx, val) {
@@ -1279,6 +1284,19 @@ window.closeBoxScore = function() {
   document.getElementById('box-score-view').style.display='none';
   document.getElementById('scores-content').style.display='block';
   document.getElementById('sec-scores').querySelector('.main-header').style.display='';
+};
+window.bsReopenGame = async function() {
+  if (!confirm('Reopen this game? It will be marked as in-progress and scores/standings will be reset.')) return;
+  try {
+    await updateDoc(doc(db,'games',bsGameId), { done: false, away_score: 0, home_score: 0 });
+    const g = GAMES.find(x=>x.id===bsGameId);
+    if (g) { g.done = false; g.away_score = 0; g.home_score = 0; }
+    bsGameData.done = false;
+    toast('Game reopened — now in-progress');
+    await logActivity('Box Score', `Reopened game: ${getTeamName(bsGameData.away)} vs ${getTeamName(bsGameData.home)}`);
+    await recalcStandingsFromGames();
+    bsRerender(); renderScores(); renderStandings(); renderDashboard();
+  } catch(e) { toast('Failed: '+e.message,'error'); }
 };
 
 // ── Tap-to-Order ──────────────────────────────────────────────────
