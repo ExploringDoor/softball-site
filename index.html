@@ -3353,49 +3353,7 @@ function loadTeam(teamId){
       </button>`;
     }
   }
-  
-// ════ SORTABLE TEAM STATS ════
-let _teamStatSort = {key:'avg', dir:'desc'};
-function renderTeamStats(t, players, sortKey, sortDir){
-  _teamStatSort = {key:sortKey||'avg', dir:sortDir||'desc'};
-  const cols = [
-    {key:'name', label:'Player',  fmt:p=>`<span style="font-weight:600">${p.name}</span> <span style="font-size:10px;color:var(--muted)">${p.pos}</span>`, align:'left'},
-    {key:'ab',   label:'AB',      fmt:p=>p.ab},
-    {key:'h',    label:'H',       fmt:p=>p.h},
-    {key:'avg',  label:'AVG',     fmt:p=>`<strong>${avg(p.avg)}</strong>`},
-    {key:'hr',   label:'HR',      fmt:p=>p.hr},
-    {key:'rbi',  label:'RBI',     fmt:p=>p.rbi},
-    {key:'r',    label:'R',       fmt:p=>p.r},
-    {key:'bb',   label:'BB',      fmt:p=>p.bb},
-    {key:'slg',  label:'SLG',     fmt:p=>slg(p.slg)},
-    {key:'ops',  label:'OPS',     fmt:p=>(p.ops||0).toFixed(3).replace(/^0\./,'.')},
-  ];
-  const sorted = [...players].sort((a,b)=>{
-    const av = a[sortKey]==='name'?a.name:a[sortKey];
-    const bv = b[sortKey]==='name'?b.name:b[sortKey];
-    if(sortKey==='name') return sortDir==='asc'?av.localeCompare(bv):bv.localeCompare(av);
-    return sortDir==='asc'?av-bv:bv-av;
-  });
-  const body = document.getElementById('team-body');
-  body.innerHTML = `
-    <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:18px;color:${t.color}">Team Stats</h3>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Click any column header to sort</p>
-    <div style="overflow-x:auto"><table class="big-table" id="team-stat-tbl"><thead><tr>
-      ${cols.map(c=>{
-        const isSort=c.key===sortKey;
-        const nextDir=isSort&&sortDir==='desc'?'asc':'desc';
-        const arrow=isSort?(sortDir==='desc'?' ↓':' ↑'):'';
-        return `<th style="cursor:pointer;${isSort?'color:var(--gold)':''};${c.align==='left'?'text-align:left':''}" 
-          onclick="renderTeamStats(getTeam('${t.id}'),PLAYERS.filter(p=>p.team==='${t.id}'),'${c.key}','${nextDir}')">
-          ${c.label}${arrow}</th>`;
-      }).join('')}
-    </tr></thead><tbody>
-    ${sorted.map(p=>`<tr onclick="openModal('${p.id}')">
-      ${cols.map(c=>`<td style="${c.align==='left'?'text-align:left':''}">${c.fmt(p)}</td>`).join('')}
-    </tr>`).join('')}
-    </tbody></table></div>`;
-}
-document.querySelectorAll('.ttab').forEach(tab=>{tab.classList.remove('on');if(tab.dataset.tab==='roster')tab.classList.add('on')});
+  document.querySelectorAll('.ttab').forEach(tab=>{tab.classList.remove('on');if(tab.dataset.tab==='roster')tab.classList.add('on')});
   renderTeamTab('roster');
 }
 
