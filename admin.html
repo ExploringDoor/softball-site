@@ -802,6 +802,7 @@ let bsHomeErrors = 0;
 let bsScoreOnlyMode = false;
 let bsAwayOrderMode = false, bsHomeOrderMode = false;
 let bsAwayOrderMap = {}, bsHomeOrderMap = {};
+let bsAwayOrdered = false, bsHomeOrdered = false;
 
 window.openBoxScore = async function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
@@ -843,7 +844,10 @@ window.openBoxScore = async function(gameId) {
   bsHomeLineup = (existing?.home_lineup || homePlayers.map(p => ({
     name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
   }))).map(migrateP);
-  bsAwayOrderMode = false; bsHomeOrderMode = false;
+  bsAwayOrdered = !!existing; bsHomeOrdered = !!existing; // pre-ordered if loading existing
+  const isMobile = window.innerWidth < 768;
+  bsAwayOrderMode = !bsAwayOrdered; // on fresh entry always start in order mode
+  bsHomeOrderMode = !bsHomeOrdered;
   bsAwayOrderMap = {}; bsHomeOrderMap = {};
   bsScoreOnlyMode = false;
   bsAwayScoreOverride = null; bsHomeScoreOverride = null;
@@ -877,26 +881,75 @@ function renderBoxScore(awayName, homeName, g) {
     });
     const totalH = totals.s + totals.d + totals.t + totals.hr;
     const orderMode = side==='away' ? bsAwayOrderMode : bsHomeOrderMode;
+    const ordered   = side==='away' ? bsAwayOrdered   : bsHomeOrdered;
     const orderMap  = side==='away' ? bsAwayOrderMap  : bsHomeOrderMap;
     const assignedCount = Object.keys(orderMap).length;
+    const isMobile = window.innerWidth < 768;
 
+    // ── ORDER MODE: big card grid ──────────────────────────────────
+    if (orderMode) {
+      return `
+      <div class="bs-panel" data-side="${side}" style="border-radius:12px;overflow:hidden;border:2px solid #001a3e">
+        <div style="background:#001a3e;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em">${teamName}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:2px">Tap players in batting order (1 → 2 → 3…)</div>
+          </div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#FFD700">${assignedCount}<span style="font-size:16px;font-weight:400;color:rgba(255,255,255,.4)">/${active.length}</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;padding:14px">
+          ${lineup.map((p, i) => {
+            if (p.dnp) return '';
+            const assigned = orderMap[i];
+            const isAssigned = assigned !== undefined;
+            return `
+            <div onclick="bsTapOrder('${side}',${i})" style="
+              background:${isAssigned ? '#001a3e' : '#f4f6f9'};
+              color:${isAssigned ? '#fff' : '#1a1a1a'};
+              border:2px solid ${isAssigned ? '#001a3e' : 'rgba(0,0,0,.1)'};
+              border-radius:10px;padding:14px 8px 12px;text-align:center;cursor:pointer;
+              user-select:none;-webkit-tap-highlight-color:transparent;
+              transition:transform .1s,box-shadow .1s;active:transform:scale(.95);
+              display:flex;flex-direction:column;align-items:center;gap:4px;min-height:90px;justify-content:center">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:36px;font-weight:900;line-height:1;color:${isAssigned ? '#FFD700' : 'rgba(0,0,0,.12)'}">
+                ${isAssigned ? assigned : '—'}
+              </div>
+              <div style="font-size:13px;font-weight:700;line-height:1.2;word-break:break-word">${p.name.split(' ').slice(-1)[0]}</div>
+              <div style="font-size:10px;opacity:.55">#${p.num||'?'}${p.pos?' · '+p.pos:''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <!-- DNP section -->
+        ${lineup.some(p=>p.dnp) ? `
+        <div style="padding:4px 14px 12px;border-top:1px solid rgba(0,0,0,.07)">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.35);margin-bottom:8px;letter-spacing:.08em">Did Not Play</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${lineup.filter(p=>p.dnp).map((p,i) => `<span style="padding:4px 10px;background:rgba(0,0,0,.05);border-radius:20px;font-size:12px;color:rgba(0,0,0,.4)">${p.name.split(' ').slice(-1)[0]}</span>`).join('')}
+          </div>
+        </div>` : ''}
+        <div style="padding:12px 14px 14px;display:flex;gap:8px;border-top:1px solid rgba(0,0,0,.08)">
+          <button class="btn btn-outline btn-sm" onclick="bsResetOrder('${side}')" style="padding:8px 14px;font-size:13px;color:#c62828;border-color:#e57373">↺ Reset</button>
+          <button onclick="bsFinalizeOrder('${side}')" style="flex:1;padding:12px;font-size:16px;font-weight:700;background:${assignedCount===active.length?'#1b5e20':'#001a3e'};color:${assignedCount===active.length?'#a5d6a7':'#FFD700'};border:none;border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em">
+            ${assignedCount === active.length ? '✓ DONE — SET LINEUP' : `SET ORDER (${assignedCount}/${active.length} tapped)`}
+          </button>
+        </div>
+      </div>`;
+    }
+
+    // ── STATS MODE ─────────────────────────────────────────────────
     return `
       <div class="bs-panel" data-side="${side}">
         <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:2px solid rgba(0,45,114,.15)">
           <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase">${teamName}
             <span style="font-weight:400;font-size:14px;color:rgba(0,0,0,.4)">(${totals.r} R · ${totalH} H)</span>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            ${orderMode ? `<button class="btn btn-outline btn-sm" onclick="bsResetOrder('${side}')" style="font-size:11px;padding:4px 10px;color:#d32f2f;border-color:#d32f2f">Reset</button>` : ''}
-            <button class="btn ${orderMode?'btn-primary':'btn-outline'} btn-sm" onclick="bsToggleOrderMode('${side}')" style="font-size:11px;padding:4px 12px">${orderMode ? `✓ Done (${assignedCount}/${active.length})` : '↕ Tap to Order'}</button>
-          </div>
+          <button class="btn btn-outline btn-sm" onclick="bsToggleOrderMode('${side}')" style="font-size:12px;padding:6px 14px;border-color:#001a3e;color:#001a3e">↕ Edit Order</button>
         </div>
-        ${orderMode ? `<div style="padding:7px 14px;background:#e8f4fd;font-size:12px;color:#0d47a1;font-weight:600;border-bottom:1px solid #b3d9f7">Tap players in batting order → 1, 2, 3… Tap again to unassign.</div>` : ''}
         <div style="overflow-x:auto">
           <div style="min-width:840px">
             <div style="display:flex;border-bottom:2px solid rgba(0,0,0,.1);padding:8px 0;font-size:11px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);background:rgba(0,0,0,.02)">
               <div style="width:30px;text-align:center">#</div>
-              <div style="width:20px"></div>
+              <div style="width:${isMobile?'0px':'20px'}"></div>
               <div style="flex:1;padding-left:6px">Player</div>
               <div style="width:50px;text-align:center">Pos</div>
               <div style="width:42px;text-align:center">AB</div>
@@ -912,37 +965,30 @@ function renderBoxScore(awayName, homeName, g) {
             </div>
             ${lineup.map((p, i) => {
               const orderNum = p.dnp ? '' : (lineup.filter((x,j) => j < i && !x.dnp).length + 1);
-              const assignedOrder = orderMap[i];
-              const tapHighlight = orderMode && !p.dnp && assignedOrder !== undefined;
-              const iStyle = `display:flex;align-items:center;border-bottom:1px solid rgba(0,0,0,.06);padding:6px 0;${p.dnp?'opacity:.35;':''}${orderMode&&!p.dnp?'cursor:pointer;':''}`
-                + (tapHighlight ? 'background:rgba(0,45,114,.06);' : '');
               return `
-              <div class="bs-player-row${p.dnp?' dnp':''}" ${!orderMode?'draggable="true"':''} data-side="${side}" data-idx="${i}"
-                  ${!orderMode?'ondragstart="bsDragStart(event)" ondragover="bsDragOver(event)" ondragleave="bsDragLeave(event)" ondrop="bsDrop(event)" ondragend="bsDragEnd(event)"':''}
-                  ${orderMode&&!p.dnp?`onclick="bsTapOrder('${side}',${i})"` : ''}
-                  style="${iStyle}">
-                <div style="width:30px;text-align:center;font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;color:${tapHighlight?'#002D72':'rgba(0,0,0,.25)'}">
-                  ${orderMode&&!p.dnp ? (assignedOrder !== undefined ? assignedOrder : '·') : orderNum}
-                </div>
-                <div style="width:20px;${!orderMode?'cursor:grab;':''}text-align:center;color:rgba(0,0,0,.2);font-size:14px;user-select:none">${!orderMode?'≡':''}</div>
+              <div class="bs-player-row${p.dnp?' dnp':''}" ${!isMobile?'draggable="true"':''} data-side="${side}" data-idx="${i}"
+                  ${!isMobile?'ondragstart="bsDragStart(event)" ondragover="bsDragOver(event)" ondragleave="bsDragLeave(event)" ondrop="bsDrop(event)" ondragend="bsDragEnd(event)"':''}
+                  style="display:flex;align-items:center;border-bottom:1px solid rgba(0,0,0,.06);padding:6px 0;${p.dnp?'opacity:.35;':''}">
+                <div style="width:30px;text-align:center;font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;color:rgba(0,0,0,.25)">${orderNum}</div>
+                <div style="width:${isMobile?'0px':'20px'};${!isMobile?'cursor:grab;':''}text-align:center;color:rgba(0,0,0,.2);font-size:14px;user-select:none">${!isMobile?'≡':''}</div>
                 <div style="flex:1;padding:0 6px;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}${p.num?' <span style="color:rgba(0,0,0,.3);font-size:10px">#'+p.num+'</span>':''}${p.guest?' <span style="color:#002D72;font-size:9px;font-weight:700">GUEST</span>':''}</div>
-                <div style="width:50px"><select style="width:46px;padding:3px;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:11px;background:#fff" onchange="bsUpdatePos('${side}',${i},this.value)" onclick="event.stopPropagation()">
+                <div style="width:50px"><select style="width:46px;padding:3px;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:11px;background:#fff" onchange="bsUpdatePos('${side}',${i},this.value)">
                   ${positions.map(pos => `<option value="${pos}"${p.pos===pos?' selected':''}>${pos||'—'}</option>`).join('')}
                 </select></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.ab}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'ab',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.r}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'r',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.s}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'s',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.d}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'d',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.t}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'t',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;${(parseInt(p.hr)||0)>0?'background:#fff8e1;border-color:#f9a825;font-weight:700;':''}" value="${p.dnp?'':p.hr}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'hr',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.rbi}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'rbi',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.bb}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'bb',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.so}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'so',this.value)" onclick="event.stopPropagation()"></div>
-                <div style="width:32px;text-align:center"><input type="checkbox" ${p.dnp?'checked':''} onchange="bsToggleDnp('${side}',${i},this.checked)" onclick="event.stopPropagation()" title="Did not play"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.ab}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'ab',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.r}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'r',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.s}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'s',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.d}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'d',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.t}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'t',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;${(parseInt(p.hr)||0)>0?'background:#fff8e1;border-color:#f9a825;font-weight:700;':''}" value="${p.dnp?'':p.hr}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'hr',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.rbi}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'rbi',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.bb}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'bb',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.so}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'so',this.value)"></div>
+                <div style="width:32px;text-align:center"><input type="checkbox" ${p.dnp?'checked':''} onchange="bsToggleDnp('${side}',${i},this.checked)" title="Did not play"></div>
               </div>`;}).join('')}
             <div style="display:flex;align-items:center;border-top:2px solid rgba(0,0,0,.15);padding:10px 0;font-weight:700;background:rgba(0,45,114,.04)">
               <div style="width:30px"></div>
-              <div style="width:20px"></div>
+              <div style="width:${isMobile?'0px':'20px'}"></div>
               <div style="flex:1;padding-left:6px;font-size:12px;font-weight:800;letter-spacing:.06em">TOTALS</div>
               <div style="width:50px"></div>
               <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.ab}</div>
@@ -1237,13 +1283,9 @@ window.closeBoxScore = function() {
 
 // ── Tap-to-Order ──────────────────────────────────────────────────
 window.bsToggleOrderMode = function(side) {
-  if (side === 'away') {
-    if (bsAwayOrderMode) { bsFinalizeOrder('away'); return; }
-    bsAwayOrderMode = true; bsAwayOrderMap = {};
-  } else {
-    if (bsHomeOrderMode) { bsFinalizeOrder('home'); return; }
-    bsHomeOrderMode = true; bsHomeOrderMap = {};
-  }
+  // Enter order mode (from stats view's "Edit Order" button)
+  if (side === 'away') { bsAwayOrderMode = true; bsAwayOrderMap = {}; }
+  else { bsHomeOrderMode = true; bsHomeOrderMap = {}; }
   bsRerender();
 };
 window.bsTapOrder = function(side, idx) {
@@ -1256,10 +1298,10 @@ window.bsTapOrder = function(side, idx) {
   } else {
     const nextNum = Object.keys(orderMap).length + 1;
     orderMap[idx] = nextNum;
-    // If all active players assigned, auto-finalize
+    // If all active players assigned, auto-finalize after brief visual pause
     const lineup = side === 'away' ? bsAwayLineup : bsHomeLineup;
     const activeCount = lineup.filter(p => !p.dnp).length;
-    if (nextNum === activeCount) { setTimeout(() => bsFinalizeOrder(side), 300); return; }
+    if (nextNum === activeCount) { bsRerender(); setTimeout(() => bsFinalizeOrder(side), 500); return; }
   }
   bsRerender();
 };
@@ -1268,21 +1310,19 @@ window.bsResetOrder = function(side) {
   else bsHomeOrderMap = {};
   bsRerender();
 };
-function bsFinalizeOrder(side) {
+window.bsFinalizeOrder = function(side) {
   const lineup = side === 'away' ? bsAwayLineup : bsHomeLineup;
   const orderMap = side === 'away' ? bsAwayOrderMap : bsHomeOrderMap;
-  // Build ordered list: tapped players by order number, then untapped active, then DNP
   const activePlayers = lineup.filter(p => !p.dnp);
   const dnpPlayers = lineup.filter(p => p.dnp);
-  // map lineup index → order number
   const withOrder = activePlayers.map(p => {
     const origIdx = lineup.indexOf(p);
     return { p, order: orderMap[origIdx] ?? 999 };
   }).sort((a, b) => a.order - b.order).map(x => x.p);
-  if (side === 'away') { bsAwayLineup = [...withOrder, ...dnpPlayers]; bsAwayOrderMode = false; bsAwayOrderMap = {}; }
-  else { bsHomeLineup = [...withOrder, ...dnpPlayers]; bsHomeOrderMode = false; bsHomeOrderMap = {}; }
+  if (side === 'away') { bsAwayLineup = [...withOrder, ...dnpPlayers]; bsAwayOrderMode = false; bsAwayOrdered = true; bsAwayOrderMap = {}; }
+  else { bsHomeLineup = [...withOrder, ...dnpPlayers]; bsHomeOrderMode = false; bsHomeOrdered = true; bsHomeOrderMap = {}; }
   bsRerender();
-}
+};
 
 // ── Score-Only Mode ───────────────────────────────────────────────
 window.bsToggleScoreOnly = function() {
