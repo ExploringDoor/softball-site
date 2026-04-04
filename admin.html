@@ -249,6 +249,9 @@ select.form-input{cursor:pointer}
       <input type="password" id="login-pass" class="form-input" placeholder="Enter password" autocomplete="current-password">
     </div>
     <button class="btn btn-outline btn-full" id="login-btn" onclick="doLogin()">Commissioner Sign In</button>
+    <div style="margin-top:10px;text-align:center">
+      <a href="#" onclick="enterAdminNoPass();return false" style="font-size:12px;color:#aaa;text-decoration:underline">Enter admin without password (temporary)</a>
+    </div>
   </div>
 </div>
 
@@ -528,6 +531,7 @@ let PLAYERS = [];
 let RECAPS_DATA = [];
 let currentUser = null;
 let captainMode = false;
+let captainTeamId = null;
 
 // ═══════════════════════════════════════════════════════════════════
 // TOAST NOTIFICATIONS
@@ -609,23 +613,73 @@ window.doLogout = async function() {
 };
 
 window.enterCaptainMode = async function() {
-  captainMode = true;
+  // First: load data so we have teams list, then show team picker
+  document.getElementById('login-screen').innerHTML = `
+    <div class="login-box" style="max-width:480px">
+      <div class="login-logo">DVSL</div>
+      <div class="login-sub" style="margin-bottom:24px">Select your team to continue</div>
+      <div id="captain-team-list" style="display:flex;flex-direction:column;gap:10px">
+        <div style="text-align:center;padding:20px;color:#888">Loading teams…</div>
+      </div>
+      <div style="margin-top:18px;text-align:center">
+        <a href="#" onclick="location.reload()" style="font-size:12px;color:#aaa">← Back</a>
+      </div>
+    </div>`;
+
+  // Load teams from Firebase
+  const FB_KEY = 'AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg';
+  const FB_BASE = 'https://firestore.googleapis.com/v1/projects/dvsl-292dd/databases/(default)/documents';
+  try {
+    const r = await fetch(`${FB_BASE}/teams?key=${FB_KEY}&pageSize=50`);
+    const data = await r.json();
+    const teams = (data.documents||[]).map(d => ({
+      id: d.name.split('/').pop(),
+      name: d.fields?.name?.stringValue || d.name.split('/').pop()
+    })).sort((a,b) => a.name.localeCompare(b.name));
+
+    document.getElementById('captain-team-list').innerHTML = teams.map(t => `
+      <button onclick="enterCaptainModeWithTeam('${t.id}','${t.name.replace(/'/g,"\\\'")}')"
+        style="width:100%;padding:14px 18px;background:#f4f6ff;border:2px solid #c7d4f5;border-radius:10px;
+               font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;text-transform:uppercase;
+               color:#002D72;cursor:pointer;text-align:left;transition:all .15s;letter-spacing:.04em"
+        onmouseover="this.style.background='#002D72';this.style.color='#FFD700'"
+        onmouseout="this.style.background='#f4f6ff';this.style.color='#002D72'">
+        ⚾ ${t.name}
+      </button>`).join('');
+  } catch(e) {
+    document.getElementById('captain-team-list').innerHTML = `<div style="color:red;font-size:13px">Failed to load teams: ${e.message}</div>`;
+  }
+};
+
+window.enterAdminNoPass = async function() {
+  captainMode = false;
+  captainTeamId = null;
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  // Hide sidebar items not relevant to captains
+  document.getElementById('sidebar-user').textContent = 'Admin (no auth)';
+  await loadAllData();
+  showSection('dashboard');
+};
+
+window.enterCaptainModeWithTeam = async function(teamId, teamName) {
+  captainMode = true;
+  captainTeamId = teamId;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  // Hide all non-scores nav items
   document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
-    const sec = el.dataset.sec;
-    if (sec !== 'scores') el.style.display = 'none';
+    if (el.dataset.sec !== 'scores') el.style.display = 'none';
   });
-  // Show a captain mode banner in sidebar
+  // Captain banner in sidebar
   const brand = document.querySelector('.sidebar-brand');
-  if (brand) {
+  if (brand && !document.getElementById('captain-banner')) {
     const banner = document.createElement('div');
-    banner.style.cssText = 'background:#fff3cd;color:#856404;font-size:11px;font-weight:700;text-transform:uppercase;padding:6px 14px;letter-spacing:.06em;border-bottom:1px solid #ffc107';
-    banner.textContent = '⚾ Captain Mode';
+    banner.id = 'captain-banner';
+    banner.style.cssText = 'background:#001a3e;color:#FFD700;font-size:11px;font-weight:700;text-transform:uppercase;padding:8px 14px;letter-spacing:.06em;border-bottom:1px solid #FFD700';
+    banner.innerHTML = `⚾ ${teamName}<br><span style="color:rgba(255,255,255,.5);font-size:10px;font-weight:400">Captain Mode</span>`;
     brand.after(banner);
   }
-  document.getElementById('sidebar-user').textContent = 'Captain';
+  document.getElementById('sidebar-user').textContent = teamName + ' Captain';
   await loadAllData();
   showSection('scores');
 };
@@ -751,8 +805,12 @@ function renderDashboard() {
 // ═══════════════════════════════════════════════════════════════════
 function renderScores() {
   const el = document.getElementById('scores-content');
+  // In captain mode, only show games involving the captain's team
+  const visibleGames = captainMode && captainTeamId
+    ? GAMES.filter(g => g.away === captainTeamId || g.home === captainTeamId)
+    : GAMES;
   const byWeek = {};
-  GAMES.forEach(g => {
+  visibleGames.forEach(g => {
     const w = g.wk || 0;
     if (!byWeek[w]) byWeek[w] = [];
     byWeek[w].push(g);
