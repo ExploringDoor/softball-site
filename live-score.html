@@ -65,11 +65,16 @@ body{display:flex;flex-direction:column}
 .lineup-col-header .lch-team{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--navy)}
 .lineup-col-header .lch-sub{font-size:11px;color:var(--muted);margin-top:2px}
 .lineup-players{flex:1;overflow-y:auto;padding:8px}
+.lineup-col-footer{padding:8px;border-top:1px solid var(--border);background:#fff;flex-shrink:0}
+.btn-add-guest{width:100%;background:transparent;border:1px dashed var(--border);color:var(--muted);border-radius:8px;padding:8px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-add-guest:hover{border-color:var(--navy);color:var(--navy);background:var(--navy-light)}
 .player-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:all .12s;user-select:none}
 .player-card:active{transform:scale(.97)}
 .player-card.selected{background:var(--navy);border-color:var(--navy);color:#fff}
 .player-card.selected .pc-num{color:rgba(255,255,255,.7)}
 .player-card.selected .pc-pos{color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.3)}
+.player-card.guest-card{border-style:dashed;border-color:var(--amber)}
+.player-card.guest-card.selected{background:var(--amber);border-color:var(--amber)}
 .pc-order{width:24px;height:24px;border-radius:50%;background:var(--gold);color:var(--navy);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;flex-shrink:0;display:none}
 .player-card.selected .pc-order{display:flex}
 .pc-num{font-size:11px;color:var(--muted);font-weight:600;min-width:22px;flex-shrink:0}
@@ -115,12 +120,21 @@ body{display:flex;flex-direction:column}
 
 /* BATTER */
 .batter-info{width:100%;background:rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;display:flex;align-items:center;justify-content:space-between}
-.batter-left .batter-label{font-size:10px;color:rgba(255,255,255,.5);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px}
+.batter-left .batter-label{font-size:10px;color:rgba(255,255,255,.5);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;display:flex;align-items:center;gap:6px}
+.btn-add-player-inline{background:rgba(255,255,255,.15);color:rgba(255,255,255,.8);border:none;border-radius:4px;padding:2px 6px;font-size:9px;font-weight:700;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+.btn-add-player-inline:hover{background:rgba(255,255,255,.25);color:#fff}
 .batter-left .batter-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#fff;letter-spacing:.02em}
 .batter-left .batter-line{font-size:11px;color:rgba(255,255,255,.6);margin-top:1px}
 .batter-right{text-align:right}
 .batter-right .ondeck-label{font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px}
 .batter-right .ondeck-name{font-size:12px;color:rgba(255,255,255,.6);font-weight:600}
+
+/* PITCHER ROW */
+.pitcher-row{width:100%;background:rgba(255,255,255,.05);border-radius:6px;padding:5px 12px;display:flex;align-items:center;gap:8px;margin-top:4px}
+.pitcher-label{font-size:9px;color:rgba(255,255,255,.4);font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.pitcher-name-display{font-size:12px;color:rgba(255,255,255,.75);font-weight:600;flex:1}
+.btn-change-pitcher{background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);border:none;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:600;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+.btn-change-pitcher:hover{background:rgba(255,255,255,.22);color:#fff}
 
 /* GAME BOTTOM */
 .game-bottom{flex:1;background:#fff;border-radius:16px 16px 0 0;overflow:hidden;display:flex;flex-direction:column;margin-top:0}
@@ -152,6 +166,8 @@ body{display:flex;flex-direction:column}
 .act-sac:hover{background:#dcfce7}
 .act-undo{background:#f3f4f6;color:#374151}
 .act-undo:hover{background:#e5e7eb}
+.act-log{background:#e0f2fe;color:#0369a1}
+.act-log:hover{background:#bae6fd}
 .last-play{padding:6px 12px 8px;font-size:12px;color:var(--muted);text-align:center;flex-shrink:0;min-height:26px}
 .inning-line{padding:0 10px 6px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .inning-line-inner{font-size:11px;color:var(--muted);display:flex;gap:6px}
@@ -167,19 +183,33 @@ body{display:flex;flex-direction:column}
 .modal-body{padding:16px 20px 24px}
 .modal-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:4px}
 .modal-subtitle{font-size:13px;color:var(--muted);margin-bottom:16px}
-.scored-section{margin-bottom:16px}
-.scored-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
-.scored-runners{display:flex;flex-wrap:wrap;gap:8px}
-.runner-toggle{padding:8px 14px;border-radius:8px;border:2px solid var(--border);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;background:#fff;color:var(--text)}
-.runner-toggle.active{background:var(--green-light);border-color:var(--green);color:var(--green2)}
+
+/* Runner resolution modal — new design */
+.runner-row{display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)}
+.runner-row:last-child{border-bottom:none}
+.runner-row-name{font-size:13px;font-weight:700;min-width:70px;color:var(--text)}
+.runner-row-name.from-base{font-size:10px;font-weight:600;color:var(--muted);display:block}
+.runner-dest-btns{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.dest-btn{padding:5px 8px;border-radius:6px;border:1.5px solid var(--border);font-size:11px;font-weight:700;cursor:pointer;transition:all .12s;background:#fff;color:var(--text);font-family:'Barlow Condensed',sans-serif;letter-spacing:.03em}
+.dest-btn:active{transform:scale(.93)}
+.dest-btn.active-dest{background:var(--navy);border-color:var(--navy);color:#fff}
+.dest-btn.dest-scored.active-dest{background:var(--green);border-color:var(--green);color:#fff}
+.dest-btn.dest-out.active-dest{background:var(--red);border-color:var(--red);color:#fff}
+.dest-btn.dest-out{border-color:#fca5a5;color:var(--red)}
+
+.play-summary{display:flex;gap:12px;padding:10px 0;margin-bottom:8px;border-bottom:1px solid var(--border)}
+.play-summary-item{font-size:12px;color:var(--muted);font-weight:600}
+.play-summary-item span{color:var(--text);font-weight:700}
+
 .rbi-badge{display:inline-block;background:var(--navy-light);color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;padding:6px 16px;border-radius:8px;margin-bottom:16px}
 .modal-confirm{width:100%;padding:14px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:background .15s;margin-top:8px}
 .modal-confirm:hover{background:var(--navy2)}
 
 /* Mini diamond in modal */
-.mini-diamond-wrap{position:relative;width:80px;height:80px;margin:0 auto 16px}
+.mini-diamond-wrap{position:relative;width:80px;height:80px;margin:0 auto 12px}
 .mini-base{position:absolute;width:14px;height:14px;transform:rotate(45deg);background:rgba(0,0,0,.1);border:1.5px solid rgba(0,0,0,.2);border-radius:2px}
 .mini-base.occ{background:var(--gold);border-color:var(--gold2);box-shadow:0 0 8px rgba(255,215,0,.5)}
+.mini-base.out-base{background:var(--red);border-color:var(--red2);opacity:.7}
 .mini-base-second{top:4px;left:50%;margin-left:-7px}
 .mini-base-third{top:50%;margin-top:-7px;left:4px}
 .mini-base-first{top:50%;margin-top:-7px;right:4px}
@@ -197,6 +227,26 @@ body{display:flex;flex-direction:column}
 .btn-continue:hover{background:var(--navy-light)}
 .btn-danger-modal{width:100%;padding:12px;background:var(--red);color:#fff;border:none;border-radius:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;margin-top:8px}
 .btn-danger-modal:hover{background:var(--red2)}
+
+/* Guest modal / Pitcher modal inputs */
+.modal-input{width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:14px;font-family:'Inter',sans-serif;margin-bottom:10px;outline:none;transition:border-color .15s}
+.modal-input:focus{border-color:var(--navy)}
+.modal-input-row{display:flex;gap:8px}
+.modal-input-row .modal-input{margin-bottom:0}
+.pitcher-select-list{margin-bottom:12px}
+.pitcher-option{padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px;font-weight:600;transition:all .12s}
+.pitcher-option:hover{border-color:var(--navy);background:var(--navy-light)}
+.pitcher-option.selected{background:var(--navy);border-color:var(--navy);color:#fff}
+.pitcher-or-divider{text-align:center;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin:10px 0}
+
+/* Play Log modal */
+.log-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.log-entry{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);font-size:12px}
+.log-entry:last-child{border-bottom:none}
+.log-inning-badge{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:14px;color:var(--navy);min-width:28px;flex-shrink:0;line-height:1.3}
+.log-play-text{flex:1;color:var(--text);font-weight:600;line-height:1.4}
+.log-run-badge{font-size:11px;font-weight:700;color:var(--green);white-space:nowrap}
+.log-rbi-badge{font-size:11px;font-weight:700;color:var(--amber);white-space:nowrap}
 
 /* ═══ SPINNER ═══ */
 .spinner{width:20px;height:20px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:inline-block}
@@ -271,6 +321,9 @@ body{display:flex;flex-direction:column}
         <div class="lch-sub">Tap to set batting order</div>
       </div>
       <div class="lineup-players" id="away-players"></div>
+      <div class="lineup-col-footer">
+        <button class="btn-add-guest" onclick="showGuestModal('away')">+ Add Guest</button>
+      </div>
     </div>
     <!-- home col -->
     <div class="lineup-col" id="col-home">
@@ -279,6 +332,9 @@ body{display:flex;flex-direction:column}
         <div class="lch-sub">Tap to set batting order</div>
       </div>
       <div class="lineup-players" id="home-players"></div>
+      <div class="lineup-col-footer">
+        <button class="btn-add-guest" onclick="showGuestModal('home')">+ Add Guest</button>
+      </div>
     </div>
   </div>
   <div class="lineup-footer">
@@ -330,53 +386,86 @@ body{display:flex;flex-direction:column}
       <div class="out-dot" id="out-2"></div>
     </div>
 
-    <!-- Field SVG -->
+    <!-- Field SVG — improved realistic design -->
     <svg class="field-svg" viewBox="0 0 220 178" xmlns="http://www.w3.org/2000/svg" overflow="visible">
       <defs>
         <filter id="base-glow-f" x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
-          <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+          <feColorMatrix in="coloredBlur" type="matrix"
+            values="1 0.8 0 0 0  0.8 0.6 0 0 0  0 0 0 0 0  0 0 0 1.2 0" result="goldBlur"/>
+          <feMerge><feMergeNode in="goldBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
-        <radialGradient id="grass-grad" cx="50%" cy="95%" r="80%">
-          <stop offset="0%" stop-color="#1e7a1e"/>
-          <stop offset="60%" stop-color="#186018"/>
-          <stop offset="100%" stop-color="#0f4a0f"/>
+        <radialGradient id="grass-grad" cx="50%" cy="90%" r="75%">
+          <stop offset="0%" stop-color="#2d8a2d"/>
+          <stop offset="55%" stop-color="#1e6e1e"/>
+          <stop offset="100%" stop-color="#145014"/>
         </radialGradient>
-        <!-- Clip field graphics to SVG bounds, let text overflow -->
+        <radialGradient id="mound-grad" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#9a6420"/>
+          <stop offset="100%" stop-color="#7d4818"/>
+        </radialGradient>
+        <pattern id="grass-stripes" x="0" y="0" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="12" height="12" fill="transparent"/>
+          <rect width="6" height="12" fill="rgba(255,255,255,0.03)"/>
+        </pattern>
         <clipPath id="field-bounds">
           <rect width="220" height="178" rx="10"/>
         </clipPath>
       </defs>
       <!-- Clipped group: all field graphics stay within SVG bounds -->
       <g clip-path="url(#field-bounds)">
-        <!-- Background -->
-        <rect width="220" height="178" fill="#001129"/>
-        <!-- Outfield grass -->
-        <circle cx="110" cy="170" r="158" fill="url(#grass-grad)"/>
+        <!-- Background (dark navy) -->
+        <rect width="220" height="178" rx="10" fill="#001129"/>
+        <!-- Warning track (brownish clay ring) -->
+        <circle cx="110" cy="170" r="155" fill="#7a5020"/>
+        <!-- Outfield grass with gradient -->
+        <circle cx="110" cy="170" r="143" fill="url(#grass-grad)"/>
+        <!-- Grass stripe overlay -->
+        <circle cx="110" cy="170" r="143" fill="url(#grass-stripes)"/>
         <!-- Infield clay diamond -->
-        <polygon points="110,36 173,99 110,162 47,99" fill="#7d4e18"/>
-        <polygon points="110,36 173,99 110,162 47,99" fill="rgba(0,0,0,0.1)"/>
+        <polygon points="110,36 173,99 110,162 47,99" fill="#7d4818"/>
+        <!-- Subtle base path dirt lines -->
+        <line x1="110" y1="162" x2="173" y2="99" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
+        <line x1="173" y1="99" x2="110" y2="36" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
+        <line x1="110" y1="36" x2="47" y2="99" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
+        <line x1="47" y1="99" x2="110" y2="162" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
         <!-- Foul lines -->
-        <line x1="110" y1="162" x2="208" y2="64" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"/>
-        <line x1="110" y1="162" x2="12" y2="64" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"/>
-        <!-- Baselines -->
-        <line x1="110" y1="162" x2="173" y2="99" stroke="rgba(255,255,255,0.7)" stroke-width="2.5"/>
-        <line x1="173" y1="99" x2="110" y2="36" stroke="rgba(255,255,255,0.7)" stroke-width="2.5"/>
-        <line x1="110" y1="36" x2="47" y2="99" stroke="rgba(255,255,255,0.7)" stroke-width="2.5"/>
-        <line x1="47" y1="99" x2="110" y2="162" stroke="rgba(255,255,255,0.7)" stroke-width="2.5"/>
-        <!-- Pitcher's mound -->
-        <circle cx="110" cy="99" r="11" fill="#8d5a18" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
-        <rect x="103" y="97" width="14" height="4" rx="1" fill="rgba(255,255,255,0.5)"/>
-        <!-- Home plate -->
-        <polygon points="110,155 118,162 118,170 102,170 102,162" fill="white"/>
-        <!-- Bases (rotated 45°) -->
+        <line x1="110" y1="162" x2="208" y2="64" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
+        <line x1="110" y1="162" x2="12" y2="64" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
+        <!-- Baselines (thicker white) -->
+        <line x1="110" y1="162" x2="173" y2="99" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+        <line x1="173" y1="99" x2="110" y2="36" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+        <line x1="110" y1="36" x2="47" y2="99" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+        <line x1="47" y1="99" x2="110" y2="162" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+        <!-- Pitcher's mound (raised look with ring) -->
+        <circle cx="110" cy="99" r="13" fill="rgba(0,0,0,0.15)"/>
+        <circle cx="110" cy="99" r="12" fill="url(#mound-grad)"/>
+        <circle cx="110" cy="99" r="12" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+        <!-- Pitcher's rubber -->
+        <rect x="103" y="97" width="14" height="4" rx="1" fill="rgba(255,255,255,0.55)"/>
+        <!-- Home plate (pentagon) -->
+        <polygon points="110,154 118,161 118,170 102,170 102,161" fill="white"/>
+        <!-- Base bags (rotated 45°) -->
         <rect id="base-first" class="svg-base" x="164" y="90" width="18" height="18" rx="2"
               transform="rotate(45 173 99)" fill="rgba(255,255,255,0.55)"/>
         <rect id="base-second" class="svg-base" x="101" y="27" width="18" height="18" rx="2"
               transform="rotate(45 110 36)" fill="rgba(255,255,255,0.55)"/>
         <rect id="base-third" class="svg-base" x="38" y="90" width="18" height="18" rx="2"
               transform="rotate(45 47 99)" fill="rgba(255,255,255,0.55)"/>
-        <!-- Outfield position labels (inside clip) -->
+        <!-- Infield position labels (subtle) -->
+        <text x="110" y="87" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
+              font-family="Inter,sans-serif" font-weight="600">P</text>
+        <text x="110" y="145" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
+              font-family="Inter,sans-serif" font-weight="600">C</text>
+        <text x="191" y="97" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
+              font-family="Inter,sans-serif" font-weight="600">1B</text>
+        <text x="152" y="66" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
+              font-family="Inter,sans-serif" font-weight="600">2B</text>
+        <text x="68" y="66" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
+              font-family="Inter,sans-serif" font-weight="600">SS</text>
+        <text x="29" y="97" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
+              font-family="Inter,sans-serif" font-weight="600">3B</text>
+        <!-- Outfield position labels -->
         <text x="110" y="14" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="8"
               font-family="Inter,sans-serif" font-weight="600" letter-spacing="1">CF</text>
         <text x="194" y="52" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="8"
@@ -396,7 +485,10 @@ body{display:flex;flex-direction:column}
     <!-- Batter info -->
     <div class="batter-info">
       <div class="batter-left">
-        <div class="batter-label">At Bat</div>
+        <div class="batter-label">
+          At Bat
+          <button class="btn-add-player-inline" onclick="showGuestModalGame()">+ Player</button>
+        </div>
         <div class="batter-name" id="batter-name">—</div>
         <div class="batter-line" id="batter-line">—</div>
       </div>
@@ -404,6 +496,13 @@ body{display:flex;flex-direction:column}
         <div class="ondeck-label">On Deck</div>
         <div class="ondeck-name" id="ondeck-name">—</div>
       </div>
+    </div>
+
+    <!-- Pitcher row -->
+    <div class="pitcher-row">
+      <span class="pitcher-label">Pitching:</span>
+      <span class="pitcher-name-display" id="pitcher-name">—</span>
+      <button class="btn-change-pitcher" onclick="showChangePitcherModal()">Change</button>
     </div>
   </div>
 
@@ -422,6 +521,7 @@ body{display:flex;flex-direction:column}
       <button class="act-btn act-fc" onclick="handlePlay('FC')">FC<span class="btn-sub">f.choice</span></button>
       <button class="act-btn act-sac" onclick="handlePlay('SAC')">SAC<span class="btn-sub">fly/bunt</span></button>
       <button class="act-btn act-undo" onclick="handleUndo()">↩<span class="btn-sub">undo</span></button>
+      <button class="act-btn act-log" onclick="showLogModal()" style="grid-column:span 4">📋 Play Log</button>
     </div>
     <div class="last-play" id="last-play-text"></div>
     <div class="inning-line">
@@ -431,20 +531,21 @@ body{display:flex;flex-direction:column}
   </div>
 </div>
 
-<!-- ═══ RUNNER RESOLUTION MODAL ═══ -->
+<!-- ═══ RUNNER RESOLUTION MODAL (redesigned) ═══ -->
 <div class="modal-overlay" id="modal-runners">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-body">
       <div class="modal-title" id="runner-modal-title">SMITH — DOUBLE</div>
-      <div class="modal-subtitle" id="runner-modal-sub">Who scored?</div>
+      <div class="modal-subtitle" id="runner-modal-sub">Adjust runner destinations</div>
 
-      <div class="scored-section" id="runner-scored-section">
-        <div class="scored-label">Scored (toggle to change)</div>
-        <div class="scored-runners" id="runner-toggles"></div>
+      <div class="play-summary">
+        <div class="play-summary-item">Runs: <span id="modal-runs-count">0</span></div>
+        <div class="play-summary-item">Outs: <span id="modal-outs-count">0</span></div>
+        <div class="play-summary-item">RBI: <span id="modal-rbi-count">0</span></div>
       </div>
 
-      <div class="scored-label" style="margin-bottom:8px">Bases After Play</div>
+      <!-- Live mini diamond -->
       <div class="mini-diamond-wrap" id="modal-mini-diamond">
         <div class="mini-base mini-base-second" id="modal-base-2b"></div>
         <div class="mini-base mini-base-third" id="modal-base-3b"></div>
@@ -452,7 +553,8 @@ body{display:flex;flex-direction:column}
         <div class="mini-base mini-base-home"></div>
       </div>
 
-      <div class="rbi-badge" id="rbi-badge">0 RBI</div>
+      <!-- Runner rows -->
+      <div id="runner-rows-wrap"></div>
 
       <button class="modal-confirm" onclick="confirmPlay()">Confirm</button>
     </div>
@@ -487,6 +589,51 @@ body{display:flex;flex-direction:column}
   </div>
 </div>
 
+<!-- ═══ GUEST PLAYER MODAL ═══ -->
+<div class="modal-overlay" id="modal-guest">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-body">
+      <div class="modal-title">Add Guest Player</div>
+      <div class="modal-subtitle" id="guest-modal-sub">At least one field required</div>
+      <input class="modal-input" id="guest-name-input" type="text" placeholder="Player Name — optional" autocomplete="off">
+      <input class="modal-input" id="guest-num-input" type="text" placeholder="# — optional" inputmode="numeric" autocomplete="off">
+      <button class="modal-confirm" onclick="confirmAddGuest()">Add to Lineup</button>
+      <button class="btn-continue" onclick="closeModal('modal-guest')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CHANGE PITCHER MODAL ═══ -->
+<div class="modal-overlay" id="modal-pitcher">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-body">
+      <div class="modal-title">Change Pitcher</div>
+      <div class="modal-subtitle">Select from lineup or type a name</div>
+      <div class="pitcher-select-list" id="pitcher-lineup-list"></div>
+      <div class="pitcher-or-divider">— or type a name —</div>
+      <input class="modal-input" id="pitcher-name-input" type="text" placeholder="Pitcher name..." autocomplete="off">
+      <button class="modal-confirm" onclick="confirmChangePitcher()">Set Pitcher</button>
+      <button class="btn-continue" onclick="closeModal('modal-pitcher')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PLAY LOG MODAL ═══ -->
+<div class="modal-overlay" id="modal-log">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-body">
+      <div class="log-header">
+        <div class="modal-title" style="margin-bottom:0">Play Log</div>
+        <button class="btn-continue" style="width:auto;padding:8px 14px;margin:0;font-size:12px" onclick="handleUndo()">↩ Undo Last</button>
+      </div>
+      <div id="log-entries"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ TOAST CONTAINER ═══ -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
@@ -515,10 +662,13 @@ const db = getFirestore(app);
 let GAMES = [], TEAMS = [], PLAYERS = [];
 let SELECTED_GAME = null;
 
-// Away/home player lists on lineup screen (full player objects keyed by team id)
 let AWAY_ROSTER = [], HOME_ROSTER = [];
-// Ordered lineup arrays: { name, num, pos, lineupIdx, ab, r, s, d, t, hr, rbi, bb, so, hbp, e }
 let AWAY_LINEUP_DRAFT = [], HOME_LINEUP_DRAFT = [];
+
+// Context for guest modal (which side + whether lineup screen or game screen)
+let GUEST_MODAL_CONTEXT = { side: 'away', screen: 'lineup' };
+// Context for pitcher modal
+let PITCHER_SELECTED_NAME = '';
 
 // ═══════════════════════════════════════════════════════════════════
 // GAME STATE
@@ -545,12 +695,15 @@ const STATE = {
   awayErrors: 0, homeErrors: 0,
   status: 'live',
   lastPlay: '',
-  history: []
+  history: [],
+  awayPitcher: '',
+  homePitcher: '',
+  playLog: []
 };
 
 // Pending play (waiting for runner resolution)
+// { outcome, batter, batterIdx, runnerOutcomes: {first,second,third}, batterOutcome }
 let PENDING_PLAY = null;
-// { outcome, batter, batterIdx, newBases, scored, isOut, isHit }
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS
@@ -602,12 +755,18 @@ function cloneState() {
     awayHits: STATE.awayHits, homeHits: STATE.homeHits,
     awayErrors: STATE.awayErrors, homeErrors: STATE.homeErrors,
     status: STATE.status,
-    lastPlay: STATE.lastPlay
+    lastPlay: STATE.lastPlay,
+    awayPitcher: STATE.awayPitcher,
+    homePitcher: STATE.homePitcher,
+    playLog: STATE.playLog
   }));
 }
 
 function restoreState(snap) {
   Object.assign(STATE, snap);
+  if (!STATE.awayPitcher) STATE.awayPitcher = '';
+  if (!STATE.homePitcher) STATE.homePitcher = '';
+  if (!STATE.playLog) STATE.playLog = [];
 }
 
 function saveToLocalStorage() {
@@ -663,6 +822,7 @@ function closeModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.remove('open');
 }
+window.closeModal = closeModal;
 
 // ═══════════════════════════════════════════════════════════════════
 // LOAD DATA
@@ -677,6 +837,30 @@ async function loadData() {
     GAMES = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     TEAMS = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     PLAYERS = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Auto-resume: check for a single active localStorage game
+    const activeSnaps = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('dvsl_live_')) {
+        try {
+          const snap = JSON.parse(localStorage.getItem(key));
+          if (snap && snap.status !== 'final') {
+            activeSnaps.push(snap);
+          }
+        } catch(e) {}
+      }
+    }
+    if (activeSnaps.length === 1) {
+      // Auto-restore and jump straight to game screen
+      restoreState(activeSnaps[0]);
+      STATE.history = [];
+      showScreen('screen-game');
+      renderGameScreen();
+      showToast('Game auto-resumed', 'success');
+      return;
+    }
+    // Multiple or zero active games — show pick screen
     renderPickScreen();
   } catch(e) {
     document.getElementById('pick-body').innerHTML =
@@ -694,27 +878,17 @@ function renderPickScreen() {
     return;
   }
 
-  // Check URL param for direct game link
   const urlParams = new URLSearchParams(window.location.search);
   const directGameId = urlParams.get('game');
   if (directGameId) {
     const g = GAMES.find(x => x.id === directGameId);
-    if (g) {
-      pickGame(g);
-      return;
-    }
+    if (g) { pickGame(g); return; }
   }
 
-  // Sort games
-  const today = new Date().toISOString().split('T')[0];
-  const pending = GAMES.filter(g => !g.done).sort((a,b) => {
-    const wA = a.wk || 0, wB = b.wk || 0;
-    return wA - wB;
-  });
+  const pending = GAMES.filter(g => !g.done).sort((a,b) => (a.wk||0) - (b.wk||0));
   const done = GAMES.filter(g => g.done).sort((a,b) => (b.wk||0) - (a.wk||0));
   const ordered = [...pending, ...done];
 
-  // Group by week
   const byWeek = {};
   ordered.forEach(g => {
     const w = g.wk || 0;
@@ -733,7 +907,7 @@ function renderPickScreen() {
     for (const g of byWeek[w]) {
       const awayName = getTeamName(g.away);
       const homeName = getTeamName(g.home);
-      const isToday = g.date === today;
+      const isToday = g.date === new Date().toISOString().split('T')[0];
       const resumeData = loadFromLocalStorage(g.id);
       const isLiveDoc = g.live && !g.done;
       const canScore = !g.done;
@@ -759,7 +933,6 @@ function renderPickScreen() {
     }
   }
   body.innerHTML = html;
-  // Expose GAMES to inline onclick handlers
   window._GAMES = GAMES;
 }
 
@@ -798,7 +971,6 @@ function showLineupScreen(g) {
   document.getElementById('away-col-title').textContent = awayName + ' (Away)';
   document.getElementById('home-col-title').textContent = homeName + ' (Home)';
 
-  // Get players for each team
   AWAY_ROSTER = PLAYERS.filter(p => p.team === g.away).sort((a,b) => (a.name||'').localeCompare(b.name||''));
   HOME_ROSTER = PLAYERS.filter(p => p.team === g.home).sort((a,b) => (a.name||'').localeCompare(b.name||''));
 
@@ -822,11 +994,12 @@ function renderLineupPlayers(side) {
   container.innerHTML = roster.map(p => {
     const order = orderMap[p.id];
     const selected = !!order;
-    return `<div class="player-card${selected ? ' selected' : ''}" onclick="toggleLineupPlayer('${side}','${p.id}')" data-pid="${p.id}">
+    const isGuest = p.id && p.id.startsWith('guest_');
+    return `<div class="player-card${selected ? ' selected' : ''}${isGuest ? ' guest-card' : ''}" onclick="toggleLineupPlayer('${side}','${p.id}')" data-pid="${p.id}">
       <div class="pc-order">${order || ''}</div>
       <div class="pc-num">#${p.num||'?'}</div>
-      <div class="pc-name">${p.name||'Unknown'}</div>
-      <div class="pc-pos">${p.pos||''}</div>
+      <div class="pc-name">${p.name||'Guest'}</div>
+      <div class="pc-pos">${isGuest ? 'guest' : (p.pos||'')}</div>
     </div>`;
   }).join('');
 }
@@ -839,10 +1012,8 @@ window.toggleLineupPlayer = function(side, playerId) {
 
   const idx = draft.findIndex(p => p.id === playerId);
   if (idx >= 0) {
-    // Remove from lineup
     draft.splice(idx, 1);
   } else {
-    // Add to end of lineup
     draft.push(player);
   }
 
@@ -899,6 +1070,9 @@ window.startGame = function() {
   STATE.status = 'live';
   STATE.lastPlay = '';
   STATE.history = [];
+  STATE.awayPitcher = '';
+  STATE.homePitcher = '';
+  STATE.playLog = [];
 
   showScreen('screen-game');
   renderGameScreen();
@@ -912,6 +1086,113 @@ window.goBack = function() {
 window.goToPickScreen = function() {
   showScreen('screen-pick');
   renderPickScreen();
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// GUEST PLAYER MODAL
+// ═══════════════════════════════════════════════════════════════════
+window.showGuestModal = function(side) {
+  GUEST_MODAL_CONTEXT = { side, screen: 'lineup' };
+  document.getElementById('guest-name-input').value = '';
+  document.getElementById('guest-num-input').value = '';
+  document.getElementById('guest-modal-sub').textContent = `Adding guest to ${side} team lineup`;
+  openModal('modal-guest');
+};
+
+window.showGuestModalGame = function() {
+  const side = STATE.half === 'top' ? 'away' : 'home';
+  GUEST_MODAL_CONTEXT = { side, screen: 'game' };
+  document.getElementById('guest-name-input').value = '';
+  document.getElementById('guest-num-input').value = '';
+  document.getElementById('guest-modal-sub').textContent = 'Adding guest to batting team lineup';
+  openModal('modal-guest');
+};
+
+window.confirmAddGuest = function() {
+  const nameVal = document.getElementById('guest-name-input').value.trim();
+  const numVal = document.getElementById('guest-num-input').value.trim();
+
+  if (!nameVal && !numVal) {
+    showToast('Enter a name or jersey number', 'error');
+    return;
+  }
+
+  const guestPlayer = {
+    id: 'guest_' + Date.now(),
+    name: nameVal || ('Guest #' + (numVal || '?')),
+    num: numVal || '',
+    pos: 'guest'
+  };
+
+  const ctx = GUEST_MODAL_CONTEXT;
+  closeModal('modal-guest');
+
+  if (ctx.screen === 'lineup') {
+    // Add to roster and lineup draft
+    if (ctx.side === 'away') {
+      AWAY_ROSTER.push(guestPlayer);
+      AWAY_LINEUP_DRAFT.push(guestPlayer);
+    } else {
+      HOME_ROSTER.push(guestPlayer);
+      HOME_LINEUP_DRAFT.push(guestPlayer);
+    }
+    renderLineupPlayers(ctx.side);
+    updateStartBtn();
+  } else {
+    // Game screen — add to end of current batting team's lineup
+    const entry = makeLineupEntry(guestPlayer, 0); // lineupIdx set below
+    if (ctx.side === 'away') {
+      entry.lineupIdx = STATE.awayLineup.length;
+      STATE.awayLineup.push(entry);
+    } else {
+      entry.lineupIdx = STATE.homeLineup.length;
+      STATE.homeLineup.push(entry);
+    }
+    renderGameScreen();
+    showToast(`${guestPlayer.name} added to lineup`, 'success');
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CHANGE PITCHER MODAL
+// ═══════════════════════════════════════════════════════════════════
+window.showChangePitcherModal = function() {
+  // Fielding team lineup
+  const fieldingLineup = STATE.half === 'top' ? STATE.homeLineup : STATE.awayLineup;
+  const currentPitcher = STATE.half === 'top' ? STATE.homePitcher : STATE.awayPitcher;
+
+  document.getElementById('pitcher-name-input').value = currentPitcher || '';
+  PITCHER_SELECTED_NAME = currentPitcher || '';
+
+  const listEl = document.getElementById('pitcher-lineup-list');
+  listEl.innerHTML = fieldingLineup.map(p => {
+    const isSelected = p.name === PITCHER_SELECTED_NAME;
+    return `<div class="pitcher-option${isSelected ? ' selected' : ''}" onclick="selectPitcherFromList('${p.name.replace(/'/g, "\\'")}', this)">${p.name}${p.num ? ' #'+p.num : ''}</div>`;
+  }).join('');
+
+  openModal('modal-pitcher');
+};
+
+window.selectPitcherFromList = function(name, el) {
+  PITCHER_SELECTED_NAME = name;
+  document.getElementById('pitcher-name-input').value = name;
+  document.querySelectorAll('.pitcher-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+};
+
+window.confirmChangePitcher = function() {
+  const typedName = document.getElementById('pitcher-name-input').value.trim();
+  const pitcherName = typedName || PITCHER_SELECTED_NAME;
+  if (!pitcherName) { showToast('Enter a pitcher name', 'error'); return; }
+
+  if (STATE.half === 'top') {
+    STATE.homePitcher = pitcherName;
+  } else {
+    STATE.awayPitcher = pitcherName;
+  }
+  closeModal('modal-pitcher');
+  renderGameScreen();
+  saveToLocalStorage();
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -932,7 +1213,7 @@ function renderGameScreen() {
     document.getElementById('out-' + i).className = 'out-dot' + (i < STATE.outs ? ' filled' : '');
   }
 
-  // Bases (SVG elements — use setAttribute for fill and filter)
+  // Bases (SVG elements)
   const bases = STATE.bases;
   ['first','second','third'].forEach(b => {
     const el = document.getElementById('base-' + b);
@@ -962,6 +1243,10 @@ function renderGameScreen() {
     document.getElementById('ondeck-name').textContent = '—';
   }
 
+  // Pitcher display (fielding team pitcher)
+  const pitcherName = STATE.half === 'top' ? STATE.homePitcher : STATE.awayPitcher;
+  document.getElementById('pitcher-name').textContent = pitcherName || '—';
+
   // Last play
   document.getElementById('last-play-text').textContent = STATE.lastPlay || '';
 
@@ -970,109 +1255,96 @@ function renderGameScreen() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// BASERUNNER ADVANCEMENT
+// CALCULATE DEFAULT OUTCOMES
 // ═══════════════════════════════════════════════════════════════════
-function advanceRunners(bases, outcome, batter) {
-  const b = { ...bases };
-  let scored = [];
-  let newBases = { first: null, second: null, third: null };
+function calculateDefaultOutcomes(bases, outcome, batter) {
+  const b = bases;
+  let runnerOutcomes = { first: null, second: null, third: null };
+  let batterOutcome = 'out';
 
   switch(outcome) {
     case '1B':
-      if (b.third) scored.push(b.third);
-      newBases = { first: batter, second: b.first, third: b.second };
+      if (b.third) runnerOutcomes.third = 'scored';
+      if (b.second) runnerOutcomes.second = '3b';
+      if (b.first) runnerOutcomes.first = '2b';
+      batterOutcome = '1b';
       break;
+
     case '2B':
-      if (b.third) scored.push(b.third);
-      if (b.second) scored.push(b.second);
-      newBases = { first: null, second: batter, third: b.first };
+      if (b.third) runnerOutcomes.third = 'scored';
+      if (b.second) runnerOutcomes.second = 'scored';
+      if (b.first) runnerOutcomes.first = '3b';
+      batterOutcome = '2b';
       break;
+
     case '3B':
-      if (b.first) scored.push(b.first);
-      if (b.second) scored.push(b.second);
-      if (b.third) scored.push(b.third);
-      newBases = { first: null, second: null, third: batter };
+      if (b.third) runnerOutcomes.third = 'scored';
+      if (b.second) runnerOutcomes.second = 'scored';
+      if (b.first) runnerOutcomes.first = 'scored';
+      batterOutcome = '3b';
       break;
+
     case 'HR':
-      if (b.first) scored.push(b.first);
-      if (b.second) scored.push(b.second);
-      if (b.third) scored.push(b.third);
-      scored.push(batter);
-      newBases = { first: null, second: null, third: null };
+      if (b.third) runnerOutcomes.third = 'scored';
+      if (b.second) runnerOutcomes.second = 'scored';
+      if (b.first) runnerOutcomes.first = 'scored';
+      batterOutcome = 'scored';
       break;
+
     case 'BB':
     case 'HBP':
+      // Force advance chain
       if (b.first && b.second && b.third) {
-        scored.push(b.third);
-        newBases = { first: batter, second: b.first, third: b.second };
+        runnerOutcomes.third = 'scored';
+        runnerOutcomes.second = '3b';
+        runnerOutcomes.first = '2b';
       } else if (b.first && b.second) {
-        newBases = { first: batter, second: b.first, third: b.second };
+        runnerOutcomes.second = '3b';
+        runnerOutcomes.first = '2b';
       } else if (b.first) {
-        newBases = { first: batter, second: b.first, third: b.third };
-      } else {
-        newBases = { first: batter, second: b.second, third: b.third };
+        runnerOutcomes.first = '2b';
+      }
+      batterOutcome = '1b';
+      break;
+
+    case 'SAC':
+      // Batter out, all runners advance one base
+      if (b.third) runnerOutcomes.third = 'scored';
+      if (b.second) runnerOutcomes.second = '3b';
+      if (b.first) runnerOutcomes.first = '2b';
+      batterOutcome = 'out';
+      break;
+
+    case 'E':
+      if (b.third) runnerOutcomes.third = 'scored';
+      if (b.second) runnerOutcomes.second = '3b';
+      if (b.first) runnerOutcomes.first = '2b';
+      batterOutcome = '1b';
+      break;
+
+    case 'FC':
+      // Batter to first; lead runner is out, others stay at current base
+      batterOutcome = '1b';
+      if (b.third) {
+        runnerOutcomes.third = 'out';
+        // others stay (null = no movement, stays at current base in newBases logic)
+      } else if (b.second) {
+        runnerOutcomes.second = 'out';
+      } else if (b.first) {
+        runnerOutcomes.first = 'out';
       }
       break;
+
     case 'K':
     case 'OUT':
     case 'FO':
     case 'GO':
-      newBases = { ...b };
-      break;
-    case 'SAC':
-      if (b.third) scored.push(b.third);
-      newBases = { first: b.first, second: b.second, third: null };
-      break;
-    case 'E':
-      if (b.third) scored.push(b.third);
-      newBases = { first: batter, second: b.first, third: b.second };
-      break;
-    case 'FC':
-      newBases = { first: batter, second: b.second, third: b.third };
-      // Lead runner out — remove the lead runner
-      if (b.first) {
-        // runner on first is out, batter to first
-        newBases.second = b.second;
-      } else if (b.second) {
-        newBases.second = null;
-      } else if (b.third) {
-        newBases.third = null;
-      }
-      break;
     default:
-      newBases = { ...b };
+      batterOutcome = 'out';
+      break;
   }
 
-  return { newBases, scored };
-}
-
-function isOutcome(outcome) {
-  return ['K','OUT','FO','GO','SAC','FC'].includes(outcome);
-}
-
-function isHitOutcome(outcome) {
-  return ['1B','2B','3B','HR'].includes(outcome);
-}
-
-// Determine if we need the runner modal
-function needsRunnerModal(outcome, bases, scored) {
-  // Always skip for strikeout
-  if (outcome === 'K') return false;
-  // Skip for pure outs with no runners in scoring position who would score
-  if (['OUT','GO','FO'].includes(outcome) && !bases.third) return false;
-  // Show if there are runners on base for any of the advances
-  const hasRunners = bases.first || bases.second || bases.third;
-  // Show if batter reaches on error/hit/walk/hbp
-  if (['1B','2B','3B','HR','BB','HBP','E','FC','SAC'].includes(outcome)) {
-    if (outcome === 'BB' || outcome === 'HBP') {
-      // Only show if a runner scores (bases loaded)
-      return scored.length > 0;
-    }
-    if (outcome === 'FC') return false;
-    if (outcome === 'SAC') return scored.length > 0;
-    return true; // Always show for hits/E
-  }
-  return scored.length > 0;
+  return { runnerOutcomes, batterOutcome };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1084,119 +1356,299 @@ window.handlePlay = function(outcome) {
   const batterIdx = STATE.half === 'top' ? STATE.awayBatterIdx : STATE.homeBatterIdx;
   if (lineup.length === 0) { showToast('No lineup set', 'error'); return; }
 
-  // Push to history
-  if (STATE.history.length >= 10) STATE.history.shift();
+  // Push to history (max 25)
+  if (STATE.history.length >= 25) STATE.history.shift();
   STATE.history.push(cloneState());
 
   const batter = { name: lineup[batterIdx % lineup.length].name, lineupIdx: batterIdx % lineup.length };
-  const { newBases, scored } = advanceRunners(STATE.bases, outcome, batter);
+  const { runnerOutcomes, batterOutcome } = calculateDefaultOutcomes(STATE.bases, outcome, batter);
 
   PENDING_PLAY = {
     outcome,
     batter,
     batterIdx: batterIdx % lineup.length,
-    newBases,
-    scored: scored.map(r => ({ ...r })),
-    confirmedScored: scored.map(r => ({ ...r }))
+    runnerOutcomes,
+    batterOutcome
   };
 
   // Determine if we show the runner modal
-  if (needsRunnerModal(outcome, STATE.bases, scored)) {
+  const hasRunners = !!(STATE.bases.first || STATE.bases.second || STATE.bases.third);
+  const batterReaches = batterOutcome !== 'out';
+
+  // K: no modal at all
+  if (outcome === 'K') {
+    finishPlay(runnerOutcomes, batterOutcome);
+    return;
+  }
+  // Pure out with no runners: no modal
+  if (['OUT','FO','GO'].includes(outcome) && !hasRunners) {
+    finishPlay(runnerOutcomes, batterOutcome);
+    return;
+  }
+  // FC: no modal — apply immediately
+  if (outcome === 'FC') {
+    finishPlay(runnerOutcomes, batterOutcome);
+    return;
+  }
+  // OUT/GO/FO with runners only show modal if a runner might score
+  if (['OUT','FO','GO'].includes(outcome) && !Object.values(runnerOutcomes).some(d => d === 'scored')) {
+    finishPlay(runnerOutcomes, batterOutcome);
+    return;
+  }
+  // BB/HBP: only show modal if scored (bases loaded scenario)
+  if (['BB','HBP'].includes(outcome) && !Object.values(runnerOutcomes).some(d => d === 'scored')) {
+    finishPlay(runnerOutcomes, batterOutcome);
+    return;
+  }
+  // SAC: show modal if there are runners (need to adjust advancement)
+  // All other cases: show modal if runners on base or batter on base
+  if (hasRunners || batterReaches) {
     showRunnerModal();
   } else {
-    // Apply immediately
-    finishPlay(PENDING_PLAY.confirmedScored);
+    finishPlay(runnerOutcomes, batterOutcome);
   }
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// RUNNER MODAL
+// RUNNER MODAL — redesigned
 // ═══════════════════════════════════════════════════════════════════
 function showRunnerModal() {
   const p = PENDING_PLAY;
-  const outcomeName = {
+  const outcomeLabels = {
     '1B':'Single','2B':'Double','3B':'Triple','HR':'Home Run',
     'BB':'Walk','HBP':'Hit By Pitch','E':'Error','SAC':'Sac Fly/Bunt',
-    'FC':'Fielder\'s Choice','OUT':'Out','K':'Strikeout'
-  }[p.outcome] || p.outcome;
-
+    'FC':"Fielder's Choice",'OUT':'Out','K':'Strikeout'
+  };
+  const outcomeName = outcomeLabels[p.outcome] || p.outcome;
   document.getElementById('runner-modal-title').textContent = `${lastName(p.batter.name)} — ${outcomeName}`;
+  document.getElementById('runner-modal-sub').textContent = 'Tap to adjust runner destinations';
 
-  // Who scored (all runners from initial calculation + batter if HR)
-  const allPossible = p.scored;
-
-  // Build toggle list
-  const toggleWrap = document.getElementById('runner-toggles');
-  if (allPossible.length === 0) {
-    document.getElementById('runner-scored-section').style.display = 'none';
-  } else {
-    document.getElementById('runner-scored-section').style.display = 'block';
-    toggleWrap.innerHTML = allPossible.map((r, i) => {
-      const active = p.confirmedScored.some(x => x.lineupIdx === r.lineupIdx);
-      // Don't allow toggling the batter on HR (they always score)
-      const isBatterHR = p.outcome === 'HR' && r.lineupIdx === p.batter.lineupIdx;
-      return `<button class="runner-toggle${active ? ' active' : ''}"
-        onclick="toggleRunnerScored(${i})"
-        ${isBatterHR ? 'disabled style="opacity:.5;cursor:not-allowed"' : ''}
-        data-runner-idx="${i}">${r.name}</button>`;
-    }).join('');
-  }
-
-  // Mini diamond
-  updateModalDiamond(p.newBases);
-  updateRBIBadge();
+  renderRunnerRows();
+  updateModalSummary();
   openModal('modal-runners');
 }
 
-window.toggleRunnerScored = function(runnerIdx) {
+function renderRunnerRows() {
   const p = PENDING_PLAY;
-  const runner = p.scored[runnerIdx];
-  const confIdx = p.confirmedScored.findIndex(r => r.lineupIdx === runner.lineupIdx);
-  if (confIdx >= 0) {
-    p.confirmedScored.splice(confIdx, 1);
-  } else {
-    p.confirmedScored.push({ ...runner });
-  }
-  // Re-render toggles
-  document.querySelectorAll('[data-runner-idx]').forEach(btn => {
-    const idx = parseInt(btn.dataset.runnerIdx);
-    const r = p.scored[idx];
-    const active = p.confirmedScored.some(x => x.lineupIdx === r.lineupIdx);
-    btn.className = 'runner-toggle' + (active ? ' active' : '');
-  });
-  updateRBIBadge();
-};
+  const bases = STATE.bases;
+  const wrap = document.getElementById('runner-rows-wrap');
+  let html = '';
 
-function updateRBIBadge() {
-  const p = PENDING_PLAY;
-  // RBI = scored runners excluding the batter themselves (batter scores on HR but doesn't get RBI from own HR)
-  const rbi = p.confirmedScored.filter(r => r.lineupIdx !== p.batter.lineupIdx || p.outcome !== 'HR').length;
-  // Actually: on HR, batter scores but that doesn't count as RBI — everyone who scores INCLUDING batter counts but we track separately
-  // Standard: batter gets RBI for each runner who scores + themselves on HR
-  const rbiCount = p.confirmedScored.length; // batter scores = 1 RBI on HR too (include batter scoring as RBI)
-  document.getElementById('rbi-badge').textContent = `${rbiCount} RBI`;
+  // Destination button validity by starting position
+  // Can't go backward. Destinations: 'scored', '3b', '2b', '1b', 'out'
+  const destOrder = ['scored', '3b', '2b', '1b', 'out'];
+  const destLabel = { 'scored': 'Scored', '3b': '3B', '2b': '2B', '1b': '1B', 'out': 'Out✕' };
+  const destClass = { 'scored': 'dest-scored', '3b': '', '2b': '', '1b': '', 'out': 'dest-out' };
+
+  // Min destination index for each starting position (can only go forward)
+  // third: min = scored(0) can't go to 1b(3) — actually third runner can go to 3b(stay), scored, or out
+  // But we allow any "forward" destination. Starting position: 3rd = min dest index 0 (scored)
+  // 2nd: min dest index 0 (scored), up to 2b (stay), or out
+  // 1st: min dest index 0 (scored), up to 1b (stay), or out
+  // We show all except positions BEHIND the runner's start
+  // third → can go to: scored, 3b(stay), out (NOT 2b or 1b — backward)
+  // second → can go to: scored, 3b, 2b(stay), out (NOT 1b)
+  // first → can go to: scored, 3b, 2b, 1b(stay), out
+  const validDests = {
+    third: ['scored', '3b', 'out'],
+    second: ['scored', '3b', '2b', 'out'],
+    first: ['scored', '3b', '2b', '1b', 'out']
+  };
+
+  const runnerEntries = [
+    { key: 'third', label: bases.third ? bases.third.name : null, fromLabel: '3rd base' },
+    { key: 'second', label: bases.second ? bases.second.name : null, fromLabel: '2nd base' },
+    { key: 'first', label: bases.first ? bases.first.name : null, fromLabel: '1st base' }
+  ];
+
+  for (const entry of runnerEntries) {
+    if (!entry.label) continue; // no runner on this base
+    const currentDest = p.runnerOutcomes[entry.key];
+    const valids = validDests[entry.key];
+
+    html += `<div class="runner-row" data-runner-key="${entry.key}">
+      <div class="runner-row-name">
+        ${lastName(entry.label)}
+        <span class="runner-row-name from-base">${entry.fromLabel}</span>
+      </div>
+      <div class="runner-dest-btns">`;
+
+    for (const d of valids) {
+      const isActive = currentDest === d;
+      html += `<button class="dest-btn ${destClass[d]}${isActive ? ' active-dest' : ''}"
+        onclick="setRunnerDest('${entry.key}','${d}',this)"
+        data-dest="${d}">${destLabel[d]}</button>`;
+    }
+    html += `</div></div>`;
+  }
+
+  // Batter row — only show if batter reaches base (not out, not FC which is instant)
+  const batterReaches = p.batterOutcome !== 'out';
+  if (batterReaches) {
+    const batterDest = p.batterOutcome;
+    // For E: allow 1b or 2b toggle; for others show fixed
+    const isError = p.outcome === 'E';
+    html += `<div class="runner-row" data-runner-key="batter">
+      <div class="runner-row-name">
+        ${lastName(p.batter.name)}
+        <span class="runner-row-name from-base">batter</span>
+      </div>
+      <div class="runner-dest-btns">`;
+
+    if (isError) {
+      // Error: batter can reach 1b or 2b
+      for (const d of ['1b', '2b', 'out']) {
+        const isActive = batterDest === d;
+        html += `<button class="dest-btn ${destClass[d]}${isActive ? ' active-dest' : ''}"
+          onclick="setBatterDest('${d}',this)"
+          data-dest="${d}">${destLabel[d]}</button>`;
+      }
+    } else {
+      // Fixed destination, no toggle (except scored = HR)
+      const destLabelText = destLabel[batterDest] || batterDest;
+      html += `<button class="dest-btn active-dest ${destClass[batterDest] || ''}" disabled>${destLabelText}</button>`;
+    }
+    html += `</div></div>`;
+  } else if (p.outcome !== 'K' && p.outcome !== 'FC') {
+    // Batter out row
+    html += `<div class="runner-row" data-runner-key="batter">
+      <div class="runner-row-name">
+        ${lastName(p.batter.name)}
+        <span class="runner-row-name from-base">batter</span>
+      </div>
+      <div class="runner-dest-btns">
+        <button class="dest-btn dest-out active-dest" disabled>Out✕</button>
+      </div>
+    </div>`;
+  }
+
+  wrap.innerHTML = html;
+  updateModalDiamond();
 }
 
-function updateModalDiamond(bases) {
-  document.getElementById('modal-base-1b').className = 'mini-base mini-base-first' + (bases.first ? ' occ' : '');
-  document.getElementById('modal-base-2b').className = 'mini-base mini-base-second' + (bases.second ? ' occ' : '');
-  document.getElementById('modal-base-3b').className = 'mini-base mini-base-third' + (bases.third ? ' occ' : '');
+window.setRunnerDest = function(runnerKey, dest, btn) {
+  PENDING_PLAY.runnerOutcomes[runnerKey] = dest;
+  // Update buttons in that row
+  const row = btn.closest('[data-runner-key]');
+  row.querySelectorAll('.dest-btn').forEach(b => b.classList.remove('active-dest'));
+  btn.classList.add('active-dest');
+  updateModalDiamond();
+  updateModalSummary();
+};
+
+window.setBatterDest = function(dest, btn) {
+  PENDING_PLAY.batterOutcome = dest;
+  const row = btn.closest('[data-runner-key="batter"]');
+  row.querySelectorAll('.dest-btn').forEach(b => b.classList.remove('active-dest'));
+  btn.classList.add('active-dest');
+  updateModalSummary();
+};
+
+function updateModalDiamond() {
+  const p = PENDING_PLAY;
+  const bases = STATE.bases;
+  // Compute what's on each base after play based on current runnerOutcomes
+  const newBases = { first: null, second: null, third: null };
+
+  const runnerMap = { third: bases.third, second: bases.second, first: bases.first };
+  const destToBase = { '3b': 'third', '2b': 'second', '1b': 'first' };
+  for (const [key, runner] of Object.entries(runnerMap)) {
+    if (!runner) continue;
+    const dest = p.runnerOutcomes[key];
+    if (dest === null || dest === undefined) {
+      newBases[key] = runner; // stays
+    } else if (destToBase[dest]) {
+      newBases[destToBase[dest]] = runner;
+    }
+  }
+  // Batter
+  if (p.batterOutcome === '3b') newBases.third = { name: p.batter.name };
+  else if (p.batterOutcome === '2b') newBases.second = { name: p.batter.name };
+  else if (p.batterOutcome === '1b') newBases.first = { name: p.batter.name };
+
+  document.getElementById('modal-base-1b').className = 'mini-base mini-base-first' + (newBases.first ? ' occ' : '');
+  document.getElementById('modal-base-2b').className = 'mini-base mini-base-second' + (newBases.second ? ' occ' : '');
+  document.getElementById('modal-base-3b').className = 'mini-base mini-base-third' + (newBases.third ? ' occ' : '');
+}
+
+function updateModalSummary() {
+  const p = PENDING_PLAY;
+  const bases = STATE.bases;
+
+  // Count runs
+  let runs = 0;
+  if (p.runnerOutcomes.third === 'scored' && bases.third) runs++;
+  if (p.runnerOutcomes.second === 'scored' && bases.second) runs++;
+  if (p.runnerOutcomes.first === 'scored' && bases.first) runs++;
+  if (p.batterOutcome === 'scored') runs++;
+
+  // Count outs
+  let outs = 0;
+  if (p.batterOutcome === 'out') outs++;
+  if (p.runnerOutcomes.third === 'out' && bases.third) outs++;
+  if (p.runnerOutcomes.second === 'out' && bases.second) outs++;
+  if (p.runnerOutcomes.first === 'out' && bases.first) outs++;
+
+  // RBI = runs scored, but batter on HR doesn't count as own RBI (batter scores = 1 RBI for themselves)
+  // Standard softball: batter gets RBI for each run that scores due to their at-bat
+  const rbi = runs; // all scored runs count as RBI for batter
+
+  document.getElementById('modal-runs-count').textContent = runs;
+  document.getElementById('modal-outs-count').textContent = outs;
+  document.getElementById('modal-rbi-count').textContent = rbi;
 }
 
 window.confirmPlay = function() {
   closeModal('modal-runners');
-  finishPlay(PENDING_PLAY.confirmedScored);
+  finishPlay(PENDING_PLAY.runnerOutcomes, PENDING_PLAY.batterOutcome);
 };
 
 // ═══════════════════════════════════════════════════════════════════
 // FINISH PLAY — apply state changes
 // ═══════════════════════════════════════════════════════════════════
-function finishPlay(confirmedScored) {
+function finishPlay(runnerOutcomes, batterOutcome) {
   const p = PENDING_PLAY;
   const outcome = p.outcome;
   const lineup = STATE.half === 'top' ? STATE.awayLineup : STATE.homeLineup;
   const batterIdx = p.batterIdx;
   const batter = lineup[batterIdx];
+  const bases = STATE.bases;
+
+  // Build newBases from runnerOutcomes + batterOutcome
+  // null dest means "stay at current base"
+  const newBases = { first: null, second: null, third: null };
+  const runnerMap = { third: bases.third, second: bases.second, first: bases.first };
+  // dest mapping: null = stay, '3b'/'2b'/'1b' = move, 'scored'/'out' = off bases
+  const destToBase = { '3b': 'third', '2b': 'second', '1b': 'first' };
+  const originBase = { third: 'third', second: 'second', first: 'first' };
+  for (const [key, runner] of Object.entries(runnerMap)) {
+    if (!runner) continue;
+    const dest = runnerOutcomes[key];
+    if (dest === null || dest === undefined) {
+      // Stay at current base
+      newBases[originBase[key]] = runner;
+    } else if (destToBase[dest]) {
+      newBases[destToBase[dest]] = runner;
+    }
+    // 'scored' and 'out' → runner leaves bases (no placement needed)
+  }
+  if (batterOutcome === '3b') newBases.third = { name: p.batter.name, lineupIdx: batterIdx };
+  else if (batterOutcome === '2b') newBases.second = { name: p.batter.name, lineupIdx: batterIdx };
+  else if (batterOutcome === '1b') newBases.first = { name: p.batter.name, lineupIdx: batterIdx };
+
+  // Collect scored runners
+  const scoredRunners = [];
+  if (runnerOutcomes.third === 'scored' && bases.third) scoredRunners.push(bases.third);
+  if (runnerOutcomes.second === 'scored' && bases.second) scoredRunners.push(bases.second);
+  if (runnerOutcomes.first === 'scored' && bases.first) scoredRunners.push(bases.first);
+  if (batterOutcome === 'scored') scoredRunners.push({ name: p.batter.name, lineupIdx: batterIdx });
+
+  // Count outs on this play
+  let outsOnPlay = 0;
+  if (batterOutcome === 'out') outsOnPlay++;
+  if (runnerOutcomes.third === 'out' && bases.third) outsOnPlay++;
+  if (runnerOutcomes.second === 'out' && bases.second) outsOnPlay++;
+  if (runnerOutcomes.first === 'out' && bases.first) outsOnPlay++;
 
   // Update batter stats
   if (!['BB','HBP','SAC'].includes(outcome)) batter.ab++;
@@ -1208,19 +1660,19 @@ function finishPlay(confirmedScored) {
   if (outcome === 'HBP') batter.hbp++;
   if (outcome === 'K') batter.so++;
 
-  // RBI: all confirmed scored (including batter on HR)
-  // Per spec: "counts runners who scored, excludes batter scoring on HR from RBI count"
-  const rbi = confirmedScored.filter(r => !(p.outcome === 'HR' && r.lineupIdx === batter.lineupIdx)).length;
-  batter.rbi += rbi;
+  // RBI: runs scored count as RBI for batter
+  const runs = scoredRunners.length;
+  const rbiCount = runs; // includes batter scoring on HR
+  batter.rbi += rbiCount;
 
   // Update runs for each scored runner
-  confirmedScored.forEach(runner => {
-    lineup[runner.lineupIdx].r++;
+  scoredRunners.forEach(runner => {
+    if (runner.lineupIdx !== undefined && lineup[runner.lineupIdx]) {
+      lineup[runner.lineupIdx].r++;
+    }
   });
 
-  const runs = confirmedScored.length;
-  const isOut = isOutcome(outcome);
-  const isHit = isHitOutcome(outcome);
+  const isHit = ['1B','2B','3B','HR'].includes(outcome);
 
   // Team totals
   if (STATE.half === 'top') {
@@ -1236,10 +1688,10 @@ function finishPlay(confirmedScored) {
   }
 
   // Outs
-  if (isOut) STATE.outs++;
+  STATE.outs += outsOnPlay;
 
   // Bases
-  STATE.bases = p.newBases;
+  STATE.bases = newBases;
 
   // Batter advance
   const newBatterIdx = batterIdx + 1;
@@ -1247,19 +1699,38 @@ function finishPlay(confirmedScored) {
   else STATE.homeBatterIdx = newBatterIdx;
 
   // Last play text
-  const outcomeName = {
+  const outcomeLabels = {
     '1B':'Single','2B':'Double','3B':'Triple','HR':'Home Run',
     'BB':'Walk','HBP':'Hit By Pitch','K':'Strikeout','OUT':'Out',
-    'E':'Error','FC':'Fielder\'s Choice','SAC':'Sac Fly/Bunt'
-  }[outcome] || outcome;
+    'E':'Error','FC':"Fielder's Choice",'SAC':'Sac Fly/Bunt'
+  };
+  const outcomeName = outcomeLabels[outcome] || outcome;
   let playText = `${batter.name} — ${outcomeName}`;
   if (runs > 0) playText += ` (${runs} run${runs > 1 ? 's' : ''} score)`;
-  if (rbi > 0) playText += ` · ${rbi} RBI`;
+  if (rbiCount > 0) playText += ` · ${rbiCount} RBI`;
   STATE.lastPlay = playText;
+
+  // Play log entry
+  const halfArrow = STATE.half === 'top' ? '▲' : '▼';
+  let desc = `${halfArrow}${STATE.inning} ${batter.name.toUpperCase()} — ${outcomeName}`;
+  const extras = [];
+  if (runs > 0) extras.push(`${runs} run${runs > 1 ? 's' : ''}`);
+  if (rbiCount > 0) extras.push(`${rbiCount} RBI`);
+  if (extras.length) desc += ` (${extras.join(', ')})`;
+  STATE.playLog.push({
+    inning: STATE.inning,
+    half: STATE.half,
+    batterName: batter.name,
+    outcome,
+    runs,
+    rbi: rbiCount,
+    outsOnPlay,
+    description: desc
+  });
 
   PENDING_PLAY = null;
 
-  // Check for 3 outs
+  // Check for 3+ outs
   if (STATE.outs >= 3) {
     renderGameScreen();
     saveToLocalStorage();
@@ -1272,6 +1743,36 @@ function finishPlay(confirmedScored) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// PLAY LOG MODAL
+// ═══════════════════════════════════════════════════════════════════
+window.showLogModal = function() {
+  const entries = document.getElementById('log-entries');
+  const log = STATE.playLog || [];
+  if (log.length === 0) {
+    entries.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">No plays logged yet</div>';
+  } else {
+    // Show last 50 in reverse order
+    const recent = [...log].reverse().slice(0, 50);
+    entries.innerHTML = recent.map(entry => {
+      const halfArrow = entry.half === 'top' ? '▲' : '▼';
+      const outcomeLabels = {
+        '1B':'Single','2B':'Double','3B':'Triple','HR':'Home Run',
+        'BB':'Walk','HBP':'HBP','K':'K','OUT':'Out',
+        'E':'Error','FC':'FC','SAC':'SAC'
+      };
+      const outLabel = outcomeLabels[entry.outcome] || entry.outcome;
+      return `<div class="log-entry">
+        <div class="log-inning-badge">${halfArrow}${entry.inning}</div>
+        <div class="log-play-text">${entry.batterName.toUpperCase()} — ${outLabel}</div>
+        ${entry.runs > 0 ? `<div class="log-run-badge">+${entry.runs}R</div>` : ''}
+        ${entry.rbi > 0 ? `<div class="log-rbi-badge">+${entry.rbi} RBI</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+  openModal('modal-log');
+};
+
+// ═══════════════════════════════════════════════════════════════════
 // UNDO
 // ═══════════════════════════════════════════════════════════════════
 window.handleUndo = function() {
@@ -1279,6 +1780,9 @@ window.handleUndo = function() {
   const snap = STATE.history.pop();
   restoreState(snap);
   STATE.lastPlay = '(undone) ' + (STATE.lastPlay || '');
+  // Pop last playLog entry if any
+  if (STATE.playLog && STATE.playLog.length > 0) STATE.playLog.pop();
+  closeModal('modal-log');
   renderGameScreen();
   saveToLocalStorage();
   syncToFirebase();
@@ -1293,7 +1797,6 @@ function showEndInningModal() {
   document.getElementById('inning-runs').textContent = runs;
   document.getElementById('inning-runs-label').textContent = runs === 0 ? 'Scoreless Inning' : `${runs} Run${runs !== 1 ? 's' : ''} Score${runs !== 1 ? '' : 's'}`;
 
-  // Next up
   let nextText;
   if (STATE.half === 'top') {
     nextText = `Bottom of the ${ordinal(STATE.inning)} — ${STATE.homeName} bat`;
@@ -1314,7 +1817,6 @@ window.confirmEndInning = function() {
 };
 
 function endHalfInning() {
-  // Record innings
   if (STATE.half === 'top') {
     STATE.awayInnings.push(STATE.awayRunsThisHalf);
     STATE.awayRunsThisHalf = 0;
@@ -1362,13 +1864,9 @@ window.markGameFinal = async function() {
   try {
     STATE.status = 'final';
 
-    // Build box score
     const boxScoreData = buildBoxScore();
-
-    // Write to box_scores collection
     await setDoc(doc(db, 'box_scores', STATE.gameId), boxScoreData);
 
-    // Update games collection
     await updateDoc(doc(db, 'games', STATE.gameId), {
       away_score: STATE.awayRuns,
       home_score: STATE.homeRuns,
@@ -1376,13 +1874,11 @@ window.markGameFinal = async function() {
       live: false
     });
 
-    // Update live_games
     await setDoc(doc(db, 'live_games', STATE.gameId), {
       ...getFirebaseSyncData(),
       status: 'final'
     });
 
-    // Clear local storage
     localStorage.removeItem('dvsl_live_' + STATE.gameId);
 
     closeModal('modal-endgame');
@@ -1439,6 +1935,8 @@ function getFirebaseSyncData() {
     homeInnings: STATE.homeInnings,
     status: STATE.status,
     lastPlay: STATE.lastPlay,
+    awayPitcher: STATE.awayPitcher,
+    homePitcher: STATE.homePitcher,
     updatedAt: new Date().toISOString()
   };
 }
@@ -1488,8 +1986,6 @@ function renderLinescore() {
   awayHtml += `<div class="ls-cell total">${STATE.awayRuns}</div>`;
   homeHtml += `<div class="ls-cell total">${STATE.homeRuns}</div>`;
 
-  row.innerHTML = awayHtml + `</div><div style="display:flex;align-items:center;overflow-x:auto;padding:0 12px;margin-bottom:6px">` + homeHtml;
-  // Wrap in two rows
   row.innerHTML = `<div style="display:flex;align-items:center;overflow-x:auto">${awayHtml}</div>
     <div style="display:flex;align-items:center;overflow-x:auto">${homeHtml}</div>`;
 }
