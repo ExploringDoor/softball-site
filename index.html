@@ -2662,8 +2662,8 @@ function loadFallbackData() {
 function getTeam(id){return TEAMS.find(t=>t.id===id)}
 function getTeamByShort(s){return TEAMS.find(t=>t.short===s)}
 function initials(name){return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}
-function avg(v){return v.toFixed(3).replace(/^0\./,'.')}
-function slg(v){return v.toFixed(3).replace(/^0\./,'.')}
+function avg(v){return (v||0).toFixed(3).replace(/^0\./,'.')}
+function slg(v){return (v||0).toFixed(3).replace(/^0\./,'.')}
 
 // ════════════════════════════ ROUTING ════════════════════════════════════
 let currentTeamId=null, currentTeamTab='roster';
@@ -2879,15 +2879,15 @@ function shareText(title, idx){
 
 // ════ LEADERS PAGE ════
 const STAT_CATS = [
-  {key:'avg',  label:'AVG',          fmt:p=>p.avg.toFixed(3).replace(/^0/,''), group:'Batting', desc:'Batting Average', higherBetter:true},
+  {key:'avg',  label:'AVG',          fmt:p=>(p.avg||0).toFixed(3).replace(/^0/,''), group:'Batting', desc:'Batting Average', higherBetter:true},
   {key:'hr',   label:'HR',           fmt:p=>p.hr,                              group:'Batting', desc:'Home Runs',       higherBetter:true},
   {key:'rbi',  label:'RBI',          fmt:p=>p.rbi,                             group:'Batting', desc:'RBI',             higherBetter:true},
   {key:'h',    label:'H',            fmt:p=>p.h,                               group:'Batting', desc:'Hits',            higherBetter:true},
   {key:'r',    label:'R',            fmt:p=>p.r,                               group:'Batting', desc:'Runs',            higherBetter:true},
   {key:'ab',   label:'AB',           fmt:p=>p.ab,                              group:'Batting', desc:'At Bats',         higherBetter:true},
   {key:'bb',   label:'BB',           fmt:p=>p.bb,                              group:'Batting', desc:'Walks',           higherBetter:true},
-  {key:'slg',  label:'SLG',          fmt:p=>p.slg.toFixed(3).replace(/^0/,''),group:'Advanced',desc:'Slugging %',      higherBetter:true},
-  {key:'ops',  label:'OPS',          fmt:p=>p.ops.toFixed(3).replace(/^0/,''),group:'Advanced',desc:'OPS',             higherBetter:true},
+  {key:'slg',  label:'SLG',          fmt:p=>(p.slg||0).toFixed(3).replace(/^0/,''),group:'Advanced',desc:'Slugging %',      higherBetter:true},
+  {key:'ops',  label:'OPS',          fmt:p=>(p.ops||0).toFixed(3).replace(/^0/,''),group:'Advanced',desc:'OPS',             higherBetter:true},
 ];
 
 let lpCurrentStat = 'avg';
@@ -2952,8 +2952,8 @@ function buildLeadersPage(statKey, dir){
       <td class="lt-val highlight">${cat.fmt(p)}</td>
       <td class="lt-stat">${p.hr}</td>
       <td class="lt-stat">${p.rbi}</td>
-      <td class="lt-stat">${p.avg.toFixed(3).replace(/^0/,'')}</td>
-      <td class="lt-stat">${p.ops.toFixed(3).replace(/^0/,'')}</td>
+      <td class="lt-stat">${(p.avg||0).toFixed(3).replace(/^0/,'')}</td>
+      <td class="lt-stat">${(p.ops||0).toFixed(3).replace(/^0/,'')}</td>
       <td class="lt-bar-cell"><div class="lt-bar-bg"><div class="lt-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div></td>
     </tr>`;
   }).join('');
@@ -3034,7 +3034,7 @@ function openBsm(gameIdx){
     const aH=Math.floor(g.as*2.1), hH=Math.floor(g.hs*2.1);
     const mkRows=(players)=>players.map(p=>`<tr style="cursor:pointer" onclick="closeScPop();openModal('${p.id}')">
         <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos}</span></td>
-        <td>${p.avg.toFixed(3).replace(/^0/,'')}</td>
+        <td>${(p.avg||0).toFixed(3).replace(/^0/,'')}</td>
         <td>${p.hr||'-'}</td>
         <td>${p.rbi}</td></tr>`).join('');
     html = `
@@ -3287,7 +3287,7 @@ function buildTeamsBigCards(){
           <span onclick="goPage('team','${t.id}');setTimeout(()=>renderTeamTab('schedule'),80)">Schedule</span>
           <span class="sep">|</span>
           <span onclick="goPage('team','${t.id}');setTimeout(()=>renderTeamTab('roster'),80)">Roster</span>
-          ${t.id==='tbir'?'<span class="sep">|</span><a href="tbir-stats.html" style="color:#002D72;text-decoration:none;font-weight:500">Career Stats</a>':''}
+          ${t.id==='tbir'?'<span class="sep">|</span><span onclick="goPage(\'team\',\'tbir\');setTimeout(()=>renderTeamTab(\'career\'),80)">Career Stats</span>':''}
         </div>
       </div>
     </div>`;
@@ -3368,7 +3368,7 @@ function renderTeamStats(t, players, sortKey, sortDir){
     {key:'r',    label:'R',       fmt:p=>p.r},
     {key:'bb',   label:'BB',      fmt:p=>p.bb},
     {key:'slg',  label:'SLG',     fmt:p=>slg(p.slg)},
-    {key:'ops',  label:'OPS',     fmt:p=>p.ops.toFixed(3).replace(/^0\./,'.')},
+    {key:'ops',  label:'OPS',     fmt:p=>(p.ops||0).toFixed(3).replace(/^0\./,'.')},
   ];
   const sorted = [...players].sort((a,b)=>{
     const av = a[sortKey]==='name'?a.name:a[sortKey];
@@ -3402,6 +3402,8 @@ document.querySelectorAll('.ttab').forEach(tab=>{tab.classList.remove('on');if(t
 function renderTeamTab(tab){
   currentTeamTab=tab;
   const t=getTeam(currentTeamId); if(!t) return;
+  // Update active tab highlight
+  document.querySelectorAll('.ttab').forEach(x=>{x.classList.toggle('on', x.dataset.tab===tab);});
   const players=PLAYERS.filter(p=>p.team===t.id);
   const body=document.getElementById('team-body');
   if(tab==='roster'){
@@ -3532,7 +3534,7 @@ function renderTeamStats(t, players, sortKey, sortDir){
     {key:'r',    label:'R',       fmt:p=>p.r},
     {key:'bb',   label:'BB',      fmt:p=>p.bb},
     {key:'slg',  label:'SLG',     fmt:p=>slg(p.slg)},
-    {key:'ops',  label:'OPS',     fmt:p=>p.ops.toFixed(3).replace(/^0\./,'.')},
+    {key:'ops',  label:'OPS',     fmt:p=>(p.ops||0).toFixed(3).replace(/^0\./,'.')},
   ];
   const sorted = [...players].sort((a,b)=>{
     const av = a[sortKey]==='name'?a.name:a[sortKey];
