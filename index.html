@@ -3428,55 +3428,77 @@ function renderTeamTab(tab){
       📅 Tap <strong style="color:var(--white)">Add to My Calendar</strong> to sync the full ${t.name} schedule to iPhone Calendar, Google Calendar, or Outlook — with date, time, field, and opponent for every game.
     </div>`;
   } else if(tab==='career' && TBIR_SEASONS){
-    // Build career stats table from historical data
-    const careerPlayers = {};
-    for(const [year, roster] of Object.entries(TBIR_SEASONS)){
-      for(const p of roster){
-        const key = p.last+'|'+p.first;
-        if(!careerPlayers[key]) careerPlayers[key]={first:p.first,last:p.last,num:p.num,gp:0,ab:0,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0,seasons:[]};
-        const c=careerPlayers[key];
-        c.gp+=p.gp;c.ab+=p.ab;c.h+=p.h;c.s+=p.s;c.d+=p.d;c.t+=p.t;c.hr+=p.hr;c.rbi+=p.rbi;c.r+=p.r;c.bb+=p.bb;c.so+=p.so;
-        c.seasons.push(year);
-        if(p.num!=='-') c.num=p.num;
-      }
-    }
-    const calcR=p=>{const a=p.ab>0?p.h/p.ab:0;const obp=(p.ab+p.bb)>0?(p.h+p.bb)/(p.ab+p.bb):0;const s=p.ab>0?(p.s+2*p.d+3*p.t+4*p.hr)/p.ab:0;return{avg:a,obp,slg:s,ops:obp+s};};
-    const fmtR=v=>v>0?(v<1?v.toFixed(3).replace(/^0/,''):v.toFixed(3)):'.000';
-    let careerList=Object.values(careerPlayers).map(p=>{const r=calcR(p);return{...p,_avg:r.avg,_obp:r.obp,_slg:r.slg,_ops:r.ops};});
-    careerList.sort((a,b)=>b._avg-a._avg);
-    // Match to PLAYERS for modal click
-    const findPid=(first,last)=>{const p=PLAYERS.find(x=>x.name.toLowerCase()===`${first} ${last}`.toLowerCase());return p?p.id:null;};
-    body.innerHTML=`
-      <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:6px;color:${t.color}">Career Batting Stats</h3>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:16px">${careerList.length} players · ${Object.keys(TBIR_SEASONS).length} seasons (${Object.keys(TBIR_SEASONS).sort()[0]}–${Object.keys(TBIR_SEASONS).sort().pop()})</p>
-      <div class="career-wrap"><table class="career-tbl">
-        <thead><tr><th style="text-align:left">Player</th><th>Yrs</th><th>GP</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead>
-        <tbody>${careerList.map(p=>{
-          const pid=findPid(p.first,p.last);
-          const click=pid?`onclick="openModal('${pid}')" style="cursor:pointer"`:'';
-          return `<tr ${click}>
-            <td style="text-align:left;font-weight:600">${p.first} ${p.last}</td>
-            <td>${p.seasons.length}</td><td>${p.gp}</td><td>${p.ab}</td><td>${p.h}</td><td>${p.d}</td><td>${p.t}</td><td>${p.hr}</td><td>${p.rbi}</td><td>${p.r}</td><td>${p.bb}</td>
-            <td>${fmtR(p._avg)}</td><td>${fmtR(p._obp)}</td><td>${fmtR(p._slg)}</td><td>${fmtR(p._ops)}</td>
-          </tr>`;
-        }).join('')}
-        ${(()=>{
-          const tot={gp:0,ab:0,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0};
-          careerList.forEach(p=>{tot.gp+=p.gp;tot.ab+=p.ab;tot.h+=p.h;tot.s+=p.s;tot.d+=p.d;tot.t+=p.t;tot.hr+=p.hr;tot.rbi+=p.rbi;tot.r+=p.r;tot.bb+=p.bb;});
-          const tr=calcR(tot);
-          return `<tr class="career-total">
-            <td style="text-align:left">Team Totals</td>
-            <td>—</td><td>${tot.gp}</td><td>${tot.ab}</td><td>${tot.h}</td><td>${tot.d}</td><td>${tot.t}</td><td>${tot.hr}</td><td>${tot.rbi}</td><td>${tot.r}</td><td>${tot.bb}</td>
-            <td>${fmtR(tr.avg)}</td><td>${fmtR(tr.obp)}</td><td>${fmtR(tr.slg)}</td><td>${fmtR(tr.ops)}</td>
-          </tr>`;
-        })()}
-        </tbody>
-      </table></div>`;
+    renderCareerTab('_avg','desc');
   } else {
     renderTeamStats(t, players, 'avg', 'desc');
   }
 }
 
+
+// ════ SORTABLE CAREER STATS ════
+let _careerSort = {key:'_avg', dir:'desc'};
+function renderCareerTab(sortKey, sortDir){
+  _careerSort = {key:sortKey||'_avg', dir:sortDir||'desc'};
+  const t=getTeam(currentTeamId); if(!t) return;
+  const body=document.getElementById('team-body');
+  const careerPlayers={};
+  for(const [year,roster] of Object.entries(TBIR_SEASONS)){
+    for(const p of roster){
+      const key=p.last+'|'+p.first;
+      if(!careerPlayers[key]) careerPlayers[key]={first:p.first,last:p.last,num:p.num,gp:0,ab:0,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0,so:0,seasons:[]};
+      const c=careerPlayers[key];
+      c.gp+=p.gp;c.ab+=p.ab;c.h+=p.h;c.s+=p.s;c.d+=p.d;c.t+=p.t;c.hr+=p.hr;c.rbi+=p.rbi;c.r+=p.r;c.bb+=p.bb;c.so+=p.so;
+      c.seasons.push(year);
+      if(p.num!=='-') c.num=p.num;
+    }
+  }
+  const calcR=p=>{const a=p.ab>0?p.h/p.ab:0;const obp=(p.ab+p.bb)>0?(p.h+p.bb)/(p.ab+p.bb):0;const s=p.ab>0?(p.s+2*p.d+3*p.t+4*p.hr)/p.ab:0;return{avg:a,obp,slg:s,ops:obp+s};};
+  const fmtR=v=>v>0?(v<1?v.toFixed(3).replace(/^0/,''):v.toFixed(3)):'.000';
+  let careerList=Object.values(careerPlayers).map(p=>{const r=calcR(p);return{...p,_avg:r.avg,_obp:r.obp,_slg:r.slg,_ops:r.ops};});
+  const sk=sortKey||'_avg', sd=sortDir||'desc';
+  careerList.sort((a,b)=>{
+    if(sk==='name') return sd==='asc'?(a.last+a.first).localeCompare(b.last+b.first):(b.last+b.first).localeCompare(a.last+a.first);
+    return sd==='asc'?(a[sk]||0)-(b[sk]||0):(b[sk]||0)-(a[sk]||0);
+  });
+  const findPid=(first,last)=>{const p=PLAYERS.find(x=>x.name.toLowerCase()===`${first} ${last}`.toLowerCase());return p?p.id:null;};
+  const cols=[
+    {key:'name', label:'Player'},
+    {key:'seasons', label:'Yrs'},{key:'gp', label:'GP'},{key:'ab', label:'AB'},{key:'h', label:'H'},
+    {key:'d', label:'2B'},{key:'t', label:'3B'},{key:'hr', label:'HR'},{key:'rbi', label:'RBI'},
+    {key:'r', label:'R'},{key:'bb', label:'BB'},
+    {key:'_avg', label:'AVG'},{key:'_obp', label:'OBP'},{key:'_slg', label:'SLG'},{key:'_ops', label:'OPS'}
+  ];
+  const tot={gp:0,ab:0,h:0,s:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0};
+  careerList.forEach(p=>{tot.gp+=p.gp;tot.ab+=p.ab;tot.h+=p.h;tot.s+=p.s;tot.d+=p.d;tot.t+=p.t;tot.hr+=p.hr;tot.rbi+=p.rbi;tot.r+=p.r;tot.bb+=p.bb;});
+  const tr=calcR(tot);
+  body.innerHTML=`
+    <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:6px;color:${t.color}">Career Batting Stats</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">${careerList.length} players · ${Object.keys(TBIR_SEASONS).length} seasons (${Object.keys(TBIR_SEASONS).sort()[0]}–${Object.keys(TBIR_SEASONS).sort().pop()}) · Click column to sort</p>
+    <div class="career-wrap"><table class="career-tbl">
+      <thead><tr>${cols.map(c=>{
+        const isSort=c.key===sk;
+        const nextDir=isSort&&sd==='desc'?'asc':'desc';
+        const arrow=isSort?(sd==='desc'?' ↓':' ↑'):'';
+        const align=c.key==='name'?'text-align:left':'';
+        return `<th style="cursor:pointer;${align};${isSort?'color:var(--accent)':''}" onclick="renderCareerTab('${c.key}','${nextDir}')">${c.label}${arrow}</th>`;
+      }).join('')}</tr></thead>
+      <tbody>${careerList.map(p=>{
+        const pid=findPid(p.first,p.last);
+        const click=pid?`onclick="openModal('${pid}')" style="cursor:pointer"`:'';
+        return `<tr ${click}>
+          <td style="text-align:left;font-weight:600">${p.first} ${p.last}</td>
+          <td>${p.seasons.length}</td><td>${p.gp}</td><td>${p.ab}</td><td>${p.h}</td><td>${p.d}</td><td>${p.t}</td><td>${p.hr}</td><td>${p.rbi}</td><td>${p.r}</td><td>${p.bb}</td>
+          <td>${fmtR(p._avg)}</td><td>${fmtR(p._obp)}</td><td>${fmtR(p._slg)}</td><td>${fmtR(p._ops)}</td>
+        </tr>`;
+      }).join('')}
+      <tr class="career-total">
+        <td style="text-align:left">Team Totals</td>
+        <td>—</td><td>${tot.gp}</td><td>${tot.ab}</td><td>${tot.h}</td><td>${tot.d}</td><td>${tot.t}</td><td>${tot.hr}</td><td>${tot.rbi}</td><td>${tot.r}</td><td>${tot.bb}</td>
+        <td>${fmtR(tr.avg)}</td><td>${fmtR(tr.obp)}</td><td>${fmtR(tr.slg)}</td><td>${fmtR(tr.ops)}</td>
+      </tr>
+      </tbody>
+    </table></div>`;
+}
 
 // ════ SORTABLE TEAM STATS ════
 let _teamStatSort = {key:'avg', dir:'desc'};
