@@ -162,7 +162,7 @@ select.form-input{cursor:pointer}
 .spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes alertGlow{0%,100%{box-shadow:0 0 8px #FFD700,0 0 16px rgba(255,215,0,.4)}50%{box-shadow:0 0 20px #FFD700,0 0 40px rgba(255,215,0,.6)}}
-@keyframes alertBlink{0%,100%{opacity:1}50%{opacity:0.2}}
+@keyframes alertBlink{0%,100%{opacity:1}50%{opacity:.2}}
 
 /* Scrollbar */
 ::-webkit-scrollbar{width:6px}
@@ -216,11 +216,6 @@ select.form-input{cursor:pointer}
 .bs-add-guest button{font-size:12px}
 .bs-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .bs-quick-link{display:block;text-align:center;margin-top:12px;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:underline}
-.bs-order-card{padding:14px 10px;border-radius:10px;background:#f0f4ff;border:2px solid #002d6e;cursor:pointer;text-align:center;transition:all .15s;position:relative}
-.bs-order-card.tapped{background:#e8f5e9;border-color:#22c55e}
-.bs-order-card .bs-order-num{position:absolute;top:6px;right:8px;font-size:20px;font-weight:900;color:#22c55e}
-.bs-order-card .bs-order-name{font-weight:700;font-size:14px;color:#002d6e}
-.bs-order-card.tapped .bs-order-name{color:#166534}
 .bs-quick-link:hover{color:var(--navy)}
 .bs-status-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px}
 </style>
@@ -231,8 +226,22 @@ select.form-input{cursor:pointer}
 <div id="login-screen" class="login-wrap">
   <div class="login-box">
     <div class="login-logo">DVSL</div>
-    <div class="login-sub">Admin Dashboard</div>
+    <div class="login-sub">Commissioner &amp; Captain Portal</div>
     <div id="login-error" class="login-error"></div>
+
+    <!-- Captain Score Entry (no password) -->
+    <div style="margin-bottom:20px;padding:18px;background:#f0f4ff;border:1.5px solid #c7d4f5;border-radius:10px;text-align:center">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:#002D72;margin-bottom:4px">⚾ Captain Score Entry</div>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">Enter your team's game scores — no password needed</div>
+      <button class="btn btn-primary btn-full" onclick="enterCaptainMode()" style="font-size:15px;padding:12px">Enter as Captain</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
+      <span style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:.08em">Commissioner</span>
+      <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
+    </div>
+
     <div class="form-group">
       <label class="form-label">Email</label>
       <input type="email" id="login-email" class="form-input" placeholder="admin@dvsl.com" autocomplete="email">
@@ -241,7 +250,10 @@ select.form-input{cursor:pointer}
       <label class="form-label">Password</label>
       <input type="password" id="login-pass" class="form-input" placeholder="Enter password" autocomplete="current-password">
     </div>
-    <button class="btn btn-primary btn-full" id="login-btn" onclick="doLogin()">Sign In</button>
+    <button class="btn btn-outline btn-full" id="login-btn" onclick="doLogin()">Commissioner Sign In</button>
+    <div style="margin-top:10px;text-align:center">
+      <a href="#" onclick="enterAdminNoPass();return false" style="font-size:12px;color:#aaa;text-decoration:underline">Enter admin without password (temporary)</a>
+    </div>
   </div>
 </div>
 
@@ -259,17 +271,17 @@ select.form-input{cursor:pointer}
       </div>
     </div>
     <nav class="sidebar-nav">
-      <div class="nav-item active" data-section="dashboard" onclick="showSection('dashboard')"><span class="icon">&#128202;</span> Dashboard</div>
-      <div class="nav-item" data-section="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
-      <div class="nav-item" data-section="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
-      <div class="nav-item" data-section="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
-      <div class="nav-item" data-section="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
-      <div class="nav-item" data-section="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
-      <div class="nav-item" data-section="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
-      <div class="nav-item" data-section="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
+      <div class="nav-item active" data-section="dashboard" data-sec="dashboard" onclick="showSection('dashboard')"><span class="icon">&#128202;</span> Dashboard</div>
+      <div class="nav-item" data-section="scores" data-sec="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
+      <div class="nav-item" data-section="schedule" data-sec="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
+      <div class="nav-item" data-section="rosters" data-sec="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
+      <div class="nav-item" data-section="standings" data-sec="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
+      <div class="nav-item" data-section="recaps" data-sec="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
+      <div class="nav-item" data-section="banner" data-sec="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
+      <div class="nav-item" data-section="email" data-sec="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
-      <div class="nav-item" data-section="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
-      <div class="nav-item" data-section="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
+      <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
+      <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-user"></div>
@@ -398,9 +410,20 @@ select.form-input{cursor:pointer}
         <!-- Emoji bar -->
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
           <span style="font-size:11px;font-weight:700;color:var(--muted);align-self:center;margin-right:4px">Emoji:</span>
-          ${['⚾','📢','⚠️','❌','✅','🌧️','☀️','🏆','📅','⏰','🚨','🎉','🔔','💬'].map(e =>
-            `<button onclick="alertInsertEmoji('${e}')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">${e}</button>`
-          ).join('')}
+          <button onclick="alertInsertEmoji('⚾')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">⚾</button>
+          <button onclick="alertInsertEmoji('📢')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">📢</button>
+          <button onclick="alertInsertEmoji('⚠️')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">⚠️</button>
+          <button onclick="alertInsertEmoji('❌')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">❌</button>
+          <button onclick="alertInsertEmoji('✅')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">✅</button>
+          <button onclick="alertInsertEmoji('🌧️')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">🌧️</button>
+          <button onclick="alertInsertEmoji('☀️')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">☀️</button>
+          <button onclick="alertInsertEmoji('🏆')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">🏆</button>
+          <button onclick="alertInsertEmoji('📅')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">📅</button>
+          <button onclick="alertInsertEmoji('⏰')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">⏰</button>
+          <button onclick="alertInsertEmoji('🚨')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">🚨</button>
+          <button onclick="alertInsertEmoji('🎉')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">🎉</button>
+          <button onclick="alertInsertEmoji('🔔')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">🔔</button>
+          <button onclick="alertInsertEmoji('💬')" style="font-size:18px;padding:4px 6px;background:#f4f6f9;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer;line-height:1">💬</button>
         </div>
 
         <!-- Formatting toolbar -->
@@ -436,7 +459,7 @@ select.form-input{cursor:pointer}
         <!-- Content editable -->
         <div id="alert-editor" contenteditable="true" oninput="alertUpdatePreview()"
           style="min-height:80px;padding:14px;border:2px solid rgba(0,0,0,.12);border-radius:8px;font-size:15px;background:#fff;outline:none;line-height:1.5"
-          placeholder="Type your alert message here..."></div>
+          data-placeholder="Type your alert message here..."></div>
 
         <!-- Bg color + border -->
         <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;align-items:center">
@@ -467,9 +490,7 @@ select.form-input{cursor:pointer}
       <!-- Preview -->
       <div class="panel" style="margin-bottom:16px">
         <div class="panel-title" style="margin-bottom:10px">Live Preview</div>
-        <div id="alert-preview-wrap">
-          <div id="alert-preview" style="padding:14px 20px;border-radius:8px;font-size:14px;font-weight:600;text-align:center;background:#fff3cd;border:1px solid rgba(0,0,0,.1)">Preview will appear here</div>
-        </div>
+        <div id="alert-preview" style="padding:14px 20px;border-radius:8px;font-size:14px;font-weight:600;text-align:center;background:#fff3cd;border:1px solid rgba(0,0,0,.1)">Preview will appear here</div>
       </div>
 
       <!-- Scheduling -->
@@ -608,6 +629,8 @@ let GAMES = [];
 let PLAYERS = [];
 let RECAPS_DATA = [];
 let currentUser = null;
+let captainMode = false;
+let captainTeamId = null;
 
 // ═══════════════════════════════════════════════════════════════════
 // TOAST NOTIFICATIONS
@@ -686,6 +709,78 @@ window.doLogin = async function() {
 window.doLogout = async function() {
   await signOut(auth);
   location.reload();
+};
+
+window.enterCaptainMode = async function() {
+  // First: load data so we have teams list, then show team picker
+  document.getElementById('login-screen').innerHTML = `
+    <div class="login-box" style="max-width:480px">
+      <div class="login-logo">DVSL</div>
+      <div class="login-sub" style="margin-bottom:24px">Select your team to continue</div>
+      <div id="captain-team-list" style="display:flex;flex-direction:column;gap:10px">
+        <div style="text-align:center;padding:20px;color:#888">Loading teams…</div>
+      </div>
+      <div style="margin-top:18px;text-align:center">
+        <a href="#" onclick="location.reload()" style="font-size:12px;color:#aaa">← Back</a>
+      </div>
+    </div>`;
+
+  // Load teams from Firebase
+  const FB_KEY = 'AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg';
+  const FB_BASE = 'https://firestore.googleapis.com/v1/projects/dvsl-292dd/databases/(default)/documents';
+  try {
+    const r = await fetch(`${FB_BASE}/teams?key=${FB_KEY}&pageSize=50`);
+    const data = await r.json();
+    const teams = (data.documents||[]).map(d => ({
+      id: d.name.split('/').pop(),
+      name: d.fields?.name?.stringValue || d.name.split('/').pop()
+    })).sort((a,b) => a.name.localeCompare(b.name));
+
+    document.getElementById('captain-team-list').innerHTML = teams.map(t => `
+      <button onclick="enterCaptainModeWithTeam('${t.id}','${t.name.replace(/'/g,"\\\'")}')"
+        style="width:100%;padding:14px 18px;background:#f4f6ff;border:2px solid #c7d4f5;border-radius:10px;
+               font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;text-transform:uppercase;
+               color:#002D72;cursor:pointer;text-align:left;transition:all .15s;letter-spacing:.04em"
+        onmouseover="this.style.background='#002D72';this.style.color='#FFD700'"
+        onmouseout="this.style.background='#f4f6ff';this.style.color='#002D72'">
+        ⚾ ${t.name}
+      </button>`).join('');
+  } catch(e) {
+    document.getElementById('captain-team-list').innerHTML = `<div style="color:red;font-size:13px">Failed to load teams: ${e.message}</div>`;
+  }
+};
+
+window.enterAdminNoPass = async function() {
+  captainMode = false;
+  captainTeamId = null;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('sidebar-user').textContent = 'Admin (no auth)';
+  await loadAllData();
+  showSection('dashboard');
+};
+
+window.enterCaptainModeWithTeam = async function(teamId, teamName) {
+  captainMode = true;
+  captainTeamId = teamId;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  // Hide all non-scores nav items
+  document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
+    if (el.dataset.sec !== 'scores') el.style.display = 'none';
+  });
+  // Captain banner in sidebar
+  const brand = document.querySelector('.sidebar-brand');
+  if (brand && !document.getElementById('captain-banner')) {
+    const banner = document.createElement('div');
+    banner.id = 'captain-banner';
+    banner.style.cssText = 'background:#001a3e;color:#FFD700;font-size:11px;font-weight:700;text-transform:uppercase;padding:8px 14px;letter-spacing:.06em;border-bottom:1px solid #FFD700';
+    banner.innerHTML = `⚾ ${teamName}<br><span style="color:rgba(255,255,255,.5);font-size:10px;font-weight:400">Captain Mode</span>`;
+    brand.after(banner);
+  }
+  document.getElementById('sidebar-user').textContent = teamName + ' Captain';
+  await loadAllData();
+  showSection('scores');
 };
 
 // Listen for auth state
@@ -809,8 +904,12 @@ function renderDashboard() {
 // ═══════════════════════════════════════════════════════════════════
 function renderScores() {
   const el = document.getElementById('scores-content');
+  // In captain mode, only show games involving the captain's team
+  const visibleGames = captainMode && captainTeamId
+    ? GAMES.filter(g => g.away === captainTeamId || g.home === captainTeamId)
+    : GAMES;
   const byWeek = {};
-  GAMES.forEach(g => {
+  visibleGames.forEach(g => {
     const w = g.wk || 0;
     if (!byWeek[w]) byWeek[w] = [];
     byWeek[w].push(g);
@@ -830,7 +929,8 @@ function renderScores() {
             ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div>
                <span class="badge badge-done">Final</span>
                <button class="btn btn-outline btn-sm" onclick="editScore('${g.id}')">Edit Score</button>
-               <button class="btn btn-outline btn-sm" onclick="openBoxScore('${g.id}')">Box Score</button>`
+               <button class="btn btn-outline btn-sm" onclick="openBoxScore('${g.id}')">Box Score</button>
+               <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${g.id}')">↺ Reset</button>`
             : `<span class="badge badge-pending">Pending</span>
                <button class="btn btn-primary btn-sm" onclick="editScore('${g.id}')">Quick Score</button>
                <button class="btn btn-outline btn-sm" onclick="openBoxScore('${g.id}')">Box Score</button>`
@@ -887,6 +987,21 @@ window.saveScore = async function(gameId, markDone) {
   }
 };
 
+window.resetGame = async function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const awayName = getTeamName(g.away), homeName = getTeamName(g.home);
+  if (!confirm(`Reset "${awayName} vs ${homeName}"?\n\nThis will:\n• Un-mark it as Final\n• Clear the score back to 0–0\n• Recalculate standings\n\nBox score stats are kept and can be re-saved.`)) return;
+  try {
+    await updateDoc(doc(db, 'games', gameId), { done: false, away_score: 0, home_score: 0 });
+    g.done = false; g.away_score = 0; g.home_score = 0;
+    toast('Game reset to in-progress');
+    await logActivity('Score Entry', `Reset game to in-progress: ${awayName} vs ${homeName}`);
+    await recalcStandingsFromGames();
+    renderScores(); renderDashboard(); renderStandings();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
 // ═══════════════════════════ BOX SCORE ═════════════════════════════
 let bsAwayLineup = [], bsHomeLineup = [], bsGameId = null, bsGameData = null;
 let bsAwayPitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
@@ -894,20 +1009,16 @@ let bsHomePitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
 let bsInnings = {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
 let bsAwayErrors = 0;
 let bsHomeErrors = 0;
-// Tap-to-order state
-let bsAwayOrderMode = false, bsHomeOrderMode = false;
-let bsAwayOrderQueue = [], bsHomeOrderQueue = [];
-// Score-only mode
 let bsScoreOnlyMode = false;
+let bsAwayOrderMode = false, bsHomeOrderMode = false;
+let bsAwayOrderMap = {}, bsHomeOrderMap = {};
+let bsAwayOrdered = false, bsHomeOrdered = false;
 
 window.openBoxScore = async function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
   if (!g) return;
   bsGameId = gameId;
   bsGameData = g;
-  bsScoreOnlyMode = false;
-  bsAwayOrderMode = false; bsHomeOrderMode = false;
-  bsAwayOrderQueue = []; bsHomeOrderQueue = [];
 
   const awayTeam = TEAMS.find(t => t.id === g.away || t.short === g.away);
   const homeTeam = TEAMS.find(t => t.id === g.home || t.short === g.home);
@@ -928,21 +1039,28 @@ window.openBoxScore = async function(gameId) {
   const awayPlayers = PLAYERS.filter(p => p.team === awayId);
   const homePlayers = PLAYERS.filter(p => p.team === homeId);
 
-  // Migrate old format: if player has h but not s, convert to new fields
-  function migratePlayer(p) {
-    if (p.h !== undefined && p.s === undefined) {
-      return { ...p, s: p.h||0, d: p.d||0, t: p.t||0, hr: p.hr||0 };
-    }
-    return { s: p.s||0, d: p.d||0, t: p.t||0, hr: p.hr||0, ...p };
-  }
-
+  // migrate: old records have 'h'; new records have s,d,t,hr
+  const migrateP = p => ({
+    name: p.name, num: p.num||'', pos: p.pos||'',
+    ab: p.ab||0, r: p.r||0,
+    s: p.s !== undefined ? p.s : (p.h && p.hr === undefined ? p.h : 0),
+    d: p.d||0, t: p.t||0, hr: p.hr||0,
+    rbi: p.rbi||0, bb: p.bb||0, so: p.so||0,
+    dnp: p.dnp||false, guest: p.guest||false
+  });
   bsAwayLineup = (existing?.away_lineup || awayPlayers.map(p => ({
     name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
-  }))).map(migratePlayer);
+  }))).map(migrateP);
   bsHomeLineup = (existing?.home_lineup || homePlayers.map(p => ({
     name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
-  }))).map(migratePlayer);
-
+  }))).map(migrateP);
+  bsAwayOrdered = !!existing; bsHomeOrdered = !!existing; // pre-ordered if loading existing
+  const isMobile = window.innerWidth < 768;
+  bsAwayOrderMode = !bsAwayOrdered; // on fresh entry always start in order mode
+  bsHomeOrderMode = !bsHomeOrdered;
+  bsAwayOrderMap = {}; bsHomeOrderMap = {};
+  bsScoreOnlyMode = false;
+  bsAwayScoreOverride = null; bsHomeScoreOverride = null;
   const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''});
   // Support old single pitcher format and new array format
   bsAwayPitchers = existing?.away_pitchers || (existing?.away_pitcher ? [existing.away_pitcher] : [defP()]);
@@ -961,117 +1079,142 @@ function renderBoxScore(awayName, homeName, g) {
   const view = document.getElementById('box-score-view');
   const positions = ['','P','C','1B','2B','3B','SS','LF','CF','RF','DH','EH'];
 
-  function playerH(p) {
-    return (parseInt(p.s)||0) + (parseInt(p.d)||0) + (parseInt(p.t)||0) + (parseInt(p.hr)||0);
-  }
-
-  function renderOrderMode(lineup, teamName, side) {
-    const queue = side === 'away' ? bsAwayOrderQueue : bsHomeOrderQueue;
-    const activePlayers = lineup.map((p,i) => ({p,i})).filter(({p}) => !p.dnp);
-    return `
-      <div class="bs-panel" data-side="${side}">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;padding:12px 0 8px;border-bottom:2px solid #002D72;display:flex;align-items:center;justify-content:space-between">
-          <span>${teamName} — Set Batting Order</span>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-outline btn-sm" onclick="bsUndoOrderPlayer('${side}')" style="font-size:12px">↩ Undo Last</button>
-            <button class="btn btn-outline btn-sm" onclick="bsCancelOrderMode('${side}')" style="font-size:12px">✕ Cancel</button>
-          </div>
-        </div>
-        <div style="padding:12px 0 6px;font-size:12px;color:rgba(0,0,0,.5)">Tap players in batting order (${queue.length}/${activePlayers.length} tapped)</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:8px 0">
-          ${activePlayers.map(({p,i}) => {
-            const tapPos = queue.indexOf(i);
-            const tapped = tapPos !== -1;
-            return `<div class="bs-order-card${tapped?' tapped':''}" onclick="bsTapOrderPlayer('${side}',${i})">
-              ${tapped ? `<div class="bs-order-num">${tapPos+1}</div>` : ''}
-              <div class="bs-order-name">${p.name}</div>
-              ${p.num ? `<div style="font-size:11px;color:rgba(0,0,0,.4)">#${p.num}</div>` : ''}
-            </div>`;
-          }).join('')}
-        </div>
-      </div>`;
-  }
-
   function renderPanel(lineup, teamName, side) {
-    if ((side==='away' && bsAwayOrderMode) || (side==='home' && bsHomeOrderMode)) {
-      return renderOrderMode(lineup, teamName, side);
-    }
-    const totals = { ab:0, r:0, s:0, d:0, t:0, hr:0, h:0, rbi:0, bb:0, so:0 };
-    lineup.filter(p => !p.dnp).forEach(p => {
+    const active = lineup.filter(p => !p.dnp);
+    const totals = { ab:0, r:0, s:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
+    active.forEach(p => {
       totals.ab += (parseInt(p.ab)||0); totals.r += (parseInt(p.r)||0);
       totals.s += (parseInt(p.s)||0); totals.d += (parseInt(p.d)||0);
       totals.t += (parseInt(p.t)||0); totals.hr += (parseInt(p.hr)||0);
-      totals.h += playerH(p);
-      totals.rbi += (parseInt(p.rbi)||0); totals.bb += (parseInt(p.bb)||0); totals.so += (parseInt(p.so)||0);
+      totals.rbi += (parseInt(p.rbi)||0); totals.bb += (parseInt(p.bb)||0);
+      totals.so += (parseInt(p.so)||0);
     });
-    const statW = '44px';
-    const inputSt = `width:${statW};padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif`;
+    const totalH = totals.s + totals.d + totals.t + totals.hr;
+    const orderMode = side==='away' ? bsAwayOrderMode : bsHomeOrderMode;
+    const ordered   = side==='away' ? bsAwayOrdered   : bsHomeOrdered;
+    const orderMap  = side==='away' ? bsAwayOrderMap  : bsHomeOrderMap;
+    const assignedCount = Object.keys(orderMap).length;
+    const isMobile = window.innerWidth < 768;
+
+    // ── ORDER MODE: big card grid ──────────────────────────────────
+    if (orderMode) {
+      return `
+      <div class="bs-panel" data-side="${side}" style="border-radius:12px;overflow:hidden;border:2px solid #001a3e">
+        <div style="background:#001a3e;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em">${teamName}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:2px">Tap players in batting order (1 → 2 → 3…)</div>
+          </div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#FFD700">${assignedCount}<span style="font-size:16px;font-weight:400;color:rgba(255,255,255,.4)">/${active.length}</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;padding:14px">
+          ${lineup.map((p, i) => {
+            if (p.dnp) return '';
+            const assigned = orderMap[i];
+            const isAssigned = assigned !== undefined;
+            return `
+            <div onclick="bsTapOrder('${side}',${i})" style="
+              background:${isAssigned ? '#001a3e' : '#f4f6f9'};
+              color:${isAssigned ? '#fff' : '#1a1a1a'};
+              border:2px solid ${isAssigned ? '#001a3e' : 'rgba(0,0,0,.1)'};
+              border-radius:10px;padding:14px 8px 12px;text-align:center;cursor:pointer;
+              user-select:none;-webkit-tap-highlight-color:transparent;
+              transition:transform .1s,box-shadow .1s;active:transform:scale(.95);
+              display:flex;flex-direction:column;align-items:center;gap:4px;min-height:90px;justify-content:center">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:36px;font-weight:900;line-height:1;color:${isAssigned ? '#FFD700' : 'rgba(0,0,0,.12)'}">
+                ${isAssigned ? assigned : '—'}
+              </div>
+              <div style="font-size:13px;font-weight:700;line-height:1.2;word-break:break-word">${p.name.split(' ').slice(-1)[0]}</div>
+              <div style="font-size:10px;opacity:.55">#${p.num||'?'}${p.pos?' · '+p.pos:''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <!-- DNP section -->
+        ${lineup.some(p=>p.dnp) ? `
+        <div style="padding:4px 14px 12px;border-top:1px solid rgba(0,0,0,.07)">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.35);margin-bottom:8px;letter-spacing:.08em">Did Not Play</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${lineup.filter(p=>p.dnp).map((p,i) => `<span style="padding:4px 10px;background:rgba(0,0,0,.05);border-radius:20px;font-size:12px;color:rgba(0,0,0,.4)">${p.name.split(' ').slice(-1)[0]}</span>`).join('')}
+          </div>
+        </div>` : ''}
+        <div style="padding:12px 14px 14px;display:flex;gap:8px;border-top:1px solid rgba(0,0,0,.08)">
+          <button class="btn btn-outline btn-sm" onclick="bsResetOrder('${side}')" style="padding:8px 14px;font-size:13px;color:#c62828;border-color:#e57373">↺ Reset</button>
+          <button onclick="bsFinalizeOrder('${side}')" style="flex:1;padding:12px;font-size:16px;font-weight:700;background:${assignedCount===active.length?'#1b5e20':'#001a3e'};color:${assignedCount===active.length?'#a5d6a7':'#FFD700'};border:none;border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em">
+            ${assignedCount === active.length ? '✓ DONE — SET LINEUP' : `SET ORDER (${assignedCount}/${active.length} tapped)`}
+          </button>
+        </div>
+      </div>`;
+    }
+
+    // ── STATS MODE ─────────────────────────────────────────────────
     return `
       <div class="bs-panel" data-side="${side}">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;padding:12px 0 8px;border-bottom:2px solid #002D72;display:flex;align-items:center;justify-content:space-between">
-          <span>${teamName} <span style="font-weight:400;font-size:14px;color:rgba(0,0,0,.4)">(${totals.r} runs)</span></span>
-          <button class="btn btn-outline btn-sm" onclick="bsEnterOrderMode('${side}')" style="font-size:12px">📋 Set Batting Order</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:2px solid rgba(0,45,114,.15)">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase">${teamName}
+            <span style="font-weight:400;font-size:14px;color:rgba(0,0,0,.4)">(${totals.r} R · ${totalH} H)</span>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="bsToggleOrderMode('${side}')" style="font-size:12px;padding:6px 14px;border-color:#001a3e;color:#001a3e">↕ Edit Order</button>
         </div>
         <div style="overflow-x:auto">
-          <div style="min-width:820px">
-            <div style="display:flex;border-bottom:2px solid rgba(0,0,0,.1);padding:8px 0;font-size:11px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4)">
+          <div style="min-width:840px">
+            <div style="display:flex;border-bottom:2px solid rgba(0,0,0,.1);padding:8px 0;font-size:11px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);background:rgba(0,0,0,.02)">
               <div style="width:30px;text-align:center">#</div>
-              <div style="width:20px"></div>
+              <div style="width:${isMobile?'0px':'20px'}"></div>
               <div style="flex:1;padding-left:6px">Player</div>
-              <div style="width:52px;text-align:center">Pos</div>
-              <div style="width:${statW};text-align:center">AB</div>
-              <div style="width:${statW};text-align:center">R</div>
-              <div style="width:${statW};text-align:center">1B</div>
-              <div style="width:${statW};text-align:center">2B</div>
-              <div style="width:${statW};text-align:center">3B</div>
-              <div style="width:${statW};text-align:center">HR</div>
-              <div style="width:${statW};text-align:center">RBI</div>
-              <div style="width:${statW};text-align:center">BB</div>
-              <div style="width:${statW};text-align:center">SO</div>
+              <div style="width:50px;text-align:center">Pos</div>
+              <div style="width:42px;text-align:center">AB</div>
+              <div style="width:42px;text-align:center">R</div>
+              <div style="width:42px;text-align:center;color:#1565c0">1B</div>
+              <div style="width:42px;text-align:center;color:#1565c0">2B</div>
+              <div style="width:42px;text-align:center;color:#1565c0">3B</div>
+              <div style="width:42px;text-align:center;color:#8B6914">HR</div>
+              <div style="width:42px;text-align:center">RBI</div>
+              <div style="width:42px;text-align:center">BB</div>
+              <div style="width:42px;text-align:center">SO</div>
               <div style="width:32px;text-align:center;font-size:9px">DNP</div>
             </div>
             ${lineup.map((p, i) => {
               const orderNum = p.dnp ? '' : (lineup.filter((x,j) => j < i && !x.dnp).length + 1);
               return `
-              <div class="bs-player-row${p.dnp?' dnp':''}" draggable="true" data-side="${side}" data-idx="${i}"
-                  ondragstart="bsDragStart(event)" ondragover="bsDragOver(event)" ondragleave="bsDragLeave(event)" ondrop="bsDrop(event)" ondragend="bsDragEnd(event)"
+              <div class="bs-player-row${p.dnp?' dnp':''}" ${!isMobile?'draggable="true"':''} data-side="${side}" data-idx="${i}"
+                  ${!isMobile?'ondragstart="bsDragStart(event)" ondragover="bsDragOver(event)" ondragleave="bsDragLeave(event)" ondrop="bsDrop(event)" ondragend="bsDragEnd(event)"':''}
                   style="display:flex;align-items:center;border-bottom:1px solid rgba(0,0,0,.06);padding:6px 0;${p.dnp?'opacity:.35;':''}">
                 <div style="width:30px;text-align:center;font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;color:rgba(0,0,0,.25)">${orderNum}</div>
-                <div style="width:20px;cursor:grab;text-align:center;color:rgba(0,0,0,.2);font-size:14px;user-select:none">≡</div>
+                <div style="width:${isMobile?'0px':'20px'};${!isMobile?'cursor:grab;':''}text-align:center;color:rgba(0,0,0,.2);font-size:14px;user-select:none">${!isMobile?'≡':''}</div>
                 <div style="flex:1;padding:0 6px;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}${p.num?' <span style="color:rgba(0,0,0,.3);font-size:10px">#'+p.num+'</span>':''}${p.guest?' <span style="color:#002D72;font-size:9px;font-weight:700">GUEST</span>':''}</div>
-                <div style="width:52px"><select style="width:48px;padding:3px;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:11px;background:#fff" onchange="bsUpdatePos('${side}',${i},this.value)">
+                <div style="width:50px"><select style="width:46px;padding:3px;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:11px;background:#fff" onchange="bsUpdatePos('${side}',${i},this.value)">
                   ${positions.map(pos => `<option value="${pos}"${p.pos===pos?' selected':''}>${pos||'—'}</option>`).join('')}
                 </select></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.ab}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'ab',this.value)"></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.r}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'r',this.value)"></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.s}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'s',this.value)"></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.d}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'d',this.value)"></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.t}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'t',this.value)"></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.hr}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'hr',this.value)"></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.rbi}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'rbi',this.value)"></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.bb}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'bb',this.value)"></div>
-                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.so}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'so',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.ab}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'ab',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.r}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'r',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.s}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'s',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.d}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'d',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;border-color:rgba(21,101,192,.3)" value="${p.dnp?'':p.t}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'t',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif;${(parseInt(p.hr)||0)>0?'background:#fff8e1;border-color:#f9a825;font-weight:700;':''}" value="${p.dnp?'':p.hr}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'hr',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.rbi}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'rbi',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.bb}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'bb',this.value)"></div>
+                <div style="width:42px"><input type="number" style="width:38px;padding:4px 1px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.so}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'so',this.value)"></div>
                 <div style="width:32px;text-align:center"><input type="checkbox" ${p.dnp?'checked':''} onchange="bsToggleDnp('${side}',${i},this.checked)" title="Did not play"></div>
               </div>`;}).join('')}
-            <div style="display:flex;align-items:center;border-top:2px solid rgba(0,0,0,.15);padding:10px 0;font-weight:700">
+            <div style="display:flex;align-items:center;border-top:2px solid rgba(0,0,0,.15);padding:10px 0;font-weight:700;background:rgba(0,45,114,.04)">
               <div style="width:30px"></div>
-              <div style="width:20px"></div>
-              <div style="flex:1;padding-left:6px;font-size:12px;font-weight:800">TOTALS</div>
-              <div style="width:52px"></div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.ab}</div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px;color:#002D72;font-weight:700">${totals.r}</div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.s}</div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.d}</div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.t}</div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.hr}</div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.rbi}</div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.bb}</div>
-              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.so}</div>
+              <div style="width:${isMobile?'0px':'20px'}"></div>
+              <div style="flex:1;padding-left:6px;font-size:12px;font-weight:800;letter-spacing:.06em">TOTALS</div>
+              <div style="width:50px"></div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.ab}</div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px;color:#002D72;font-weight:700">${totals.r}</div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.s}</div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.d}</div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.t}</div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px;color:#8B6914;font-weight:800">${totals.hr}</div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.rbi}</div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.bb}</div>
+              <div style="width:42px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.so}</div>
               <div style="width:32px"></div>
             </div>
           </div>
         </div>
-        <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="bsAddGuest('${side}')">+ Guest Player</button>
+        <button class="btn btn-outline btn-sm" style="margin:10px 0 0 0" onclick="bsAddGuest('${side}')">+ Guest Player</button>
 
         <div style="margin-top:20px;padding-top:16px;border-top:2px solid #002D72">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -1129,105 +1272,88 @@ function renderBoxScore(awayName, homeName, g) {
   const awayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
   const homeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
 
-  // Active mode toggle buttons
-  const fullActive = !bsScoreOnlyMode;
-  const btnBase = 'border:none;padding:7px 16px;font-size:13px;font-weight:600;border-radius:6px;cursor:pointer;transition:all .15s';
-  const btnFull = fullActive
-    ? `background:#002D72;color:#fff;${btnBase}`
-    : `background:transparent;color:rgba(0,0,0,.5);${btnBase}`;
-  const btnScore = bsScoreOnlyMode
-    ? `background:#002D72;color:#fff;${btnBase}`
-    : `background:transparent;color:rgba(0,0,0,.5);${btnBase}`;
-
-  const modeToggle = `
-    <div style="display:flex;gap:0;background:rgba(0,0,0,.06);border-radius:8px;padding:3px;margin-bottom:16px;width:fit-content">
-      <button onclick="bsSetMode(false)" style="${btnFull}" id="bs-btn-full">📊 Full Box Score</button>
-      <button onclick="bsSetMode(true)" style="${btnScore}" id="bs-btn-score">⚡ Score Only</button>
-    </div>`;
-
-  const darkBanner = `
-    <div style="background:#001a3e;border-radius:10px;padding:14px 20px;margin:16px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
-      <div style="color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">${g.date||''} · Wk ${g.wk||''} · ${g.time||''} · ${g.field||''}</div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;text-transform:uppercase;color:#fff;text-align:center;flex:1;line-height:1">
-        ${awayName} <span style="color:#FFD700" id="bs-away-total">${awayR}</span>
-        <span style="color:rgba(255,255,255,.2);margin:0 8px">—</span>
-        <span style="color:#FFD700" id="bs-home-total">${homeR}</span> ${homeName}
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-outline btn-sm" onclick="closeBoxScore()" style="color:#fff;border-color:rgba(255,255,255,.3)">← Back</button>
-      </div>
-    </div>`;
-
-  let bodyContent = '';
-  if (bsScoreOnlyMode) {
-    bodyContent = `
-      <div style="text-align:center;padding:24px 0 32px">
-        <div style="display:flex;gap:40px;justify-content:center;align-items:flex-end;flex-wrap:wrap">
-          <div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;color:rgba(0,0,0,.5);letter-spacing:.06em;margin-bottom:8px">${awayName}</div>
-            <input type="number" id="bs-score-away" style="width:120px;font-size:48px;font-family:'Barlow Condensed',sans-serif;font-weight:900;text-align:center;border:2px solid #002D72;border-radius:10px;padding:12px;color:#002D72" value="${awayR}" min="0">
-          </div>
-          <div style="font-size:40px;font-weight:900;color:rgba(0,0,0,.2);padding-bottom:12px">—</div>
-          <div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;color:rgba(0,0,0,.5);letter-spacing:.06em;margin-bottom:8px">${homeName}</div>
-            <input type="number" id="bs-score-home" style="width:120px;font-size:48px;font-family:'Barlow Condensed',sans-serif;font-weight:900;text-align:center;border:2px solid #002D72;border-radius:10px;padding:12px;color:#002D72" value="${homeR}" min="0">
-          </div>
+  view.innerHTML = `
+    <div style="padding:20px 0">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <a href="#" onclick="closeBoxScore();return false" style="color:#002D72;font-size:13px;font-weight:600;text-decoration:none">← Back to Scores</a>
+          ${bsGameData?.done ? `<button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100;font-size:12px" onclick="bsReopenGame()">↺ Reset Game</button>` : ''}
         </div>
-      </div>`;
-  } else {
-    const awayH = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+playerH(p),0);
-    const homeH = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+playerH(p),0);
-    const awayInningR = bsInnings.away.reduce((s,v)=>s+(parseInt(v)||0),0);
-    const homeInningR = bsInnings.home.reduce((s,v)=>s+(parseInt(v)||0),0);
-    const awayMismatch = awayInningR !== awayR;
-    const homeMismatch = homeInningR !== homeR;
-    const thStyle = 'padding:6px 4px;font-size:11px;font-weight:700;color:rgba(0,0,0,.4);text-align:center;min-width:36px';
-    const tdStyle = 'padding:4px 2px;text-align:center';
-    const inputStyle = 'width:36px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:3px;font-size:13px;font-family:Oswald,sans-serif;background:#fff';
-    const totalStyle = 'padding:6px 4px;text-align:center;font-family:Oswald,sans-serif;font-size:15px;font-weight:700';
-    bodyContent = `
-      <div style="overflow-x:auto;margin:20px 0">
-        <table style="border-collapse:collapse;margin:0 auto;font-family:Oswald,sans-serif">
-          <thead><tr>
-            <th style="min-width:120px;text-align:left;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(0,0,0,.4)">TEAM</th>
-            ${bsInnings.away.map((_,i) => '<th style="'+thStyle+'">'+(i+1)+'</th>').join('')}
-            <th style="${thStyle};border-left:2px solid rgba(0,0,0,.15)">R</th>
-            <th style="${thStyle}">H</th>
-            <th style="${thStyle}">E</th>
-          </tr></thead>
-          <tbody>
-            <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
-              <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
-              ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
-              <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${awayInningR}${awayMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+awayR+'</div>':''}</td>
-              <td style="${totalStyle}">${awayH}</td>
-              <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
-            </tr>
-            <tr>
-              <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
-              ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
-              <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${homeInningR}${homeMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+homeR+'</div>':''}</td>
-              <td style="${totalStyle}">${homeH}</td>
-              <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
-            </tr>
-          </tbody>
-        </table>
-        <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
+        <button class="btn ${bsScoreOnlyMode?'btn-primary':'btn-outline'} btn-sm" onclick="bsToggleScoreOnly()" style="font-size:12px">
+          ${bsScoreOnlyMode ? '📊 Full Stats Mode' : '🎯 Score Only Mode'}
+        </button>
       </div>
+      <!-- Dark navy game banner -->
+      <div style="background:#001a3e;border-radius:12px;padding:16px 24px;margin-bottom:18px;text-align:center;color:#fff">
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.45);margin-bottom:10px">${g.date||''} · ${g.time||''} · ${g.field||''}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:16px">
+          <span>${awayName}</span>
+          <span style="font-size:48px;color:#FFD700;min-width:56px;text-align:center" id="bs-away-total">${awayR}</span>
+          <span style="color:rgba(255,255,255,.2);font-size:22px;font-weight:300">—</span>
+          <span style="font-size:48px;color:#FFD700;min-width:56px;text-align:center" id="bs-home-total">${homeR}</span>
+          <span>${homeName}</span>
+        </div>
+        ${bsScoreOnlyMode ? `
+        <div style="display:flex;gap:20px;justify-content:center;margin-top:12px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;margin-bottom:4px">${awayName} Score</div>
+            <input type="number" min="0" style="width:80px;padding:8px;text-align:center;font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:900;border:2px solid rgba(255,255,255,.2);border-radius:6px;background:rgba(255,255,255,.08);color:#FFD700" value="${awayR}" id="score-only-away" oninput="bsSetScoreOnly('away',this.value)">
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;margin-bottom:4px">${homeName} Score</div>
+            <input type="number" min="0" style="width:80px;padding:8px;text-align:center;font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:900;border:2px solid rgba(255,255,255,.2);border-radius:6px;background:rgba(255,255,255,.08);color:#FFD700" value="${homeR}" id="score-only-home" oninput="bsSetScoreOnly('home',this.value)">
+          </div>
+        </div>` : ''}
+      </div>
+      ${(() => {
+        const awayInningR = bsInnings.away.reduce((s,v)=>s+(parseInt(v)||0),0);
+        const homeInningR = bsInnings.home.reduce((s,v)=>s+(parseInt(v)||0),0);
+        const awayH = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+((parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0)),0);
+        const homeH = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+((parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0)),0);
+        const awayMismatch = awayInningR !== awayR;
+        const homeMismatch = homeInningR !== homeR;
+        const thStyle = 'padding:6px 4px;font-size:11px;font-weight:700;color:rgba(0,0,0,.4);text-align:center;min-width:36px';
+        const tdStyle = 'padding:4px 2px;text-align:center';
+        const inputStyle = 'width:36px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:3px;font-size:13px;font-family:Oswald,sans-serif;background:#fff';
+        const totalStyle = 'padding:6px 4px;text-align:center;font-family:Oswald,sans-serif;font-size:15px;font-weight:700';
+        return `<div style="overflow-x:auto;margin:20px 0">
+          <table style="border-collapse:collapse;margin:0 auto;font-family:Oswald,sans-serif">
+            <thead><tr>
+              <th style="min-width:120px;text-align:left;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(0,0,0,.4)">TEAM</th>
+              ${bsInnings.away.map((_,i) => '<th style="'+thStyle+'">'+(i+1)+'</th>').join('')}
+              <th style="${thStyle};border-left:2px solid rgba(0,0,0,.15)">R</th>
+              <th style="${thStyle}">H</th>
+              <th style="${thStyle}">E</th>
+            </tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
+                <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
+                ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
+                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-away-r">${awayR}${awayMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+awayInningR+'\">inns: '+awayInningR+'</div>':''}</td>
+                <td style="${totalStyle}" id="bs-linescore-away-h">${awayH}</td>
+                <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
+              </tr>
+              <tr>
+                <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
+                ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
+                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-home-r">${homeR}${homeMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+homeInningR+'\">inns: '+homeInningR+'</div>':''}</td>
+                <td style="${totalStyle}" id="bs-linescore-home-h">${homeH}</td>
+                <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
+        </div>`;
+      })()}
+      ${bsScoreOnlyMode ? '' : `
       <div style="display:flex;flex-direction:column;gap:32px;margin-top:16px">
         ${renderPanel(bsAwayLineup, awayName, 'away')}
         ${renderPanel(bsHomeLineup, homeName, 'home')}
-      </div>`;
-  }
-
-  view.innerHTML = `
-    <div style="padding:20px 0">
-      ${modeToggle}
-      ${darkBanner}
-      ${bodyContent}
-      <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1)">
+      </div>`}
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1);flex-wrap:wrap">
         <button class="btn btn-success" onclick="saveBoxScore(true)">Save & Mark Final</button>
         <button class="btn btn-outline" onclick="saveBoxScore(false)">Save Draft</button>
+        ${bsGameData?.done ? `<button class="btn btn-outline" style="color:#e65100;border-color:#e65100" onclick="bsReopenGame()" title="Reset game to in-progress so scores can be edited">↺ Reopen Game</button>` : ''}
         <button class="btn btn-outline" onclick="closeBoxScore()">Cancel</button>
       </div>
     </div>`;
@@ -1239,42 +1365,6 @@ function bsRerender() {
   const v = document.getElementById('box-score-view');
   renderBoxScore(v.dataset.awayName, v.dataset.homeName, bsGameData);
 }
-
-window.bsSetMode = function(scoreOnly) { bsScoreOnlyMode = scoreOnly; bsRerender(); };
-
-// Tap-to-order functions
-window.bsEnterOrderMode = function(side) {
-  if (side === 'away') { bsAwayOrderMode = true; bsAwayOrderQueue = []; }
-  else { bsHomeOrderMode = true; bsHomeOrderQueue = []; }
-  bsRerender();
-};
-window.bsTapOrderPlayer = function(side, idx) {
-  const queue = side === 'away' ? bsAwayOrderQueue : bsHomeOrderQueue;
-  const lineup = side === 'away' ? bsAwayLineup : bsHomeLineup;
-  // If already tapped, do nothing (use undo to remove)
-  if (queue.indexOf(idx) !== -1) return;
-  queue.push(idx);
-  const activePlayers = lineup.filter(p => !p.dnp);
-  if (queue.length === activePlayers.length) {
-    // All tapped — reorder the lineup
-    const newOrder = queue.map(i => lineup[i]);
-    const dnpPlayers = lineup.filter(p => p.dnp);
-    const reordered = [...newOrder, ...dnpPlayers];
-    if (side === 'away') { bsAwayLineup = reordered; bsAwayOrderMode = false; bsAwayOrderQueue = []; }
-    else { bsHomeLineup = reordered; bsHomeOrderMode = false; bsHomeOrderQueue = []; }
-  }
-  bsRerender();
-};
-window.bsUndoOrderPlayer = function(side) {
-  if (side === 'away') bsAwayOrderQueue.pop();
-  else bsHomeOrderQueue.pop();
-  bsRerender();
-};
-window.bsCancelOrderMode = function(side) {
-  if (side === 'away') { bsAwayOrderMode = false; bsAwayOrderQueue = []; }
-  else { bsHomeOrderMode = false; bsHomeOrderQueue = []; }
-  bsRerender();
-};
 
 let bsDragIdx = null, bsDragSide = null;
 window.bsDragStart = function(e) {
@@ -1303,21 +1393,34 @@ window.bsDragEnd = function(e) {
   document.querySelectorAll('.bs-player-row').forEach(r => { r.style.opacity = ''; r.style.borderTop = ''; });
 };
 window.bsUpdateStat = function(side, idx, stat, val) {
-  const p = (side==='away'?bsAwayLineup:bsHomeLineup)[idx];
+  const lineup = side==='away' ? bsAwayLineup : bsHomeLineup;
+  const p = lineup[idx];
   const newVal = parseInt(val)||0;
   if (stat === 'hr') {
-    const delta = newVal - (p.hr||0);
-    p.r = Math.max(0, (p.r||0) + delta);
-    p.rbi = Math.max(0, (p.rbi||0) + delta);
-    p.hr = newVal;
-    bsRerender();
-    return;
+    // HR delta: auto-add the difference to R and RBI
+    const oldHR = parseInt(p.hr)||0;
+    const delta = newVal - oldHR;
+    if (delta !== 0) {
+      p.r   = Math.max(0, (parseInt(p.r)||0)   + delta);
+      p.rbi = Math.max(0, (parseInt(p.rbi)||0) + delta);
+      // update R and RBI inputs in the DOM without re-render
+      const rows = document.querySelectorAll(`.bs-player-row[data-side="${side}"][data-idx="${idx}"] input[type="number"]`);
+      // columns: AB(0) R(1) 1B(2) 2B(3) 3B(4) HR(5) RBI(6) BB(7) SO(8)
+      if (rows[1]) rows[1].value = p.r;
+      if (rows[6]) rows[6].value = p.rbi;
+    }
   }
   p[stat] = newVal;
-  const ar = bsAwayLineup.filter(q=>!q.dnp).reduce((s,q)=>s+(parseInt(q.r)||0),0);
-  const hr = bsHomeLineup.filter(q=>!q.dnp).reduce((s,q)=>s+(parseInt(q.r)||0),0);
-  const at=document.getElementById('bs-away-total'), ht=document.getElementById('bs-home-total');
-  if(at) at.textContent=ar; if(ht) ht.textContent=hr;
+  const ar = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const hr = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const ah = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),0);
+  const hh = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),0);
+  const at=document.getElementById('bs-away-total'), ht2=document.getElementById('bs-home-total');
+  const aRcell=document.getElementById('bs-linescore-away-r'), hRcell=document.getElementById('bs-linescore-home-r');
+  const aHcell=document.getElementById('bs-linescore-away-h'), hHcell=document.getElementById('bs-linescore-home-h');
+  if(at) at.textContent=ar; if(ht2) ht2.textContent=hr;
+  if(aRcell) aRcell.textContent=ar; if(hRcell) hRcell.textContent=hr;
+  if(aHcell) aHcell.textContent=ah; if(hHcell) hHcell.textContent=hh;
 };
 window.bsUpdatePos = function(side, idx, val) { (side==='away'?bsAwayLineup:bsHomeLineup)[idx].pos = val; };
 window.bsUpdateInning = function(side, idx, val) {
@@ -1363,43 +1466,21 @@ window.bsAddGuest = function(side) {
   bsRerender();
 };
 window.saveBoxScore = async function(markFinal) {
-  let awayR, homeR;
-  let boxData;
-  if (bsScoreOnlyMode) {
-    awayR = parseInt(document.getElementById('bs-score-away')?.value)||0;
-    homeR = parseInt(document.getElementById('bs-score-home')?.value)||0;
-    boxData = {
-      game_id: bsGameId, wk: bsGameData.wk, date: bsGameData.date,
-      away: bsGameData.away, home: bsGameData.home,
-      away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
-    };
-  } else {
-    awayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
-    homeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
-    boxData = {
-      game_id: bsGameId, wk: bsGameData.wk, date: bsGameData.date,
-      away: bsGameData.away, home: bsGameData.home,
-      away_lineup: bsAwayLineup.filter(p=>!p.dnp).map(p=>({
-        name:p.name, num:p.num, pos:p.pos,
-        ab:parseInt(p.ab)||0, r:parseInt(p.r)||0,
-        s:parseInt(p.s)||0, d:parseInt(p.d)||0, t:parseInt(p.t)||0, hr:parseInt(p.hr)||0,
-        h:(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),
-        rbi:parseInt(p.rbi)||0, bb:parseInt(p.bb)||0, so:parseInt(p.so)||0
-      })),
-      home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>({
-        name:p.name, num:p.num, pos:p.pos,
-        ab:parseInt(p.ab)||0, r:parseInt(p.r)||0,
-        s:parseInt(p.s)||0, d:parseInt(p.d)||0, t:parseInt(p.t)||0, hr:parseInt(p.hr)||0,
-        h:(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),
-        rbi:parseInt(p.rbi)||0, bb:parseInt(p.bb)||0, so:parseInt(p.so)||0
-      })),
-      away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
-      home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
-      innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
-      away_errors: bsAwayErrors, home_errors: bsHomeErrors,
-      away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
-    };
-  }
+  const calcAwayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const calcHomeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const awayR = bsScoreOnlyMode && bsAwayScoreOverride !== null ? bsAwayScoreOverride : calcAwayR;
+  const homeR = bsScoreOnlyMode && bsHomeScoreOverride !== null ? bsHomeScoreOverride : calcHomeR;
+  const boxData = {
+    game_id: bsGameId, wk: bsGameData.wk, date: bsGameData.date,
+    away: bsGameData.away, home: bsGameData.home,
+    away_lineup: bsAwayLineup.filter(p=>!p.dnp).map(p=>{const s=parseInt(p.s)||0,d=parseInt(p.d)||0,t=parseInt(p.t)||0,hr=parseInt(p.hr)||0;return{name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,s,d,t,hr,h:s+d+t+hr,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0};}),
+    home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>{const s=parseInt(p.s)||0,d=parseInt(p.d)||0,t=parseInt(p.t)||0,hr=parseInt(p.hr)||0;return{name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,s,d,t,hr,h:s+d+t+hr,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0};}),
+    away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
+    home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
+    innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
+    away_errors: bsAwayErrors, home_errors: bsHomeErrors,
+    away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
+  };
   try {
     const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
     const snap = await getDocs(q2);
@@ -1419,6 +1500,81 @@ window.closeBoxScore = function() {
   document.getElementById('scores-content').style.display='block';
   document.getElementById('sec-scores').querySelector('.main-header').style.display='';
 };
+window.bsReopenGame = async function() {
+  if (!confirm('Reopen this game? It will be marked as in-progress and scores/standings will be reset.')) return;
+  try {
+    await updateDoc(doc(db,'games',bsGameId), { done: false, away_score: 0, home_score: 0 });
+    const g = GAMES.find(x=>x.id===bsGameId);
+    if (g) { g.done = false; g.away_score = 0; g.home_score = 0; }
+    bsGameData.done = false;
+    toast('Game reopened — now in-progress');
+    await logActivity('Box Score', `Reopened game: ${getTeamName(bsGameData.away)} vs ${getTeamName(bsGameData.home)}`);
+    await recalcStandingsFromGames();
+    bsRerender(); renderScores(); renderStandings(); renderDashboard();
+  } catch(e) { toast('Failed: '+e.message,'error'); }
+};
+
+// ── Tap-to-Order ──────────────────────────────────────────────────
+window.bsToggleOrderMode = function(side) {
+  // Enter order mode (from stats view's "Edit Order" button)
+  if (side === 'away') { bsAwayOrderMode = true; bsAwayOrderMap = {}; }
+  else { bsHomeOrderMode = true; bsHomeOrderMap = {}; }
+  bsRerender();
+};
+window.bsTapOrder = function(side, idx) {
+  const orderMap = side === 'away' ? bsAwayOrderMap : bsHomeOrderMap;
+  if (orderMap[idx] !== undefined) {
+    // Un-assign — shift higher numbers down
+    const removed = orderMap[idx];
+    delete orderMap[idx];
+    Object.keys(orderMap).forEach(k => { if (orderMap[k] > removed) orderMap[k]--; });
+  } else {
+    const nextNum = Object.keys(orderMap).length + 1;
+    orderMap[idx] = nextNum;
+    // If all active players assigned, auto-finalize after brief visual pause
+    const lineup = side === 'away' ? bsAwayLineup : bsHomeLineup;
+    const activeCount = lineup.filter(p => !p.dnp).length;
+    if (nextNum === activeCount) { bsRerender(); setTimeout(() => bsFinalizeOrder(side), 500); return; }
+  }
+  bsRerender();
+};
+window.bsResetOrder = function(side) {
+  if (side === 'away') bsAwayOrderMap = {};
+  else bsHomeOrderMap = {};
+  bsRerender();
+};
+window.bsFinalizeOrder = function(side) {
+  const lineup = side === 'away' ? bsAwayLineup : bsHomeLineup;
+  const orderMap = side === 'away' ? bsAwayOrderMap : bsHomeOrderMap;
+  const activePlayers = lineup.filter(p => !p.dnp);
+  const dnpPlayers = lineup.filter(p => p.dnp);
+  const withOrder = activePlayers.map(p => {
+    const origIdx = lineup.indexOf(p);
+    return { p, order: orderMap[origIdx] ?? 999 };
+  }).sort((a, b) => a.order - b.order).map(x => x.p);
+  if (side === 'away') { bsAwayLineup = [...withOrder, ...dnpPlayers]; bsAwayOrderMode = false; bsAwayOrdered = true; bsAwayOrderMap = {}; }
+  else { bsHomeLineup = [...withOrder, ...dnpPlayers]; bsHomeOrderMode = false; bsHomeOrdered = true; bsHomeOrderMap = {}; }
+  bsRerender();
+};
+
+// ── Score-Only Mode ───────────────────────────────────────────────
+window.bsToggleScoreOnly = function() {
+  bsScoreOnlyMode = !bsScoreOnlyMode;
+  bsRerender();
+};
+window.bsSetScoreOnly = function(side, val) {
+  // In score-only mode, directly set a score override stored separately
+  const score = parseInt(val) || 0;
+  const lineup = side === 'away' ? bsAwayLineup : bsHomeLineup;
+  // We store the manual score as an override on a placeholder player
+  // Simple approach: store in a global override
+  if (side === 'away') bsAwayScoreOverride = score;
+  else bsHomeScoreOverride = score;
+  const at = document.getElementById('bs-away-total'), ht = document.getElementById('bs-home-total');
+  if (side === 'away' && at) at.textContent = score;
+  if (side === 'home' && ht) ht.textContent = score;
+};
+let bsAwayScoreOverride = null, bsHomeScoreOverride = null;
 
 // ═══════════════════════════════════════════════════════════════════
 // STANDINGS AUTO-CALCULATE
@@ -1932,7 +2088,6 @@ async function loadBanner() {
     const snap = await getDoc(doc(db, 'site_config', 'banner'));
     if (snap.exists()) {
       const d = snap.data();
-      // Load into rich editor
       const editor = document.getElementById('alert-editor');
       if (editor) editor.innerHTML = d.html || '';
       const bg = document.getElementById('alert-bg-color');
@@ -2009,15 +2164,12 @@ window.alertUpdatePreview = function() {
   const blink = document.getElementById('alert-blink')?.checked;
   preview.innerHTML = html || '<em style="color:#aaa">Preview will appear here</em>';
   preview.style.background = bg;
-  // Pick text color based on bg brightness
   const r = parseInt(bg.slice(1,3),16), g = parseInt(bg.slice(3,5),16), b = parseInt(bg.slice(5,7),16);
-  const lum = (0.299*r + 0.587*g + 0.114*b)/255;
-  preview.style.color = lum < 0.5 ? '#fff' : '#111';
-  // Border
+  preview.style.color = (0.299*r + 0.587*g + 0.114*b)/255 < 0.5 ? '#fff' : '#111';
   if (border === 'none') { preview.style.border = '1px solid rgba(0,0,0,.1)'; preview.style.boxShadow = 'none'; preview.style.animation = ''; }
   else if (border === 'solid') { preview.style.border = '2px solid #002D72'; preview.style.boxShadow = 'none'; preview.style.animation = ''; }
   else if (border === 'dashed') { preview.style.border = '2px dashed #002D72'; preview.style.boxShadow = 'none'; preview.style.animation = ''; }
-  else if (border === 'glow') { preview.style.border = '2px solid #FFD700'; preview.style.boxShadow = '0 0 12px #FFD700, 0 0 24px rgba(255,215,0,.4)'; preview.style.animation = 'alertGlow 1.5s ease-in-out infinite'; }
+  else if (border === 'glow') { preview.style.border = '2px solid #FFD700'; preview.style.boxShadow = '0 0 12px #FFD700,0 0 24px rgba(255,215,0,.4)'; preview.style.animation = 'alertGlow 1.5s ease-in-out infinite'; }
   if (blink) preview.style.animation = (preview.style.animation ? preview.style.animation + ',' : '') + 'alertBlink 1s step-start infinite';
 };
 
@@ -2039,12 +2191,11 @@ window.alertPublish = async function() {
   };
   try {
     await setDoc(doc(db, 'site_config', 'banner'), data);
-    // Save to history
     await addDoc(collection(db, 'alert_history'), data);
     toast('Alert published!');
     alertUpdateStatus(data);
     alertLoadHistory();
-    await logActivity('Alert', `Published alert: "${data.label}"`);
+    await logActivity('Alert', `Published: "${data.label}"`);
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 
@@ -2097,7 +2248,7 @@ async function alertLoadHistory() {
     list.innerHTML = snap.docs.map((docSnap, i) => {
       const d = docSnap.data();
       const dt = d.createdAt ? new Date(d.createdAt).toLocaleString() : '—';
-      return `<div onclick="alertLoadFromHistory(${i})" data-hist="${encodeURIComponent(JSON.stringify(d))}"
+      return `<div onclick="alertLoadFromHistory(${i})"
         style="padding:10px 14px;border-radius:6px;background:#f8f9fa;border:1px solid rgba(0,0,0,.07);cursor:pointer;margin-bottom:8px;display:flex;align-items:center;gap:12px"
         onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#f8f9fa'">
         <div style="width:10px;height:10px;border-radius:50%;background:${d.bgColor||'#fff3cd'};border:1px solid rgba(0,0,0,.2);flex-shrink:0"></div>
@@ -2108,10 +2259,8 @@ async function alertLoadHistory() {
         <div style="font-size:11px;font-weight:700;color:${d.active?'#22c55e':'var(--muted)'}">${d.active?'LIVE':'DRAFT'}</div>
       </div>`;
     }).join('');
-    // Attach data to elements
     snap.docs.forEach((docSnap, i) => {
-      const el = list.children[i];
-      if (el) el._histData = docSnap.data();
+      if (list.children[i]) list.children[i]._histData = docSnap.data();
     });
   } catch(e) { list.innerHTML = '<div style="color:var(--muted);font-size:13px">Could not load history</div>'; }
 }
@@ -2134,7 +2283,7 @@ window.alertLoadFromHistory = function(idx) {
   const expire = document.getElementById('alert-expire');
   if (expire) expire.value = d.expireAt ? d.expireAt.replace('Z','').slice(0,16) : '';
   alertUpdatePreview();
-  toast('Alert loaded from history — click Publish to go live');
+  toast('Alert loaded — click Publish to go live');
 };
 
 // ═══════════════════════════════════════════════════════════════════
