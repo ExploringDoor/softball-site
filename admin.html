@@ -214,6 +214,11 @@ select.form-input{cursor:pointer}
 .bs-add-guest button{font-size:12px}
 .bs-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .bs-quick-link{display:block;text-align:center;margin-top:12px;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:underline}
+.bs-order-card{padding:14px 10px;border-radius:10px;background:#f0f4ff;border:2px solid #002d6e;cursor:pointer;text-align:center;transition:all .15s;position:relative}
+.bs-order-card.tapped{background:#e8f5e9;border-color:#22c55e}
+.bs-order-card .bs-order-num{position:absolute;top:6px;right:8px;font-size:20px;font-weight:900;color:#22c55e}
+.bs-order-card .bs-order-name{font-weight:700;font-size:14px;color:#002d6e}
+.bs-order-card.tapped .bs-order-name{color:#166534}
 .bs-quick-link:hover{color:var(--navy)}
 .bs-status-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px}
 </style>
@@ -799,12 +804,20 @@ let bsHomePitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
 let bsInnings = {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
 let bsAwayErrors = 0;
 let bsHomeErrors = 0;
+// Tap-to-order state
+let bsAwayOrderMode = false, bsHomeOrderMode = false;
+let bsAwayOrderQueue = [], bsHomeOrderQueue = [];
+// Score-only mode
+let bsScoreOnlyMode = false;
 
 window.openBoxScore = async function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
   if (!g) return;
   bsGameId = gameId;
   bsGameData = g;
+  bsScoreOnlyMode = false;
+  bsAwayOrderMode = false; bsHomeOrderMode = false;
+  bsAwayOrderQueue = []; bsHomeOrderQueue = [];
 
   const awayTeam = TEAMS.find(t => t.id === g.away || t.short === g.away);
   const homeTeam = TEAMS.find(t => t.id === g.home || t.short === g.home);
@@ -825,12 +838,21 @@ window.openBoxScore = async function(gameId) {
   const awayPlayers = PLAYERS.filter(p => p.team === awayId);
   const homePlayers = PLAYERS.filter(p => p.team === homeId);
 
-  bsAwayLineup = existing?.away_lineup || awayPlayers.map(p => ({
-    name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, dnp: false
-  }));
-  bsHomeLineup = existing?.home_lineup || homePlayers.map(p => ({
-    name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, h: 0, rbi: 0, bb: 0, so: 0, dnp: false
-  }));
+  // Migrate old format: if player has h but not s, convert to new fields
+  function migratePlayer(p) {
+    if (p.h !== undefined && p.s === undefined) {
+      return { ...p, s: p.h||0, d: p.d||0, t: p.t||0, hr: p.hr||0 };
+    }
+    return { s: p.s||0, d: p.d||0, t: p.t||0, hr: p.hr||0, ...p };
+  }
+
+  bsAwayLineup = (existing?.away_lineup || awayPlayers.map(p => ({
+    name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
+  }))).map(migratePlayer);
+  bsHomeLineup = (existing?.home_lineup || homePlayers.map(p => ({
+    name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
+  }))).map(migratePlayer);
+
   const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''});
   // Support old single pitcher format and new array format
   bsAwayPitchers = existing?.away_pitchers || (existing?.away_pitcher ? [existing.away_pitcher] : [defP()]);
@@ -849,29 +871,73 @@ function renderBoxScore(awayName, homeName, g) {
   const view = document.getElementById('box-score-view');
   const positions = ['','P','C','1B','2B','3B','SS','LF','CF','RF','DH','EH'];
 
-  function renderPanel(lineup, teamName, side) {
-    const totals = { ab:0, r:0, h:0, rbi:0, bb:0, so:0 };
-    lineup.filter(p => !p.dnp).forEach(p => {
-      totals.ab += (parseInt(p.ab)||0); totals.r += (parseInt(p.r)||0);
-      totals.h += (parseInt(p.h)||0); totals.rbi += (parseInt(p.rbi)||0);
-      totals.bb += (parseInt(p.bb)||0); totals.so += (parseInt(p.so)||0);
-    });
+  function playerH(p) {
+    return (parseInt(p.s)||0) + (parseInt(p.d)||0) + (parseInt(p.t)||0) + (parseInt(p.hr)||0);
+  }
+
+  function renderOrderMode(lineup, teamName, side) {
+    const queue = side === 'away' ? bsAwayOrderQueue : bsHomeOrderQueue;
+    const activePlayers = lineup.map((p,i) => ({p,i})).filter(({p}) => !p.dnp);
     return `
       <div class="bs-panel" data-side="${side}">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;padding:12px 0;border-bottom:2px solid #002D72">${teamName} <span style="font-weight:400;font-size:14px;color:rgba(0,0,0,.4)">(${totals.r} runs)</span></div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;padding:12px 0 8px;border-bottom:2px solid #002D72;display:flex;align-items:center;justify-content:space-between">
+          <span>${teamName} — Set Batting Order</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="bsUndoOrderPlayer('${side}')" style="font-size:12px">↩ Undo Last</button>
+            <button class="btn btn-outline btn-sm" onclick="bsCancelOrderMode('${side}')" style="font-size:12px">✕ Cancel</button>
+          </div>
+        </div>
+        <div style="padding:12px 0 6px;font-size:12px;color:rgba(0,0,0,.5)">Tap players in batting order (${queue.length}/${activePlayers.length} tapped)</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:8px 0">
+          ${activePlayers.map(({p,i}) => {
+            const tapPos = queue.indexOf(i);
+            const tapped = tapPos !== -1;
+            return `<div class="bs-order-card${tapped?' tapped':''}" onclick="bsTapOrderPlayer('${side}',${i})">
+              ${tapped ? `<div class="bs-order-num">${tapPos+1}</div>` : ''}
+              <div class="bs-order-name">${p.name}</div>
+              ${p.num ? `<div style="font-size:11px;color:rgba(0,0,0,.4)">#${p.num}</div>` : ''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  function renderPanel(lineup, teamName, side) {
+    if ((side==='away' && bsAwayOrderMode) || (side==='home' && bsHomeOrderMode)) {
+      return renderOrderMode(lineup, teamName, side);
+    }
+    const totals = { ab:0, r:0, s:0, d:0, t:0, hr:0, h:0, rbi:0, bb:0, so:0 };
+    lineup.filter(p => !p.dnp).forEach(p => {
+      totals.ab += (parseInt(p.ab)||0); totals.r += (parseInt(p.r)||0);
+      totals.s += (parseInt(p.s)||0); totals.d += (parseInt(p.d)||0);
+      totals.t += (parseInt(p.t)||0); totals.hr += (parseInt(p.hr)||0);
+      totals.h += playerH(p);
+      totals.rbi += (parseInt(p.rbi)||0); totals.bb += (parseInt(p.bb)||0); totals.so += (parseInt(p.so)||0);
+    });
+    const statW = '44px';
+    const inputSt = `width:${statW};padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif`;
+    return `
+      <div class="bs-panel" data-side="${side}">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;padding:12px 0 8px;border-bottom:2px solid #002D72;display:flex;align-items:center;justify-content:space-between">
+          <span>${teamName} <span style="font-weight:400;font-size:14px;color:rgba(0,0,0,.4)">(${totals.r} runs)</span></span>
+          <button class="btn btn-outline btn-sm" onclick="bsEnterOrderMode('${side}')" style="font-size:12px">📋 Set Batting Order</button>
+        </div>
         <div style="overflow-x:auto">
-          <div style="min-width:700px">
+          <div style="min-width:820px">
             <div style="display:flex;border-bottom:2px solid rgba(0,0,0,.1);padding:8px 0;font-size:11px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4)">
               <div style="width:30px;text-align:center">#</div>
               <div style="width:20px"></div>
               <div style="flex:1;padding-left:6px">Player</div>
               <div style="width:52px;text-align:center">Pos</div>
-              <div style="width:48px;text-align:center">AB</div>
-              <div style="width:48px;text-align:center">R</div>
-              <div style="width:48px;text-align:center">H</div>
-              <div style="width:48px;text-align:center">RBI</div>
-              <div style="width:48px;text-align:center">BB</div>
-              <div style="width:48px;text-align:center">SO</div>
+              <div style="width:${statW};text-align:center">AB</div>
+              <div style="width:${statW};text-align:center">R</div>
+              <div style="width:${statW};text-align:center">1B</div>
+              <div style="width:${statW};text-align:center">2B</div>
+              <div style="width:${statW};text-align:center">3B</div>
+              <div style="width:${statW};text-align:center">HR</div>
+              <div style="width:${statW};text-align:center">RBI</div>
+              <div style="width:${statW};text-align:center">BB</div>
+              <div style="width:${statW};text-align:center">SO</div>
               <div style="width:32px;text-align:center;font-size:9px">DNP</div>
             </div>
             ${lineup.map((p, i) => {
@@ -886,12 +952,15 @@ function renderBoxScore(awayName, homeName, g) {
                 <div style="width:52px"><select style="width:48px;padding:3px;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:11px;background:#fff" onchange="bsUpdatePos('${side}',${i},this.value)">
                   ${positions.map(pos => `<option value="${pos}"${p.pos===pos?' selected':''}>${pos||'—'}</option>`).join('')}
                 </select></div>
-                <div style="width:48px"><input type="number" style="width:44px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.ab}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'ab',this.value)"></div>
-                <div style="width:48px"><input type="number" style="width:44px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.r}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'r',this.value)"></div>
-                <div style="width:48px"><input type="number" style="width:44px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.h}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'h',this.value)"></div>
-                <div style="width:48px"><input type="number" style="width:44px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.rbi}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'rbi',this.value)"></div>
-                <div style="width:48px"><input type="number" style="width:44px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.bb}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'bb',this.value)"></div>
-                <div style="width:48px"><input type="number" style="width:44px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.1);border-radius:3px;font-size:13px;font-family:'Oswald',sans-serif" value="${p.dnp?'':p.so}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'so',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.ab}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'ab',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.r}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'r',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.s}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'s',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.d}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'d',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.t}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'t',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.hr}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'hr',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.rbi}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'rbi',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.bb}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'bb',this.value)"></div>
+                <div style="width:${statW}"><input type="number" style="${inputSt}" value="${p.dnp?'':p.so}" min="0" ${p.dnp?'disabled':''} oninput="bsUpdateStat('${side}',${i},'so',this.value)"></div>
                 <div style="width:32px;text-align:center"><input type="checkbox" ${p.dnp?'checked':''} onchange="bsToggleDnp('${side}',${i},this.checked)" title="Did not play"></div>
               </div>`;}).join('')}
             <div style="display:flex;align-items:center;border-top:2px solid rgba(0,0,0,.15);padding:10px 0;font-weight:700">
@@ -899,16 +968,18 @@ function renderBoxScore(awayName, homeName, g) {
               <div style="width:20px"></div>
               <div style="flex:1;padding-left:6px;font-size:12px;font-weight:800">TOTALS</div>
               <div style="width:52px"></div>
-              <div style="width:48px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.ab}</div>
-              <div style="width:48px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px;color:#002D72;font-weight:700">${totals.r}</div>
-              <div style="width:48px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.h}</div>
-              <div style="width:48px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.rbi}</div>
-              <div style="width:48px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.bb}</div>
-              <div style="width:48px;text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.so}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.ab}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px;color:#002D72;font-weight:700">${totals.r}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.s}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.d}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.t}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.hr}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.rbi}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.bb}</div>
+              <div style="width:${statW};text-align:center;font-family:'Oswald',sans-serif;font-size:15px">${totals.so}</div>
               <div style="width:32px"></div>
             </div>
           </div>
-          </table>
         </div>
         <button class="btn btn-outline btn-sm" style="margin-top:10px" onclick="bsAddGuest('${side}')">+ Guest Player</button>
 
@@ -968,61 +1039,102 @@ function renderBoxScore(awayName, homeName, g) {
   const awayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
   const homeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
 
-  view.innerHTML = `
-    <div style="padding:20px 0">
-      <a href="#" onclick="closeBoxScore();return false" style="color:#002D72;font-size:13px;font-weight:600;text-decoration:none">← Back to Scores</a>
-      <div style="text-align:center;margin:20px 0">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(0,0,0,.4);margin-bottom:6px">${g.date||''} · ${g.time||''} · ${g.field||''}</div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;text-transform:uppercase">
-          ${awayName} <span style="font-size:38px;color:#002D72" id="bs-away-total">${awayR}</span>
-          <span style="color:rgba(0,0,0,.15);margin:0 10px">—</span>
-          <span style="font-size:38px;color:#002D72" id="bs-home-total">${homeR}</span> ${homeName}
-        </div>
+  // Active mode toggle buttons
+  const fullActive = !bsScoreOnlyMode;
+  const btnBase = 'border:none;padding:7px 16px;font-size:13px;font-weight:600;border-radius:6px;cursor:pointer;transition:all .15s';
+  const btnFull = fullActive
+    ? `background:#002D72;color:#fff;${btnBase}`
+    : `background:transparent;color:rgba(0,0,0,.5);${btnBase}`;
+  const btnScore = bsScoreOnlyMode
+    ? `background:#002D72;color:#fff;${btnBase}`
+    : `background:transparent;color:rgba(0,0,0,.5);${btnBase}`;
+
+  const modeToggle = `
+    <div style="display:flex;gap:0;background:rgba(0,0,0,.06);border-radius:8px;padding:3px;margin-bottom:16px;width:fit-content">
+      <button onclick="bsSetMode(false)" style="${btnFull}" id="bs-btn-full">📊 Full Box Score</button>
+      <button onclick="bsSetMode(true)" style="${btnScore}" id="bs-btn-score">⚡ Score Only</button>
+    </div>`;
+
+  const darkBanner = `
+    <div style="background:#001a3e;border-radius:10px;padding:14px 20px;margin:16px 0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div style="color:rgba(255,255,255,.6);font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase">${g.date||''} · Wk ${g.wk||''} · ${g.time||''} · ${g.field||''}</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;text-transform:uppercase;color:#fff;text-align:center;flex:1;line-height:1">
+        ${awayName} <span style="color:#FFD700" id="bs-away-total">${awayR}</span>
+        <span style="color:rgba(255,255,255,.2);margin:0 8px">—</span>
+        <span style="color:#FFD700" id="bs-home-total">${homeR}</span> ${homeName}
       </div>
-      ${(() => {
-        const awayInningR = bsInnings.away.reduce((s,v)=>s+(parseInt(v)||0),0);
-        const homeInningR = bsInnings.home.reduce((s,v)=>s+(parseInt(v)||0),0);
-        const awayH = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.h)||0),0);
-        const homeH = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.h)||0),0);
-        const awayMismatch = awayInningR !== awayR;
-        const homeMismatch = homeInningR !== homeR;
-        const thStyle = 'padding:6px 4px;font-size:11px;font-weight:700;color:rgba(0,0,0,.4);text-align:center;min-width:36px';
-        const tdStyle = 'padding:4px 2px;text-align:center';
-        const inputStyle = 'width:36px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:3px;font-size:13px;font-family:Oswald,sans-serif;background:#fff';
-        const totalStyle = 'padding:6px 4px;text-align:center;font-family:Oswald,sans-serif;font-size:15px;font-weight:700';
-        return `<div style="overflow-x:auto;margin:20px 0">
-          <table style="border-collapse:collapse;margin:0 auto;font-family:Oswald,sans-serif">
-            <thead><tr>
-              <th style="min-width:120px;text-align:left;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(0,0,0,.4)">TEAM</th>
-              ${bsInnings.away.map((_,i) => '<th style="'+thStyle+'">'+(i+1)+'</th>').join('')}
-              <th style="${thStyle};border-left:2px solid rgba(0,0,0,.15)">R</th>
-              <th style="${thStyle}">H</th>
-              <th style="${thStyle}">E</th>
-            </tr></thead>
-            <tbody>
-              <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
-                <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
-                ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
-                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${awayInningR}${awayMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+awayR+'</div>':''}</td>
-                <td style="${totalStyle}">${awayH}</td>
-                <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
-              </tr>
-              <tr>
-                <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
-                ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
-                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${homeInningR}${homeMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+homeR+'</div>':''}</td>
-                <td style="${totalStyle}">${homeH}</td>
-                <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
-              </tr>
-            </tbody>
-          </table>
-          <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
-        </div>`;
-      })()}
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="closeBoxScore()" style="color:#fff;border-color:rgba(255,255,255,.3)">← Back</button>
+      </div>
+    </div>`;
+
+  let bodyContent = '';
+  if (bsScoreOnlyMode) {
+    bodyContent = `
+      <div style="text-align:center;padding:24px 0 32px">
+        <div style="display:flex;gap:40px;justify-content:center;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;color:rgba(0,0,0,.5);letter-spacing:.06em;margin-bottom:8px">${awayName}</div>
+            <input type="number" id="bs-score-away" style="width:120px;font-size:48px;font-family:'Barlow Condensed',sans-serif;font-weight:900;text-align:center;border:2px solid #002D72;border-radius:10px;padding:12px;color:#002D72" value="${awayR}" min="0">
+          </div>
+          <div style="font-size:40px;font-weight:900;color:rgba(0,0,0,.2);padding-bottom:12px">—</div>
+          <div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;color:rgba(0,0,0,.5);letter-spacing:.06em;margin-bottom:8px">${homeName}</div>
+            <input type="number" id="bs-score-home" style="width:120px;font-size:48px;font-family:'Barlow Condensed',sans-serif;font-weight:900;text-align:center;border:2px solid #002D72;border-radius:10px;padding:12px;color:#002D72" value="${homeR}" min="0">
+          </div>
+        </div>
+      </div>`;
+  } else {
+    const awayH = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+playerH(p),0);
+    const homeH = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+playerH(p),0);
+    const awayInningR = bsInnings.away.reduce((s,v)=>s+(parseInt(v)||0),0);
+    const homeInningR = bsInnings.home.reduce((s,v)=>s+(parseInt(v)||0),0);
+    const awayMismatch = awayInningR !== awayR;
+    const homeMismatch = homeInningR !== homeR;
+    const thStyle = 'padding:6px 4px;font-size:11px;font-weight:700;color:rgba(0,0,0,.4);text-align:center;min-width:36px';
+    const tdStyle = 'padding:4px 2px;text-align:center';
+    const inputStyle = 'width:36px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:3px;font-size:13px;font-family:Oswald,sans-serif;background:#fff';
+    const totalStyle = 'padding:6px 4px;text-align:center;font-family:Oswald,sans-serif;font-size:15px;font-weight:700';
+    bodyContent = `
+      <div style="overflow-x:auto;margin:20px 0">
+        <table style="border-collapse:collapse;margin:0 auto;font-family:Oswald,sans-serif">
+          <thead><tr>
+            <th style="min-width:120px;text-align:left;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(0,0,0,.4)">TEAM</th>
+            ${bsInnings.away.map((_,i) => '<th style="'+thStyle+'">'+(i+1)+'</th>').join('')}
+            <th style="${thStyle};border-left:2px solid rgba(0,0,0,.15)">R</th>
+            <th style="${thStyle}">H</th>
+            <th style="${thStyle}">E</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
+              <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
+              ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
+              <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${awayInningR}${awayMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+awayR+'</div>':''}</td>
+              <td style="${totalStyle}">${awayH}</td>
+              <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
+            </tr>
+            <tr>
+              <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
+              ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
+              <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)">${homeInningR}${homeMismatch?'<div style=\"font-size:9px;color:#d32f2f;font-weight:400\">≠ '+homeR+'</div>':''}</td>
+              <td style="${totalStyle}">${homeH}</td>
+              <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
+      </div>
       <div style="display:flex;flex-direction:column;gap:32px;margin-top:16px">
         ${renderPanel(bsAwayLineup, awayName, 'away')}
         ${renderPanel(bsHomeLineup, homeName, 'home')}
-      </div>
+      </div>`;
+  }
+
+  view.innerHTML = `
+    <div style="padding:20px 0">
+      ${modeToggle}
+      ${darkBanner}
+      ${bodyContent}
       <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1)">
         <button class="btn btn-success" onclick="saveBoxScore(true)">Save & Mark Final</button>
         <button class="btn btn-outline" onclick="saveBoxScore(false)">Save Draft</button>
@@ -1037,6 +1149,42 @@ function bsRerender() {
   const v = document.getElementById('box-score-view');
   renderBoxScore(v.dataset.awayName, v.dataset.homeName, bsGameData);
 }
+
+window.bsSetMode = function(scoreOnly) { bsScoreOnlyMode = scoreOnly; bsRerender(); };
+
+// Tap-to-order functions
+window.bsEnterOrderMode = function(side) {
+  if (side === 'away') { bsAwayOrderMode = true; bsAwayOrderQueue = []; }
+  else { bsHomeOrderMode = true; bsHomeOrderQueue = []; }
+  bsRerender();
+};
+window.bsTapOrderPlayer = function(side, idx) {
+  const queue = side === 'away' ? bsAwayOrderQueue : bsHomeOrderQueue;
+  const lineup = side === 'away' ? bsAwayLineup : bsHomeLineup;
+  // If already tapped, do nothing (use undo to remove)
+  if (queue.indexOf(idx) !== -1) return;
+  queue.push(idx);
+  const activePlayers = lineup.filter(p => !p.dnp);
+  if (queue.length === activePlayers.length) {
+    // All tapped — reorder the lineup
+    const newOrder = queue.map(i => lineup[i]);
+    const dnpPlayers = lineup.filter(p => p.dnp);
+    const reordered = [...newOrder, ...dnpPlayers];
+    if (side === 'away') { bsAwayLineup = reordered; bsAwayOrderMode = false; bsAwayOrderQueue = []; }
+    else { bsHomeLineup = reordered; bsHomeOrderMode = false; bsHomeOrderQueue = []; }
+  }
+  bsRerender();
+};
+window.bsUndoOrderPlayer = function(side) {
+  if (side === 'away') bsAwayOrderQueue.pop();
+  else bsHomeOrderQueue.pop();
+  bsRerender();
+};
+window.bsCancelOrderMode = function(side) {
+  if (side === 'away') { bsAwayOrderMode = false; bsAwayOrderQueue = []; }
+  else { bsHomeOrderMode = false; bsHomeOrderQueue = []; }
+  bsRerender();
+};
 
 let bsDragIdx = null, bsDragSide = null;
 window.bsDragStart = function(e) {
@@ -1065,9 +1213,19 @@ window.bsDragEnd = function(e) {
   document.querySelectorAll('.bs-player-row').forEach(r => { r.style.opacity = ''; r.style.borderTop = ''; });
 };
 window.bsUpdateStat = function(side, idx, stat, val) {
-  (side==='away'?bsAwayLineup:bsHomeLineup)[idx][stat] = parseInt(val)||0;
-  const ar = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
-  const hr = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const p = (side==='away'?bsAwayLineup:bsHomeLineup)[idx];
+  const newVal = parseInt(val)||0;
+  if (stat === 'hr') {
+    const delta = newVal - (p.hr||0);
+    p.r = Math.max(0, (p.r||0) + delta);
+    p.rbi = Math.max(0, (p.rbi||0) + delta);
+    p.hr = newVal;
+    bsRerender();
+    return;
+  }
+  p[stat] = newVal;
+  const ar = bsAwayLineup.filter(q=>!q.dnp).reduce((s,q)=>s+(parseInt(q.r)||0),0);
+  const hr = bsHomeLineup.filter(q=>!q.dnp).reduce((s,q)=>s+(parseInt(q.r)||0),0);
   const at=document.getElementById('bs-away-total'), ht=document.getElementById('bs-home-total');
   if(at) at.textContent=ar; if(ht) ht.textContent=hr;
 };
@@ -1088,7 +1246,7 @@ window.bsUpdateErrors = function(side, val) {
 window.bsToggleDnp = function(side, idx, checked) {
   const p = (side==='away'?bsAwayLineup:bsHomeLineup)[idx];
   p.dnp = checked;
-  if(checked){p.ab=0;p.r=0;p.h=0;p.rbi=0;p.bb=0;p.so=0;}
+  if(checked){p.ab=0;p.r=0;p.s=0;p.d=0;p.t=0;p.hr=0;p.rbi=0;p.bb=0;p.so=0;}
   bsRerender();
 };
 window.bsUpdatePitcher = function(side, idx, field, val) {
@@ -1111,23 +1269,47 @@ window.bsRemovePitcher = function(side, idx) {
 window.bsAddGuest = function(side) {
   const name = prompt('Guest player name:');
   if(!name) return;
-  (side==='away'?bsAwayLineup:bsHomeLineup).push({name,num:'',pos:'',ab:0,r:0,h:0,rbi:0,bb:0,so:0,dnp:false,guest:true});
+  (side==='away'?bsAwayLineup:bsHomeLineup).push({name,num:'',pos:'',ab:0,r:0,s:0,d:0,t:0,hr:0,rbi:0,bb:0,so:0,dnp:false,guest:true});
   bsRerender();
 };
 window.saveBoxScore = async function(markFinal) {
-  const awayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
-  const homeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
-  const boxData = {
-    game_id: bsGameId, wk: bsGameData.wk, date: bsGameData.date,
-    away: bsGameData.away, home: bsGameData.home,
-    away_lineup: bsAwayLineup.filter(p=>!p.dnp).map(p=>({name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,h:parseInt(p.h)||0,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
-    home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>({name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,h:parseInt(p.h)||0,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
-    away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
-    home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
-    innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
-    away_errors: bsAwayErrors, home_errors: bsHomeErrors,
-    away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
-  };
+  let awayR, homeR;
+  let boxData;
+  if (bsScoreOnlyMode) {
+    awayR = parseInt(document.getElementById('bs-score-away')?.value)||0;
+    homeR = parseInt(document.getElementById('bs-score-home')?.value)||0;
+    boxData = {
+      game_id: bsGameId, wk: bsGameData.wk, date: bsGameData.date,
+      away: bsGameData.away, home: bsGameData.home,
+      away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
+    };
+  } else {
+    awayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+    homeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+    boxData = {
+      game_id: bsGameId, wk: bsGameData.wk, date: bsGameData.date,
+      away: bsGameData.away, home: bsGameData.home,
+      away_lineup: bsAwayLineup.filter(p=>!p.dnp).map(p=>({
+        name:p.name, num:p.num, pos:p.pos,
+        ab:parseInt(p.ab)||0, r:parseInt(p.r)||0,
+        s:parseInt(p.s)||0, d:parseInt(p.d)||0, t:parseInt(p.t)||0, hr:parseInt(p.hr)||0,
+        h:(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),
+        rbi:parseInt(p.rbi)||0, bb:parseInt(p.bb)||0, so:parseInt(p.so)||0
+      })),
+      home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>({
+        name:p.name, num:p.num, pos:p.pos,
+        ab:parseInt(p.ab)||0, r:parseInt(p.r)||0,
+        s:parseInt(p.s)||0, d:parseInt(p.d)||0, t:parseInt(p.t)||0, hr:parseInt(p.hr)||0,
+        h:(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),
+        rbi:parseInt(p.rbi)||0, bb:parseInt(p.bb)||0, so:parseInt(p.so)||0
+      })),
+      away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
+      home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
+      innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
+      away_errors: bsAwayErrors, home_errors: bsHomeErrors,
+      away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
+    };
+  }
   try {
     const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
     const snap = await getDocs(q2);
