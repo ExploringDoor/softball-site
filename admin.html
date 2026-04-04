@@ -224,8 +224,22 @@ select.form-input{cursor:pointer}
 <div id="login-screen" class="login-wrap">
   <div class="login-box">
     <div class="login-logo">DVSL</div>
-    <div class="login-sub">Admin Dashboard</div>
+    <div class="login-sub">Commissioner &amp; Captain Portal</div>
     <div id="login-error" class="login-error"></div>
+
+    <!-- Captain Score Entry (no password) -->
+    <div style="margin-bottom:20px;padding:18px;background:#f0f4ff;border:1.5px solid #c7d4f5;border-radius:10px;text-align:center">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:#002D72;margin-bottom:4px">⚾ Captain Score Entry</div>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">Enter your team's game scores — no password needed</div>
+      <button class="btn btn-primary btn-full" onclick="enterCaptainMode()" style="font-size:15px;padding:12px">Enter as Captain</button>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
+      <span style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:.08em">Commissioner</span>
+      <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
+    </div>
+
     <div class="form-group">
       <label class="form-label">Email</label>
       <input type="email" id="login-email" class="form-input" placeholder="admin@dvsl.com" autocomplete="email">
@@ -234,7 +248,7 @@ select.form-input{cursor:pointer}
       <label class="form-label">Password</label>
       <input type="password" id="login-pass" class="form-input" placeholder="Enter password" autocomplete="current-password">
     </div>
-    <button class="btn btn-primary btn-full" id="login-btn" onclick="doLogin()">Sign In</button>
+    <button class="btn btn-outline btn-full" id="login-btn" onclick="doLogin()">Commissioner Sign In</button>
   </div>
 </div>
 
@@ -252,17 +266,17 @@ select.form-input{cursor:pointer}
       </div>
     </div>
     <nav class="sidebar-nav">
-      <div class="nav-item active" data-section="dashboard" onclick="showSection('dashboard')"><span class="icon">&#128202;</span> Dashboard</div>
-      <div class="nav-item" data-section="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
-      <div class="nav-item" data-section="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
-      <div class="nav-item" data-section="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
-      <div class="nav-item" data-section="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
-      <div class="nav-item" data-section="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
-      <div class="nav-item" data-section="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
-      <div class="nav-item" data-section="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
+      <div class="nav-item active" data-section="dashboard" data-sec="dashboard" onclick="showSection('dashboard')"><span class="icon">&#128202;</span> Dashboard</div>
+      <div class="nav-item" data-section="scores" data-sec="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
+      <div class="nav-item" data-section="schedule" data-sec="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
+      <div class="nav-item" data-section="rosters" data-sec="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
+      <div class="nav-item" data-section="standings" data-sec="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
+      <div class="nav-item" data-section="recaps" data-sec="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
+      <div class="nav-item" data-section="banner" data-sec="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
+      <div class="nav-item" data-section="email" data-sec="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
-      <div class="nav-item" data-section="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
-      <div class="nav-item" data-section="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
+      <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
+      <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-user"></div>
@@ -513,6 +527,7 @@ let GAMES = [];
 let PLAYERS = [];
 let RECAPS_DATA = [];
 let currentUser = null;
+let captainMode = false;
 
 // ═══════════════════════════════════════════════════════════════════
 // TOAST NOTIFICATIONS
@@ -591,6 +606,28 @@ window.doLogin = async function() {
 window.doLogout = async function() {
   await signOut(auth);
   location.reload();
+};
+
+window.enterCaptainMode = async function() {
+  captainMode = true;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  // Hide sidebar items not relevant to captains
+  document.querySelectorAll('.nav-item[data-sec]').forEach(el => {
+    const sec = el.dataset.sec;
+    if (sec !== 'scores') el.style.display = 'none';
+  });
+  // Show a captain mode banner in sidebar
+  const brand = document.querySelector('.sidebar-brand');
+  if (brand) {
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:#fff3cd;color:#856404;font-size:11px;font-weight:700;text-transform:uppercase;padding:6px 14px;letter-spacing:.06em;border-bottom:1px solid #ffc107';
+    banner.textContent = '⚾ Captain Mode';
+    brand.after(banner);
+  }
+  document.getElementById('sidebar-user').textContent = 'Captain';
+  await loadAllData();
+  showSection('scores');
 };
 
 // Listen for auth state
@@ -1081,7 +1118,10 @@ function renderBoxScore(awayName, homeName, g) {
   view.innerHTML = `
     <div style="padding:20px 0">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <a href="#" onclick="closeBoxScore();return false" style="color:#002D72;font-size:13px;font-weight:600;text-decoration:none">← Back to Scores</a>
+        <div style="display:flex;align-items:center;gap:12px">
+          <a href="#" onclick="closeBoxScore();return false" style="color:#002D72;font-size:13px;font-weight:600;text-decoration:none">← Back to Scores</a>
+          ${bsGameData?.done ? `<button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100;font-size:12px" onclick="bsReopenGame()">↺ Reset Game</button>` : ''}
+        </div>
         <button class="btn ${bsScoreOnlyMode?'btn-primary':'btn-outline'} btn-sm" onclick="bsToggleScoreOnly()" style="font-size:12px">
           ${bsScoreOnlyMode ? '📊 Full Stats Mode' : '🎯 Score Only Mode'}
         </button>
