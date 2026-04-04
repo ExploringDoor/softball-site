@@ -351,6 +351,7 @@ body{display:flex;flex-direction:column}
       <div class="game-topbar-left">
         <button class="topbar-btn" onclick="goToPickScreen()">← Games</button>
         <button class="topbar-btn" onclick="showEndGameModal()">End Game</button>
+        <button class="topbar-btn danger" onclick="openModal('modal-reset')">↺ Reset</button>
       </div>
       <div class="sync-indicator">
         <div class="sync-dot" id="sync-dot"></div>
@@ -571,6 +572,31 @@ body{display:flex;flex-direction:column}
       <div class="inning-over-label" id="inning-runs-label">Scoreless Inning</div>
       <div class="inning-next" id="inning-next-label">Next up: Loading...</div>
       <button class="modal-confirm" onclick="confirmEndInning()">▶ Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ RESET MODAL ═══ -->
+<div class="modal-overlay" id="modal-reset">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-body">
+      <div class="modal-title">Reset</div>
+      <div class="modal-subtitle">What do you want to reset?</div>
+
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px 16px;margin-bottom:12px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#92400e;margin-bottom:4px">↺ Reset Current Inning</div>
+        <div style="font-size:12px;color:#92400e;margin-bottom:12px">Clears outs, bases, and runs scored this half. Batter order stays.</div>
+        <button class="modal-confirm" style="background:var(--amber)" onclick="resetCurrentInning()">Reset This Half-Inning</button>
+      </div>
+
+      <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:14px 16px;margin-bottom:12px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#991b1b;margin-bottom:4px">↺↺ Reset Entire Game</div>
+        <div style="font-size:12px;color:#991b1b;margin-bottom:12px">Resets everything to 0–0, inning 1. Lineup stays.</div>
+        <button class="btn-danger-modal" style="padding:12px" onclick="closeModal('modal-reset'); document.getElementById('modal-endgame').classList.add('open'); showResetConfirm()">Reset Entire Game</button>
+      </div>
+
+      <button class="btn-continue" onclick="closeModal('modal-reset')">Cancel</button>
     </div>
   </div>
 </div>
@@ -1863,6 +1889,30 @@ window.showEndGameModal = function() {
 window.closeEndGameModal = function() {
   hideResetConfirm();
   closeModal('modal-endgame');
+};
+
+window.resetCurrentInning = function() {
+  closeModal('modal-reset');
+  const isTop = STATE.half === 'top';
+  // Subtract runs scored this half from total
+  if (isTop) {
+    STATE.awayRuns = Math.max(0, STATE.awayRuns - STATE.awayRunsThisHalf);
+    STATE.awayRunsThisHalf = 0;
+  } else {
+    STATE.homeRuns = Math.max(0, STATE.homeRuns - STATE.homeRunsThisHalf);
+    STATE.homeRunsThisHalf = 0;
+  }
+  STATE.outs = 0;
+  STATE.bases = { first: null, second: null, third: null };
+  STATE.lastPlay = '';
+  STATE.history = [];
+  // Remove plays logged in this half from playLog
+  STATE.playLog = (STATE.playLog || []).filter(
+    p => !(p.inning === STATE.inning && p.half === STATE.half)
+  );
+  renderGameScreen();
+  saveToLocalStorage();
+  showToast('Inning reset', 'success');
 };
 
 window.showResetConfirm = function() {
