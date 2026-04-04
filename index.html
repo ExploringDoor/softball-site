@@ -2122,7 +2122,8 @@ thead th.sorted-col .sarrow{opacity:1}
 
 <!-- YEAR TABS -->
 <div class="year-tabs" id="yearTabs">
-  <button class="yr-tab active" onclick="showStandYear('2025',this)">2025</button>
+  <button class="yr-tab active" onclick="showStandYear('2026',this)">2026</button>
+  <button class="yr-tab" onclick="showStandYear('2025',this)">2025</button>
   <button class="yr-tab" onclick="showStandYear('2024',this)">2024</button>
   <button class="yr-tab" onclick="showStandYear('2023',this)">2023</button>
   <button class="yr-tab" onclick="showStandYear('2021',this)">2021</button>
@@ -2130,8 +2131,13 @@ thead th.sorted-col .sarrow{opacity:1}
 
 <div class="main">
 
+<!-- ═══════════ 2026 ═══════════ -->
+<div class="yr-panel show" id="yr-2026">
+  <div id="stand-2026-body"></div>
+</div>
+
 <!-- ═══════════ 2025 ═══════════ -->
-<div class="yr-panel show" id="yr-2025">
+<div class="yr-panel" id="yr-2025">
   <div class="yr-header">
     <div>
       <div class="yr-title">2025</div>
@@ -2692,7 +2698,7 @@ function goPage(name,extra,skipHistory){
     else if(window._dataPromise) window._dataPromise.then(()=>setTimeout(doScores,50));
   }
   if(name==='stats') setTimeout(()=>{try{renderStats();}catch(e){console.error(e);}},50);
-  if(name==='standings') setTimeout(()=>{try{buildStandTable(2025);var p=document.getElementById('yr-2025');if(p){document.querySelectorAll('#pg-standings .yr-panel').forEach(x=>x.classList.remove('show'));p.classList.add('show');}var b=document.querySelector('#pg-standings .yr-tab');if(b){document.querySelectorAll('#pg-standings .yr-tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');}}catch(e){console.error(e);}},50);
+  if(name==='standings') setTimeout(()=>{try{buildStand2026();var p=document.getElementById('yr-2026');if(p){document.querySelectorAll('#pg-standings .yr-panel').forEach(x=>x.classList.remove('show'));p.classList.add('show');}var b=document.querySelector('#pg-standings .yr-tab');if(b){document.querySelectorAll('#pg-standings .yr-tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');}}catch(e){console.error(e);}},50);
   if(!skipHistory){
     const state={page:name,extra:extra||null};
     const url='#'+name+(extra?'/'+extra:'');
@@ -5137,12 +5143,65 @@ function buildStandTable(yr, sortKey, sortDir){
   }).join('');
 }
 
+function buildStand2026(){
+  const el=document.getElementById('stand-2026-body');
+  if(!el) return;
+  const teams=[...TEAMS].filter(t=>t.active!==false).sort((a,b)=>b.pct-a.pct||b.w-a.w||(b.rs-b.ra)-(a.rs-a.ra));
+  const started=teams.some(t=>t.w>0||t.l>0);
+  if(!started){
+    el.innerHTML=`
+      <div style="text-align:center;padding:60px 24px 40px">
+        <div style="font-size:48px;margin-bottom:16px">⚾</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;text-transform:uppercase;margin-bottom:8px">2026 Season</div>
+        <div style="font-size:15px;color:var(--muted);margin-bottom:24px">Season hasn't started yet — check back after Opening Day</div>
+        <div style="font-size:13px;color:var(--muted2)">First game: <strong>April 27, 2026</strong></div>
+      </div>
+      <div style="overflow-x:auto;margin:0 0 24px">
+        <table class="s-tbl" style="width:100%">
+          <thead><tr><th>#</th><th style="text-align:left">Team</th><th>W</th><th>L</th><th>PCT</th><th>RS</th><th>RA</th><th>STRK</th></tr></thead>
+          <tbody>${teams.map((t,i)=>`<tr style="cursor:pointer;opacity:.7" onclick="goPage('team','${t.id}')">
+            <td style="color:var(--muted);font-size:12px">${i+1}</td>
+            <td style="text-align:left"><span style="color:${t.color};font-weight:700">${t.name}</span></td>
+            <td>0</td><td>0</td><td>—</td><td>0</td><td>0</td>
+            <td><span style="color:var(--muted)">—</span></td>
+          </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  } else {
+    const leader=teams[0];
+    el.innerHTML=`
+      <div class="yr-header">
+        <div><div class="yr-title">2026</div><div class="yr-subtitle">Current Standings · ${teams.length} Teams</div></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="s-tbl" style="width:100%">
+          <thead><tr><th>#</th><th style="text-align:left">Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>STRK</th></tr></thead>
+          <tbody>${teams.map((t,i)=>{
+            const gb=i===0?'—':((leader.w-leader.l-(t.w-t.l))/2).toFixed(1);
+            const streak=t.streak&&t.streak!=='—'?`<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`:'<span style="color:var(--muted)">—</span>';
+            return `<tr class="${i===0?'leader':''}" style="cursor:pointer" onclick="goPage('team','${t.id}')">
+              <td style="color:var(--muted);font-size:12px">${i+1}</td>
+              <td style="text-align:left"><span style="color:${t.color};font-weight:700">${t.name}</span></td>
+              <td>${t.w}</td><td>${t.l}</td>
+              <td style="font-weight:600">${t.w+t.l>0?t.pct.toFixed(3).replace(/^0\./,'.'):'-'}</td>
+              <td>${gb==='—'?'<span style="color:var(--muted)">—</span>':gb}</td>
+              <td style="color:var(--muted)">${t.rs}</td><td style="color:var(--muted)">${t.ra}</td>
+              <td>${streak}</td>
+            </tr>`;
+          }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+}
+
 function showStandYear(yr,btn){
   document.querySelectorAll('.yr-tab').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('.yr-panel').forEach(p=>p.classList.remove('show'));
   document.getElementById('yr-'+yr).classList.add('show');
-  buildStandTable(yr);
+  if(yr==='2026') buildStand2026(); else buildStandTable(yr);
 }
 
 // Build initial
@@ -5151,7 +5210,7 @@ function showStandYear(yr,btn){
 
 function initStandings(){
   var btn=document.querySelector('#pg-standings .yr-tab');
-  if(btn) showStandYear('2025',btn);
+  if(btn) showStandYear('2026',btn);
 }
 
 </script>
