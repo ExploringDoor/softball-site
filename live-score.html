@@ -121,8 +121,8 @@ body{display:flex;flex-direction:column}
 /* BATTER */
 .batter-info{width:100%;background:rgba(255,255,255,.08);border-radius:8px;padding:7px 12px;display:flex;align-items:center;justify-content:space-between}
 .batter-left .batter-label{font-size:10px;color:rgba(255,255,255,.5);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;display:flex;align-items:center;gap:6px}
-.btn-add-player-inline{background:rgba(255,255,255,.15);color:rgba(255,255,255,.8);border:none;border-radius:4px;padding:2px 6px;font-size:9px;font-weight:700;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
-.btn-add-player-inline:hover{background:rgba(255,255,255,.25);color:#fff}
+.btn-add-player-inline{background:rgba(255,215,0,.25);color:#FFD700;border:1px solid rgba(255,215,0,.4);border-radius:5px;padding:4px 9px;font-size:10px;font-weight:700;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.btn-add-player-inline:active{background:rgba(255,215,0,.4)}
 .batter-left .batter-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#fff;letter-spacing:.02em}
 .batter-left .batter-line{font-size:11px;color:rgba(255,255,255,.6);margin-top:1px}
 .batter-right{text-align:right}
@@ -585,6 +585,14 @@ body{display:flex;flex-direction:column}
       <div class="final-teams-display" id="final-teams-display"></div>
       <button class="modal-confirm" id="btn-mark-final" onclick="markGameFinal()">✓ Mark Game Final</button>
       <button class="btn-continue" onclick="closeEndGameModal()">Continue Editing</button>
+      <button class="btn-danger-modal" style="background:var(--amber);margin-top:16px;border-top:1px solid var(--border)" onclick="showResetConfirm()">↺ Reset Game to 0–0</button>
+      <div id="reset-confirm-section" style="display:none;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px;margin-top:8px;text-align:center">
+        <div style="font-size:13px;color:#92400e;font-weight:600;margin-bottom:10px">⚠️ Reset ALL scores and stats?<br><span style="font-weight:400;font-size:12px">Lineup stays, everything else clears.</span></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-danger-modal" style="flex:1;padding:10px;margin:0;font-size:13px" onclick="confirmResetGame()">Yes, Reset</button>
+          <button class="btn-continue" style="flex:1;padding:10px;margin:0;font-size:13px" onclick="hideResetConfirm()">Cancel</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1853,7 +1861,42 @@ window.showEndGameModal = function() {
 };
 
 window.closeEndGameModal = function() {
+  hideResetConfirm();
   closeModal('modal-endgame');
+};
+
+window.showResetConfirm = function() {
+  document.getElementById('reset-confirm-section').style.display = 'block';
+};
+
+window.hideResetConfirm = function() {
+  document.getElementById('reset-confirm-section').style.display = 'none';
+};
+
+window.confirmResetGame = function() {
+  STATE.inning = 1;
+  STATE.half = 'top';
+  STATE.outs = 0;
+  STATE.bases = { first: null, second: null, third: null };
+  STATE.awayRunsThisHalf = 0;
+  STATE.homeRunsThisHalf = 0;
+  STATE.awayRuns = 0; STATE.homeRuns = 0;
+  STATE.awayHits = 0; STATE.homeHits = 0;
+  STATE.awayErrors = 0; STATE.homeErrors = 0;
+  STATE.awayInnings = []; STATE.homeInnings = [];
+  STATE.awayBatterIdx = 0; STATE.homeBatterIdx = 0;
+  STATE.status = 'live';
+  STATE.lastPlay = '';
+  STATE.history = [];
+  STATE.playLog = [];
+  [...STATE.awayLineup, ...STATE.homeLineup].forEach(p => {
+    p.ab=0; p.r=0; p.s=0; p.d=0; p.t=0; p.hr=0; p.rbi=0; p.bb=0; p.so=0; p.hbp=0; p.e=0;
+  });
+  hideResetConfirm();
+  closeModal('modal-endgame');
+  renderGameScreen();
+  saveToLocalStorage();
+  showToast('Game reset to 0–0', 'success');
 };
 
 window.markGameFinal = async function() {
