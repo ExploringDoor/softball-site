@@ -261,11 +261,12 @@ async function loadPlayer() {
       const playersSnap = await getDocs(collection(db, 'players'));
       const allPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       const needle = normalizeName(playerName);
+      const teamNeedle = (playerTeam||'').toLowerCase();
       player = allPlayers.find(p => {
         const nameMatch = normalizeName(p.name) === needle;
-        if (playerTeam) return nameMatch && p.team === playerTeam;
+        if (teamNeedle) return nameMatch && (p.team||'').toLowerCase() === teamNeedle;
         return nameMatch;
-      });
+      }) || allPlayers.find(p => normalizeName(p.name) === needle); // fallback: name only
     }
 
     if (!player) {
