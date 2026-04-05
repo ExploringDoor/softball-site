@@ -744,7 +744,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 /* ── MLB-STYLE SCORES ── */
 .score-row{display:flex;align-items:center;padding:16px 24px;border-bottom:1px solid var(--border);gap:16px}
 .score-row:last-child{border-bottom:none}
-.score-row:hover{background:rgba(0,0,0,.02)}
+.score-row:hover{background:rgba(0,0,0,.04)}
 .score-status{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:60px;flex-shrink:0}
 .score-teams{flex:1;min-width:0}
 .score-team-row{display:flex;align-items:center;gap:10px;padding:3px 0}
@@ -1063,7 +1063,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 /* ── MLB-STYLE SCORES ── */
 .score-row{display:flex;align-items:center;padding:16px 24px;border-bottom:1px solid var(--border);gap:16px}
 .score-row:last-child{border-bottom:none}
-.score-row:hover{background:rgba(0,0,0,.02)}
+.score-row:hover{background:rgba(0,0,0,.04)}
 .score-status{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:60px;flex-shrink:0}
 .score-teams{flex:1;min-width:0}
 .score-team-row{display:flex;align-items:center;gap:10px;padding:3px 0}
@@ -4491,13 +4491,14 @@ function scheduleBlock(g, isNext){
 
   if(g.done){
     const aw=g.as>g.hs;
-    return `<div class="score-row">
+    const _bsArgs=`'${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}'`;
+    return `<div class="score-row" style="cursor:pointer" onclick="openBox(${_bsArgs})">
       <div class="score-status">FINAL</div>
       <div class="score-teams">
         <div class="score-team-row">
           <div class="score-logo" style="color:${ac};border-color:${ac}55">${aShort}</div>
           <div class="score-team-info">
-            <span class="score-team-name${aw?'':' loser'}" onclick="goTeam('${atm?.id||g.away}')">${atm?.name||aShort.toUpperCase()}</span>
+            <span class="score-team-name${aw?'':' loser'}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')">${atm?.name||aShort.toUpperCase()}</span>
             <span class="score-record">${aRec}</span>
           </div>
           <div class="score-rhe"><span class="rhe-val${aw?' winner':''}">${g.as}</span><span class="rhe-val">\u2014</span><span class="rhe-val">0</span></div>
@@ -4506,7 +4507,7 @@ function scheduleBlock(g, isNext){
         <div class="score-team-row">
           <div class="score-logo" style="color:${hc};border-color:${hc}55">${hShort}</div>
           <div class="score-team-info">
-            <span class="score-team-name${!aw?'':' loser'}" onclick="goTeam('${htm?.id||g.home}')">${htm?.name||hShort.toUpperCase()}</span>
+            <span class="score-team-name${!aw?'':' loser'}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')">${htm?.name||hShort.toUpperCase()}</span>
             <span class="score-record">${hRec}</span>
           </div>
           <div class="score-rhe"><span class="rhe-val${!aw?' winner':''}">${g.hs}</span><span class="rhe-val">\u2014</span><span class="rhe-val">0</span></div>
@@ -4514,8 +4515,7 @@ function scheduleBlock(g, isNext){
         </div>
       </div>
       <div class="score-actions">
-        <button class="score-btn" onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}')">Box Score</button>
-        <button class="score-btn" onclick="openRecap2('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Recap</button>
+        <button class="score-btn" onclick="event.stopPropagation();openRecap2('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Recap</button>
         <button class="score-btn" onclick="event.stopPropagation();shareGame('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Share</button>
       </div>
     </div>`;
@@ -4648,26 +4648,32 @@ function openRecap(away,home,as,hs,field,date){
 async function openBox(away,home,as,hs,field,date,gameId){
   const ac=tc(away),hc=tc(home),aW=as>hs;
 
-  // Build the header immediately and show a loading body
+  // Shared header HTML (score always visible; loser score slightly muted but readable)
   const hdrHtml=`
-    <div class="pop-hd">
+    <div class="pop-hd" style="background:#fff">
       <div class="pop-matchup">
-        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${away}')"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away ↗</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${away}')">
+          <div class="pop-abbr" style="color:${ac}">${away}</div>
+          <div class="pop-role-lbl">Away ↗</div>
+        </div>
         <div class="pop-sc-mid">
           <div class="pop-sc">
-            <span style="color:${ac};opacity:${aW?1:.55}">${as}</span><span class="pop-dash">–</span><span style="color:${hc};opacity:${!aW?1:.55}">${hs}</span>
+            <span style="color:${aW?ac:'#999'}">${as}</span><span class="pop-dash" style="color:#ccc">–</span><span style="color:${!aW?hc:'#999'}">${hs}</span>
           </div>
           <div class="pop-badge">Final</div>
         </div>
-        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${home}')"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home ↗</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${home}')">
+          <div class="pop-abbr" style="color:${hc}">${home}</div>
+          <div class="pop-role-lbl">Home ↗</div>
+        </div>
       </div>
       <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${field}</span></div>
     </div>`;
 
-  document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:var(--muted)"><div style="font-size:22px;margin-bottom:8px">⏳</div>Loading box score…</div>`;
+  document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999"><div style="font-size:20px;margin-bottom:8px">⏳</div>Loading…</div>`;
   openScPop();
 
-  // Try to fetch box score from Firestore
+  // Fetch box score from Firestore
   let boxScore = null;
   if (gameId) {
     try {
@@ -4675,20 +4681,20 @@ async function openBox(away,home,as,hs,field,date,gameId){
       const { collection: col2, getDocs: gd2, query: q2, where: wh2 } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
       const snap = await gd2(q2(col2(db2,'box_scores'), wh2('game_id','==',gameId)));
       if (!snap.empty) boxScore = { id: snap.docs[0].id, ...snap.docs[0].data() };
-    } catch(e) { console.warn('Box score fetch failed:',e); }
+    } catch(e) { console.warn('Box score fetch:',e); }
   }
 
   // Recap data
   const recap=RECAPS.find(r=>r.away===away&&r.home===home);
-  const starsHtml=recap&&recap.stars?.length
-    ?`<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:var(--gold)">★</span>${s}</div>`).join('')}</div>`:'';
 
-  let bodyHtml = '<div class="pop-body">';
+  let bodyHtml = '<div class="pop-body" style="padding:20px 24px">';
 
   if (boxScore) {
-    // ── Real box score data ──
-    const aLineup = boxScore.away_lineup || [];
-    const hLineup = boxScore.home_lineup || [];
+    // ── Real box score stats ──
+    const aLineup  = boxScore.away_lineup   || [];
+    const hLineup  = boxScore.home_lineup   || [];
+    const aPitch   = boxScore.away_pitchers || [];
+    const hPitch   = boxScore.home_pitchers || [];
     const aInnings = boxScore.innings?.away || [];
     const hInnings = boxScore.innings?.home || [];
     const aH = aLineup.reduce((s,p)=>s+(p.h||0),0);
@@ -4696,71 +4702,85 @@ async function openBox(away,home,as,hs,field,date,gameId){
     const aE = boxScore.away_errors || 0;
     const hE = boxScore.home_errors || 0;
 
-    // Line score
-    const innNums = Array.from({length: Math.max(aInnings.length, hInnings.length, 7)}, (_,i)=>i+1);
+    // Line score with innings
+    const innCount = Math.max(aInnings.length, hInnings.length, 7);
+    const innNums  = Array.from({length:innCount},(_,i)=>i+1);
     bodyHtml += `<div class="pop-sec-title">Line Score</div>
       <div style="overflow-x:auto;margin-bottom:20px">
-      <table class="ptbl" style="min-width:340px">
-        <thead><tr><th>Team</th>${innNums.map(n=>`<th style="min-width:22px">${n}</th>`).join('')}<th>R</th><th>H</th><th>E</th></tr></thead>
-        <tbody>
-          <tr><td style="color:${ac};font-weight:700;white-space:nowrap">${away}</td>${innNums.map((_,i)=>`<td>${aInnings[i]??'-'}</td>`).join('')}<td style="font-weight:700">${as}</td><td>${aH}</td><td>${aE}</td></tr>
-          <tr><td style="color:${hc};font-weight:700;white-space:nowrap">${home}</td>${innNums.map((_,i)=>`<td>${hInnings[i]??'-'}</td>`).join('')}<td style="font-weight:700">${hs}</td><td>${hH}</td><td>${hE}</td></tr>
-        </tbody>
-      </table></div>`;
+        <table class="ptbl">
+          <thead><tr><th style="text-align:left">Team</th>${innNums.map(n=>`<th>${n}</th>`).join('')}<th>R</th><th>H</th><th>E</th></tr></thead>
+          <tbody>
+            <tr><td style="color:${ac};font-weight:700;white-space:nowrap;text-align:left">${away}</td>${innNums.map((_,i)=>`<td>${aInnings[i]??'–'}</td>`).join('')}<td style="font-weight:700">${as}</td><td>${aH}</td><td>${aE}</td></tr>
+            <tr><td style="color:${hc};font-weight:700;white-space:nowrap;text-align:left">${home}</td>${innNums.map((_,i)=>`<td>${hInnings[i]??'–'}</td>`).join('')}<td style="font-weight:700">${hs}</td><td>${hH}</td><td>${hE}</td></tr>
+          </tbody>
+        </table>
+      </div>`;
 
-    // Batting tables
-    const mkBatRows=(lineup)=>lineup.length
+    // Batting
+    const mkBatRows=lineup=>lineup.length
       ? lineup.map(p=>{
           const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
-          const ab=p.ab||0;
-          const avg=ab>0?(h/ab).toFixed(3).replace(/^0/,''):'-';
+          const avg=(p.ab>0)?(h/p.ab).toFixed(3).replace(/^0/,''):'.000';
           return `<tr>
-            <td><span style="color:var(--white);font-weight:600">${p.name||''}</span>${p.pos?` <span style="font-size:9px;color:var(--muted2)">${p.pos}</span>`:''}${p.num?` <span style="font-size:9px;color:var(--muted2)">#${p.num}</span>`:''}</td>
-            <td>${ab}</td><td>${h}</td><td>${p.r||0}</td><td>${p.hr||0}</td><td>${p.rbi||0}</td><td>${avg}</td>
+            <td style="text-align:left"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${p.pos?` <span style="font-size:9px;color:#999">${p.pos}</span>`:''}${p.num?` <span style="font-size:9px;color:#bbb">#${p.num}</span>`:''}</td>
+            <td>${p.ab||0}</td><td>${h}</td><td>${p.r||0}</td><td>${p.hr||0}</td><td>${p.rbi||0}</td><td>${avg}</td>
           </tr>`;}).join('')
-      : `<tr><td colspan="7" style="color:var(--muted);text-align:center;padding:12px">No batting data</td></tr>`;
+      : `<tr><td colspan="7" style="text-align:center;padding:10px;color:#999">No batting data</td></tr>`;
 
     bodyHtml += `<div class="pop-sec-title">Batting</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away} ↗</div>
-          <table class="ptbl"><thead><tr><th>Player</th><th>AB</th><th>H</th><th>R</th><th>HR</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(aLineup)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home} ↗</div>
-          <table class="ptbl"><thead><tr><th>Player</th><th>AB</th><th>H</th><th>R</th><th>HR</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(hLineup)}</tbody></table></div>
+        <div>
+          <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away} ↗</div>
+          <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>HR</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(aLineup)}</tbody></table>
+        </div>
+        <div>
+          <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home} ↗</div>
+          <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>HR</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(hLineup)}</tbody></table>
+        </div>
       </div>`;
+
+    // Pitching (only if any pitcher data exists)
+    if (aPitch.length || hPitch.length) {
+      const mkPitchRows=pitchers=>pitchers.length
+        ? pitchers.map(p=>{
+            const dec = p.decision;
+            const decBadge = dec ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;background:${dec==='W'?'#dcfce7':dec==='L'?'#fee2e2':'#f3f4f6'};color:${dec==='W'?'#166534':dec==='L'?'#991b1b':'#374151'}">${dec}</span>` : '';
+            return `<tr>
+              <td style="text-align:left"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${decBadge}</td>
+              <td>${p.ip||0}</td><td>${p.h||0}</td><td>${p.r||0}</td><td>${p.er||0}</td><td>${p.bb||0}</td><td>${p.so||0}</td>
+            </tr>`;}).join('')
+        : `<tr><td colspan="7" style="text-align:center;padding:10px;color:#999">—</td></tr>`;
+
+      bodyHtml += `<div class="pop-sec-title" style="margin-top:18px">Pitching</div>
+        <div class="pop-grid2">
+          <div>
+            <div class="pop-team-lbl" style="color:${ac}">${away}</div>
+            <table class="ptbl"><thead><tr><th style="text-align:left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th></tr></thead><tbody>${mkPitchRows(aPitch)}</tbody></table>
+          </div>
+          <div>
+            <div class="pop-team-lbl" style="color:${hc}">${home}</div>
+            <table class="ptbl"><thead><tr><th style="text-align:left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th></tr></thead><tbody>${mkPitchRows(hPitch)}</tbody></table>
+          </div>
+        </div>`;
+    }
+
   } else {
-    // ── Fallback: season aggregate stats from PLAYERS ──
-    const awayTeam=TEAMS.find(t=>t.id===away||t.short===away||t.short===away?.toUpperCase())||HIST_TEAMS.find(t=>t.id===away||t.short===away);
-    const homeTeam=TEAMS.find(t=>t.id===home||t.short===home||t.short===home?.toUpperCase())||HIST_TEAMS.find(t=>t.id===home||t.short===home);
-    const awayPlayers=awayTeam?PLAYERS.filter(p=>p.team===awayTeam.id).sort((a,b)=>b.avg-a.avg):[];
-    const homePlayers=homeTeam?PLAYERS.filter(p=>p.team===homeTeam.id).sort((a,b)=>b.avg-a.avg):[];
-    const aH=Math.floor(as*2.1), hH=Math.floor(hs*2.1);
-    const mkRows=(players)=>players.length
-      ? players.map(p=>`<tr>
-          <td><span style="color:var(--white);font-weight:600">${p.name}</span> <span style="font-size:9px;color:var(--muted2)">${p.pos||''}</span></td>
-          <td>${(p.avg||0).toFixed(3).replace(/^0/,'')}</td>
-          <td>${p.hr||0}</td>
-          <td>${p.rbi||0}</td></tr>`).join('')
-      : `<tr><td colspan="4" style="color:var(--muted);text-align:center;padding:12px">No roster data yet</td></tr>`;
-    bodyHtml += `<div class="pop-sec-title">Line Score</div>
-      <table class="ptbl" style="margin-bottom:20px">
-        <thead><tr><th>Team</th><th>R</th><th>H</th><th>E</th></tr></thead>
-        <tbody>
-          <tr><td style="color:${ac};font-weight:700">${away}</td><td>${as}</td><td>${aH}</td><td>0</td></tr>
-          <tr><td style="color:${hc};font-weight:700">${home}</td><td>${hs}</td><td>${hH}</td><td>0</td></tr>
-        </tbody>
-      </table>
-      <div class="pop-sec-title">Batting <span style="font-size:11px;font-weight:400;opacity:.6">(Season stats)</span></div>
-      <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(awayPlayers)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home} ↗</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead><tbody>${mkRows(homePlayers)}</tbody></table></div>
-      </div>`;
+    // ── No box score saved yet ──
+    bodyHtml += `<div style="text-align:center;padding:32px 16px">
+      <div style="font-size:15px;font-weight:700;color:#555;margin-bottom:6px">No stats have been entered</div>
+      <div style="font-size:13px;color:#999">Player and pitching stats haven't been submitted for this game yet.</div>
+    </div>`;
   }
 
-  // Recap section
+  // ── Recap section (always shown) ──
+  bodyHtml += `<div class="pop-sec-title" style="margin-top:20px">Game Recap</div>`;
   if (recap?.text) {
-    bodyHtml += `<div class="pop-sec-title" style="margin-top:20px">Game Recap</div>
-      <div class="pop-recap">${recap.text}</div>
-      ${starsHtml}`;
+    bodyHtml += `<div class="pop-recap" style="color:#333;font-size:14px;line-height:1.8">${recap.text}</div>`;
+    if (recap.stars?.length) {
+      bodyHtml += `<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:#e8a014">★</span> ${s}</div>`).join('')}</div>`;
+    }
+  } else {
+    bodyHtml += `<div style="color:#999;font-size:13px;font-style:italic">Recap coming soon — check back after the game.</div>`;
   }
 
   bodyHtml += '</div>';

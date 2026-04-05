@@ -2655,11 +2655,24 @@ let SCORE_SUBMISSIONS = [];
 async function loadScoreReviews() {
   const el = document.getElementById('score-reviews-content');
   try {
-    const snap = await getDocs(query(collection(db, 'score_submissions'), orderBy('timestamp', 'desc')));
+    let snap;
+    try {
+      // Try ordered query first (requires Firestore index)
+      snap = await getDocs(query(collection(db, 'score_submissions'), orderBy('timestamp', 'desc')));
+    } catch(indexErr) {
+      // Fallback: fetch all docs, sort client-side (no index needed)
+      snap = await getDocs(collection(db, 'score_submissions'));
+    }
     SCORE_SUBMISSIONS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Sort newest first client-side
+    SCORE_SUBMISSIONS.sort((a, b) => {
+      const ta = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(0);
+      const tb = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(0);
+      return tb - ta;
+    });
     renderScoreReviews();
   } catch(e) {
-    el.innerHTML = '<div class="empty">Could not load score submissions</div>';
+    el.innerHTML = `<div class="empty">Could not load score submissions: ${e.message}</div>`;
   }
 }
 
