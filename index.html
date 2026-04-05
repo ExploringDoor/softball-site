@@ -3955,7 +3955,7 @@ function populateTeamsDropdown(){
   if (!list || !TEAMS.length) return;
   const sorted = [...TEAMS].filter(t=>t.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   list.innerHTML = sorted.map(t=>`
-    <div class="nav-team-item" onclick="goPage('team','${t.id}');document.querySelectorAll('.nav-dropdown').forEach(d=>d.style.display='')">
+    <div class="nav-team-item" onclick="goPage('team','${t.id}');(function(){const w=document.getElementById('nl-players');w.style.pointerEvents='none';setTimeout(()=>{w.style.pointerEvents='';},400);})()">
       <div class="nav-team-dot" style="background:${t.color||'#999'}"></div>
       <span class="nav-team-name">${t.name}</span>
     </div>`).join('');
@@ -4774,9 +4774,8 @@ function renderScores(){
         }).join('')
       : '';
 
-    wrap.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">`
-      +`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="sb-week-head" style="margin-bottom:0">${wkLabel} <span style="font-size:13px;color:var(--muted);font-weight:400">${shownGames.length} game${shownGames.length!==1?'s':''}</span></div>${dayPicker}</div>`
-      +`<button onclick="downloadFullSchedule()" style="display:flex;align-items:center;gap:6px;background:var(--gold);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap">📅 Download Full Schedule</button></div>`
+    wrap.innerHTML=`<div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">`
+      +`<div class="sb-week-head" style="margin-bottom:0">${wkLabel} <span style="font-size:13px;color:var(--muted);font-weight:400">${shownGames.length} game${shownGames.length!==1?'s':''}</span></div>${dayPicker}</div>`
       +`<div class="preview-grid">`
       +shownGames.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
       +`</div>`;
