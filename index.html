@@ -4766,19 +4766,17 @@ function renderScores(){
 
     const shownGames=multiDay&&selectedDay ? w.games.filter(g=>g.date===selectedDay) : w.games;
 
-    // Day picker buttons
+    // Day picker buttons — inline with header
     const dayPicker=multiDay
-      ? `<div style="display:flex;gap:6px;margin:10px 0 16px;flex-wrap:wrap">`
-        + uniqueDays.map(d=>{
-            const active=d===selectedDay;
-            return `<button onclick="selectedDay='${d}';renderScores()" style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;padding:5px 14px;border-radius:20px;border:2px solid ${active?'var(--gold)':'var(--border)'};background:${active?'var(--gold)':'transparent'};color:${active?'#fff':'var(--muted)'};cursor:pointer;transition:all .15s">${d}</button>`;
-          }).join('')
-        + `</div>`
+      ? uniqueDays.map(d=>{
+          const active=d===selectedDay;
+          return `<button onclick="selectedDay='${d}';renderScores()" style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;padding:6px 18px;border-radius:20px;border:2px solid ${active?'var(--gold)':'var(--border)'};background:${active?'var(--gold)':'transparent'};color:${active?'#fff':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${d}</button>`;
+        }).join('')
       : '';
 
-    wrap.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0"><div class="sb-week-head" style="margin-bottom:0">${wkLabel} <span style="font-size:13px;color:var(--muted);font-weight:400">${shownGames.length} game${shownGames.length!==1?'s':''}</span></div>`
+    wrap.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">`
+      +`<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div class="sb-week-head" style="margin-bottom:0">${wkLabel} <span style="font-size:13px;color:var(--muted);font-weight:400">${shownGames.length} game${shownGames.length!==1?'s':''}</span></div>${dayPicker}</div>`
       +`<button onclick="downloadFullSchedule()" style="display:flex;align-items:center;gap:6px;background:var(--gold);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap">📅 Download Full Schedule</button></div>`
-      +dayPicker
       +`<div class="preview-grid">`
       +shownGames.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
       +`</div>`;
