@@ -2225,7 +2225,16 @@ thead th.sorted-col .sarrow{opacity:1}
 
 <!-- ═══════════ 2026 ═══════════ -->
 <div class="yr-panel show" id="yr-2026">
-  <div id="stand-2026-body"></div>
+  <div id="stand-2026-header"></div>
+  <div class="legend">
+    <span><b>W</b> Wins</span><span><b>L</b> Losses</span><span><b>T</b> Ties</span><span><b>PCT</b> Win %</span><span><b>AVG</b> Points Avg</span><span><b>GB</b> Games Behind</span><span><b>PF</b> Points For</span><span><b>PA</b> Points Against</span><span><b>DIFF</b> Differential</span><span><b>STRK</b> Streak</span>
+  </div>
+  <div class="s-wrap">
+    <table>
+      <thead><tr></tr></thead>
+      <tbody id="tbody-2026"></tbody>
+    </table>
+  </div>
 </div>
 
 <!-- ═══════════ 2025 ═══════════ -->
@@ -5383,7 +5392,7 @@ function buildStandTable(yr, sortKey, sortDir){
     const rowCls=i<3?`rank-${i+1}`:'';
     return `<tr class="${rowCls}">
       <td class="rank-cell">${medal(i)||i+1}</td>
-      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="goTeamByName('${r.t}')" title="View ${r.t} team page">${r.t} ↗</td>
+      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="${r._id?`goPage('team','${r._id}')`:`goTeamByName('${r.t}')`}" title="View ${r.t} team page">${r._color?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${r._color};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''}<span style="vertical-align:middle">${r.t}</span> ↗</td>
       <td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num">${r.ti}</td>
       <td class="num">${pctBar}</td>
       <td class="num">${r.avg.toFixed(3).replace(/^0\./,'.')}</td>
@@ -5396,56 +5405,44 @@ function buildStandTable(yr, sortKey, sortDir){
 }
 
 function buildStand2026(){
-  const el=document.getElementById('stand-2026-body');
-  if(!el) return;
   const teams=[...TEAMS].filter(t=>t.active!==false).sort((a,b)=>b.pct-a.pct||b.w-a.w||(b.rs-b.ra)-(a.rs-a.ra));
+  if(!teams.length) return;
   const started=teams.some(t=>t.w>0||t.l>0);
-  if(!started){
-    el.innerHTML=`
-      <div style="text-align:center;padding:60px 24px 40px">
-        <div style="font-size:48px;margin-bottom:16px">⚾</div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;text-transform:uppercase;margin-bottom:8px">2026 Season</div>
-        <div style="font-size:15px;color:var(--muted);margin-bottom:24px">Season hasn't started yet — check back after Opening Day</div>
-        <div style="font-size:13px;color:var(--muted2)">First game: <strong>April 27, 2026</strong></div>
-      </div>
-      <div style="overflow-x:auto;margin:0 0 24px">
-        <table class="s-tbl" style="width:100%">
-          <thead><tr><th>#</th><th style="text-align:left">Team</th><th>W</th><th>L</th><th>PCT</th><th>RS</th><th>RA</th><th>STRK</th></tr></thead>
-          <tbody>${teams.map((t,i)=>`<tr style="cursor:pointer;opacity:.7" onclick="goPage('team','${t.id}')">
-            <td style="color:var(--muted);font-size:12px;text-align:center">${i+1}</td>
-            <td style="text-align:left"><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span><span style="font-weight:600;color:#1a1a1a">${t.name}</span></span></td>
-            <td>0</td><td>0</td><td>—</td><td>0</td><td>0</td>
-            <td><span style="color:var(--muted)">—</span></td>
-          </tr>`).join('')}
-          </tbody>
-        </table>
+  const leader=teams[0];
+
+  // Header area
+  const hdr=document.getElementById('stand-2026-header');
+  if(hdr){
+    if(!started){
+      hdr.innerHTML=`<div style="text-align:center;padding:48px 24px 20px">
+        <div style="font-size:40px;margin-bottom:10px">⚾</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;text-transform:uppercase;margin-bottom:6px">2026 Season</div>
+        <div style="font-size:14px;color:var(--muted);margin-bottom:6px">Season hasn't started yet — check back after Opening Day</div>
+        <div style="font-size:12px;color:var(--muted2)">First game: <strong>April 27, 2026</strong></div>
       </div>`;
-  } else {
-    const leader=teams[0];
-    el.innerHTML=`
-      <div class="yr-header">
+    } else {
+      hdr.innerHTML=`<div class="yr-header">
         <div><div class="yr-title">2026</div><div class="yr-subtitle">Current Standings · ${teams.length} Teams</div></div>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="s-tbl" style="width:100%">
-          <thead><tr><th>#</th><th style="text-align:left">Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>STRK</th></tr></thead>
-          <tbody>${teams.map((t,i)=>{
-            const gb=i===0?'—':((leader.w-leader.l-(t.w-t.l))/2).toFixed(1);
-            const streak=t.streak&&t.streak!=='—'?`<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`:'<span style="color:var(--muted)">—</span>';
-            return `<tr class="${i===0?'leader':''}" style="cursor:pointer" onclick="goPage('team','${t.id}')">
-              <td style="color:var(--muted);font-size:12px;text-align:center">${i+1}</td>
-              <td style="text-align:left"><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span><span style="font-weight:600;color:#1a1a1a">${t.name}</span></span></td>
-              <td style="font-weight:600">${t.w}</td><td>${t.l}</td>
-              <td style="font-weight:600">${t.w+t.l>0?t.pct.toFixed(3).replace(/^0\./,'.'):'-'}</td>
-              <td style="color:var(--muted)">${gb==='—'?'—':gb}</td>
-              <td>${t.rs}</td><td style="color:var(--muted)">${t.ra}</td>
-              <td>${streak}</td>
-            </tr>`;
-          }).join('')}
-          </tbody>
-        </table>
       </div>`;
+    }
   }
+
+  // Convert Firebase TEAMS into the same row format as historical DATA
+  DATA['2026']=teams.map((t,i)=>{
+    const gp=t.w+t.l;
+    const gb=i===0?'—':((leader.w-leader.l-(t.w-t.l))/2).toFixed(1);
+    const avg=gp>0?(t.rs||0)/gp:0;
+    return {
+      t:t.name, _id:t.id, _color:t.color,
+      w:t.w||0, l:t.l||0, ti:t.ti||0,
+      pct:t.pct||0, avg, gb,
+      pf:t.rs||0, pa:t.ra||0,
+      diff:(t.rs||0)-(t.ra||0),
+      strk:t.streak||'—'
+    };
+  });
+
+  buildStandTable('2026');
 }
 
 function showStandYear(yr,btn){
