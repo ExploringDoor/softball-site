@@ -283,6 +283,30 @@ body{display:flex;flex-direction:column}
   .field-svg{max-width:180px}
 }
 
+/* ═══ COUNT / PITCH ═══ */
+.count-pitch-row{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:6px;gap:8px}
+.count-pills{display:flex;align-items:center;gap:6px}
+.count-pill{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.8);border-radius:6px;padding:4px 10px;letter-spacing:.06em;display:flex;align-items:center;gap:4px}
+.count-pill .cp-num{font-size:20px;color:#FFD700;line-height:1}
+.pitch-btn{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.06em;text-transform:uppercase;background:rgba(255,215,0,.18);color:#FFD700;border:1.5px solid rgba(255,215,0,.35);border-radius:8px;padding:6px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;flex-shrink:0}
+.pitch-btn:active{background:rgba(255,215,0,.35)}
+
+/* ═══ GAME TABS ═══ */
+.game-tab-bar{display:flex;border-bottom:2px solid var(--border);flex-shrink:0;background:#fff}
+.game-tab{flex:1;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;border:none;background:none;padding:10px 6px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s}
+.game-tab.active{color:var(--navy);border-bottom-color:var(--navy)}
+.tab-panel{display:flex;flex-direction:column;flex:1;overflow:hidden}
+
+/* ═══ BOX SCORE ═══ */
+.box-wrap{flex:1;overflow-y:auto;padding:10px 8px}
+.box-team-label{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--navy);margin:8px 0 4px 2px}
+.box-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px}
+.box-tbl th{font-weight:700;color:var(--muted);text-align:center;padding:4px 3px;border-bottom:1px solid var(--border);white-space:nowrap;font-size:10px}
+.box-tbl th.left{text-align:left}
+.box-tbl td{text-align:center;padding:4px 3px;border-bottom:1px solid #f3f4f6;color:var(--text);font-size:11px}
+.box-tbl td.left{text-align:left;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:90px}
+.box-tbl .totals-row td{font-weight:700;background:#f0f4ff;border-top:1px solid var(--border)}
+
 /* ═══ SECTION VISIBILITY ═══ */
 .screen{display:none}
 #screen-pick{display:flex}
@@ -506,29 +530,54 @@ body{display:flex;flex-direction:column}
       <span class="pitcher-name-display" id="pitcher-name">—</span>
       <button class="btn-change-pitcher" onclick="showChangePitcherModal()">Change</button>
     </div>
+
+    <!-- Count + Pitch button -->
+    <div class="count-pitch-row">
+      <div class="count-pills">
+        <div class="count-pill">B <span class="cp-num" id="pitch-balls">0</span></div>
+        <div class="count-pill">S <span class="cp-num" id="pitch-strikes">0</span></div>
+      </div>
+      <button class="pitch-btn" onclick="openPitchModal()">⚾ PITCH</button>
+    </div>
   </div>
 
   <!-- BOTTOM SECTION: white -->
   <div class="game-bottom">
-    <div class="action-grid">
-      <button class="act-btn act-1b" onclick="handlePlay('1B')">1B</button>
-      <button class="act-btn act-2b" onclick="handlePlay('2B')">2B</button>
-      <button class="act-btn act-3b" onclick="handlePlay('3B')">3B</button>
-      <button class="act-btn act-hr" onclick="handlePlay('HR')">HR</button>
-      <button class="act-btn act-bb" onclick="handlePlay('BB')">BB</button>
-      <button class="act-btn act-hbp" onclick="handlePlay('HBP')">HBP</button>
-      <button class="act-btn act-k" onclick="handlePlay('K')">K<span class="btn-sub">strikeout</span></button>
-      <button class="act-btn act-out" onclick="handlePlay('OUT')">OUT<span class="btn-sub">go/fo</span></button>
-      <button class="act-btn act-e" onclick="handlePlay('E')">E<span class="btn-sub">error</span></button>
-      <button class="act-btn act-fc" onclick="handlePlay('FC')">FC<span class="btn-sub">f.choice</span></button>
-      <button class="act-btn act-sac" onclick="handlePlay('SAC')">SAC<span class="btn-sub">fly/bunt</span></button>
-      <button class="act-btn act-undo" onclick="handleUndo()">↩<span class="btn-sub">undo</span></button>
-      <button class="act-btn act-log" onclick="showLogModal()" style="grid-column:span 4">📋 Play Log</button>
+    <!-- Tab bar -->
+    <div class="game-tab-bar">
+      <button class="game-tab active" id="tab-play" onclick="switchTab('play')">▶ Play</button>
+      <button class="game-tab" id="tab-box" onclick="switchTab('box')">📊 Box Score</button>
     </div>
-    <div class="last-play" id="last-play-text"></div>
-    <div class="inning-line">
-      <div class="inning-line-inner" id="linescore-small"></div>
-      <button class="inning-btn" onclick="showEndInningManual()">End Half ▸</button>
+
+    <!-- Play panel -->
+    <div id="panel-play" class="tab-panel">
+      <div class="action-grid">
+        <button class="act-btn act-1b" onclick="handlePlay('1B')">1B</button>
+        <button class="act-btn act-2b" onclick="handlePlay('2B')">2B</button>
+        <button class="act-btn act-3b" onclick="handlePlay('3B')">3B</button>
+        <button class="act-btn act-hr" onclick="handlePlay('HR')">HR</button>
+        <button class="act-btn act-bb" onclick="handlePlay('BB')">BB</button>
+        <button class="act-btn act-hbp" onclick="handlePlay('HBP')">HBP</button>
+        <button class="act-btn act-k" onclick="handlePlay('K')">K<span class="btn-sub">strikeout</span></button>
+        <button class="act-btn act-out" onclick="handlePlay('OUT')">OUT<span class="btn-sub">go/fo</span></button>
+        <button class="act-btn act-e" onclick="handlePlay('E')">E<span class="btn-sub">error</span></button>
+        <button class="act-btn act-fc" onclick="handlePlay('FC')">FC<span class="btn-sub">f.choice</span></button>
+        <button class="act-btn act-sac" onclick="handlePlay('SAC')">SAC<span class="btn-sub">fly/bunt</span></button>
+        <button class="act-btn act-undo" onclick="handleUndo()">↩<span class="btn-sub">undo</span></button>
+        <button class="act-btn act-log" onclick="showLogModal()" style="grid-column:span 4">📋 Play Log</button>
+      </div>
+      <div class="last-play" id="last-play-text"></div>
+      <div class="inning-line">
+        <div class="inning-line-inner" id="linescore-small"></div>
+        <button class="inning-btn" onclick="showEndInningManual()">End Half ▸</button>
+      </div>
+    </div>
+
+    <!-- Box Score panel -->
+    <div id="panel-box" class="tab-panel" style="display:none">
+      <div class="box-wrap" id="box-score-wrap">
+        <!-- rendered by renderBoxScore() -->
+      </div>
     </div>
   </div>
 </div>
@@ -682,6 +731,28 @@ body{display:flex;flex-direction:column}
   </div>
 </div>
 
+<!-- ═══ PITCH MODAL ═══ -->
+<div class="modal-overlay" id="modal-pitch">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-body">
+      <div class="modal-title" style="text-align:center">⚾ Pitch</div>
+      <div style="text-align:center;margin-bottom:16px">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:48px;color:var(--navy);letter-spacing:.04em;line-height:1">
+          <span id="modal-pitch-balls" style="color:var(--blue)">0</span><span style="font-size:18px;color:var(--muted);margin:0 8px">B – S</span><span id="modal-pitch-strikes" style="color:var(--red)">0</span>
+        </span>
+      </div>
+      <div style="display:grid;gap:10px;margin-bottom:14px">
+        <button class="modal-confirm" style="background:var(--blue)" onclick="recordPitch('ball')">⬤ Ball</button>
+        <button class="modal-confirm" style="background:var(--red)" onclick="recordPitch('strike_swing')">✕ Strike — Swinging</button>
+        <button class="modal-confirm" style="background:var(--red)" onclick="recordPitch('strike_look')">✕ Strike — Looking</button>
+        <button class="modal-confirm" style="background:var(--green)" onclick="recordPitch('inplay')">🏏 In Play → pick result</button>
+      </div>
+      <button class="btn-continue" onclick="closeModal('modal-pitch')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ TOAST CONTAINER ═══ -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
@@ -746,7 +817,9 @@ const STATE = {
   history: [],
   awayPitcher: '',
   homePitcher: '',
-  playLog: []
+  playLog: [],
+  balls: 0,
+  strikes: 0
 };
 
 // Pending play (waiting for runner resolution)
@@ -886,29 +959,7 @@ async function loadData() {
     TEAMS = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     PLAYERS = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Auto-resume: check for a single active localStorage game
-    const activeSnaps = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('dvsl_live_')) {
-        try {
-          const snap = JSON.parse(localStorage.getItem(key));
-          if (snap && snap.status !== 'final') {
-            activeSnaps.push(snap);
-          }
-        } catch(e) {}
-      }
-    }
-    if (activeSnaps.length === 1) {
-      // Auto-restore and jump straight to game screen
-      restoreState(activeSnaps[0]);
-      STATE.history = [];
-      showScreen('screen-game');
-      renderGameScreen();
-      showToast('Game auto-resumed', 'success');
-      return;
-    }
-    // Multiple or zero active games — show pick screen
+    // Always show pick screen — use "⚡ Resume" button on a game card to resume
     renderPickScreen();
   } catch(e) {
     document.getElementById('pick-body').innerHTML =
@@ -1121,6 +1172,8 @@ window.startGame = function() {
   STATE.awayPitcher = '';
   STATE.homePitcher = '';
   STATE.playLog = [];
+  STATE.balls = 0;
+  STATE.strikes = 0;
 
   showScreen('screen-game');
   renderGameScreen();
@@ -1129,6 +1182,7 @@ window.startGame = function() {
 
 window.goBack = function() {
   showScreen('screen-pick');
+  renderPickScreen();
 };
 
 window.goToPickScreen = function() {
@@ -1298,6 +1352,21 @@ function renderGameScreen() {
 
   // Last play
   document.getElementById('last-play-text').textContent = STATE.lastPlay || '';
+
+  // Count display
+  const b = STATE.balls || 0, s = STATE.strikes || 0;
+  const pb = document.getElementById('pitch-balls');
+  const ps = document.getElementById('pitch-strikes');
+  if (pb) pb.textContent = b;
+  if (ps) ps.textContent = s;
+  const mpb = document.getElementById('modal-pitch-balls');
+  const mps = document.getElementById('modal-pitch-strikes');
+  if (mpb) mpb.textContent = b;
+  if (mps) mps.textContent = s;
+
+  // If box score tab is visible, refresh it
+  const boxPanel = document.getElementById('panel-box');
+  if (boxPanel && boxPanel.style.display !== 'none') renderBoxScore();
 
   // Linescore
   renderLinescore();
@@ -1779,6 +1848,10 @@ function finishPlay(runnerOutcomes, batterOutcome) {
 
   PENDING_PLAY = null;
 
+  // Reset pitch count for next batter
+  STATE.balls = 0;
+  STATE.strikes = 0;
+
   // Check for 3+ outs
   if (STATE.outs >= 3) {
     renderGameScreen();
@@ -2035,9 +2108,11 @@ window.confirmResetGame = function() {
   });
   hideResetConfirm();
   closeModal('modal-endgame');
-  renderGameScreen();
-  saveToLocalStorage();
-  showToast('Game reset to 0–0', 'success');
+  // Clear saved state so Resume button disappears
+  if (STATE.gameId) localStorage.removeItem('dvsl_live_' + STATE.gameId);
+  STATE.gameId = null;
+  showToast('Game reset — pick game and re-enter lineups', 'success');
+  goToPickScreen();
 };
 
 window.markGameFinal = async function() {
@@ -2173,6 +2248,133 @@ function renderLinescore() {
   row.innerHTML = `<div style="display:flex;align-items:center;overflow-x:auto">${awayHtml}</div>
     <div style="display:flex;align-items:center;overflow-x:auto">${homeHtml}</div>`;
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════════════
+window.switchTab = function(name) {
+  const playPanel = document.getElementById('panel-play');
+  const boxPanel = document.getElementById('panel-box');
+  const tabPlay = document.getElementById('tab-play');
+  const tabBox = document.getElementById('tab-box');
+  if (name === 'play') {
+    playPanel.style.display = 'flex';
+    boxPanel.style.display = 'none';
+    tabPlay.classList.add('active');
+    tabBox.classList.remove('active');
+  } else {
+    playPanel.style.display = 'none';
+    boxPanel.style.display = 'flex';
+    tabPlay.classList.remove('active');
+    tabBox.classList.add('active');
+    renderBoxScore();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// BOX SCORE
+// ═══════════════════════════════════════════════════════════════════
+function renderBoxScore() {
+  const wrap = document.getElementById('box-score-wrap');
+  if (!wrap) return;
+
+  function teamTable(lineup, teamName) {
+    if (!lineup || !lineup.length) {
+      return `<div class="box-team-label">${teamName}</div><div style="color:var(--muted);font-size:12px;padding:8px 2px">No lineup set</div>`;
+    }
+    let totAb=0,totH=0,totD=0,totT=0,totHr=0,totRbi=0,totR=0,totBb=0,totSo=0;
+    let rows = '';
+    lineup.forEach(p => {
+      const h = (p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0);
+      totAb+=p.ab||0; totH+=h; totD+=p.d||0; totT+=p.t||0; totHr+=p.hr||0;
+      totRbi+=p.rbi||0; totR+=p.r||0; totBb+=p.bb||0; totSo+=p.so||0;
+      rows += `<tr>
+        <td class="left">${p.name||'?'}</td>
+        <td>${p.ab||0}</td>
+        <td>${h}</td>
+        <td>${p.d||0}</td>
+        <td>${p.t||0}</td>
+        <td>${p.hr||0}</td>
+        <td>${p.rbi||0}</td>
+        <td>${p.r||0}</td>
+        <td>${p.bb||0}</td>
+        <td>${p.so||0}</td>
+      </tr>`;
+    });
+    rows += `<tr class="totals-row">
+      <td class="left">TOTALS</td>
+      <td>${totAb}</td><td>${totH}</td><td>${totD}</td><td>${totT}</td><td>${totHr}</td>
+      <td>${totRbi}</td><td>${totR}</td><td>${totBb}</td><td>${totSo}</td>
+    </tr>`;
+    return `<div class="box-team-label">${teamName}</div>
+    <table class="box-tbl">
+      <thead><tr>
+        <th class="left">Player</th>
+        <th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th>
+        <th>RBI</th><th>R</th><th>BB</th><th>K</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  wrap.innerHTML =
+    teamTable(STATE.awayLineup, STATE.awayName || 'Away') +
+    teamTable(STATE.homeLineup, STATE.homeName || 'Home');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PITCH COUNTER
+// ═══════════════════════════════════════════════════════════════════
+function updateCountDisplay() {
+  const b = STATE.balls || 0, s = STATE.strikes || 0;
+  const pb = document.getElementById('pitch-balls');
+  const ps = document.getElementById('pitch-strikes');
+  if (pb) pb.textContent = b;
+  if (ps) ps.textContent = s;
+  const mpb = document.getElementById('modal-pitch-balls');
+  const mps = document.getElementById('modal-pitch-strikes');
+  if (mpb) mpb.textContent = b;
+  if (mps) mps.textContent = s;
+}
+
+window.openPitchModal = function() {
+  if (STATE.status === 'final') { showToast('Game is final', 'error'); return; }
+  // Sync modal count to current STATE
+  updateCountDisplay();
+  openModal('modal-pitch');
+};
+
+window.recordPitch = function(type) {
+  if (!STATE.balls) STATE.balls = 0;
+  if (!STATE.strikes) STATE.strikes = 0;
+
+  if (type === 'ball') {
+    STATE.balls++;
+    if (STATE.balls >= 4) {
+      closeModal('modal-pitch');
+      STATE.balls = 0; STATE.strikes = 0;
+      handlePlay('BB');
+      return;
+    }
+  } else if (type === 'strike_swing' || type === 'strike_look') {
+    STATE.strikes++;
+    if (STATE.strikes >= 3) {
+      closeModal('modal-pitch');
+      STATE.balls = 0; STATE.strikes = 0;
+      handlePlay('K');
+      return;
+    }
+  } else if (type === 'inplay') {
+    // Close pitch modal and let user tap result button
+    closeModal('modal-pitch');
+    STATE.balls = 0; STATE.strikes = 0;
+    updateCountDisplay();
+    showToast('Select play result ↓', '');
+    return;
+  }
+
+  updateCountDisplay();
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // INIT
