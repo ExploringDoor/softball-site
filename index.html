@@ -4462,6 +4462,7 @@ const LINEUP = [
 const CURRENT_WK_IDX = 9; // weeks index treated as "current"
 let weekOffset = -1; // -1 = auto-set to last completed week on first render
 let view = 'scores';
+let selectedDay = null; // null = auto-pick first day of selected week
 
 function fakeScore(away,home,seed){
   const s=(away.charCodeAt(0)+home.charCodeAt(0)+seed*7)%15;
@@ -4523,7 +4524,7 @@ function buildScoresNav(){
   setTimeout(()=>{const a=document.querySelector('#dnSlots .dn-slot.active');if(a)a.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});},50);
 }
 
-function setWeekAbs(idx){weekOffset=idx;buildScoresNav();renderScores();}
+function setWeekAbs(idx){weekOffset=idx;selectedDay=null;buildScoresNav();renderScores();}
 function setWeek(off){weekOffset=off;buildScoresNav();renderScores();}
 function shiftNav(d){
   const wks=getWeekList();
@@ -4753,10 +4754,33 @@ function renderScores(){
     weekOffset=off;
     const w=allWks[off];
     const wkLabel=String(w.wk).startsWith('PL')?'Playoffs':('Week '+w.wk);
-    wrap.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px"><div class="sb-week-head" style="margin-bottom:0">${wkLabel} · ${w.date} <span style="font-size:13px;color:var(--muted);font-weight:400">${w.games.length} game${w.games.length!==1?'s':''}</span></div>`
+
+    // Build sorted unique days for this week
+    const MONTHS2={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const pd=s=>{const[m,d]=s.split(' ');return new Date(2026,MONTHS2[m]||0,parseInt(d)||1);};
+    const uniqueDays=[...new Set(w.games.map(g=>g.date).filter(Boolean))].sort((a,b)=>pd(a)-pd(b));
+    const multiDay=uniqueDays.length>1;
+
+    // Auto-select first day if none selected or day not in this week
+    if(!selectedDay||!uniqueDays.includes(selectedDay)) selectedDay=uniqueDays[0]||null;
+
+    const shownGames=multiDay&&selectedDay ? w.games.filter(g=>g.date===selectedDay) : w.games;
+
+    // Day picker buttons
+    const dayPicker=multiDay
+      ? `<div style="display:flex;gap:6px;margin:10px 0 16px;flex-wrap:wrap">`
+        + uniqueDays.map(d=>{
+            const active=d===selectedDay;
+            return `<button onclick="selectedDay='${d}';renderScores()" style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;padding:5px 14px;border-radius:20px;border:2px solid ${active?'var(--gold)':'var(--border)'};background:${active?'var(--gold)':'transparent'};color:${active?'#fff':'var(--muted)'};cursor:pointer;transition:all .15s">${d}</button>`;
+          }).join('')
+        + `</div>`
+      : '';
+
+    wrap.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0"><div class="sb-week-head" style="margin-bottom:0">${wkLabel} <span style="font-size:13px;color:var(--muted);font-weight:400">${shownGames.length} game${shownGames.length!==1?'s':''}</span></div>`
       +`<button onclick="downloadFullSchedule()" style="display:flex;align-items:center;gap:6px;background:var(--gold);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;white-space:nowrap">📅 Download Full Schedule</button></div>`
+      +dayPicker
       +`<div class="preview-grid">`
-      +w.games.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
+      +shownGames.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
       +`</div>`;
   }
 }
