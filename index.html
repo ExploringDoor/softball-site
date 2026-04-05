@@ -421,6 +421,43 @@ body.dark .nav-team-item:hover{background:rgba(255,255,255,.07)}
 .career-tbl tr:hover td{background:rgba(0,45,114,.04)}
 .career-tbl tr.career-total td{font-weight:800;border-top:2px solid var(--border);background:rgba(0,45,114,.05)}
 
+/* ── STATS PAGE ── */
+.pt-toggle{display:flex;gap:0;margin-bottom:14px;padding:20px 48px 0}
+.pt-btn{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;text-transform:uppercase;color:var(--muted);padding:4px 14px;margin-right:16px;background:none;border:2px solid transparent;border-radius:6px;cursor:pointer;transition:color .15s}
+.pt-btn.active{color:var(--white);border-color:var(--gold)}
+.hp-toggle{display:flex;gap:20px;margin-bottom:0;padding:0 48px 14px;border-bottom:1px solid var(--border)}
+.hp-btn{font-size:15px;font-weight:600;color:var(--muted);background:none;border:none;border-bottom:2px solid transparent;padding:4px 0;cursor:pointer;transition:all .15s}
+.hp-btn.active{color:var(--white);border-bottom-color:#1a1a1a}
+.hp-reset{margin-left:auto;font-size:12px;color:var(--gold);background:none;border:none;cursor:pointer;font-weight:600}
+.filter-row{display:flex;flex-wrap:wrap;gap:8px;padding:14px 48px;border-bottom:1px solid var(--border);background:var(--bg);position:sticky;top:62px;z-index:50}
+.filter-select{appearance:none;background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:7px;color:#1a1a1a;font-family:'Inter',sans-serif;font-size:13px;font-weight:500;padding:8px 32px 8px 14px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;transition:border-color .15s}
+.filter-select:hover{border-color:rgba(0,0,0,.3)}
+.stats-wrap{overflow-x:auto;padding:0 0 80px}
+.stats-table{width:100%;border-collapse:collapse;font-size:13px;min-width:700px}
+.stats-table thead th{background:#f8f8f8;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:10px 14px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;transition:color .15s}
+.stats-table thead th:not(.col-rank):not(.col-player):not(.col-team){text-align:right}
+.stats-table thead th.sorted{color:var(--gold)}
+.stats-table tbody tr{border-bottom:1px solid rgba(0,0,0,.05);cursor:pointer;transition:background .12s}
+.stats-table tbody tr:hover{background:rgba(0,45,114,.04)}
+.stats-table tbody tr.rank-1{background:rgba(245,200,66,.06)}
+.stats-table td{padding:10px 14px;color:#1a1a1a}
+.stats-table td:not(.col-rank):not(.col-player):not(.col-team){text-align:right}
+.col-rank{color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;width:36px}
+.col-rank.r1{color:#e6ac00}.col-rank.r2{color:#888}.col-rank.r3{color:#a05a2c}
+.col-player{font-weight:600;color:#1a1a1a;white-space:nowrap}
+.col-player .p-pos{font-size:10px;color:var(--muted);font-weight:400;margin-left:5px}
+.col-team{white-space:nowrap}
+.col-team-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.stat-hi{color:var(--gold);font-weight:700}
+.stats-table tfoot td{padding:10px 14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);font-style:italic}
+body.dark .pt-btn{color:rgba(237,237,237,.4)!important}body.dark .pt-btn.active{color:#ededed!important;border-color:#5b9aff!important}
+body.dark .hp-btn{color:rgba(237,237,237,.4)!important}body.dark .hp-btn.active{color:#ededed!important;border-bottom-color:#ededed!important}
+body.dark .filter-select{background-color:#1a1a1f!important;border-color:rgba(255,255,255,.12)!important;color:#ededed!important}
+body.dark .stats-table thead th{background:#141418!important;color:rgba(237,237,237,.4)!important;border-bottom-color:rgba(255,255,255,.07)!important}
+body.dark .stats-table tbody tr:hover{background:rgba(255,255,255,.04)!important}
+body.dark .stats-table td{color:#ededed!important}
+body.dark .stats-table tbody tr.rank-1{background:rgba(245,200,66,.06)!important}
+
 /* ── TEAM PAGE ── */
 .team-hero{padding:80px 48px 40px;position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
 .team-hero-blob{position:absolute;inset:0;opacity:.04;pointer-events:none}
@@ -2754,7 +2791,11 @@ function goPage(name,extra,skipHistory){
     if(SCHEDULE_PREVIEW.length) setTimeout(doScores,50);
     else if(window._dataPromise) window._dataPromise.then(()=>setTimeout(doScores,50));
   }
-  if(name==='stats') setTimeout(()=>{try{renderStats();}catch(e){console.error(e);}},50);
+  if(name==='stats'){
+    const doStats=()=>{try{renderStats();}catch(e){console.error(e);}};
+    if(PLAYERS.length) setTimeout(doStats,50);
+    else if(window._dataPromise) window._dataPromise.then(()=>setTimeout(doStats,50));
+  }
   if(name==='standings') setTimeout(()=>{try{buildStand2026();var p=document.getElementById('yr-2026');if(p){document.querySelectorAll('#pg-standings .yr-panel').forEach(x=>x.classList.remove('show'));p.classList.add('show');}var b=document.querySelector('#pg-standings .yr-tab');if(b){document.querySelectorAll('#pg-standings .yr-tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');}}catch(e){console.error(e);}},50);
   if(!skipHistory){
     const state={page:name,extra:extra||null};
@@ -5063,14 +5104,6 @@ function renderStats(){
   const col = cols.find(c=>c.key===sk);
   const lowerBetter = col && col.lowerBetter;
 
-  // Empty state if no players have at-bats
-  if(ctx==='player' && !PLAYERS.some(p => p.ab > 0)){
-    document.getElementById('statsHead').innerHTML = '';
-    document.getElementById('statsBody').innerHTML = '<tr><td style="text-align:center;padding:60px 20px;font-size:16px;color:var(--muted)">No stats yet — the season hasn\'t started.</td></tr>';
-    document.getElementById('statsFoot').innerHTML = '';
-    return;
-  }
-
   // Sort
   let rows = getRows();
   rows.sort((a,b)=>{
@@ -5160,7 +5193,7 @@ function goTeamPage(id){
   if(!id) return;
   goPage('team',id);
 }
-function resetStatsFilters(){
+function resetFilters(){
   year='2026'; team='all'; split='all'; sortKey=null; sortDir='desc';
   ctx='player'; type='hitting';
   document.getElementById('btn-player').classList.add('active');
