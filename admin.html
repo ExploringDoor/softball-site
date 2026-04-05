@@ -219,6 +219,17 @@ select.form-input{cursor:pointer}
 .bs-quick-link{display:block;text-align:center;margin-top:12px;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:underline}
 .bs-quick-link:hover{color:var(--navy)}
 .bs-status-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;margin-left:8px}
+@media print{
+  .sidebar,.mob-toggle,.sidebar-overlay{display:none!important}
+  .main{margin-left:0!important;padding:0!important}
+  .app{display:block!important}
+  #sec-scores > .main-header,#scores-content{display:none!important}
+  #box-score-view{display:block!important}
+  button,.btn{display:none!important}
+  a[onclick]{display:none!important}
+  body{background:#fff!important}
+  .section{display:block!important}
+}
 </style>
 </head>
 <body>
@@ -1008,8 +1019,8 @@ window.resetGame = async function(gameId) {
 
 // ═══════════════════════════ BOX SCORE ═════════════════════════════
 let bsAwayLineup = [], bsHomeLineup = [], bsGameId = null, bsGameData = null;
-let bsAwayPitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
-let bsHomePitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
+let bsAwayPitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''}];
+let bsHomePitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''}];
 let bsInnings = {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
 let bsAwayErrors = 0;
 let bsHomeErrors = 0;
@@ -1123,8 +1134,8 @@ window.handleCaptainUpload = async function(file) {
         text += content.items.map(item => item.str).join(' ') + '\n';
       }
       procBar.style.width = '50%';
-      procTitle.textContent = 'Parsing with AI...';
-      procMsg.textContent = 'Claude is reading the box score';
+      procTitle.textContent = 'Converting your PDF...';
+      procMsg.textContent = 'Remember to double-check stats before submitting!';
       payload.text = text;
     } else {
       // ── Image path: send base64 to Claude Vision ──
@@ -1138,8 +1149,8 @@ window.handleCaptainUpload = async function(file) {
         reader.readAsDataURL(file);
       });
       procBar.style.width = '50%';
-      procTitle.textContent = 'Parsing with AI...';
-      procMsg.textContent = 'Claude Vision is reading the game sheet';
+      procTitle.textContent = 'Analyzing your game sheet...';
+      procMsg.textContent = 'Remember to double-check stats before submitting!';
       payload.imageBase64 = b64;
       payload.imageType = file.type;
     }
@@ -1196,14 +1207,15 @@ function applyParsedToBoxScore(parsed) {
     name: p.name || '', num: p.num || '', ip: p.ip || '',
     h: parseInt(p.h) || 0, r: parseInt(p.r) || 0,
     er: parseInt(p.er) || 0, bb: parseInt(p.bb) || 0,
-    so: parseInt(p.so) || 0, decision: p.decision || ''
+    so: parseInt(p.so) || 0, strikes: parseInt(p.strikes) || 0,
+    balls: parseInt(p.balls) || 0, decision: p.decision || ''
   }));
 
   const ls = parsed.linescore || {};
   bsAwayLineup = toLineup(parsed.awayBatters);
   bsHomeLineup = toLineup(parsed.homeBatters);
-  bsAwayPitchers = toPitchers(parsed.awayPitchers).length ? toPitchers(parsed.awayPitchers) : [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
-  bsHomePitchers = toPitchers(parsed.homePitchers).length ? toPitchers(parsed.homePitchers) : [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''}];
+  bsAwayPitchers = toPitchers(parsed.awayPitchers).length ? toPitchers(parsed.awayPitchers) : [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''}];
+  bsHomePitchers = toPitchers(parsed.homePitchers).length ? toPitchers(parsed.homePitchers) : [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''}];
   bsInnings = {
     away: (ls.away || [0,0,0,0,0,0,0]).slice(0,7).map(v => parseInt(v)||0),
     home: (ls.home || [0,0,0,0,0,0,0]).slice(0,7).map(v => parseInt(v)||0)
@@ -1261,7 +1273,7 @@ window.openBoxScore = async function(gameId, skipClear) {
     bsAwayOrderMap = {}; bsHomeOrderMap = {};
     bsScoreOnlyMode = false;
     bsAwayScoreOverride = null; bsHomeScoreOverride = null;
-    const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''});
+    const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''});
     bsAwayPitchers = existing?.away_pitchers || (existing?.away_pitcher ? [existing.away_pitcher] : [defP()]);
     bsHomePitchers = existing?.home_pitchers || (existing?.home_pitcher ? [existing.home_pitcher] : [defP()]);
     bsInnings = existing?.innings ? {away:[...existing.innings.away], home:[...existing.innings.home]} : {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
@@ -1454,6 +1466,14 @@ function renderBoxScore(awayName, homeName, g) {
               <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">SO</label>
               <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${pit.so}" min="0" oninput="bsUpdatePitcher('${side}',${pi},'so',this.value)">
             </div>
+            <div style="width:44px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">STR</label>
+              <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${pit.strikes||0}" min="0" oninput="bsUpdatePitcher('${side}',${pi},'strikes',this.value)" placeholder="0">
+            </div>
+            <div style="width:44px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">BLS</label>
+              <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${pit.balls||0}" min="0" oninput="bsUpdatePitcher('${side}',${pi},'balls',this.value)" placeholder="0">
+            </div>
             <div style="width:52px">
               <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">Dec</label>
               <select style="width:100%;padding:5px 4px;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:12px;background:#fff" onchange="bsUpdatePitcher('${side}',${pi},'decision',this.value)">
@@ -1553,6 +1573,7 @@ function renderBoxScore(awayName, homeName, g) {
       <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1);flex-wrap:wrap">
         <button class="btn btn-success" onclick="saveBoxScore(true)">Save & Mark Final</button>
         <button class="btn btn-outline" onclick="saveBoxScore(false)">Save Draft</button>
+        <button class="btn btn-outline" onclick="window.print()" title="Export box score as PDF">🖨️ Export PDF</button>
         ${bsGameData?.done ? `<button class="btn btn-outline" style="color:#e65100;border-color:#e65100" onclick="bsReopenGame()" title="Reset game to in-progress so scores can be edited">↺ Reopen Game</button>` : ''}
         <button class="btn btn-outline" onclick="closeBoxScore()">Cancel</button>
       </div>
@@ -1651,7 +1672,7 @@ window.bsUpdatePitcher = function(side, idx, field, val) {
   }
 };
 window.bsAddPitcher = function(side) {
-  (side==='away'?bsAwayPitchers:bsHomePitchers).push({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,decision:''});
+  (side==='away'?bsAwayPitchers:bsHomePitchers).push({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''});
   bsRerender();
 };
 window.bsRemovePitcher = function(side, idx) {
@@ -1675,8 +1696,8 @@ window.saveBoxScore = async function(markFinal) {
     away: bsGameData.away, home: bsGameData.home,
     away_lineup: bsAwayLineup.filter(p=>!p.dnp).map(p=>{const s=parseInt(p.s)||0,d=parseInt(p.d)||0,t=parseInt(p.t)||0,hr=parseInt(p.hr)||0;return{name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,s,d,t,hr,h:s+d+t+hr,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0};}),
     home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>{const s=parseInt(p.s)||0,d=parseInt(p.d)||0,t=parseInt(p.t)||0,hr=parseInt(p.hr)||0;return{name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,s,d,t,hr,h:s+d+t+hr,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0};}),
-    away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
-    home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0})),
+    away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
+    home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
     innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
     away_errors: bsAwayErrors, home_errors: bsHomeErrors,
     away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
