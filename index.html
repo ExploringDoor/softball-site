@@ -172,7 +172,8 @@ body.dark [style*="border-bottom:1px solid rgba(0,0,0"]{border-bottom-color:rgba
 .nav-dd-wrap>a,.nav-dd-wrap>span{display:flex!important;align-items:center;gap:4px}
 .nav-dd-arrow{width:9px;height:6px;flex-shrink:0;opacity:.5;transition:transform .2s}
 .nav-dd-wrap:hover .nav-dd-arrow{transform:rotate(180deg)}
-.nav-dropdown{display:none;position:absolute;top:calc(100% + 10px);left:0;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.12);padding:10px;z-index:500;min-width:180px;animation:ddIn .15s ease}
+.nav-dropdown{display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.12);padding:10px;z-index:500;min-width:180px;animation:ddIn .15s ease}
+.nav-dropdown::before{content:'';position:absolute;top:-14px;left:0;right:0;height:14px}
 @keyframes ddIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .nav-dropdown-right{left:auto;right:0}
 .nav-dd-wrap:hover .nav-dropdown{display:block}
@@ -2522,7 +2523,7 @@ function getCareerStats(playerName){
     const s = p.ab>0 ? (p.s+2*p.d+3*p.t+4*p.hr)/p.ab : 0;
     return {avg:fmtAvg(a), obp:fmtAvg(obp), slg:fmtAvg(s), ops:fmtAvg(obp+s)};
   };
-  return {seasons: seasons.map(s=>({...s, rates:calcR(s)})), totals:{...totals, rates:calcR(totals)}, numSeasons:seasons.length};
+  return {seasons: seasons.map(s=>({...s, teamName:'TBIR', rates:calcR(s)})), totals:{...totals, rates:calcR(totals)}, numSeasons:seasons.length};
 }
 let HISTORY = [];
 let TEAM_CALENDARS_DB = {};
@@ -2565,6 +2566,7 @@ async function loadAllData() {
         id: p.id, name: p.name, num: p.num, team: p.team, pos: p.pos,
         avg: parseFloat(p.avg)||0, hr: p.hr||0, rbi: p.rbi||0,
         h: p.h||0, ab: p.ab||0, r: p.r||0, bb: p.bb||0,
+        d: p.d||0, t: p.t||0, gp: p.gp||0,
         slg: parseFloat(p.slg)||0, ops: parseFloat(p.ops)||0, log: []
       }))
       .sort((a,b) => b.avg - a.avg);
@@ -3469,18 +3471,17 @@ function renderTeamTab(tab){
       const oppColor=oppTeam?oppTeam.color:'var(--muted)';
       const leftBorder=!g.done?t.color:won?'#22c55e':'#ef4444';
       const scoreHtml = g.done
-        ? '<div style="text-align:right"><div style="font-family:Barlow Condensed,sans-serif;font-weight:900;font-size:22px;color:#1a1a1a">'+ts+'–'+os+'</div><div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:'+(won?'#22c55e':'#ef4444')+'">'+(won?'WIN':'LOSS')+'</div></div>'
-        : '<div style="text-align:right;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--muted)">UPCOMING</div>';
-      return '<div style="display:grid;grid-template-columns:90px 1fr 1fr auto;align-items:center;gap:12px;background:rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:14px 16px;border-left:3px solid '+leftBorder+'">'
+        ? '<div style="text-align:right;min-width:64px"><div style="font-family:Barlow Condensed,sans-serif;font-weight:900;font-size:24px;color:#1a1a1a">'+ts+'–'+os+'</div><div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:'+(won?'#22c55e':'#ef4444')+'">'+(won?'WIN':'LOSS')+'</div></div>'
+        : '<div style="text-align:right;font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--muted);min-width:64px">UPCOMING</div>';
+      return '<div style="display:grid;grid-template-columns:100px 1fr auto;align-items:center;gap:16px;background:rgba(0,0,0,.02);border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:16px 20px;border-left:3px solid '+leftBorder+'">'
         +'<div>'
-        +'<div style="font-family:Barlow Condensed,sans-serif;font-weight:800;font-size:16px;color:#1a1a1a">'+g.date+'</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:1px">'+g.day+' · Wk '+g.wk+'</div>'
+        +'<div style="font-family:Barlow Condensed,sans-serif;font-weight:800;font-size:18px;color:#1a1a1a">'+g.date+'</div>'
+        +'<div style="font-size:13px;color:var(--muted);margin-top:2px">'+g.day+' · Wk '+g.wk+'</div>'
         +'</div>'
         +'<div>'
-        +'<div style="font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:15px;color:#1a1a1a">'+(isH?'vs':'@')+' <span style="color:'+oppColor+'">'+opp+'</span></div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">📍 '+g.field+' · ⏰ '+g.time+'</div>'
+        +'<div style="font-family:Inter,sans-serif;font-weight:700;font-size:16px;color:#1a1a1a">'+(isH?'vs':'@')+' <span style="color:'+oppColor+';cursor:pointer" onclick="goPage(\'team\',\''+(oppTeam?.id||opp)+'\')">'+(oppTeam?.name||opp)+'</span></div>'
+        +'<div style="font-size:13px;color:var(--muted);margin-top:3px">📍 '+g.field+' · ⏰ '+g.time+(g.addr?'<span style="color:rgba(0,0,0,.3)"> · '+g.addr+'</span>':'')+'</div>'
         +'</div>'
-        +'<div style="font-size:11px;color:var(--muted);padding-right:8px">'+g.addr+'</div>'
         +scoreHtml
         +'</div>';
     }).join('')}
@@ -3719,7 +3720,7 @@ function openModal(playerId){
   const inner=document.getElementById('modal-inner');
   inner.innerHTML=`
     <div class="modal-hero">
-      <div class="modal-av" style="border-color:${t?.color||'var(--gold)'}44;background:${t?.color||'var(--gold)'}14;color:${t?.color||'var(--gold)'}">
+      <div class="modal-av" style="border-color:#ddd;background:#f0f0f0;color:#888">
         <span style="position:relative;z-index:1">${initials(p.name)}</span>
       </div>
       <div>
@@ -3754,29 +3755,48 @@ function openModal(playerId){
       <td>${g.ab}</td><td>${g.h}</td><td>${g.hr||'—'}</td><td>${g.rbi}</td><td>${g.bb||0}</td><td>${g.r}</td>
       <td><span class="${g.res[0]==='W'?'badge-w':'badge-l'}">${g.res}</span></td>
     </tr>`).join('')}</tbody></table>`;
-  // Career stats (TBIR players)
-  const career = getCareerStats(p.name);
-  if(career){
+  // ── Year-by-year stats (all players) ──────────────────────
+  const _fmt=v=>v>0?(v<1?v.toFixed(3).replace(/^0/,''):v.toFixed(3)):'.000';
+  const _calcR=s=>{
+    const avg=s.ab>0?s.h/s.ab:0;
+    const obp=(s.ab+s.bb)>0?(s.h+s.bb)/(s.ab+s.bb):0;
+    const sing=(s.h||0)-(s.hr||0)-(s.d||0)-(s.t||0);
+    const slg=s.ab>0?(sing+2*(s.d||0)+3*(s.t||0)+4*(s.hr||0))/s.ab:0;
+    return{avg:_fmt(avg),obp:_fmt(obp),slg:_fmt(slg),ops:_fmt(obp+slg)};
+  };
+  // Build 2026 season row from current player data
+  const _s26={year:'2026',teamName:t?.name||'',gp:p.gp||p.log?.length||0,ab:p.ab,h:p.h,d:p.d||0,t:p.t||0,hr:p.hr,rbi:p.rbi,r:p.r,bb:p.bb};
+  _s26.rates=_calcR(_s26);
+  // Historical seasons (TBIR only)
+  const _career=getCareerStats(p.name);
+  const _histSeasons=_career?_career.seasons:[];
+  // Combine: historical first, then 2026
+  const _allSeasons=[..._histSeasons, _s26];
+  // Only show if they have some actual data (either history or current stats)
+  const _hasStats=_histSeasons.length>0||(p.ab>0);
+  if(_hasStats){
+    // Compute career totals
+    const _tot={gp:0,ab:0,h:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0};
+    _allSeasons.forEach(s=>{for(const k of Object.keys(_tot))_tot[k]+=(s[k]||0);});
+    _tot.rates=_calcR(_tot);
+    const _nSeas=_allSeasons.length;
+    const _tRow=row=>`<tr>
+      <td style="text-align:left;font-weight:600;color:#1a1a1a">${row.year}</td>
+      <td style="text-align:left;color:var(--muted);font-size:11px">${row.teamName||''}</td>
+      <td>${row.gp||0}</td><td>${row.ab}</td><td>${row.h}</td><td>${row.d||0}</td><td>${row.t||0}</td><td>${row.hr}</td><td>${row.rbi}</td><td>${row.r}</td><td>${row.bb}</td>
+      <td>${row.rates.avg}</td><td>${row.rates.obp}</td><td>${row.rates.slg}</td><td>${row.rates.ops}</td>
+    </tr>`;
     inner.innerHTML += `
-    <div class="modal-sec" style="margin-top:24px">Career Batting</div>
+    <div class="modal-sec" style="margin-top:24px">Year-by-Year Stats</div>
     <div class="career-wrap"><table class="career-tbl">
-      <thead><tr><th style="text-align:left">Season</th><th>GP</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead>
+      <thead><tr><th style="text-align:left">Season</th><th style="text-align:left">Team</th><th>GP</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead>
       <tbody>
-      ${career.seasons.map(s=>`<tr>
-        <td style="text-align:left;font-weight:600">${s.year}</td>
-        <td>${s.gp}</td><td>${s.ab}</td><td>${s.h}</td><td>${s.d}</td><td>${s.t}</td><td>${s.hr}</td><td>${s.rbi}</td><td>${s.r}</td><td>${s.bb}</td>
-        <td>${s.rates.avg}</td><td>${s.rates.obp}</td><td>${s.rates.slg}</td><td>${s.rates.ops}</td>
-      </tr>`).join('')}
-      <tr class="career-total">
-        <td style="text-align:left">Career</td>
-        <td>${career.totals.gp}</td><td>${career.totals.ab}</td><td>${career.totals.h}</td><td>${career.totals.d}</td><td>${career.totals.t}</td><td>${career.totals.hr}</td><td>${career.totals.rbi}</td><td>${career.totals.r}</td><td>${career.totals.bb}</td>
-        <td>${career.totals.rates.avg}</td><td>${career.totals.rates.obp}</td><td>${career.totals.rates.slg}</td><td>${career.totals.rates.ops}</td>
-      </tr>
-      <tr class="career-total" style="opacity:.7;font-style:italic">
-        <td style="text-align:left">Per Season</td>
-        ${(()=>{const n=career.numSeasons;const t=career.totals;const f=v=>Math.round(v/n*10)/10;return`<td>${f(t.gp)}</td><td>${f(t.ab)}</td><td>${f(t.h)}</td><td>${f(t.d)}</td><td>${f(t.t)}</td><td>${f(t.hr)}</td><td>${f(t.rbi)}</td><td>${f(t.r)}</td><td>${f(t.bb)}</td>`;})()}
-        <td>${career.totals.rates.avg}</td><td>${career.totals.rates.obp}</td><td>${career.totals.rates.slg}</td><td>${career.totals.rates.ops}</td>
-      </tr>
+      ${_allSeasons.map(_tRow).join('')}
+      ${_nSeas>1?`<tr class="career-total">
+        <td style="text-align:left">Career</td><td></td>
+        <td>${_tot.gp}</td><td>${_tot.ab}</td><td>${_tot.h}</td><td>${_tot.d}</td><td>${_tot.t}</td><td>${_tot.hr}</td><td>${_tot.rbi}</td><td>${_tot.r}</td><td>${_tot.bb}</td>
+        <td>${_tot.rates.avg}</td><td>${_tot.rates.obp}</td><td>${_tot.rates.slg}</td><td>${_tot.rates.ops}</td>
+      </tr>`:''}
       </tbody>
     </table></div>`;
   }
