@@ -2593,14 +2593,15 @@ let TEAM_CALENDARS_DB = {};
 async function loadAllData() {
   try {
     // Load all collections in parallel from Firebase
-    const [teams, histTeams, players, games, recaps, history, calendars] = await Promise.all([
+    const [teams, histTeams, players, games, recaps, history, calendars, boxScores] = await Promise.all([
       fbFetch('teams', 'name'),
       fbFetch('hist_teams', 'name'),
       fbFetch('players').catch(()=>[]),
       fbFetch('games', 'wk'),
       fbFetch('recaps', 'wk').catch(()=>[]),
       fbFetch('league_history', 'yr').catch(()=>[]),
-      fbFetch('team_calendars').catch(()=>[])
+      fbFetch('team_calendars').catch(()=>[]),
+      fbFetch('box_scores').catch(()=>[])
     ]);
 
     // Map teams — sort by pct desc
@@ -2632,6 +2633,91 @@ async function loadAllData() {
         slg: parseFloat(p.slg)||0, ops: parseFloat(p.ops)||0, log: []
       }))
       .sort((a,b) => b.avg - a.avg);
+
+    // ── Aggregate real stats from box_scores ──────────────────────────
+    const finalBS = boxScores.filter(bs => bs.status === 'final');
+    if (finalBS.length > 0) {
+      const batMap = {};   // "name||team" → batting totals
+      const pitMap = {};   // "name||team" → pitching totals
+
+      for (const bs of finalBS) {
+        // Batting — support both snake_case (admin) and camelCase (live-scorer)
+        const batSides = [
+          { lineup: bs.away_lineup || bs.awayLineup, team: bs.away },
+          { lineup: bs.home_lineup || bs.homeLineup, team: bs.home },
+        ];
+        for (const { lineup, team: sid } of batSides) {
+          if (!Array.isArray(lineup)) continue;
+          for (const p of lineup) {
+            const nm = (p.name || '').trim(); if (!nm) continue;
+            const key = nm.toLowerCase() + '||' + (sid || '');
+            if (!batMap[key]) batMap[key] = { name: nm, team: sid, gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
+            const b = batMap[key];
+            b.gp++;
+            b.ab  += parseInt(p.ab)||0; b.r   += parseInt(p.r)||0;
+            b.s   += parseInt(p.s)||0;  b.d   += parseInt(p.d)||0;
+            b.tri += parseInt(p.t)||0;  b.hr  += parseInt(p.hr)||0;
+            b.rbi += parseInt(p.rbi)||0;b.bb  += parseInt(p.bb)||0;
+            b.so  += parseInt(p.so)||0;
+          }
+        }
+        // Pitching
+        const pitSides = [
+          { pitchers: bs.away_pitchers || bs.awayPitchers, team: bs.away },
+          { pitchers: bs.home_pitchers || bs.homePitchers, team: bs.home },
+        ];
+        for (const { pitchers, team: sid } of pitSides) {
+          if (!Array.isArray(pitchers)) continue;
+          for (const p of pitchers) {
+            const nm = (p.name || '').trim(); if (!nm) continue;
+            const key = nm.toLowerCase() + '||' + (sid || '');
+            if (!pitMap[key]) pitMap[key] = { name: nm, team: sid, gs:0, wins:0, losses:0, saves:0, ipOuts:0, h:0, er:0, bb:0, k:0 };
+            const pm = pitMap[key];
+            pm.gs++;
+            if (p.decision === 'W') pm.wins++;
+            if (p.decision === 'L') pm.losses++;
+            if (p.decision === 'S') pm.saves++;
+            const [inn, rem] = String(p.ip || 0).split('.').map(Number);
+            pm.ipOuts += (inn||0)*3 + (rem||0);
+            pm.h  += parseInt(p.h)||0;  pm.er += parseInt(p.er)||0;
+            pm.bb += parseInt(p.bb)||0; pm.k  += parseInt(p.so)||0;
+          }
+        }
+      }
+
+      // Apply batting stats to PLAYERS
+      PLAYERS.forEach(pl => {
+        const key = pl.name.toLowerCase() + '||' + (pl.team || '');
+        const b = batMap[key]; if (!b) return;
+        pl.gp = b.gp; pl.ab = b.ab; pl.r = b.r;
+        pl.s  = b.s;  pl.d  = b.d;  pl.t = b.tri; pl.hr = b.hr;
+        pl.rbi = b.rbi; pl.bb = b.bb; pl.so = b.so;
+        pl.h   = b.s + b.d + b.tri + b.hr;
+        pl.avg = pl.ab > 0 ? pl.h / pl.ab : 0;
+        const obp = (pl.ab + pl.bb) > 0 ? (pl.h + pl.bb) / (pl.ab + pl.bb) : 0;
+        const slg = pl.ab > 0 ? (b.s + 2*b.d + 3*b.tri + 4*b.hr) / pl.ab : 0;
+        pl.slg = slg; pl.ops = obp + slg;
+      });
+
+      // Apply pitching stats to PLAYERS (only real pitchers with recorded outs)
+      PLAYERS.forEach(pl => {
+        const key = pl.name.toLowerCase() + '||' + (pl.team || '');
+        const pm = pitMap[key];
+        if (!pm || pm.ipOuts === 0) { pl.ip = 0; return; }
+        pl.ip         = parseFloat(`${Math.floor(pm.ipOuts/3)}.${pm.ipOuts%3}`);
+        pl.gs         = pm.gs;
+        pl.wins       = pm.wins;
+        pl.losses     = pm.losses;
+        pl.h_allowed  = pm.h;
+        pl.bb_allowed = pm.bb;
+        pl.k          = pm.k;
+        // ERA per 7 innings (21 outs)
+        pl.era  = parseFloat(((pm.er / pm.ipOuts) * 21).toFixed(2));
+        pl.whip = parseFloat(((pm.bb + pm.h) / (pm.ipOuts / 3)).toFixed(2));
+      });
+
+      PLAYERS.sort((a, b) => b.avg - a.avg);
+    }
 
     // Map games -> SCHEDULE_PREVIEW format, sort by wk then time
     SCHEDULE_PREVIEW = games
@@ -5073,19 +5159,9 @@ function initScores(v){
 }
 
 // ═══ STATS JS ═══
-// Add pitching stats derived from player data
-PLAYERS.forEach((p,i) => {
+// Home/away split proxies (approximate until real split tracking is added)
+PLAYERS.forEach((p, i) => {
   const seed = i + 1;
-  p.ip   = parseFloat((p.ab / 3.2 + seed % 4).toFixed(1));
-  p.era  = parseFloat((1.8 + (seed*1.3)%4.5).toFixed(2));
-  p.wins = Math.floor(p.hr/3) + 1;
-  p.losses = Math.floor(p.l||0) || Math.max(0, Math.floor((seed*0.7)%4));
-  p.k    = Math.floor(p.ab * 0.28 + seed % 5);
-  p.whip = parseFloat((0.9 + (seed*0.11)%0.9).toFixed(2));
-  p.bb_allowed = Math.floor(p.bb * 0.4);
-  p.h_allowed  = Math.floor(p.h  * 0.38);
-  p.gs = Math.floor(p.ab / 16);
-  // Simulate home/away split
   p.home_avg = parseFloat((p.avg * (0.9 + (seed%5)*0.05)).toFixed(3));
   p.away_avg = parseFloat((p.avg * (0.95 + (seed%4)*0.04)).toFixed(3));
   p.home_hr  = Math.floor(p.hr * 0.55);
@@ -5217,6 +5293,8 @@ function getRows(){
   }
   let rows = PLAYERS;
   if(team!=='all') rows = rows.filter(p=>p.team===team);
+  // For pitching, only show players with real recorded innings
+  if(type==='pitching') rows = rows.filter(p => p.ip > 0);
   return rows.map(applyPlayerSplit);
 }
 
@@ -5277,6 +5355,13 @@ function renderStats(){
   // FOOT
   const isHist = year !== '2026' && TBIR_SEASONS[year];
   document.getElementById('statsFoot').innerHTML = `<tr><td colspan="${cols.length}">Sorted by ${col?.label||sk} · ${rows.length} players · ${isHist?`${year} TBIR Season`:(split==='all'?'2026 Year to Date':SPLITS.find(s=>s.val===split)?.label||split)}</td></tr>`;
+
+  // Hide pitching button for historical years (no pitching data)
+  const pitchBtn = document.getElementById('btn-pitching');
+  if (pitchBtn) {
+    pitchBtn.style.display = isHist ? 'none' : '';
+    if (isHist && type === 'pitching') { type = 'hitting'; }
+  }
 
   buildFilters();
 }
