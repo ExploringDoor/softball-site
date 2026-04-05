@@ -569,6 +569,10 @@ body.dark .stats-table tbody tr.rank-1{background:rgba(245,200,66,.06)!important
   .ft-links{justify-content:center}
   .sched-wrap{flex-direction:column}
   .ttabs,.team-body,.team-hero{padding-left:18px;padding-right:18px}
+  .team-hero{padding-top:32px!important}
+  .modal-av{display:none!important}
+  .mob-menu{overflow-y:auto!important;max-height:calc(100vh - 110px)!important}
+  .pop-hd .pop-team img{width:72px!important;height:72px!important}
   #pg-home .hero-img-bg{background-color:#06080f;}
   .hero-mobile-logo{display:none!important;}
   .modal-inner{padding:18px}
@@ -2797,7 +2801,11 @@ function goPage(name,extra,skipHistory){
   const nl=document.getElementById('nl-'+name);
   if(nl) nl.classList.add('active');
   window.scrollTo(0,0);
-  if(name==='team'&&extra) loadTeam(extra);
+  if(name==='team'&&extra){
+    if(TEAMS&&TEAMS.length) loadTeam(extra);
+    else if(window._dataPromise) window._dataPromise.then(()=>loadTeam(extra));
+    else loadTeam(extra);
+  }
   if(name==='players'||name==='teams'){
     buildTeamsBigCards();
     // If data hasn't loaded yet, rebuild once it does
@@ -3327,16 +3335,16 @@ function buildSchedule(){
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,atm?.short||g.away)}</div>
-          <span class="preview-name">${atm?.name||g.away}</span>
+          <span class="preview-name" onclick="goPage('team','${atm?.id||g.away}')">${atm?.name||g.away}</span>
           <span class="preview-rec">${aRec}</span>
         </div>
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(htm?.id,htm?.short||g.home)}</div>
-          <span class="preview-name">${htm?.name||g.home}</span>
+          <span class="preview-name" onclick="goPage('team','${htm?.id||g.home}')">${htm?.name||g.home}</span>
           <span class="preview-rec">${hRec}</span>
         </div>
       </div>
-      <span class="preview-link" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Preview</span>
+      <span class="preview-link" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${g.time||'TBD'}')">Preview</span>
       ${g.done?`<span class="preview-link" style="margin-top:4px" onclick="event.stopPropagation();shareGame('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Share</span>`:''}
     </div>`;
   }).join('');
@@ -3440,7 +3448,7 @@ function loadTeam(teamId){
   const t=getTeam(teamId)||(typeof ALL_TEAMS!=='undefined'&&ALL_TEAMS.find(x=>x.id===teamId));
   if(!t){ console.warn('loadTeam: team not found:',teamId); return; }
   document.getElementById('team-div-label').textContent=`Division ${t.div} · 2026 Season`;
-  document.getElementById('team-big-name').innerHTML=`${t.name} <span style="color:${t.color}">·</span> ${t.short}`;
+  document.getElementById('team-big-name').innerHTML=`${t.name}`;
   document.getElementById('team-rec').innerHTML=`<strong>${t.w}–${t.l}</strong>&nbsp;·&nbsp;${t.pct.toFixed(3).replace(/^0\./,'.')}&nbsp;PCT&nbsp;·&nbsp;${t.rs} RS&nbsp;·&nbsp;${t.ra} RA&nbsp;·&nbsp;<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`;
   document.getElementById('team-blob').style.background=`linear-gradient(135deg,${t.color},transparent 60%)`;
   // Set team hero logo
