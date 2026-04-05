@@ -167,6 +167,28 @@ body.dark [style*="border-bottom:1px solid rgba(0,0,0"]{border-bottom-color:rgba
 .mob-menu{display:none;position:fixed;top:110px;left:0;right:0;z-index:299;background:rgba(255,255,255,.97);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);flex-direction:column;padding:20px}
 .mob-menu.open{display:flex}
 .mob-menu a,.mob-menu span{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:var(--white);text-decoration:none;cursor:pointer;padding:12px 0;border-bottom:1px solid var(--border)}
+/* ── NAV DROPDOWNS ── */
+.nav-dd-wrap{position:relative}
+.nav-dd-wrap>a,.nav-dd-wrap>span{display:flex!important;align-items:center;gap:4px}
+.nav-dd-arrow{width:9px;height:6px;flex-shrink:0;opacity:.5;transition:transform .2s}
+.nav-dd-wrap:hover .nav-dd-arrow{transform:rotate(180deg)}
+.nav-dropdown{display:none;position:absolute;top:calc(100% + 10px);left:0;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.12);padding:10px;z-index:500;min-width:180px;animation:ddIn .15s ease}
+@keyframes ddIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.nav-dropdown-right{left:auto;right:0}
+.nav-dd-wrap:hover .nav-dropdown{display:block}
+.nav-dd-head{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(0,0,0,.35);padding:4px 10px 8px;border-bottom:1px solid rgba(0,0,0,.07);margin-bottom:6px}
+.nav-dd-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;font-size:12.5px;font-weight:600;color:#1a1a1a;text-decoration:none;cursor:pointer;transition:background .1s;letter-spacing:.02em;white-space:nowrap}
+.nav-dd-item:hover{background:rgba(0,45,114,.07);color:#002D72}
+.nav-teams-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;min-width:300px}
+.nav-team-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .1s}
+.nav-team-item:hover{background:rgba(0,45,114,.06)}
+.nav-team-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.nav-team-name{font-size:12px;font-weight:600;color:#1a1a1a;white-space:nowrap}
+body.dark .nav-dropdown{background:#1e2532;border-color:rgba(255,255,255,.1);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+body.dark .nav-dd-item{color:#e0e0e0}
+body.dark .nav-dd-item:hover{background:rgba(255,255,255,.08);color:#fff}
+body.dark .nav-team-name{color:#e0e0e0}
+body.dark .nav-team-item:hover{background:rgba(255,255,255,.07)}
 .mob-menu span:last-child,.mob-menu a:last-child{border-bottom:none}
 
 /* ── PAGES ── */
@@ -1502,15 +1524,15 @@ thead th.num{text-align:right}
 tbody tr{border-bottom:1px solid rgba(0,0,0,.08);transition:background .15s}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:rgba(0,0,0,.03)}
-tbody tr.rank-1{background:rgba(0,45,114,.05)}
-tbody tr.rank-2{background:rgba(0,0,0,.02)}
-tbody tr.rank-3{background:rgba(0,0,0,.015)}
-tbody td{padding:12px 14px;color:rgba(0,0,0,.7);white-space:nowrap}
+tbody tr.rank-1{background:rgba(0,0,0,.015)}
+tbody tr.rank-2{background:transparent}
+tbody tr.rank-3{background:transparent}
+tbody td{padding:11px 14px;color:rgba(0,0,0,.75);white-space:nowrap}
 tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
-.rank-cell{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;color:var(--muted);min-width:28px}
-tbody tr.rank-1 .rank-cell{color:var(--gold)}
-tbody tr.rank-2 .rank-cell{color:rgba(200,210,220,.7)}
-tbody tr.rank-3 .rank-cell{color:rgba(200,150,80,.6)}
+.rank-cell{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;color:var(--muted);min-width:28px;text-align:center}
+tbody tr.rank-1 .rank-cell{color:var(--muted)}
+tbody tr.rank-2 .rank-cell{color:var(--muted)}
+tbody tr.rank-3 .rank-cell{color:var(--muted)}
 .team-name{font-weight:600;font-size:14.5px;color:var(--white)}
 .streak-w{color:var(--green)}
 .streak-l{color:var(--red)}
@@ -1827,10 +1849,26 @@ thead th.sorted-col .sarrow{opacity:1}
     <li><a href="javascript:void(0)" onclick="goPage('standings')">Standings</a></li>
     <li><a href="javascript:void(0)" onclick="goPage('stats')">Stats</a></li>
     <li><a href="leaders.html">Leaders</a></li>
-    <li id="nl-players"><span onclick="goPage('players')">Teams</span></li>
-    <li><a href="playoffs.html">Brackets</a></li>
-    <li><a href="rules.html">Field Guide</a></li>
-    <li><a href="photos.html">Gallery</a></li>
+    <li class="nav-dd-wrap" id="nl-players">
+      <span onclick="goPage('players')">Teams<svg class="nav-dd-arrow" viewBox="0 0 9 6" fill="none"><path d="M1 1l3.5 4L8 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <div class="nav-dropdown" id="nav-teams-dd">
+        <div class="nav-dd-head">All Teams</div>
+        <div class="nav-teams-grid" id="nav-teams-list">
+          <div style="padding:12px;color:#999;font-size:12px;grid-column:1/-1;text-align:center">Loading…</div>
+        </div>
+        <div style="border-top:1px solid rgba(0,0,0,.07);margin-top:8px;padding-top:8px">
+          <div class="nav-dd-item" onclick="goPage('players')">View All Teams →</div>
+        </div>
+      </div>
+    </li>
+    <li class="nav-dd-wrap">
+      <span>More<svg class="nav-dd-arrow" viewBox="0 0 9 6" fill="none"><path d="M1 1l3.5 4L8 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <div class="nav-dropdown nav-dropdown-right">
+        <a class="nav-dd-item" href="playoffs.html">🏆 Brackets</a>
+        <a class="nav-dd-item" href="rules.html">📋 Field Guide</a>
+        <a class="nav-dd-item" href="photos.html">📷 Gallery</a>
+      </div>
+    </li>
     <li><a href="admin.html" style="color:rgba(0,45,114,.6)!important;font-size:10.5px">⚙ Admin</a></li>
   </ul>
   <div class="nav-right"><span class="live-badge" id="liveBadge" onclick="goPage('scores');setTimeout(()=>setView('scores'),80)"><span class="live-dot"></span>Live</span>
@@ -1847,9 +1885,12 @@ thead th.sorted-col .sarrow{opacity:1}
   <span onclick="goPage('stats');closeMob()">Stats</span>
   <span onclick="goPage('leaders');closeMob()">Leaders</span>
   <span onclick="goPage('players');closeMob()">Teams</span>
-  <a href="playoffs.html">Brackets</a>
-  <a href="rules.html">Field Guide</a>
-  <a href="photos.html">Gallery</a>
+  <span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='flex'?'none':'flex'" style="display:flex;align-items:center;justify-content:space-between">More <span style="font-size:18px;opacity:.5">›</span></span>
+  <div style="display:none;flex-direction:column;padding-left:20px;border-bottom:1px solid var(--border)">
+    <a href="playoffs.html" style="font-size:20px;padding:10px 0;border-bottom:none">🏆 Brackets</a>
+    <a href="rules.html" style="font-size:20px;padding:10px 0;border-bottom:none">📋 Field Guide</a>
+    <a href="photos.html" style="font-size:20px;padding:10px 0;border-bottom:none">📷 Gallery</a>
+  </div>
   <a href="admin.html" style="color:rgba(0,45,114,.7);font-size:13px">⚙ Admin / Score Entry</a>
 </div>
 
@@ -3838,6 +3879,18 @@ const mob=document.getElementById('mobMenu');
 hbg.addEventListener('click',()=>{hbg.classList.toggle('open');mob.classList.toggle('open')});
 function closeMob(){hbg.classList.remove('open');mob.classList.remove('open')}
 
+// ════════════════════════════ TEAMS DROPDOWN ══════════════════════════════
+function populateTeamsDropdown(){
+  const list = document.getElementById('nav-teams-list');
+  if (!list || !TEAMS.length) return;
+  const sorted = [...TEAMS].filter(t=>t.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  list.innerHTML = sorted.map(t=>`
+    <div class="nav-team-item" onclick="goPage('team','${t.id}');document.querySelectorAll('.nav-dropdown').forEach(d=>d.style.display='')">
+      <div class="nav-team-dot" style="background:${t.color||'#999'}"></div>
+      <span class="nav-team-name">${t.name}</span>
+    </div>`).join('');
+}
+
 // ════════════════════════════ SCROLL FADE ════════════════════════════════
 const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible')})},{threshold:.06});
 function observeAll(){document.querySelectorAll('.div-card,.ldr-card,.game-row,.pcard,.recap-card,.hist-row,.tsg-cell').forEach(el=>{el.classList.add('fade-in');io.observe(el)})}
@@ -3855,6 +3908,7 @@ window._dataPromise.then(() => {
   }
   try{ buildTicker(); }catch(e){}
   try{ buildTicker2(); }catch(e){}
+  try{ populateTeamsDropdown(); }catch(e){}
   try{ buildStandings(); }catch(e){}
   try{ buildHomeSidebar(); }catch(e){}
   try{ buildSchedule(); }catch(e){}
@@ -5271,7 +5325,7 @@ function buildStandTable(yr, sortKey, sortDir){
       ?`<span class="streak-w">${r.strk}</span>`
       :`<span class="streak-l">${r.strk}</span>`;
     const diff=r.diff>0?`<span class="diff-pos">+${r.diff}</span>`:r.diff<0?`<span class="diff-neg">${r.diff}</span>`:`<span class="diff-zero">0</span>`;
-    const gb=r.gb==='—'?'<span style="color:var(--muted)">—</span>':`<span style="color:#002D72;font-weight:700">${r.gb}</span>`;
+    const gb=r.gb==='—'?'<span style="color:var(--muted)">—</span>':`<span>${r.gb}</span>`;
     const pctBar=r.pct.toFixed(3).replace(/^0\./,'.');
     const rowCls=i<3?`rank-${i+1}`:'';
     return `<tr class="${rowCls}">
@@ -5305,8 +5359,8 @@ function buildStand2026(){
         <table class="s-tbl" style="width:100%">
           <thead><tr><th>#</th><th style="text-align:left">Team</th><th>W</th><th>L</th><th>PCT</th><th>RS</th><th>RA</th><th>STRK</th></tr></thead>
           <tbody>${teams.map((t,i)=>`<tr style="cursor:pointer;opacity:.7" onclick="goPage('team','${t.id}')">
-            <td style="color:var(--muted);font-size:12px">${i+1}</td>
-            <td style="text-align:left"><span style="color:${t.color};font-weight:700">${t.name}</span></td>
+            <td style="color:var(--muted);font-size:12px;text-align:center">${i+1}</td>
+            <td style="text-align:left"><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span><span style="font-weight:600;color:#1a1a1a">${t.name}</span></span></td>
             <td>0</td><td>0</td><td>—</td><td>0</td><td>0</td>
             <td><span style="color:var(--muted)">—</span></td>
           </tr>`).join('')}
@@ -5326,12 +5380,12 @@ function buildStand2026(){
             const gb=i===0?'—':((leader.w-leader.l-(t.w-t.l))/2).toFixed(1);
             const streak=t.streak&&t.streak!=='—'?`<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`:'<span style="color:var(--muted)">—</span>';
             return `<tr class="${i===0?'leader':''}" style="cursor:pointer" onclick="goPage('team','${t.id}')">
-              <td style="color:var(--muted);font-size:12px">${i+1}</td>
-              <td style="text-align:left"><span style="color:${t.color};font-weight:700">${t.name}</span></td>
-              <td>${t.w}</td><td>${t.l}</td>
+              <td style="color:var(--muted);font-size:12px;text-align:center">${i+1}</td>
+              <td style="text-align:left"><span style="display:inline-flex;align-items:center;gap:8px"><span style="width:9px;height:9px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span><span style="font-weight:600;color:#1a1a1a">${t.name}</span></span></td>
+              <td style="font-weight:600">${t.w}</td><td>${t.l}</td>
               <td style="font-weight:600">${t.w+t.l>0?t.pct.toFixed(3).replace(/^0\./,'.'):'-'}</td>
-              <td>${gb==='—'?'<span style="color:var(--muted)">—</span>':gb}</td>
-              <td style="color:var(--muted)">${t.rs}</td><td style="color:var(--muted)">${t.ra}</td>
+              <td style="color:var(--muted)">${gb==='—'?'—':gb}</td>
+              <td>${t.rs}</td><td style="color:var(--muted)">${t.ra}</td>
               <td>${streak}</td>
             </tr>`;
           }).join('')}

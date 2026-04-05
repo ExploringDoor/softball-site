@@ -1008,11 +1008,20 @@ window.resetGame = async function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
   if (!g) return;
   const awayName = getTeamName(g.away), homeName = getTeamName(g.home);
-  if (!confirm(`Reset "${awayName} vs ${homeName}"?\n\nThis will:\n• Un-mark it as Final\n• Clear the score back to 0–0\n• Recalculate standings\n\nBox score stats are kept and can be re-saved.`)) return;
+  if (!confirm(`Reset "${awayName} vs ${homeName}"?\n\nThis will:\n• Un-mark it as Final\n• Clear the score back to 0–0\n• Mark box score as draft (removes it from league leaders)\n• Recalculate standings`)) return;
   try {
     await updateDoc(doc(db, 'games', gameId), { done: false, away_score: 0, home_score: 0 });
     g.done = false; g.away_score = 0; g.home_score = 0;
-    toast('Game reset to in-progress');
+
+    // Reset box score status → 'draft' so it no longer counts in league leaders
+    try {
+      const bsSnap = await getDocs(query(collection(db, 'box_scores'), where('game_id', '==', gameId)));
+      if (!bsSnap.empty) {
+        await updateDoc(doc(db, 'box_scores', bsSnap.docs[0].id), { status: 'draft' });
+      }
+    } catch(bsErr) { console.warn('Could not reset box score status:', bsErr); }
+
+    toast('Game reset — box score set to draft');
     await logActivity('Score Entry', `Reset game to in-progress: ${awayName} vs ${homeName}`);
     await recalcStandingsFromGames();
     renderScores(); renderDashboard(); renderStandings();
