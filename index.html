@@ -4471,10 +4471,26 @@ function fakeScore(away,home,seed){
 }
 
 function getWeekList(){
+  const MONTHS={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const parseDate=s=>{const [m,d]=s.split(' ');return new Date(2026,MONTHS[m]||0,parseInt(d)||1);};
   const wkMap={};
   SCHEDULE_PREVIEW.forEach(g=>{
-    if(!wkMap[g.wk])wkMap[g.wk]={wk:g.wk,date:g.date,hasDone:false};
+    if(!wkMap[g.wk])wkMap[g.wk]={wk:g.wk,dates:[],hasDone:false};
+    if(g.date&&!wkMap[g.wk].dates.includes(g.date))wkMap[g.wk].dates.push(g.date);
     if(g.done)wkMap[g.wk].hasDone=true;
+  });
+  // Build display date range for each week
+  Object.values(wkMap).forEach(w=>{
+    if(!w.dates.length){w.dateRange='';return;}
+    w.dates.sort((a,b)=>parseDate(a)-parseDate(b));
+    const first=w.dates[0], last=w.dates[w.dates.length-1];
+    if(first===last){
+      w.dateRange=first; // single day
+    } else {
+      const [fm,fd]=first.split(' '), [lm,ld]=last.split(' ');
+      w.dateRange=fm===lm ? `${fm} ${fd}–${ld}` : `${first}–${last}`;
+    }
+    w.date=w.dates[0]; // keep for backwards compat
   });
   const all=Object.values(wkMap).sort((a,b)=>String(a.wk).localeCompare(String(b.wk),(undefined),{numeric:true}));
   return view==='scores'?all.filter(w=>w.hasDone):all;
@@ -4496,9 +4512,11 @@ function buildScoresNav(){
   if(weekOffset<0)weekOffset=off;
   document.getElementById('dnSlots').innerHTML=wks.map((w,i)=>{
     const label=String(w.wk).startsWith('PL')?w.wk:'WK '+w.wk;
-    return`<div class="dn-slot${i===off?' active':''}" onclick="setWeekAbs(${i})">
+    const dr=w.dateRange||w.date||'';
+    const isRange=dr.includes('–');
+    return`<div class="dn-slot${i===off?' active':''}" onclick="setWeekAbs(${i})" style="${isRange?'min-width:90px':''}">
       <div class="wk-label">${label}</div>
-      <div class="wk-date">${w.date||''}</div>
+      <div class="wk-date" style="${isRange?'font-size:13px;letter-spacing:0':''}}">${dr}</div>
     </div>`;
   }).join('');
   // Scroll active tab into view
