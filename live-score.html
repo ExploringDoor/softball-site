@@ -447,13 +447,13 @@ body{display:flex;flex-direction:column}
         <rect x="103" y="97" width="14" height="4" rx="1" fill="rgba(255,255,255,0.55)"/>
         <!-- Home plate (pentagon) -->
         <polygon points="110,154 118,161 118,170 102,170 102,161" fill="white"/>
-        <!-- Base bags (rotated 45°) -->
+        <!-- Base bags (rotated 45°, tappable when occupied) -->
         <rect id="base-first" class="svg-base" x="164" y="90" width="18" height="18" rx="2"
-              transform="rotate(45 173 99)" fill="rgba(255,255,255,0.55)"/>
+              transform="rotate(45 173 99)" fill="rgba(255,255,255,0.55)" onclick="tapBase('first')" style="cursor:pointer"/>
         <rect id="base-second" class="svg-base" x="101" y="27" width="18" height="18" rx="2"
-              transform="rotate(45 110 36)" fill="rgba(255,255,255,0.55)"/>
+              transform="rotate(45 110 36)" fill="rgba(255,255,255,0.55)" onclick="tapBase('second')" style="cursor:pointer"/>
         <rect id="base-third" class="svg-base" x="38" y="90" width="18" height="18" rx="2"
-              transform="rotate(45 47 99)" fill="rgba(255,255,255,0.55)"/>
+              transform="rotate(45 47 99)" fill="rgba(255,255,255,0.55)" onclick="tapBase('third')" style="cursor:pointer"/>
         <!-- Infield position labels (subtle) -->
         <text x="110" y="87" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
               font-family="Inter,sans-serif" font-weight="600">P</text>
@@ -529,6 +529,19 @@ body{display:flex;flex-direction:column}
     <div class="inning-line">
       <div class="inning-line-inner" id="linescore-small"></div>
       <button class="inning-btn" onclick="showEndInningManual()">End Half ▸</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ADVANCE RUNNER MODAL ═══ -->
+<div class="modal-overlay" id="modal-advance">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-body">
+      <div class="modal-title" id="advance-title">Advance Runner</div>
+      <div class="modal-subtitle" id="advance-sub">Where does the runner go?</div>
+      <div id="advance-buttons" style="display:flex;flex-direction:column;gap:8px"></div>
+      <button class="btn-continue" style="margin-top:12px" onclick="closeModal('modal-advance')">Cancel</button>
     </div>
   </div>
 </div>
@@ -1890,6 +1903,82 @@ window.showEndGameModal = function() {
 window.closeEndGameModal = function() {
   hideResetConfirm();
   closeModal('modal-endgame');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// ADVANCE RUNNER (tap a base to manually move/score/out a runner)
+// ═══════════════════════════════════════════════════════════════════
+window.tapBase = function(base) {
+  const runner = STATE.bases[base];
+  if (!runner) return; // empty base, ignore tap
+
+  const baseName = { first: '1st', second: '2nd', third: '3rd' }[base];
+  document.getElementById('advance-title').textContent = lastName(runner.name);
+  document.getElementById('advance-sub').textContent = `On ${baseName} — move to:`;
+
+  const options = [];
+  if (base === 'first')  options.push(['2nd Base', 'second'], ['3rd Base', 'third'], ['Scored ✓', 'scored'], ['Out ✕', 'out']);
+  if (base === 'second') options.push(['3rd Base', 'third'], ['Scored ✓', 'scored'], ['Out ✕', 'out']);
+  if (base === 'third')  options.push(['Scored ✓', 'scored'], ['Out ✕', 'out']);
+
+  const wrap = document.getElementById('advance-buttons');
+  wrap.innerHTML = options.map(([label, dest]) => {
+    const isOut = dest === 'out';
+    const isScore = dest === 'scored';
+    const bg = isOut ? 'var(--red)' : isScore ? 'var(--green)' : 'var(--navy)';
+    return `<button onclick="confirmAdvance('${base}','${dest}')"
+      style="width:100%;padding:13px;background:${bg};color:#fff;border:none;border-radius:10px;
+             font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:17px;
+             letter-spacing:.06em;text-transform:uppercase;cursor:pointer">
+      ${label}
+    </button>`;
+  }).join('');
+
+  openModal('modal-advance');
+};
+
+window.confirmAdvance = function(fromBase, dest) {
+  closeModal('modal-advance');
+  const runner = STATE.bases[fromBase];
+  if (!runner) return;
+
+  // Save undo snapshot
+  if (STATE.history.length >= 25) STATE.history.shift();
+  STATE.history.push(cloneState());
+
+  // Remove runner from current base
+  STATE.bases[fromBase] = null;
+
+  if (dest === 'scored') {
+    // Add a run for the batting team
+    if (STATE.half === 'top') { STATE.awayRuns++; STATE.awayRunsThisHalf++; }
+    else { STATE.homeRuns++; STATE.homeRunsThisHalf++; }
+    // Log it
+    const lineup = STATE.half === 'top' ? STATE.awayLineup : STATE.homeLineup;
+    if (runner.lineupIdx !== undefined && lineup[runner.lineupIdx]) lineup[runner.lineupIdx].r++;
+    STATE.lastPlay = `${lastName(runner.name)} scored`;
+    showToast(`${lastName(runner.name)} scores!`, 'success');
+  } else if (dest === 'out') {
+    STATE.outs++;
+    STATE.lastPlay = `${lastName(runner.name)} thrown out`;
+    showToast(`${lastName(runner.name)} out`, 'error');
+    if (STATE.outs >= 3) {
+      renderGameScreen();
+      saveToLocalStorage();
+      showEndInningModal();
+      return;
+    }
+  } else {
+    // Move to base: dest is 'second' or 'third'
+    STATE.bases[dest] = runner;
+    const destName = { second: '2nd', third: '3rd' }[dest];
+    STATE.lastPlay = `${lastName(runner.name)} advances to ${destName}`;
+    showToast(`${lastName(runner.name)} → ${destName}`);
+  }
+
+  renderGameScreen();
+  saveToLocalStorage();
+  syncToFirebase();
 };
 
 window.resetCurrentInning = function() {
