@@ -270,10 +270,8 @@ async function loadLeaders() {
     const bsSnap = await getDocs(collection(db, 'box_scores'));
     const boxScores = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Filter to final only
-    const finalBoxScores = boxScores.filter(bs => bs.status === 'final');
-
-    if (finalBoxScores.length === 0) {
+    // Use all box scores (they only exist for final games via markGameFinal)
+    if (boxScores.length === 0) {
       contentEl.innerHTML = `<div class="empty-msg">League leaders will appear once games are played and box scores are entered.</div>`;
       return;
     }
@@ -281,10 +279,11 @@ async function loadLeaders() {
     // Aggregate player stats across all games
     const playerMap = {}; // key: normalized name + team
 
-    for (const bs of finalBoxScores) {
+    for (const bs of boxScores) {
+      // Support both camelCase (live-scorer) and snake_case (legacy) field names
       const sides = [
-        { lineup: bs.away_lineup, teamId: bs.away },
-        { lineup: bs.home_lineup, teamId: bs.home },
+        { lineup: bs.awayLineup || bs.away_lineup, teamId: bs.away },
+        { lineup: bs.homeLineup || bs.home_lineup, teamId: bs.home },
       ];
 
       for (const { lineup, teamId } of sides) {
@@ -310,7 +309,9 @@ async function loadLeaders() {
           s.gp += 1;
           s.ab  += parseInt(p.ab) || 0;
           s.r   += parseInt(p.r) || 0;
-          s.h   += parseInt(p.h) || 0;
+          // hits: live-scorer stores s/d/t/hr separately; legacy stores aggregate h
+          const hits = (parseInt(p.s)||0) + (parseInt(p.d)||0) + (parseInt(p.t)||0) + (parseInt(p.hr)||0);
+          s.h   += hits || parseInt(p.h) || 0;
           s.hr  += parseInt(p.hr) || 0;
           s.rbi += parseInt(p.rbi) || 0;
           s.bb  += parseInt(p.bb) || 0;
