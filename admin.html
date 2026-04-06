@@ -291,6 +291,9 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="recaps" data-sec="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
       <div class="nav-item" data-section="banner" data-sec="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
       <div class="nav-item" data-section="email" data-sec="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
+      <div class="nav-item" data-section="contacts" data-sec="contacts" onclick="showSection('contacts')"><span class="icon">&#128222;</span> Contacts</div>
+      <div class="nav-item" data-section="financials" data-sec="financials" onclick="showSection('financials')"><span class="icon">&#128181;</span> Financials</div>
+      <div class="nav-item" data-section="registrations" data-sec="registrations" onclick="showSection('registrations')"><span class="icon">&#128221;</span> Registrations</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
       <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
       <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
@@ -595,6 +598,82 @@ select.form-input{cursor:pointer}
       </div>
     </div>
 
+    <!-- ═══ CONTACTS ═══ -->
+    <div class="section" id="sec-contacts">
+      <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="main-title">Contacts</div>
+          <div class="main-subtitle">Player &amp; manager directory — email anyone at once</div>
+        </div>
+      </div>
+
+      <!-- Quick-email bar -->
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-title">Quick Email</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="form-label">Select Team</label>
+            <select class="form-input" id="contacts-team-sel" onchange="renderContacts()" style="min-width:180px">
+              <option value="all">All Teams</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="emailTeamPlayers()">✉ Email All Players (this team)</button>
+          <button class="btn btn-outline" onclick="emailAllManagers()">✉ Email All Managers</button>
+          <button class="btn btn-outline" onclick="emailAllPlayers()">✉ Email Every Player</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted2);margin-top:8px">Buttons open your mail client with a pre-filled recipient list. Player emails come from their roster record — add email addresses in Rosters to see them here.</div>
+      </div>
+
+      <!-- Directory -->
+      <div class="panel">
+        <div class="panel-title">Directory</div>
+        <div id="contacts-directory">
+          <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ FINANCIALS ═══ -->
+    <div class="section" id="sec-financials">
+      <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="main-title">Financials &amp; Payments</div>
+          <div class="main-subtitle">Track team dues and payments</div>
+        </div>
+        <button class="btn btn-primary" onclick="openAddPayment()">+ Record Payment</button>
+      </div>
+
+      <!-- Summary cards -->
+      <div id="fin-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px"></div>
+
+      <!-- Add payment form -->
+      <div id="fin-add-form" style="display:none" class="panel" style="margin-bottom:16px"></div>
+
+      <!-- Payments table -->
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div class="panel-title" style="margin:0">Payment Log</div>
+          <select class="form-input" id="fin-filter-team" onchange="renderFinancials()" style="max-width:200px">
+            <option value="all">All Teams</option>
+          </select>
+        </div>
+        <div id="fin-payments-list">
+          <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ REGISTRATIONS ═══ -->
+    <div class="section" id="sec-registrations">
+      <div class="main-header">
+        <div class="main-title">Registrations</div>
+        <div class="main-subtitle">Incoming team &amp; free agent sign-ups from the registration page</div>
+      </div>
+      <div id="registrations-content">
+        <div class="loading"><div class="spinner"></div> Loading registrations...</div>
+      </div>
+    </div>
+
     <!-- ═══ SCORE REVIEWS ═══ -->
     <div class="section" id="sec-score-reviews">
       <div class="main-header">
@@ -827,6 +906,10 @@ window.showSection = function(name) {
   // Close mobile sidebar
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sidebar-overlay').classList.remove('open');
+  // Render on demand
+  if (name === 'contacts') renderContacts();
+  if (name === 'financials') renderFinancials();
+  if (name === 'registrations') loadRegistrations();
 };
 
 window.toggleSidebar = function() {
@@ -867,6 +950,7 @@ async function loadAllData() {
     loadActivityLog();
     loadCaptains();
     loadScoreReviews();
+    loadFinancials();
   } catch(e) {
     console.error('Data load failed:', e);
     toast('Failed to load data: ' + e.message, 'error');
@@ -2098,6 +2182,10 @@ function populateTeamDropdowns() {
     `<option value="${t.id}">${esc(t.name)}</option>`
   ).join('');
   document.getElementById('email-to').innerHTML = emailOpts;
+
+  // Contacts + Financials dropdowns
+  populateContactsTeamSel();
+  populateFinTeamSel();
 }
 
 window.loadRoster = function() {
@@ -2137,6 +2225,8 @@ window.openAddPlayer = function() {
       <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ap-name" placeholder="Player name"></div>
       <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ap-num" placeholder="#" min="0"></div>
       <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ap-pos" placeholder="e.g. SS, CF, P"></div>
+      <div class="form-col"><label class="form-label">Email</label><input type="email" class="form-input" id="ap-email" placeholder="player@email.com"></div>
+      <div class="form-col"><label class="form-label">Phone</label><input type="tel" class="form-input" id="ap-phone" placeholder="555-555-5555"></div>
       <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
         <button class="btn btn-success btn-sm" onclick="saveNewPlayer()">Add</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('add-player-form').style.display='none'">Cancel</button>
@@ -2152,6 +2242,8 @@ window.saveNewPlayer = async function() {
     name: document.getElementById('ap-name').value.trim(),
     num: parseInt(document.getElementById('ap-num').value) || 0,
     pos: document.getElementById('ap-pos').value.trim(),
+    email: document.getElementById('ap-email').value.trim(),
+    phone: document.getElementById('ap-phone').value.trim(),
     team: teamId
   };
   if (!data.name) { toast('Enter a player name', 'error'); return; }
@@ -2179,6 +2271,8 @@ window.editPlayer = function(playerId) {
         <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ep-name-${playerId}" value="${esc(p.name)}"></div>
         <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ep-num-${playerId}" value="${p.num||''}" min="0"></div>
         <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ep-pos-${playerId}" value="${esc(p.pos||'')}"></div>
+        <div class="form-col"><label class="form-label">Email</label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}"></div>
+        <div class="form-col"><label class="form-label">Phone</label><input type="tel" class="form-input" id="ep-phone-${playerId}" value="${esc(p.phone||'')}"></div>
         <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
           <button class="btn btn-success btn-sm" onclick="saveEditPlayer('${playerId}')">Save</button>
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('player-edit-${playerId}').style.display='none'">Cancel</button>
@@ -2191,7 +2285,9 @@ window.saveEditPlayer = async function(playerId) {
   const data = {
     name: document.getElementById('ep-name-' + playerId).value.trim(),
     num: parseInt(document.getElementById('ep-num-' + playerId).value) || 0,
-    pos: document.getElementById('ep-pos-' + playerId).value.trim()
+    pos: document.getElementById('ep-pos-' + playerId).value.trim(),
+    email: document.getElementById('ep-email-' + playerId).value.trim(),
+    phone: document.getElementById('ep-phone-' + playerId).value.trim()
   };
   if (!data.name) { toast('Enter a name', 'error'); return; }
   try {
@@ -2772,6 +2868,267 @@ window.rejectScore = async function(submissionId) {
     toast('Score submission rejected');
     await logActivity('Score Review', `Rejected submission from ${s.submitted_by}: ${getTeamName(s.away)} ${s.away_score} - ${getTeamName(s.home)} ${s.home_score}`);
     renderScoreReviews();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CONTACTS
+// ═══════════════════════════════════════════════════════════════════
+function populateContactsTeamSel() {
+  const sel = document.getElementById('contacts-team-sel');
+  if (!sel) return;
+  sel.innerHTML = '<option value="all">All Teams</option>' +
+    TEAMS.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+}
+
+window.renderContacts = function() {
+  const teamId = document.getElementById('contacts-team-sel')?.value || 'all';
+  const dir = document.getElementById('contacts-directory');
+  if (!dir) return;
+
+  const teams = teamId === 'all' ? TEAMS : TEAMS.filter(t => t.id === teamId);
+  if (!teams.length) { dir.innerHTML = '<div class="empty">No teams found</div>'; return; }
+
+  let html = '';
+  for (const t of teams) {
+    const players = PLAYERS.filter(p => p.team === t.id).sort((a,b)=>(a.num||99)-(b.num||99));
+    const cap = CAPTAINS.find(c => c.team_id === t.id);
+    html += `<div style="margin-bottom:24px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;letter-spacing:.05em;color:var(--navy)">${esc(t.name)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${cap ? `<span style="font-size:12px;color:var(--muted2)">Manager: <a href="mailto:${esc(cap.email)}" style="color:var(--blue)">${esc(cap.email)}</a></span>` : '<span style="font-size:12px;color:var(--muted2)">No manager assigned</span>'}
+        </div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>#</th><th>Name</th><th>Pos</th><th>Email</th><th>Phone</th></tr></thead>
+        <tbody>${players.length ? players.map(p => `<tr>
+          <td style="color:var(--muted2)">${p.num||'—'}</td>
+          <td><strong>${esc(p.name)}</strong></td>
+          <td>${esc(p.pos||'—')}</td>
+          <td>${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--blue)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
+          <td>${p.phone ? `<a href="tel:${esc(p.phone)}" style="color:var(--blue)">${esc(p.phone)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
+        </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--muted2);padding:12px">No players on roster</td></tr>`}
+        </tbody>
+      </table></div>
+    </div>`;
+  }
+  dir.innerHTML = html;
+};
+
+window.emailTeamPlayers = function() {
+  const teamId = document.getElementById('contacts-team-sel')?.value || 'all';
+  const players = teamId === 'all' ? PLAYERS : PLAYERS.filter(p => p.team === teamId);
+  const emails = players.map(p => p.email).filter(Boolean);
+  if (!emails.length) { toast('No email addresses found for this team. Add emails via Rosters.', 'error'); return; }
+  window.location.href = 'mailto:' + emails.join(',');
+};
+
+window.emailAllManagers = function() {
+  const emails = CAPTAINS.map(c => c.email).filter(Boolean);
+  if (!emails.length) { toast('No manager emails found. Add managers under Captains.', 'error'); return; }
+  window.location.href = 'mailto:' + emails.join(',');
+};
+
+window.emailAllPlayers = function() {
+  const emails = PLAYERS.map(p => p.email).filter(Boolean);
+  if (!emails.length) { toast('No player emails found. Add emails via Rosters.', 'error'); return; }
+  window.location.href = 'mailto:' + emails.join(',');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// FINANCIALS
+// ═══════════════════════════════════════════════════════════════════
+let PAYMENTS = [];
+const DUES_PER_TEAM = 500; // default season dues — adjust as needed
+
+async function loadFinancials() {
+  try {
+    const snap = await getDocs(collection(db, 'payments'));
+    PAYMENTS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderFinancials();
+  } catch(e) {
+    const el = document.getElementById('fin-payments-list');
+    if (el) el.innerHTML = '<div class="empty">Could not load payments</div>';
+  }
+}
+
+function populateFinTeamSel() {
+  const sel = document.getElementById('fin-filter-team');
+  if (!sel) return;
+  sel.innerHTML = '<option value="all">All Teams</option>' +
+    TEAMS.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+}
+
+window.renderFinancials = function() {
+  // Summary cards
+  const summary = document.getElementById('fin-summary');
+  if (summary) {
+    const totalDues = TEAMS.length * DUES_PER_TEAM;
+    const totalPaid = PAYMENTS.filter(p=>p.type!=='expense').reduce((s,p)=>s+(p.amount||0),0);
+    const totalExp  = PAYMENTS.filter(p=>p.type==='expense').reduce((s,p)=>s+(p.amount||0),0);
+    const outstanding = totalDues - totalPaid;
+    summary.innerHTML = [
+      ['Total Dues', `$${totalDues.toLocaleString()}`, '#002D72'],
+      ['Collected', `$${totalPaid.toLocaleString()}`, '#16a34a'],
+      ['Outstanding', `$${Math.max(0,outstanding).toLocaleString()}`, outstanding>0?'#dc2626':'#16a34a'],
+      ['Expenses', `$${totalExp.toLocaleString()}`, '#d97706'],
+      ['Net', `$${(totalPaid-totalExp).toLocaleString()}`, (totalPaid-totalExp)>=0?'#16a34a':'#dc2626'],
+    ].map(([lbl,val,col])=>`<div style="background:#fff;border:1px solid var(--border2);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);margin-bottom:4px">${lbl}</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:${col}">${val}</div>
+    </div>`).join('');
+  }
+
+  // Payment log
+  const el = document.getElementById('fin-payments-list');
+  if (!el) return;
+  const teamId = document.getElementById('fin-filter-team')?.value || 'all';
+  const filtered = teamId === 'all' ? PAYMENTS : PAYMENTS.filter(p=>p.team===teamId);
+  const sorted = [...filtered].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+  if (!sorted.length) {
+    el.innerHTML = '<div class="empty">No payments recorded yet. Click "+ Record Payment" to add one.</div>';
+    return;
+  }
+  el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Date</th><th>Team</th><th>Type</th><th>Amount</th><th>Note</th><th>Actions</th></tr></thead>
+    <tbody>${sorted.map(p => {
+      const typeColor = p.type==='dues'?'var(--green)':p.type==='expense'?'var(--red)':'var(--blue)';
+      return `<tr>
+        <td style="color:var(--muted2);font-size:12px">${p.date||'—'}</td>
+        <td><strong>${esc(getTeamName(p.team)||p.team||'—')}</strong></td>
+        <td><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:${typeColor}">${esc(p.type||'payment')}</span></td>
+        <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:${p.type==='expense'?'var(--red)':'var(--green)'}">
+          ${p.type==='expense'?'-':''}$${(p.amount||0).toLocaleString()}
+        </td>
+        <td style="color:var(--muted2);font-size:13px">${esc(p.note||'—')}</td>
+        <td class="actions"><button class="btn btn-danger btn-sm" onclick="deletePayment('${p.id}')">Delete</button></td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`;
+};
+
+window.openAddPayment = function() {
+  const el = document.getElementById('fin-add-form');
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const teamOpts = '<option value="">-- Select team --</option>' + TEAMS.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  el.innerHTML = `<div class="panel-title">Record Payment / Expense</div>
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Team</label>
+        <select class="form-input" id="fin-team">${teamOpts}</select></div>
+      <div class="form-col form-col-sm"><label class="form-label">Type</label>
+        <select class="form-input" id="fin-type">
+          <option value="dues">Dues Payment</option>
+          <option value="expense">Expense</option>
+          <option value="other">Other Income</option>
+        </select></div>
+      <div class="form-col form-col-sm"><label class="form-label">Amount ($)</label>
+        <input type="number" class="form-input" id="fin-amount" placeholder="0" min="0" step="0.01"></div>
+      <div class="form-col form-col-sm"><label class="form-label">Date</label>
+        <input type="date" class="form-input" id="fin-date" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="form-col"><label class="form-label">Note (optional)</label>
+        <input type="text" class="form-input" id="fin-note" placeholder="e.g. Spring 2026 dues, Umpire fees..."></div>
+      <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
+        <button class="btn btn-success btn-sm" onclick="savePayment()">Save</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('fin-add-form').style.display='none'">Cancel</button>
+      </div>
+    </div>`;
+};
+
+window.savePayment = async function() {
+  const team   = document.getElementById('fin-team').value;
+  const type   = document.getElementById('fin-type').value;
+  const amount = parseFloat(document.getElementById('fin-amount').value)||0;
+  const date   = document.getElementById('fin-date').value;
+  const note   = document.getElementById('fin-note').value.trim();
+  if (!team) { toast('Select a team', 'error'); return; }
+  if (!amount) { toast('Enter an amount', 'error'); return; }
+  try {
+    const data = { team, type, amount, date, note, created_at: new Date().toISOString(), recorded_by: currentUser?.email||'admin' };
+    const ref = await addDoc(collection(db, 'payments'), data);
+    PAYMENTS.push({ id: ref.id, ...data });
+    document.getElementById('fin-add-form').style.display = 'none';
+    toast('Payment recorded!');
+    await logActivity('Financials', `${type}: $${amount} — ${getTeamName(team)}`);
+    renderFinancials();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// REGISTRATIONS
+// ═══════════════════════════════════════════════════════════════════
+async function loadRegistrations() {
+  const el = document.getElementById('registrations-content');
+  if (!el) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'registrations'), orderBy('submitted_at', 'desc')));
+    const regs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!regs.length) {
+      el.innerHTML = '<div class="empty">No registrations yet. They will appear here once someone submits the form at <strong>registration.html</strong>.</div>';
+      return;
+    }
+    const counts = { pending: regs.filter(r=>r.status==='pending').length, approved: regs.filter(r=>r.status==='approved').length, team: regs.filter(r=>r.type==='team').length, freeagent: regs.filter(r=>r.type==='freeagent').length };
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:24px">
+        ${[['Pending',counts.pending,'#d97706'],['Approved',counts.approved,'#16a34a'],['Teams',counts.team,'#002D72'],['Free Agents',counts.freeagent,'#7c3aed']].map(([l,v,c])=>`
+        <div style="background:#fff;border:1px solid var(--border2);border-radius:10px;padding:14px;text-align:center">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;color:${c}">${v}</div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);margin-top:2px">${l}</div>
+        </div>`).join('')}
+      </div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Email</th><th>Team</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead>
+        <tbody>${regs.map(r => {
+          const date = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '—';
+          const statusColor = r.status==='approved'?'var(--green)':r.status==='rejected'?'var(--red)':'var(--amber)';
+          return `<tr>
+            <td style="font-size:12px;color:var(--muted2)">${date}</td>
+            <td><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:${r.type==='team'?'#002D72':'#7c3aed'}">${r.type==='team'?'Team':'Free Agent'}</span></td>
+            <td><strong>${esc(r.name||'—')}</strong></td>
+            <td><a href="mailto:${esc(r.email||'')}" style="color:var(--blue);font-size:12px">${esc(r.email||'—')}</a></td>
+            <td style="font-size:13px">${esc(r.team_name||'—')}</td>
+            <td><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:${statusColor}">${r.status||'pending'}</span></td>
+            <td style="font-size:12px;color:var(--muted2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.notes||'—')}</td>
+            <td class="actions">
+              ${r.status!=='approved'?`<button class="btn btn-success btn-sm" onclick="approveRegistration('${r.id}')">Approve</button>`:''}
+              ${r.status!=='rejected'?`<button class="btn btn-outline btn-sm" onclick="rejectRegistration('${r.id}')">Reject</button>`:''}
+            </td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table></div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Could not load registrations: ${e.message}</div>`;
+  }
+}
+
+window.approveRegistration = async function(id) {
+  try {
+    await updateDoc(doc(db,'registrations',id),{status:'approved'});
+    toast('Registration approved!');
+    loadRegistrations();
+  } catch(e) { toast('Failed: '+e.message,'error'); }
+};
+
+window.rejectRegistration = async function(id) {
+  if (!confirm('Mark this registration as rejected?')) return;
+  try {
+    await updateDoc(doc(db,'registrations',id),{status:'rejected'});
+    toast('Registration rejected');
+    loadRegistrations();
+  } catch(e) { toast('Failed: '+e.message,'error'); }
+};
+
+window.deletePayment = async function(paymentId) {
+  if (!confirm('Delete this payment record?')) return;
+  try {
+    await deleteDoc(doc(db, 'payments', paymentId));
+    PAYMENTS = PAYMENTS.filter(p => p.id !== paymentId);
+    toast('Payment deleted');
+    renderFinancials();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 
