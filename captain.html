@@ -195,23 +195,15 @@ select.form-input{cursor:pointer}
   <span style="color:rgba(255,255,255,.5);font-size:12px;font-family:'Inter',sans-serif">Team Captain Portal</span>
 </div>
 
-<!-- LOGIN SCREEN -->
-<div id="login-screen" class="login-wrap" style="padding-top:48px">
-  <div class="login-box">
-    <div class="login-logo">DVSL</div>
-    <div class="login-sub">Team Captain Portal</div>
-    <div id="login-error" class="login-error"></div>
-    <div class="form-group">
-      <label class="form-label">Email</label>
-      <input type="email" id="login-email" class="form-input" placeholder="your.email@example.com" autocomplete="email">
+<!-- TEAM PICKER -->
+<div id="team-picker" style="padding-top:48px;min-height:100vh;background:var(--bg)">
+  <div style="max-width:860px;margin:0 auto;padding:40px 24px 80px">
+    <div style="text-align:center;margin-bottom:36px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:36px;text-transform:uppercase;color:var(--navy);letter-spacing:-.01em">Captain Dashboard</div>
+      <div style="font-size:14px;color:var(--muted);margin-top:6px">Select your team to get started</div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Password</label>
-      <input type="password" id="login-pass" class="form-input" placeholder="Enter password" autocomplete="current-password">
-    </div>
-    <button class="btn btn-primary btn-full" id="login-btn" onclick="doLogin()">Sign In</button>
-    <div style="text-align:center;margin-top:16px">
-      <a href="index.html" style="font-size:12px;color:var(--muted);text-decoration:none">&larr; Back to DVSL site</a>
+    <div id="team-picker-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px">
+      <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)"><div class="spinner" style="margin:0 auto 12px"></div>Loading teams...</div>
     </div>
   </div>
 </div>
@@ -229,8 +221,7 @@ select.form-input{cursor:pointer}
       </div>
     </div>
     <div class="top-bar-right">
-      <span class="top-bar-user" id="top-user-email"></span>
-      <button class="btn btn-outline btn-sm" onclick="doLogout()">Sign Out</button>
+      <button class="btn btn-outline btn-sm" onclick="changeTeam()">Change Team</button>
     </div>
   </div>
 
@@ -373,7 +364,6 @@ select.form-input{cursor:pointer}
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -386,7 +376,6 @@ const FIREBASE_CONFIG = {
 
 const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
-const auth = getAuth(app);
 
 // ═══════════════════════════════════════════════════════════════════
 // EMAILJS CONFIG — fill these in after setting up emailjs.com
@@ -406,8 +395,8 @@ if (EMAILJS_ENABLED) window.emailjs?.init(EMAILJS_PUBLIC_KEY);
 // ═══════════════════════════════════════════════════════════════════
 // GLOBAL STATE
 // ═══════════════════════════════════════════════════════════════════
-let currentUser = null;
-let captainData = null;  // { email, team_id, team_name }
+let currentUser = null; // set to team name string when team is selected
+let captainData = null;  // { team_id, team_name, email }
 let MY_TEAM = null;
 let ALL_TEAMS = [];
 let MY_GAMES = [];
@@ -459,83 +448,52 @@ async function logActivity(action, details) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// AUTH
+// TEAM PICKER — shown on load, no login required
 // ═══════════════════════════════════════════════════════════════════
-window.doLogin = async function() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  const errEl = document.getElementById('login-error');
-  errEl.style.display = 'none';
-  if (!email || !pass) { errEl.textContent = 'Please enter email and password.'; errEl.style.display = 'block'; return; }
+async function initTeamPicker() {
   try {
-    document.getElementById('login-btn').disabled = true;
-    document.getElementById('login-btn').textContent = 'Signing in...';
-    await signInWithEmailAndPassword(auth, email, pass);
+    const snap = await getDocs(query(collection(db, 'teams'), orderBy('name')));
+    const teams = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+    ALL_TEAMS = teams;
+    const grid = document.getElementById('team-picker-grid');
+    grid.innerHTML = teams.map(t => `
+      <div onclick="selectTeam('${t.id}')" style="background:#fff;border:2px solid ${t.color||'#002D72'}22;border-radius:14px;padding:20px 16px;text-align:center;cursor:pointer;transition:all .15s;user-select:none"
+        onmouseover="this.style.borderColor='${t.color||'#002D72'}';this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.1)'"
+        onmouseout="this.style.borderColor='${t.color||'#002D72'}22';this.style.transform='';this.style.boxShadow=''">
+        <div style="width:52px;height:52px;margin:0 auto 10px;display:flex;align-items:center;justify-content:center">
+          <img src="logos/${t.id}.png" style="max-width:52px;max-height:52px;object-fit:contain" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+          <div style="display:none;width:52px;height:52px;border-radius:50%;background:${t.color||'#002D72'};color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;align-items:center;justify-content:center">${(t.short||t.name||'?').slice(0,3)}</div>
+        </div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;text-transform:uppercase;color:${t.color||'#002D72'};line-height:1.2">${t.name}</div>
+      </div>`).join('');
   } catch(e) {
-    let msg = e.message || 'Login failed';
-    if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') {
-      msg = 'Invalid email or password. Please try again.';
-    } else if (e.code === 'auth/configuration-not-found' || e.code === 'auth/operation-not-allowed') {
-      msg = 'Login is not configured yet. Please contact the league administrator.';
-    } else if (e.code === 'auth/network-request-failed') {
-      msg = 'Network error. Please check your internet connection.';
-    } else if (e.code === 'auth/too-many-requests') {
-      msg = 'Too many failed attempts. Please wait a few minutes and try again.';
-    }
-    errEl.textContent = msg;
-    errEl.style.display = 'block';
-    document.getElementById('login-btn').disabled = false;
-    document.getElementById('login-btn').textContent = 'Sign In';
+    document.getElementById('team-picker-grid').innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--red);padding:40px">Failed to load teams: ${e.message}</div>`;
   }
+}
+
+window.selectTeam = async function(teamId) {
+  const team = ALL_TEAMS.find(t => t.id === teamId);
+  if (!team) return;
+  captainData = { team_id: team.id, team_name: team.name, email: team.name };
+  currentUser = { email: team.name }; // used as author identifier in chat/submissions
+  document.getElementById('team-picker').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  await loadAllData();
 };
 
-window.doLogout = async function() {
-  await signOut(auth);
-  location.reload();
+window.changeTeam = function() {
+  // Unsubscribe from chat listeners
+  if (_unsubTeamChat) { _unsubTeamChat(); _unsubTeamChat = null; }
+  if (_unsubCaptChat) { _unsubCaptChat(); _unsubCaptChat = null; }
+  captainData = null; currentUser = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('team-picker').style.display = 'block';
+  // Reset to first tab
+  showTab('team');
 };
 
-// Listen for auth state
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUser = user;
-    // Look up captain assignment
-    try {
-      const captainSnap = await getDocs(query(collection(db, 'captains'), where('email', '==', user.email)));
-      if (captainSnap.empty) {
-        // Not assigned as captain
-        document.getElementById('login-screen').style.display = 'flex';
-        document.getElementById('app').style.display = 'none';
-        const errEl = document.getElementById('login-error');
-        errEl.textContent = 'Your account is not assigned to a team. Contact the league administrator.';
-        errEl.style.display = 'block';
-        document.getElementById('login-btn').disabled = false;
-        document.getElementById('login-btn').textContent = 'Sign In';
-        return;
-      }
-      captainData = { id: captainSnap.docs[0].id, ...captainSnap.docs[0].data() };
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('app').style.display = 'block';
-      document.getElementById('top-user-email').textContent = user.email;
-      await loadAllData();
-    } catch(e) {
-      console.error('Captain lookup failed:', e);
-      const errEl = document.getElementById('login-error');
-      errEl.textContent = 'Error loading your team data. Please try again or contact the administrator.';
-      errEl.style.display = 'block';
-      document.getElementById('login-btn').disabled = false;
-      document.getElementById('login-btn').textContent = 'Sign In';
-    }
-  } else {
-    currentUser = null;
-    captainData = null;
-    document.getElementById('login-screen').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
-  }
-});
-
-// Enter key on login
-document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') window.doLogin(); });
-document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-pass').focus(); });
+// Start by showing team picker
+initTeamPicker();
 
 // ═══════════════════════════════════════════════════════════════════
 // TAB NAVIGATION
@@ -597,7 +555,7 @@ async function loadAllData() {
     const myId = captainData.team_id;
     MY_GAMES = allGames.filter(g => g.away === myId || g.home === myId);
     MY_PLAYERS = players.filter(p => p.team === myId).sort((a,b) => (a.num||99) - (b.num||99));
-    MY_SUBMISSIONS = submissions.filter(s => s.submitted_by === currentUser.email).sort((a,b) => {
+    MY_SUBMISSIONS = submissions.filter(s => s.team_id === captainData.team_id).sort((a,b) => {
       const ta = a.timestamp?.toDate ? a.timestamp.toDate() : new Date(0);
       const tb = b.timestamp?.toDate ? b.timestamp.toDate() : new Date(0);
       return tb - ta;
@@ -918,7 +876,7 @@ window.submitScore = async function(gameId) {
     home: g.home,
     away_score: awayScore,
     home_score: homeScore,
-    submitted_by: currentUser.email,
+    submitted_by: captainData.team_name,
     team_id: captainData.team_id,
     team_name: captainData.team_name,
     wk: g.wk || 0,
