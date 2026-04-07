@@ -6,6 +6,7 @@
 <title>DVSL Captain Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -43,10 +44,10 @@ select.form-input{cursor:pointer}
 .login-error{background:var(--red-bg);color:var(--red);font-size:13px;padding:10px 14px;border-radius:8px;margin-bottom:16px;display:none}
 
 /* ── APP LAYOUT ── */
-.app{display:none;min-height:100vh}
+.app{display:none;min-height:100vh;padding-top:38px}
 
 /* ── TOP HEADER BAR ── */
-.top-bar{background:var(--card);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
+.top-bar{background:var(--card);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:38px;z-index:100}
 .top-bar-brand{display:flex;align-items:center;gap:12px}
 .top-bar-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy)}
 .top-bar-team{font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px}
@@ -815,7 +816,6 @@ function renderPendingGames() {
     const isHome = g.home === captainData.team_id;
     const opponent = isHome ? g.away : g.home;
     const homeAway = isHome ? 'vs' : '@';
-    // Check if already submitted
     const existing = MY_SUBMISSIONS.find(s => s.game_id === g.id && s.status === 'pending');
     return `<div class="game-card" style="flex-direction:column;align-items:stretch">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
@@ -827,40 +827,158 @@ function renderPendingGames() {
           </div>
           <div class="meta" style="margin-top:4px">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}</div>
         </div>
-        ${existing
-          ? `<span class="badge badge-pending">Pending Approval</span>`
-          : `<button class="btn btn-primary btn-sm" onclick="openScoreForm('${g.id}')">Submit Score</button>`
-        }
+        ${existing ? `<span class="badge badge-pending">Pending Approval</span>` : `
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('live-score.html?game=${g.id}&from=captain','_blank')">⚡ Score Live</button>
+          <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="showUploadZone('${g.id}')">📄 Upload</button>
+          <button class="btn btn-outline btn-sm" onclick="showManualEntry('${g.id}')">✏️ Enter Score</button>
+        </div>`}
       </div>
-      <div id="score-form-${g.id}" style="display:none"></div>
+      ${existing ? '' : `
+      <div id="upload-zone-${g.id}" style="display:none;border:2px dashed #7c3aed;border-radius:12px;padding:36px 20px;text-align:center;background:rgba(124,58,237,.04);cursor:pointer;position:relative" ondragover="event.preventDefault();this.style.background='rgba(124,58,237,.1)'" ondragleave="this.style.background='rgba(124,58,237,.04)'" ondrop="event.preventDefault();this.style.background='rgba(124,58,237,.04)';handleCaptainScoreUpload('${g.id}',event.dataTransfer.files[0])">
+        <input type="file" accept=".pdf,image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="handleCaptainScoreUpload('${g.id}',this.files[0])">
+        <div style="font-size:36px;margin-bottom:8px">📋</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;color:var(--navy);margin-bottom:4px">Drop Game Sheet Here</div>
+        <div style="font-size:12px;color:var(--muted)">PDF or photo (JPG/PNG) — tap to browse on mobile</div>
+      </div>
+      <div id="upload-proc-${g.id}" style="display:none;text-align:center;padding:24px 16px">
+        <div style="font-size:36px;margin-bottom:10px">⚙️</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;color:var(--navy);margin-bottom:4px" id="upt-title-${g.id}">Processing...</div>
+        <div style="font-size:12px;color:var(--muted)" id="upt-msg-${g.id}">Please wait</div>
+        <div style="width:60px;height:4px;background:#e5e7eb;border-radius:2px;margin:12px auto 0"><div id="upt-bar-${g.id}" style="height:100%;background:#7c3aed;border-radius:2px;width:10%;transition:width .4s"></div></div>
+      </div>
+      <div id="upload-err-${g.id}" style="display:none;margin-top:12px;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:13px;color:#dc2626"></div>
+      <div id="manual-entry-${g.id}" style="display:none">
+        <div class="form-row">
+          <div class="form-col form-col-sm">
+            <label class="form-label">${esc(getTeamName(g.away))} (Away)</label>
+            <input type="number" class="form-input" id="ss-away-${g.id}" min="0" placeholder="0">
+          </div>
+          <div class="form-col form-col-sm">
+            <label class="form-label">${esc(getTeamName(g.home))} (Home)</label>
+            <input type="number" class="form-input" id="ss-home-${g.id}" min="0" placeholder="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <button class="btn btn-success btn-sm" onclick="submitScore('${g.id}')">Submit Score</button>
+        </div>
+      </div>
+      `}
     </div>`;
   }).join('');
 }
 
-window.openScoreForm = function(gameId) {
-  const formEl = document.getElementById('score-form-' + gameId);
-  if (formEl.style.display !== 'none') { formEl.style.display = 'none'; return; }
+
+window.showUploadZone = function(gameId) {
+  document.getElementById('upload-zone-' + gameId).style.display = 'block';
+  document.getElementById('manual-entry-' + gameId).style.display = 'none';
+};
+
+window.showManualEntry = function(gameId) {
+  document.getElementById('manual-entry-' + gameId).style.display = 'block';
+  document.getElementById('upload-zone-' + gameId).style.display = 'none';
+};
+
+window.handleCaptainScoreUpload = async function(gameId, file) {
+  if (!file) return;
   const g = MY_GAMES.find(x => x.id === gameId);
   if (!g) return;
 
-  formEl.style.display = 'block';
-  formEl.innerHTML = `
-    <div class="inline-form" style="margin-top:12px">
-      <div class="form-row">
-        <div class="form-col form-col-sm">
-          <label class="form-label">${esc(getTeamName(g.away))} (Away)</label>
-          <input type="number" class="form-input" id="ss-away-${gameId}" min="0" placeholder="0">
-        </div>
-        <div class="form-col form-col-sm">
-          <label class="form-label">${esc(getTeamName(g.home))} (Home)</label>
-          <input type="number" class="form-input" id="ss-home-${gameId}" min="0" placeholder="0">
-        </div>
-      </div>
-      <div class="form-row">
-        <button class="btn btn-success btn-sm" onclick="submitScore('${gameId}')">Submit Score</button>
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('score-form-${gameId}').style.display='none'">Cancel</button>
-      </div>
-    </div>`;
+  const zone = document.getElementById('upload-zone-' + gameId);
+  const proc = document.getElementById('upload-proc-' + gameId);
+  const errEl = document.getElementById('upload-err-' + gameId);
+  const titleEl = document.getElementById('upt-title-' + gameId);
+  const msgEl = document.getElementById('upt-msg-' + gameId);
+  const barEl = document.getElementById('upt-bar-' + gameId);
+
+  zone.style.display = 'none';
+  proc.style.display = 'block';
+  errEl.style.display = 'none';
+
+  const awayTeam = ALL_TEAMS.find(t => t.id === g.away || t.short === g.away);
+  const homeTeam = ALL_TEAMS.find(t => t.id === g.home || t.short === g.home);
+
+  try {
+    let payload = {
+      gameId: g.id, week: g.wk || g.week || '',
+      awayTeam: awayTeam?.name || g.away,
+      homeTeam: homeTeam?.name || g.home,
+      awayTeamId: awayTeam?.id || g.away,
+      homeTeamId: homeTeam?.id || g.home,
+      date: g.date || '', field: g.field || ''
+    };
+
+    if (file.type === 'application/pdf') {
+      titleEl.textContent = 'Reading PDF...';
+      msgEl.textContent = 'Extracting text from document';
+      barEl.style.width = '20%';
+
+      const pdfjsLib = window['pdfjs-dist/build/pdf'];
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      const arrayBuf = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
+      let text = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(item => item.str).join(' ') + '\n';
+      }
+      barEl.style.width = '50%';
+      titleEl.textContent = 'Converting your PDF...';
+      msgEl.textContent = 'Remember to double-check stats before submitting!';
+      payload.text = text;
+    } else {
+      titleEl.textContent = 'Reading photo...';
+      msgEl.textContent = 'Preparing image for AI';
+      barEl.style.width = '20%';
+      const b64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      barEl.style.width = '50%';
+      titleEl.textContent = 'Analyzing your game sheet...';
+      msgEl.textContent = 'Remember to double-check stats before submitting!';
+      payload.imageBase64 = b64;
+      payload.imageType = file.type;
+    }
+
+    const resp = await fetch('/api/parse-boxscore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    barEl.style.width = '85%';
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${resp.status}`);
+    }
+    const { parsed } = await resp.json();
+    barEl.style.width = '100%';
+    titleEl.textContent = 'Done!';
+    msgEl.textContent = `Found ${(parsed.awayBatters||[]).length + (parsed.homeBatters||[]).length} players`;
+    await new Promise(r => setTimeout(r, 600));
+
+    // Auto-submit score from parsed data if scores found
+    if (parsed.awayScore != null && parsed.homeScore != null) {
+      proc.style.display = 'none';
+      document.getElementById('manual-entry-' + gameId).style.display = 'block';
+      const awayInput = document.getElementById('ss-away-' + gameId);
+      const homeInput = document.getElementById('ss-home-' + gameId);
+      if (awayInput) awayInput.value = parsed.awayScore;
+      if (homeInput) homeInput.value = parsed.homeScore;
+      toast('Score sheet read! Review the scores below and submit.');
+    } else {
+      proc.innerHTML = `<div style="font-size:36px;margin-bottom:8px">✅</div><div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;color:var(--navy)">Sheet uploaded to admin for review</div>`;
+    }
+  } catch(e) {
+    proc.style.display = 'none';
+    zone.style.display = 'block';
+    errEl.style.display = 'block';
+    errEl.textContent = 'Upload failed: ' + e.message;
+  }
 };
 
 window.submitScore = async function(gameId) {

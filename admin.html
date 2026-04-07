@@ -241,13 +241,6 @@ select.form-input{cursor:pointer}
     <div class="login-sub">Commissioner &amp; Captain Portal</div>
     <div id="login-error" class="login-error"></div>
 
-    <!-- Captain Score Entry (no password) -->
-    <div style="margin-bottom:20px;padding:18px;background:#f0f4ff;border:1.5px solid #c7d4f5;border-radius:10px;text-align:center">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:#002D72;margin-bottom:4px">⚾ Captain Score Entry</div>
-      <div style="font-size:12px;color:#666;margin-bottom:14px">Enter your team's game scores — no password needed</div>
-      <button class="btn btn-primary btn-full" onclick="enterCaptainMode()" style="font-size:15px;padding:12px">Enter as Captain</button>
-    </div>
-
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
       <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
       <span style="font-size:11px;color:#aaa;font-weight:600;text-transform:uppercase;letter-spacing:.08em">Commissioner</span>
@@ -1975,12 +1968,13 @@ function renderStandings() {
   if (!TEAMS.length) { el.innerHTML = '<div class="empty">No teams found</div>'; return; }
   const sorted = [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Actions</th></tr></thead>
+    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Actions</th></tr></thead>
     <tbody>${sorted.map((t, i) => `<tr id="standing-row-${t.id}">
       <td>${i+1}</td>
       <td><strong>${esc(t.name)}</strong></td>
       <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.w||0}" id="st-w-${t.id}" min="0"></td>
       <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.l||0}" id="st-l-${t.id}" min="0"></td>
+      <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.t||0}" id="st-t-${t.id}" min="0"></td>
       <td>${(t.pct||0).toFixed(3)}</td>
       <td>${t.gb||'-'}</td>
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.rs||0}" id="st-rs-${t.id}" min="0"></td>
@@ -1992,17 +1986,18 @@ function renderStandings() {
 }
 
 window.saveOneStanding = async function(teamId) {
-  const w = parseInt(document.getElementById('st-w-' + teamId).value) || 0;
-  const l = parseInt(document.getElementById('st-l-' + teamId).value) || 0;
+  const w  = parseInt(document.getElementById('st-w-'  + teamId).value) || 0;
+  const l  = parseInt(document.getElementById('st-l-'  + teamId).value) || 0;
+  const ties = parseInt(document.getElementById('st-t-' + teamId).value) || 0;
   const rs = parseInt(document.getElementById('st-rs-' + teamId).value) || 0;
   const ra = parseInt(document.getElementById('st-ra-' + teamId).value) || 0;
-  const pct = (w + l) > 0 ? parseFloat((w / (w + l)).toFixed(3)) : 0;
+  const pct = (w + l + ties) > 0 ? parseFloat(((w + ties * 0.5) / (w + l + ties)).toFixed(3)) : 0;
   try {
-    await updateDoc(doc(db, 'teams', teamId), { w, l, pct, rs, ra });
-    const t = TEAMS.find(x => x.id === teamId);
-    if (t) { t.w = w; t.l = l; t.pct = pct; t.rs = rs; t.ra = ra; }
+    await updateDoc(doc(db, 'teams', teamId), { w, l, t: ties, pct, rs, ra });
+    const tm = TEAMS.find(x => x.id === teamId);
+    if (tm) { tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra; }
     toast('Saved standings for ' + getTeamName(teamId));
-    await logActivity('Standings', `Updated ${getTeamFull(teamId)}: ${w}-${l}`);
+    await logActivity('Standings', `Updated ${getTeamFull(teamId)}: ${w}-${l}-${ties}`);
   } catch(e) {
     toast('Failed: ' + e.message, 'error');
   }
@@ -2940,7 +2935,7 @@ window.emailAllPlayers = function() {
 // FINANCIALS
 // ═══════════════════════════════════════════════════════════════════
 let PAYMENTS = [];
-const DUES_PER_TEAM = 500; // default season dues — adjust as needed
+const DUES_PER_TEAM = 0; // season dues
 
 async function loadFinancials() {
   try {
@@ -3064,63 +3059,35 @@ async function loadRegistrations() {
   const el = document.getElementById('registrations-content');
   if (!el) return;
   try {
-    const snap = await getDocs(query(collection(db, 'registrations'), orderBy('submitted_at', 'desc')));
+    const snap = await getDocs(query(collection(db, 'player_signups'), orderBy('signed_up_at', 'desc')));
     const regs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (!regs.length) {
-      el.innerHTML = '<div class="empty">No registrations yet. They will appear here once someone submits the form at <strong>registration.html</strong>.</div>';
+      el.innerHTML = '<div class="empty">No signups yet. They will appear here once someone submits the form at <strong>registration.html</strong>.</div>';
       return;
     }
-    const counts = { pending: regs.filter(r=>r.status==='pending').length, approved: regs.filter(r=>r.status==='approved').length, team: regs.filter(r=>r.type==='team').length, freeagent: regs.filter(r=>r.type==='freeagent').length };
     el.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin-bottom:24px">
-        ${[['Pending',counts.pending,'#d97706'],['Approved',counts.approved,'#16a34a'],['Teams',counts.team,'#002D72'],['Free Agents',counts.freeagent,'#7c3aed']].map(([l,v,c])=>`
-        <div style="background:#fff;border:1px solid var(--border2);border-radius:10px;padding:14px;text-align:center">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;color:${c}">${v}</div>
-          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);margin-top:2px">${l}</div>
-        </div>`).join('')}
-      </div>
+      <div style="margin-bottom:8px;font-size:13px;color:var(--muted)">${regs.length} player signup${regs.length!==1?'s':''}</div>
       <div class="tbl-wrap"><table class="tbl">
-        <thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Email</th><th>Team</th><th>Status</th><th>Notes</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Date</th><th>Name</th><th>Team</th><th>Email</th><th>Phone</th><th>Notifications</th></tr></thead>
         <tbody>${regs.map(r => {
-          const date = r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '—';
-          const statusColor = r.status==='approved'?'var(--green)':r.status==='rejected'?'var(--red)':'var(--amber)';
+          const ts = r.signed_up_at;
+          const date = ts ? (ts.toDate ? ts.toDate().toLocaleDateString() : new Date(ts).toLocaleDateString()) : '—';
+          const notifs = r.notifications ? Object.entries(r.notifications).filter(([,v])=>v).map(([k])=>k.replace('_',' ')).join(', ') || 'none' : '—';
           return `<tr>
-            <td style="font-size:12px;color:var(--muted2)">${date}</td>
-            <td><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:${r.type==='team'?'#002D72':'#7c3aed'}">${r.type==='team'?'Team':'Free Agent'}</span></td>
+            <td style="font-size:12px;color:var(--muted2);white-space:nowrap">${date}</td>
             <td><strong>${esc(r.name||'—')}</strong></td>
-            <td><a href="mailto:${esc(r.email||'')}" style="color:var(--blue);font-size:12px">${esc(r.email||'—')}</a></td>
             <td style="font-size:13px">${esc(r.team_name||'—')}</td>
-            <td><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:${statusColor}">${r.status||'pending'}</span></td>
-            <td style="font-size:12px;color:var(--muted2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.notes||'—')}</td>
-            <td class="actions">
-              ${r.status!=='approved'?`<button class="btn btn-success btn-sm" onclick="approveRegistration('${r.id}')">Approve</button>`:''}
-              ${r.status!=='rejected'?`<button class="btn btn-outline btn-sm" onclick="rejectRegistration('${r.id}')">Reject</button>`:''}
-            </td>
+            <td><a href="mailto:${esc(r.email||'')}" style="color:var(--blue);font-size:12px">${esc(r.email||'—')}</a></td>
+            <td style="font-size:12px">${esc(r.phone||'—')}</td>
+            <td style="font-size:11px;color:var(--muted2)">${esc(notifs)}</td>
           </tr>`;
         }).join('')}
         </tbody>
       </table></div>`;
   } catch(e) {
-    el.innerHTML = `<div class="empty">Could not load registrations: ${e.message}</div>`;
+    el.innerHTML = `<div class="empty">Could not load signups: ${e.message}</div>`;
   }
 }
-
-window.approveRegistration = async function(id) {
-  try {
-    await updateDoc(doc(db,'registrations',id),{status:'approved'});
-    toast('Registration approved!');
-    loadRegistrations();
-  } catch(e) { toast('Failed: '+e.message,'error'); }
-};
-
-window.rejectRegistration = async function(id) {
-  if (!confirm('Mark this registration as rejected?')) return;
-  try {
-    await updateDoc(doc(db,'registrations',id),{status:'rejected'});
-    toast('Registration rejected');
-    loadRegistrations();
-  } catch(e) { toast('Failed: '+e.message,'error'); }
-};
 
 window.deletePayment = async function(paymentId) {
   if (!confirm('Delete this payment record?')) return;

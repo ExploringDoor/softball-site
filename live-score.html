@@ -291,6 +291,40 @@ body{display:flex;flex-direction:column}
 .pitch-btn{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.06em;text-transform:uppercase;background:rgba(255,215,0,.18);color:#FFD700;border:1.5px solid rgba(255,215,0,.35);border-radius:8px;padding:6px 14px;cursor:pointer;-webkit-tap-highlight-color:transparent;flex-shrink:0}
 .pitch-btn:active{background:rgba(255,215,0,.35)}
 
+/* ═══ FIELD + BATTER SIDE BY SIDE ═══ */
+.field-batter-row{display:flex;align-items:center;width:100%;gap:10px;margin-bottom:4px}
+.field-svg{flex:0 0 auto;width:52%;max-width:260px;height:auto;display:block}
+.batter-panel{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.batter-at-label{font-size:10px;color:rgba(255,255,255,.5);font-weight:600;letter-spacing:.06em;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.batter-name-big{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:38px;color:#fff;letter-spacing:.02em;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.batter-stats-line{font-size:11px;color:rgba(255,255,255,.55);line-height:1.3}
+.ondeck-mini{display:flex;flex-direction:column;margin-top:2px}
+.ondeck-mini-label{font-size:9px;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em}
+.ondeck-mini-name{font-size:11px;color:rgba(255,255,255,.55);font-weight:600}
+.count-pills-only{display:flex;align-items:center;gap:6px}
+
+/* Mound pulse ring */
+@keyframes moundPulse{0%,100%{opacity:0.25}50%{opacity:0.85}}
+#pitch-mound-ring{animation:moundPulse 2s ease-in-out infinite}
+
+/* ═══ HIT LOCATION MODAL ═══ */
+.hitloc-grid{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+.hitloc-row{display:flex;justify-content:center;gap:7px}
+.hitloc-btn{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.06em;border:none;border-radius:10px;padding:13px 0;cursor:pointer;transition:all .1s;min-width:56px;flex:1;max-width:80px;-webkit-tap-highlight-color:transparent}
+.hitloc-btn:active{transform:scale(.91)}
+.hitloc-of{background:#1e6e1e;color:#b7f7b0}
+.hitloc-if{background:#7d4818;color:#ffd59e}
+.hitloc-p{background:#9a6420;color:#fff0c0}
+.hitloc-c{background:#4b5563;color:#e5e7eb}
+.out-type-btn{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.04em;background:#f3f4f6;color:#374151;border:1.5px solid #d1d5db;border-radius:8px;padding:8px 12px;cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.out-type-btn:hover{background:#e5e7eb}
+.out-type-btn.selected{background:#002D72;color:#fff;border-color:#002D72}
+
+/* ═══ LOG ENTRY CLICKABLE ═══ */
+.log-entry{cursor:pointer;border-radius:6px;padding-left:6px;padding-right:6px;margin:0 -6px;transition:background .12s}
+.log-entry:hover{background:rgba(0,45,114,.06)}
+.log-hitloc{font-size:10px;color:var(--muted);font-weight:600;background:#f3f4f6;border-radius:4px;padding:1px 5px;margin-left:auto;white-space:nowrap}
+
 /* ═══ GAME TABS ═══ */
 .game-tab-bar{display:flex;border-bottom:2px solid var(--border);flex-shrink:0;background:#fff}
 .game-tab{flex:1;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;border:none;background:none;padding:10px 6px;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s}
@@ -321,7 +355,19 @@ body{display:flex;flex-direction:column}
       <div class="pick-title">⚡ DVSL Live Scorer</div>
       <div class="pick-sub">Select a game to score</div>
     </div>
-    <a href="admin.html" class="admin-link">← Admin</a>
+    <a href="#" class="admin-link" id="back-link">← Admin</a>
+    <script>
+      (function(){
+        const p = new URLSearchParams(location.search);
+        const el = document.getElementById('back-link');
+        if (p.get('from') === 'captain') {
+          el.textContent = '← Captain Dashboard';
+          el.href = 'captain.html';
+        } else {
+          el.href = 'admin.html';
+        }
+      })();
+    </script>
   </div>
   <div class="pick-body" id="pick-body">
     <div class="loading-pick"><div class="spinner dark"></div> Loading games...</div>
@@ -412,132 +458,107 @@ body{display:flex;flex-direction:column}
       <div class="out-dot" id="out-2"></div>
     </div>
 
-    <!-- Field SVG — improved realistic design -->
-    <svg class="field-svg" viewBox="0 0 220 178" xmlns="http://www.w3.org/2000/svg" overflow="visible">
-      <defs>
-        <filter id="base-glow-f" x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-          <feColorMatrix in="coloredBlur" type="matrix"
-            values="1 0.8 0 0 0  0.8 0.6 0 0 0  0 0 0 0 0  0 0 0 1.2 0" result="goldBlur"/>
-          <feMerge><feMergeNode in="goldBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <radialGradient id="grass-grad" cx="50%" cy="90%" r="75%">
-          <stop offset="0%" stop-color="#2d8a2d"/>
-          <stop offset="55%" stop-color="#1e6e1e"/>
-          <stop offset="100%" stop-color="#145014"/>
-        </radialGradient>
-        <radialGradient id="mound-grad" cx="50%" cy="40%" r="60%">
-          <stop offset="0%" stop-color="#9a6420"/>
-          <stop offset="100%" stop-color="#7d4818"/>
-        </radialGradient>
-        <pattern id="grass-stripes" x="0" y="0" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <rect width="12" height="12" fill="transparent"/>
-          <rect width="6" height="12" fill="rgba(255,255,255,0.03)"/>
-        </pattern>
-        <clipPath id="field-bounds">
-          <rect width="220" height="178" rx="10"/>
-        </clipPath>
-      </defs>
-      <!-- Clipped group: all field graphics stay within SVG bounds -->
-      <g clip-path="url(#field-bounds)">
-        <!-- Background (dark navy) -->
-        <rect width="220" height="178" rx="10" fill="#001129"/>
-        <!-- Warning track (brownish clay ring) -->
-        <circle cx="110" cy="170" r="155" fill="#7a5020"/>
-        <!-- Outfield grass with gradient -->
-        <circle cx="110" cy="170" r="143" fill="url(#grass-grad)"/>
-        <!-- Grass stripe overlay -->
-        <circle cx="110" cy="170" r="143" fill="url(#grass-stripes)"/>
-        <!-- Infield clay diamond -->
-        <polygon points="110,36 173,99 110,162 47,99" fill="#7d4818"/>
-        <!-- Subtle base path dirt lines -->
-        <line x1="110" y1="162" x2="173" y2="99" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
-        <line x1="173" y1="99" x2="110" y2="36" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
-        <line x1="110" y1="36" x2="47" y2="99" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
-        <line x1="47" y1="99" x2="110" y2="162" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
-        <!-- Foul lines -->
-        <line x1="110" y1="162" x2="208" y2="64" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
-        <line x1="110" y1="162" x2="12" y2="64" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
-        <!-- Baselines (thicker white) -->
-        <line x1="110" y1="162" x2="173" y2="99" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
-        <line x1="173" y1="99" x2="110" y2="36" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
-        <line x1="110" y1="36" x2="47" y2="99" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
-        <line x1="47" y1="99" x2="110" y2="162" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
-        <!-- Pitcher's mound (raised look with ring) -->
-        <circle cx="110" cy="99" r="13" fill="rgba(0,0,0,0.15)"/>
-        <circle cx="110" cy="99" r="12" fill="url(#mound-grad)"/>
-        <circle cx="110" cy="99" r="12" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
-        <!-- Pitcher's rubber -->
-        <rect x="103" y="97" width="14" height="4" rx="1" fill="rgba(255,255,255,0.55)"/>
-        <!-- Home plate (pentagon) -->
-        <polygon points="110,154 118,161 118,170 102,170 102,161" fill="white"/>
-        <!-- Base bags (rotated 45°, tappable when occupied) -->
-        <rect id="base-first" class="svg-base" x="164" y="90" width="18" height="18" rx="2"
-              transform="rotate(45 173 99)" fill="rgba(255,255,255,0.55)" onclick="tapBase('first')" style="cursor:pointer"/>
-        <rect id="base-second" class="svg-base" x="101" y="27" width="18" height="18" rx="2"
-              transform="rotate(45 110 36)" fill="rgba(255,255,255,0.55)" onclick="tapBase('second')" style="cursor:pointer"/>
-        <rect id="base-third" class="svg-base" x="38" y="90" width="18" height="18" rx="2"
-              transform="rotate(45 47 99)" fill="rgba(255,255,255,0.55)" onclick="tapBase('third')" style="cursor:pointer"/>
-        <!-- Infield position labels (subtle) -->
-        <text x="110" y="87" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
-              font-family="Inter,sans-serif" font-weight="600">P</text>
-        <text x="110" y="145" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
-              font-family="Inter,sans-serif" font-weight="600">C</text>
-        <text x="191" y="97" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
-              font-family="Inter,sans-serif" font-weight="600">1B</text>
-        <text x="152" y="66" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
-              font-family="Inter,sans-serif" font-weight="600">2B</text>
-        <text x="68" y="66" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
-              font-family="Inter,sans-serif" font-weight="600">SS</text>
-        <text x="29" y="97" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7"
-              font-family="Inter,sans-serif" font-weight="600">3B</text>
-        <!-- Outfield position labels -->
-        <text x="110" y="14" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="8"
-              font-family="Inter,sans-serif" font-weight="600" letter-spacing="1">CF</text>
-        <text x="194" y="52" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="8"
-              font-family="Inter,sans-serif" font-weight="600" letter-spacing="1">RF</text>
-        <text x="26" y="52" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="8"
-              font-family="Inter,sans-serif" font-weight="600" letter-spacing="1">LF</text>
-      </g>
-      <!-- Runner name labels (outside clip — can overflow SVG bounds) -->
-      <text id="runner-label-1b" x="188" y="102" fill="#FFD700" font-size="9" font-weight="700"
-            font-family="Inter,sans-serif" text-anchor="start" letter-spacing="0.3"></text>
-      <text id="runner-label-2b" x="110" y="20" fill="#FFD700" font-size="9" font-weight="700"
-            font-family="Inter,sans-serif" text-anchor="middle" letter-spacing="0.3"></text>
-      <text id="runner-label-3b" x="32" y="102" fill="#FFD700" font-size="9" font-weight="700"
-            font-family="Inter,sans-serif" text-anchor="end" letter-spacing="0.3"></text>
-    </svg>
+    <!-- Field + Batter side by side -->
+    <div class="field-batter-row">
+      <!-- Field SVG — improved realistic design -->
+      <svg class="field-svg" viewBox="0 0 220 178" xmlns="http://www.w3.org/2000/svg" overflow="visible">
+        <defs>
+          <filter id="base-glow-f" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+            <feColorMatrix in="coloredBlur" type="matrix"
+              values="1 0.8 0 0 0  0.8 0.6 0 0 0  0 0 0 0 0  0 0 0 1.2 0" result="goldBlur"/>
+            <feMerge><feMergeNode in="goldBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+          <radialGradient id="grass-grad" cx="50%" cy="90%" r="75%">
+            <stop offset="0%" stop-color="#2d8a2d"/>
+            <stop offset="55%" stop-color="#1e6e1e"/>
+            <stop offset="100%" stop-color="#145014"/>
+          </radialGradient>
+          <radialGradient id="mound-grad" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stop-color="#9a6420"/>
+            <stop offset="100%" stop-color="#7d4818"/>
+          </radialGradient>
+          <pattern id="grass-stripes" x="0" y="0" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="12" height="12" fill="transparent"/>
+            <rect width="6" height="12" fill="rgba(255,255,255,0.03)"/>
+          </pattern>
+          <clipPath id="field-bounds">
+            <rect width="220" height="178" rx="10"/>
+          </clipPath>
+        </defs>
+        <g clip-path="url(#field-bounds)">
+          <rect width="220" height="178" rx="10" fill="#001129"/>
+          <circle cx="110" cy="170" r="155" fill="#7a5020"/>
+          <circle cx="110" cy="170" r="143" fill="url(#grass-grad)"/>
+          <circle cx="110" cy="170" r="143" fill="url(#grass-stripes)"/>
+          <polygon points="110,36 173,99 110,162 47,99" fill="#7d4818"/>
+          <line x1="110" y1="162" x2="173" y2="99" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
+          <line x1="173" y1="99" x2="110" y2="36" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
+          <line x1="110" y1="36" x2="47" y2="99" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
+          <line x1="47" y1="99" x2="110" y2="162" stroke="rgba(180,120,60,0.35)" stroke-width="5"/>
+          <line x1="110" y1="162" x2="208" y2="64" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
+          <line x1="110" y1="162" x2="12" y2="64" stroke="rgba(255,255,255,0.25)" stroke-width="1.2"/>
+          <line x1="110" y1="162" x2="173" y2="99" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+          <line x1="173" y1="99" x2="110" y2="36" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+          <line x1="110" y1="36" x2="47" y2="99" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+          <line x1="47" y1="99" x2="110" y2="162" stroke="rgba(255,255,255,0.65)" stroke-width="2"/>
+          <!-- Pitcher's mound with pulsing ring + clickable baseball -->
+          <circle cx="110" cy="99" r="20" fill="rgba(0,0,0,0.15)"/>
+          <circle cx="110" cy="99" r="19" fill="url(#mound-grad)"/>
+          <circle id="pitch-mound-ring" cx="110" cy="99" r="19" fill="none" stroke="#FFD700" stroke-width="2"/>
+          <g onclick="openPitchModal()" style="cursor:pointer">
+            <circle cx="110" cy="99" r="13" fill="white" stroke="rgba(0,0,0,0.12)" stroke-width="0.8"/>
+            <path d="M106,95 C108,98 108,101 106,104" stroke="#dc2626" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <path d="M114,95 C112,98 112,101 114,104" stroke="#dc2626" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <circle cx="110" cy="99" r="19" fill="transparent"/>
+          </g>
+          <!-- Home plate -->
+          <polygon points="110,154 118,161 118,170 102,170 102,161" fill="white"/>
+          <!-- Bases -->
+          <rect id="base-first" class="svg-base" x="164" y="90" width="18" height="18" rx="2"
+                transform="rotate(45 173 99)" fill="rgba(255,255,255,0.55)" onclick="tapBase('first')" style="cursor:pointer"/>
+          <rect id="base-second" class="svg-base" x="101" y="27" width="18" height="18" rx="2"
+                transform="rotate(45 110 36)" fill="rgba(255,255,255,0.55)" onclick="tapBase('second')" style="cursor:pointer"/>
+          <rect id="base-third" class="svg-base" x="38" y="90" width="18" height="18" rx="2"
+                transform="rotate(45 47 99)" fill="rgba(255,255,255,0.55)" onclick="tapBase('third')" style="cursor:pointer"/>
+          <!-- Position labels -->
+          <text x="110" y="145" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7" font-family="Inter,sans-serif" font-weight="600">C</text>
+          <text x="191" y="97" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7" font-family="Inter,sans-serif" font-weight="600">1B</text>
+          <text x="152" y="66" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7" font-family="Inter,sans-serif" font-weight="600">2B</text>
+          <text x="68" y="66" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7" font-family="Inter,sans-serif" font-weight="600">SS</text>
+          <text x="29" y="97" text-anchor="middle" fill="rgba(255,255,255,0.22)" font-size="7" font-family="Inter,sans-serif" font-weight="600">3B</text>
+          <text x="110" y="14" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="8" font-family="Inter,sans-serif" font-weight="600" letter-spacing="1">CF</text>
+          <text x="194" y="52" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="8" font-family="Inter,sans-serif" font-weight="600" letter-spacing="1">RF</text>
+          <text x="26" y="52" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-size="8" font-family="Inter,sans-serif" font-weight="600" letter-spacing="1">LF</text>
+        </g>
+        <!-- Runner name labels -->
+        <text id="runner-label-1b" x="188" y="102" fill="#FFD700" font-size="9" font-weight="700" font-family="Inter,sans-serif" text-anchor="start" letter-spacing="0.3"></text>
+        <text id="runner-label-2b" x="110" y="20" fill="#FFD700" font-size="9" font-weight="700" font-family="Inter,sans-serif" text-anchor="middle" letter-spacing="0.3"></text>
+        <text id="runner-label-3b" x="32" y="102" fill="#FFD700" font-size="9" font-weight="700" font-family="Inter,sans-serif" text-anchor="end" letter-spacing="0.3"></text>
+      </svg>
 
-    <!-- Batter info -->
-    <div class="batter-info">
-      <div class="batter-left">
-        <div class="batter-label">
+      <!-- Batter panel -->
+      <div class="batter-panel">
+        <div class="batter-at-label">
           At Bat
           <button class="btn-add-player-inline" onclick="showGuestModalGame()">+ Player</button>
         </div>
-        <div class="batter-name" id="batter-name">—</div>
-        <div class="batter-line" id="batter-line">—</div>
+        <div class="batter-name-big" id="batter-name">—</div>
+        <div class="batter-stats-line" id="batter-line">—</div>
+        <div class="pitcher-row" style="margin-top:4px;padding:4px 8px;border-radius:6px">
+          <span class="pitcher-label">Pitching:</span>
+          <span class="pitcher-name-display" id="pitcher-name">—</span>
+          <button class="btn-change-pitcher" onclick="showChangePitcherModal()">Change</button>
+        </div>
+        <div class="count-pills-only">
+          <div class="count-pill">B <span class="cp-num" id="pitch-balls">0</span></div>
+          <div class="count-pill">S <span class="cp-num" id="pitch-strikes">0</span></div>
+        </div>
+        <div class="ondeck-mini">
+          <div class="ondeck-mini-label">On Deck</div>
+          <div class="ondeck-mini-name" id="ondeck-name">—</div>
+        </div>
       </div>
-      <div class="batter-right">
-        <div class="ondeck-label">On Deck</div>
-        <div class="ondeck-name" id="ondeck-name">—</div>
-      </div>
-    </div>
-
-    <!-- Pitcher row -->
-    <div class="pitcher-row">
-      <span class="pitcher-label">Pitching:</span>
-      <span class="pitcher-name-display" id="pitcher-name">—</span>
-      <button class="btn-change-pitcher" onclick="showChangePitcherModal()">Change</button>
-    </div>
-
-    <!-- Count + Pitch button -->
-    <div class="count-pitch-row">
-      <div class="count-pills">
-        <div class="count-pill">B <span class="cp-num" id="pitch-balls">0</span></div>
-        <div class="count-pill">S <span class="cp-num" id="pitch-strikes">0</span></div>
-      </div>
-      <button class="pitch-btn" onclick="openPitchModal()">⚾ PITCH</button>
     </div>
   </div>
 
@@ -552,17 +573,17 @@ body{display:flex;flex-direction:column}
     <!-- Play panel -->
     <div id="panel-play" class="tab-panel">
       <div class="action-grid">
-        <button class="act-btn act-1b" onclick="handlePlay('1B')">1B</button>
-        <button class="act-btn act-2b" onclick="handlePlay('2B')">2B</button>
-        <button class="act-btn act-3b" onclick="handlePlay('3B')">3B</button>
-        <button class="act-btn act-hr" onclick="handlePlay('HR')">HR</button>
+        <button class="act-btn act-1b" onclick="handlePlayWithLoc('1B')">1B</button>
+        <button class="act-btn act-2b" onclick="handlePlayWithLoc('2B')">2B</button>
+        <button class="act-btn act-3b" onclick="handlePlayWithLoc('3B')">3B</button>
+        <button class="act-btn act-hr" onclick="handlePlayWithLoc('HR')">HR</button>
         <button class="act-btn act-bb" onclick="handlePlay('BB')">BB</button>
         <button class="act-btn act-hbp" onclick="handlePlay('HBP')">HBP</button>
         <button class="act-btn act-k" onclick="handlePlay('K')">K<span class="btn-sub">strikeout</span></button>
-        <button class="act-btn act-out" onclick="handlePlay('OUT')">OUT<span class="btn-sub">go/fo</span></button>
-        <button class="act-btn act-e" onclick="handlePlay('E')">E<span class="btn-sub">error</span></button>
-        <button class="act-btn act-fc" onclick="handlePlay('FC')">FC<span class="btn-sub">f.choice</span></button>
-        <button class="act-btn act-sac" onclick="handlePlay('SAC')">SAC<span class="btn-sub">fly/bunt</span></button>
+        <button class="act-btn act-out" onclick="handlePlayWithLoc('OUT')">OUT<span class="btn-sub">go/fo</span></button>
+        <button class="act-btn act-e" onclick="handlePlayWithLoc('E')">E<span class="btn-sub">error</span></button>
+        <button class="act-btn act-fc" onclick="handlePlayWithLoc('FC')">FC<span class="btn-sub">f.choice</span></button>
+        <button class="act-btn act-sac" onclick="handlePlayWithLoc('SAC')">SAC<span class="btn-sub">fly/bunt</span></button>
         <button class="act-btn act-undo" onclick="handleUndo()">↩<span class="btn-sub">undo</span></button>
         <button class="act-btn act-log" onclick="showLogModal()" style="grid-column:span 4">📋 Play Log</button>
       </div>
@@ -753,6 +774,87 @@ body{display:flex;flex-direction:column}
   </div>
 </div>
 
+<!-- ═══ HIT LOCATION MODAL ═══ -->
+<div class="modal-overlay" id="modal-hitloc">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-body">
+      <div class="modal-title" id="hitloc-title">WHERE WAS IT HIT?</div>
+      <div class="modal-subtitle" id="hitloc-sub">Tap the zone where the ball was fielded</div>
+      <!-- Out type picker — shown only for OUT plays -->
+      <div id="out-type-section" style="display:none;margin-bottom:14px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Type of Out</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <button class="out-type-btn" data-type="GO" onclick="selectOutType('GO')">🔄 Ground Out</button>
+          <button class="out-type-btn" data-type="FO" onclick="selectOutType('FO')">🌬️ Fly Out</button>
+          <button class="out-type-btn" data-type="LO" onclick="selectOutType('LO')">📏 Line Out</button>
+          <button class="out-type-btn" data-type="PO" onclick="selectOutType('PO')">🎈 Pop Out</button>
+          <button class="out-type-btn" data-type="DP" onclick="selectOutType('DP')">🔁 Double Play</button>
+        </div>
+      </div>
+      <div class="hitloc-grid">
+        <div class="hitloc-row">
+          <button class="hitloc-btn hitloc-of" onclick="selectHitLoc('LF')">LF</button>
+          <button class="hitloc-btn hitloc-of" onclick="selectHitLoc('CF')">CF</button>
+          <button class="hitloc-btn hitloc-of" onclick="selectHitLoc('RF')">RF</button>
+        </div>
+        <div class="hitloc-row">
+          <button class="hitloc-btn hitloc-if" onclick="selectHitLoc('3B')">3B</button>
+          <button class="hitloc-btn hitloc-if" onclick="selectHitLoc('SS')">SS</button>
+          <button class="hitloc-btn hitloc-p" onclick="selectHitLoc('P')">P</button>
+          <button class="hitloc-btn hitloc-if" onclick="selectHitLoc('2B')">2B</button>
+          <button class="hitloc-btn hitloc-if" onclick="selectHitLoc('1B')">1B</button>
+        </div>
+        <div class="hitloc-row">
+          <button class="hitloc-btn hitloc-c" onclick="selectHitLoc('C')">C</button>
+        </div>
+      </div>
+      <button class="btn-continue" style="margin-top:8px" onclick="selectHitLoc(null)">Skip</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ EDIT PLAY MODAL ═══ -->
+<div class="modal-overlay" id="modal-editplay">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-body">
+      <div class="modal-title">Edit Play</div>
+      <div class="modal-subtitle" id="edit-play-batter-label" style="font-weight:700;color:var(--navy)">—</div>
+      <input type="hidden" id="edit-play-idx">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 6px">Outcome</div>
+      <select class="modal-input" id="edit-play-outcome">
+        <option value="1B">Single (1B)</option>
+        <option value="2B">Double (2B)</option>
+        <option value="3B">Triple (3B)</option>
+        <option value="HR">Home Run (HR)</option>
+        <option value="BB">Walk (BB)</option>
+        <option value="HBP">Hit By Pitch (HBP)</option>
+        <option value="K">Strikeout (K)</option>
+        <option value="OUT">Out</option>
+        <option value="E">Error (E)</option>
+        <option value="FC">Fielder's Choice (FC)</option>
+        <option value="SAC">Sac Fly/Bunt (SAC)</option>
+      </select>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:8px 0 6px">Hit Location</div>
+      <select class="modal-input" id="edit-play-hitloc">
+        <option value="">—</option>
+        <option value="LF">LF (Left Field)</option>
+        <option value="CF">CF (Center Field)</option>
+        <option value="RF">RF (Right Field)</option>
+        <option value="3B">3B (Third Base)</option>
+        <option value="SS">SS (Shortstop)</option>
+        <option value="P">P (Pitcher)</option>
+        <option value="2B">2B (Second Base)</option>
+        <option value="1B">1B (First Base)</option>
+        <option value="C">C (Catcher)</option>
+      </select>
+      <button class="modal-confirm" onclick="confirmEditPlay()">Save Changes</button>
+      <button class="btn-continue" onclick="closeModal('modal-editplay')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══ TOAST CONTAINER ═══ -->
 <div class="toast-wrap" id="toast-wrap"></div>
 
@@ -825,6 +927,11 @@ const STATE = {
 // Pending play (waiting for runner resolution)
 // { outcome, batter, batterIdx, runnerOutcomes: {first,second,third}, batterOutcome }
 let PENDING_PLAY = null;
+
+// Hit location state
+let HIT_LOC_PENDING_OUTCOME = null;
+let PENDING_HIT_LOCATION = null;
+let PENDING_OUT_TYPE = null;
 
 // ═══════════════════════════════════════════════════════════════════
 // HELPERS
@@ -1035,11 +1142,9 @@ function renderPickScreen() {
         <div class="gc-actions">
           ${resumeData && !g.done
             ? `<button class="btn-score resume" onclick="resumeGame('${g.id}')">⚡ Resume</button>`
-            : ''
-          }
-          ${canScore
-            ? `<button class="btn-score primary" onclick="pickGame(window._GAMES.find(x=>x.id==='${g.id}'))">⚡ Score Live</button>`
-            : `<button class="btn-score disabled-btn" disabled>Final</button>`
+            : canScore
+              ? `<button class="btn-score primary" onclick="pickGame(window._GAMES.find(x=>x.id==='${g.id}'))">⚡ Score Live</button>`
+              : `<button class="btn-score disabled-btn" disabled>Final</button>`
           }
         </div>
       </div>`;
@@ -1482,6 +1587,43 @@ function calculateDefaultOutcomes(bases, outcome, batter) {
 // ═══════════════════════════════════════════════════════════════════
 // HANDLE PLAY
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// HIT LOCATION PICKER
+// ═══════════════════════════════════════════════════════════════════
+window.handlePlayWithLoc = function(outcome) {
+  HIT_LOC_PENDING_OUTCOME = outcome;
+  PENDING_HIT_LOCATION = null;
+  PENDING_OUT_TYPE = null;
+  const labels = {'1B':'SINGLE','2B':'DOUBLE','3B':'TRIPLE','HR':'HOME RUN','OUT':'OUT','E':'ERROR','FC':"FIELDER'S CHOICE",'SAC':'SAC FLY/BUNT'};
+  document.getElementById('hitloc-title').textContent = (labels[outcome] || outcome) + ' — WHERE HIT?';
+  // Show/hide out-type section
+  const outSec = document.getElementById('out-type-section');
+  const hitlocSub = document.getElementById('hitloc-sub');
+  if (outcome === 'OUT') {
+    outSec.style.display = 'block';
+    hitlocSub.textContent = 'Pick the out type, then tap where it was fielded';
+    // Reset out-type button highlights
+    document.querySelectorAll('.out-type-btn').forEach(b => b.classList.remove('selected'));
+  } else {
+    outSec.style.display = 'none';
+    hitlocSub.textContent = 'Tap the zone where the ball was fielded';
+  }
+  openModal('modal-hitloc');
+};
+
+window.selectOutType = function(type) {
+  PENDING_OUT_TYPE = type;
+  document.querySelectorAll('.out-type-btn').forEach(b => {
+    b.classList.toggle('selected', b.dataset.type === type);
+  });
+};
+
+window.selectHitLoc = function(pos) {
+  PENDING_HIT_LOCATION = pos;
+  closeModal('modal-hitloc');
+  handlePlay(HIT_LOC_PENDING_OUTCOME);
+};
+
 window.handlePlay = function(outcome) {
   if (STATE.status === 'final') { showToast('Game is final', 'error'); return; }
   const lineup = STATE.half === 'top' ? STATE.awayLineup : STATE.homeLineup;
@@ -1857,8 +1999,12 @@ function finishPlay(runnerOutcomes, batterOutcome) {
     runs,
     rbi: rbiCount,
     outsOnPlay,
-    description: desc
+    description: desc,
+    hitLocation: PENDING_HIT_LOCATION || null,
+    outType: PENDING_OUT_TYPE || null
   });
+  PENDING_HIT_LOCATION = null;
+  PENDING_OUT_TYPE = null;
 
   PENDING_PLAY = null;
 
@@ -1887,25 +2033,89 @@ window.showLogModal = function() {
   if (log.length === 0) {
     entries.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:13px">No plays logged yet</div>';
   } else {
-    // Show last 50 in reverse order
-    const recent = [...log].reverse().slice(0, 50);
-    entries.innerHTML = recent.map(entry => {
+    const outcomeLabels = {
+      '1B':'Single','2B':'Double','3B':'Triple','HR':'Home Run',
+      'BB':'Walk','HBP':'HBP','K':'K','OUT':'Out',
+      'E':'Error','FC':'FC','SAC':'SAC'
+    };
+    entries.innerHTML = log.map((entry, i) => {
       const halfArrow = entry.half === 'top' ? '▲' : '▼';
-      const outcomeLabels = {
-        '1B':'Single','2B':'Double','3B':'Triple','HR':'Home Run',
-        'BB':'Walk','HBP':'HBP','K':'K','OUT':'Out',
-        'E':'Error','FC':'FC','SAC':'SAC'
-      };
       const outLabel = outcomeLabels[entry.outcome] || entry.outcome;
-      return `<div class="log-entry">
+      return `<div class="log-entry" onclick="openEditPlay(${i})">
         <div class="log-inning-badge">${halfArrow}${entry.inning}</div>
-        <div class="log-play-text">${entry.batterName.toUpperCase()} — ${outLabel}</div>
+        <div class="log-play-text">${entry.batterName.toUpperCase()} — ${entry.outType ? entry.outType + ' · ' : ''}${outLabel}</div>
         ${entry.runs > 0 ? `<div class="log-run-badge">+${entry.runs}R</div>` : ''}
         ${entry.rbi > 0 ? `<div class="log-rbi-badge">+${entry.rbi} RBI</div>` : ''}
+        ${entry.hitLocation ? `<div class="log-hitloc">${entry.hitLocation}</div>` : ''}
       </div>`;
-    }).join('');
+    }).reverse().join('');
   }
   openModal('modal-log');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// EDIT PLAY
+// ═══════════════════════════════════════════════════════════════════
+window.openEditPlay = function(logIdx) {
+  const entry = STATE.playLog[logIdx];
+  if (!entry) return;
+  const outcomeLabels = {
+    '1B':'Single','2B':'Double','3B':'Triple','HR':'Home Run',
+    'BB':'Walk','HBP':'HBP','K':'Strikeout','OUT':'Out',
+    'E':'Error','FC':"Fielder's Choice",'SAC':'SAC'
+  };
+  document.getElementById('edit-play-idx').value = logIdx;
+  document.getElementById('edit-play-batter-label').textContent =
+    entry.batterName.toUpperCase() + ' — ' + (outcomeLabels[entry.outcome] || entry.outcome);
+  document.getElementById('edit-play-outcome').value = entry.outcome;
+  document.getElementById('edit-play-hitloc').value = entry.hitLocation || '';
+  openModal('modal-editplay');
+};
+
+window.confirmEditPlay = function() {
+  const idx = parseInt(document.getElementById('edit-play-idx').value);
+  const entry = STATE.playLog[idx];
+  if (!entry) { closeModal('modal-editplay'); return; }
+  const newOutcome = document.getElementById('edit-play-outcome').value;
+  const newHitLoc = document.getElementById('edit-play-hitloc').value || null;
+  const oldOutcome = entry.outcome;
+
+  // Update log entry
+  entry.hitLocation = newHitLoc;
+
+  if (oldOutcome !== newOutcome) {
+    entry.outcome = newOutcome;
+    // Find batter in the correct lineup
+    const lineup = entry.half === 'top' ? STATE.awayLineup : STATE.homeLineup;
+    const batter = lineup.find(p => p.name === entry.batterName);
+    if (batter) {
+      // Remove old contribution
+      if (!['BB','HBP','SAC'].includes(oldOutcome) && ['BB','HBP','SAC'].includes(newOutcome)) batter.ab = Math.max(0, batter.ab - 1);
+      if (['BB','HBP','SAC'].includes(oldOutcome) && !['BB','HBP','SAC'].includes(newOutcome)) batter.ab++;
+      if (oldOutcome === '1B') batter.s = Math.max(0, batter.s - 1);
+      if (oldOutcome === '2B') batter.d = Math.max(0, batter.d - 1);
+      if (oldOutcome === '3B') batter.t = Math.max(0, batter.t - 1);
+      if (oldOutcome === 'HR') batter.hr = Math.max(0, batter.hr - 1);
+      if (oldOutcome === 'BB') batter.bb = Math.max(0, batter.bb - 1);
+      if (oldOutcome === 'HBP') batter.hbp = Math.max(0, batter.hbp - 1);
+      if (oldOutcome === 'K') batter.so = Math.max(0, batter.so - 1);
+      // Add new contribution
+      if (newOutcome === '1B') batter.s++;
+      if (newOutcome === '2B') batter.d++;
+      if (newOutcome === '3B') batter.t++;
+      if (newOutcome === 'HR') batter.hr++;
+      if (newOutcome === 'BB') batter.bb++;
+      if (newOutcome === 'HBP') batter.hbp++;
+      if (newOutcome === 'K') batter.so++;
+    }
+  }
+
+  closeModal('modal-editplay');
+  showToast('Play updated');
+  renderGameScreen();
+  saveToLocalStorage();
+  // Refresh log
+  showLogModal();
 };
 
 // ═══════════════════════════════════════════════════════════════════
