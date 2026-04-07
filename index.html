@@ -3967,14 +3967,13 @@ function openModal(playerId){
   document.body.style.overflow='hidden';
 }
 function closeModal(e){
-  if(e&&e.target!==document.getElementById('modal-bg'))return;
+  if(e&&e.target.closest('.modal-box'))return;
   document.getElementById('modal-bg').classList.remove('open');
   document.body.style.overflow='';
+  history.replaceState(null,'',window.location.pathname+window.location.search);
 }
-document.querySelector('.modal-close').addEventListener('click',()=>{
-  document.getElementById('modal-bg').classList.remove('open');
-  document.body.style.overflow='';
-});
+document.querySelector('.modal-close').addEventListener('click',()=>closeModal());
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
 // ════════════════════════════ RECAPS ═════════════════════════════════════
 function buildRecaps(){
