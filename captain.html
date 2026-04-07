@@ -151,6 +151,42 @@ select.form-input{cursor:pointer}
 ::-webkit-scrollbar{width:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
+
+/* ── TAB UNREAD BADGE ── */
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:0 5px;margin-left:5px;vertical-align:middle;line-height:1}
+.tab-badge[hidden]{display:none!important}
+
+/* ── CHAT ── */
+.chat-wrap{display:flex;flex-direction:column;height:460px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.chat-msg{max-width:78%;display:flex;flex-direction:column;gap:3px}
+.chat-msg.mine{align-self:flex-end;align-items:flex-end}
+.chat-msg.theirs{align-self:flex-start;align-items:flex-start}
+.chat-bubble{padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.5;word-break:break-word}
+.chat-msg.mine .chat-bubble{background:var(--navy);color:#fff;border-bottom-right-radius:4px}
+.chat-msg.theirs .chat-bubble{background:rgba(0,0,0,.07);color:var(--text);border-bottom-left-radius:4px}
+.chat-meta{font-size:11px;color:var(--muted2);padding:0 4px}
+.chat-input-row{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:#fafafa}
+.chat-input{flex:1;padding:10px 16px;font-size:14px;font-family:'Inter',sans-serif;border:1px solid var(--border);border-radius:22px;outline:none;transition:border-color .2s;background:#fff}
+.chat-input:focus{border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-light)}
+.chat-day-sep{text-align:center;font-size:11px;color:var(--muted2);margin:4px 0;position:relative}
+.chat-day-sep::before,.chat-day-sep::after{content:'';position:absolute;top:50%;width:30%;height:1px;background:var(--border)}
+.chat-day-sep::before{left:0}.chat-day-sep::after{right:0}
+
+/* ── PAYMENTS ── */
+.pay-status{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;user-select:none}
+.pay-check{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.pay-check.paid{background:var(--green);border-color:var(--green);color:#fff}
+.pay-check.paid::after{content:'✓';font-size:11px;font-weight:700}
+.pay-summary{display:flex;gap:20px;font-size:13px;padding:14px 16px;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)}
+.pay-summary strong{font-weight:700}
+.pay-note-input{font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;color:var(--text);background:#fff;width:100%;max-width:200px}
+.pay-note-input:focus{outline:none;border-color:var(--navy)}
+
+@media(max-width:600px){
+  .chat-wrap{height:400px}
+  .chat-msg{max-width:90%}
+}
 </style>
 </head>
 <body>
@@ -204,6 +240,10 @@ select.form-input{cursor:pointer}
     <div class="tab-item" data-tab="roster" onclick="showTab('roster')">Roster</div>
     <div class="tab-item" data-tab="schedule" onclick="showTab('schedule')">Schedule</div>
     <div class="tab-item" data-tab="scores" onclick="showTab('scores')">Submit Score</div>
+    <div class="tab-item" data-tab="payments" onclick="showTab('payments')">Payments</div>
+    <div class="tab-item" data-tab="attendance" onclick="showTab('attendance')">Attendance</div>
+    <div class="tab-item" data-tab="teamchat" onclick="showTab('teamchat')">Team Chat <span class="tab-badge" id="badge-teamchat" hidden></span></div>
+    <div class="tab-item" data-tab="captchat" onclick="showTab('captchat')">Captains Chat <span class="tab-badge" id="badge-captchat" hidden></span></div>
     <div class="tab-item" data-tab="announcements" onclick="showTab('announcements')">Announcements</div>
   </div>
 
@@ -263,6 +303,52 @@ select.form-input{cursor:pointer}
       </div>
     </div>
 
+    <!-- PAYMENTS -->
+    <div class="section" id="sec-payments">
+      <div class="section-title">Payments</div>
+      <div class="section-sub">Track which players have paid their season fees</div>
+      <div id="payments-content">
+        <div class="loading"><div class="spinner"></div> Loading...</div>
+      </div>
+    </div>
+
+    <!-- ATTENDANCE -->
+    <div class="section" id="sec-attendance">
+      <div class="section-title">Attendance</div>
+      <div class="section-sub">Games played per player based on submitted box scores</div>
+      <div id="attendance-content">
+        <div class="loading"><div class="spinner"></div> Loading...</div>
+      </div>
+    </div>
+
+    <!-- TEAM CHAT -->
+    <div class="section" id="sec-teamchat">
+      <div class="section-title">Team Chat</div>
+      <div class="section-sub">Send messages to your team. Players with an email on file will be notified.</div>
+      <div class="chat-wrap">
+        <div class="chat-messages" id="teamchat-messages"><div class="empty">No messages yet.</div></div>
+        <div class="chat-input-row">
+          <input class="chat-input" id="teamchat-input" placeholder="Message your team..." maxlength="500"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.sendTeamMsg()}">
+          <button class="btn btn-primary btn-sm" onclick="window.sendTeamMsg()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAPTAINS CHAT -->
+    <div class="section" id="sec-captchat">
+      <div class="section-title">Captains Chat</div>
+      <div class="section-sub">Private group chat — only team captains can read and post here</div>
+      <div class="chat-wrap">
+        <div class="chat-messages" id="captchat-messages"><div class="empty">No messages yet.</div></div>
+        <div class="chat-input-row">
+          <input class="chat-input" id="captchat-input" placeholder="Message all captains..." maxlength="500"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.sendCaptMsg()}">
+          <button class="btn btn-primary btn-sm" onclick="window.sendCaptMsg()">Send</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ANNOUNCEMENTS -->
     <div class="section" id="sec-announcements">
       <div class="section-title">Announcements</div>
@@ -278,12 +364,15 @@ select.form-input{cursor:pointer}
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
+<!-- EmailJS — handles email notifications for chat messages -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
 <script type="module">
 // ═══════════════════════════════════════════════════════════════════
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
@@ -300,6 +389,21 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // ═══════════════════════════════════════════════════════════════════
+// EMAILJS CONFIG — fill these in after setting up emailjs.com
+// Free plan: 200 emails/month, no backend needed.
+// Setup: https://emailjs.com → Add Service (Gmail/Outlook) → Add Templates
+//
+// Template "template_captain_chat" variables: {{from_team}}, {{from_email}}, {{message}}, {{portal_url}}
+// Template "template_team_chat" variables: {{team_name}}, {{captain_email}}, {{message}}, {{portal_url}}
+// ═══════════════════════════════════════════════════════════════════
+const EMAILJS_PUBLIC_KEY    = 'YOUR_EMAILJS_PUBLIC_KEY';
+const EMAILJS_SERVICE_ID    = 'YOUR_EMAILJS_SERVICE_ID';
+const EMAILJS_CAPT_TEMPLATE = 'template_captain_chat';
+const EMAILJS_TEAM_TEMPLATE = 'template_team_chat';
+const EMAILJS_ENABLED = EMAILJS_PUBLIC_KEY !== 'YOUR_EMAILJS_PUBLIC_KEY';
+if (EMAILJS_ENABLED) window.emailjs?.init(EMAILJS_PUBLIC_KEY);
+
+// ═══════════════════════════════════════════════════════════════════
 // GLOBAL STATE
 // ═══════════════════════════════════════════════════════════════════
 let currentUser = null;
@@ -309,6 +413,10 @@ let ALL_TEAMS = [];
 let MY_GAMES = [];
 let MY_PLAYERS = [];
 let MY_SUBMISSIONS = [];
+let ALL_CAPTAINS = [];
+let PAYMENT_DATA = {};   // keyed by player_id
+let _unsubTeamChat = null;
+let _unsubCaptChat = null;
 
 // ═══════════════════════════════════════════════════════════════════
 // UTILITIES
@@ -437,6 +545,25 @@ window.showTab = function(name) {
   document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
   document.getElementById('sec-' + name)?.classList.add('active');
   document.querySelector(`.tab-item[data-tab="${name}"]`)?.classList.add('active');
+  // Clear unread badge and mark as read
+  if (name === 'teamchat') {
+    localStorage.setItem('lastRead_teamchat_' + (currentUser?.email||''), Date.now());
+    const b = document.getElementById('badge-teamchat'); if (b) b.hidden = true;
+    setTimeout(() => {
+      const msgs = document.getElementById('teamchat-messages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }, 50);
+  }
+  if (name === 'captchat') {
+    localStorage.setItem('lastRead_captchat_' + (currentUser?.email||''), Date.now());
+    const b = document.getElementById('badge-captchat'); if (b) b.hidden = true;
+    setTimeout(() => {
+      const msgs = document.getElementById('captchat-messages');
+      if (msgs) msgs.scrollTop = msgs.scrollHeight;
+    }, 50);
+  }
+  if (name === 'attendance') renderAttendance();
+  if (name === 'payments') renderPayments();
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -450,12 +577,14 @@ async function fbFetch(coll, orderField) {
 
 async function loadAllData() {
   try {
-    const [teams, games, players, submissions, announcements] = await Promise.all([
+    const [teams, games, players, submissions, announcements, captains, payments] = await Promise.all([
       fbFetch('teams', 'name'),
       fbFetch('games', 'wk'),
       fbFetch('players').catch(() => []),
       fbFetch('score_submissions').catch(() => []),
-      fbFetch('announcements').catch(() => [])
+      fbFetch('announcements').catch(() => []),
+      fbFetch('captains').catch(() => []),
+      fbFetch('payments').catch(() => []),
     ]);
 
     ALL_TEAMS = teams.filter(t => t.active !== false).sort((a,b) => (b.pct||0) - (a.pct||0));
@@ -487,12 +616,22 @@ async function loadAllData() {
     document.getElementById('top-team-label').textContent = MY_TEAM?.name || captainData.team_name || 'My Team';
     document.getElementById('welcome-team').textContent = `Welcome, ${MY_TEAM?.name || captainData.team_name || 'Captain'}`;
 
+    // Store captains list (for captain chat email targets)
+    ALL_CAPTAINS = captains;
+
+    // Index payments by player_id
+    PAYMENT_DATA = {};
+    payments.filter(p => p.team_id === captainData.team_id).forEach(p => {
+      PAYMENT_DATA[p.player_id] = p;
+    });
+
     renderTeam();
     renderRoster();
     renderSchedule();
     renderPendingGames();
     renderSubmissions();
     renderAnnouncements();
+    setupChatListeners();
   } catch(e) {
     console.error('Data load failed:', e);
     toast('Failed to load data: ' + e.message, 'error');
@@ -556,11 +695,12 @@ function renderRoster() {
   el.innerHTML = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${MY_PLAYERS.length} player(s)</div>
     <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Actions</th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Email</th><th>Actions</th></tr></thead>
       <tbody>${MY_PLAYERS.map(p => `<tr>
         <td>${p.num || '-'}</td>
         <td><strong>${esc(p.name)}</strong></td>
         <td>${esc(p.pos || '-')}</td>
+        <td style="color:var(--muted);font-size:12px">${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
         <td class="actions">
           <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>
@@ -584,6 +724,9 @@ window.openAddPlayer = function() {
       <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ap-pos" placeholder="e.g. SS, CF, P"></div>
     </div>
     <div class="form-row">
+      <div class="form-col"><label class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(for team chat notifications)</span></label><input type="email" class="form-input" id="ap-email" placeholder="player@email.com"></div>
+    </div>
+    <div class="form-row">
       <button class="btn btn-success btn-sm" onclick="saveNewPlayer()">Add Player</button>
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('add-player-form').style.display='none'">Cancel</button>
     </div>
@@ -591,11 +734,13 @@ window.openAddPlayer = function() {
 };
 
 window.saveNewPlayer = async function() {
+  const emailVal = document.getElementById('ap-email').value.trim();
   const data = {
     name: document.getElementById('ap-name').value.trim(),
     num: parseInt(document.getElementById('ap-num').value) || 0,
     pos: document.getElementById('ap-pos').value.trim(),
-    team: captainData.team_id
+    team: captainData.team_id,
+    ...(emailVal && { email: emailVal }),
   };
   if (!data.name) { toast('Please enter the player\'s name.', 'error'); return; }
   try {
@@ -625,6 +770,9 @@ window.editPlayer = function(playerId) {
         <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ep-pos-${playerId}" value="${esc(p.pos||'')}"></div>
       </div>
       <div class="form-row">
+        <div class="form-col"><label class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(team chat notifications)</span></label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}" placeholder="player@email.com"></div>
+      </div>
+      <div class="form-row">
         <button class="btn btn-success btn-sm" onclick="saveEditPlayer('${playerId}')">Save</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('player-edit-${playerId}').style.display='none'">Cancel</button>
       </div>
@@ -632,10 +780,12 @@ window.editPlayer = function(playerId) {
 };
 
 window.saveEditPlayer = async function(playerId) {
+  const emailVal = document.getElementById('ep-email-' + playerId).value.trim();
   const data = {
     name: document.getElementById('ep-name-' + playerId).value.trim(),
     num: parseInt(document.getElementById('ep-num-' + playerId).value) || 0,
-    pos: document.getElementById('ep-pos-' + playerId).value.trim()
+    pos: document.getElementById('ep-pos-' + playerId).value.trim(),
+    email: emailVal || '',
   };
   if (!data.name) { toast('Please enter a name.', 'error'); return; }
   try {
@@ -830,6 +980,287 @@ function renderAnnouncements() {
     </div>`;
   }).join('');
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// PAYMENTS
+// ═══════════════════════════════════════════════════════════════════
+function renderPayments() {
+  const el = document.getElementById('payments-content');
+  if (!MY_PLAYERS.length) {
+    el.innerHTML = '<div class="empty">No players on roster yet.</div>';
+    return;
+  }
+  const paid = MY_PLAYERS.filter(p => PAYMENT_DATA[p.id]?.paid).length;
+  const total = MY_PLAYERS.length;
+  const outstanding = MY_PLAYERS.filter(p => !PAYMENT_DATA[p.id]?.paid)
+    .reduce((s, p) => s + (PAYMENT_DATA[p.id]?.amount_owed || 0), 0);
+  el.innerHTML = `
+    <div class="tbl-wrap">
+      <div class="pay-summary">
+        <span><strong style="color:var(--green)">${paid}/${total}</strong> paid</span>
+        ${outstanding > 0 ? `<span><strong style="color:var(--red)">$${outstanding}</strong> outstanding</span>` : ''}
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Player</th><th>#</th><th>Status</th><th>Amount Owed</th><th>Notes</th></tr></thead>
+        <tbody>${MY_PLAYERS.map(p => {
+          const pay = PAYMENT_DATA[p.id] || {};
+          return `<tr>
+            <td><strong>${esc(p.name)}</strong></td>
+            <td>${p.num || '-'}</td>
+            <td>
+              <label class="pay-status" onclick="togglePayment('${p.id}','${esc(p.name)}')">
+                <span class="pay-check ${pay.paid ? 'paid' : ''}"></span>
+                <span style="color:${pay.paid ? 'var(--green)' : 'var(--red)'}">${pay.paid ? 'Paid' : 'Unpaid'}</span>
+              </label>
+            </td>
+            <td><input type="number" class="pay-note-input" style="max-width:90px" placeholder="$0"
+              value="${pay.amount_owed || ''}" min="0" step="5"
+              onchange="savePaymentField('${p.id}','${esc(p.name)}','amount_owed',+this.value)"></td>
+            <td><input type="text" class="pay-note-input" placeholder="Notes..."
+              value="${esc(pay.notes || '')}" maxlength="60"
+              onchange="savePaymentField('${p.id}','${esc(p.name)}','notes',this.value)"></td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+window.togglePayment = async function(playerId, playerName) {
+  const pay = PAYMENT_DATA[playerId] || {};
+  const newPaid = !pay.paid;
+  await savePaymentField(playerId, playerName, 'paid', newPaid);
+};
+
+window.savePaymentField = async function(playerId, playerName, field, value) {
+  try {
+    const pay = PAYMENT_DATA[playerId] || {};
+    const updated = { ...pay, team_id: captainData.team_id, player_id: playerId, player_name: playerName, [field]: value, updated_by: currentUser.email, updated_at: Timestamp.now() };
+    if (pay.docId) {
+      await updateDoc(doc(db, 'payments', pay.docId), { [field]: value, updated_by: currentUser.email, updated_at: Timestamp.now() });
+    } else {
+      const ref = await addDoc(collection(db, 'payments'), updated);
+      updated.docId = ref.id;
+    }
+    PAYMENT_DATA[playerId] = updated;
+    renderPayments();
+  } catch(e) { toast('Failed to save: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// ATTENDANCE
+// ═══════════════════════════════════════════════════════════════════
+async function renderAttendance() {
+  const el = document.getElementById('attendance-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading box scores...</div>';
+  try {
+    const snap = await getDocs(query(collection(db, 'box_scores'), where('status', '==', 'final')));
+    const boxScores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const myId = captainData.team_id;
+    const myBoxScores = boxScores.filter(bs => bs.away === myId || bs.home === myId);
+    const gameCount = myBoxScores.length;
+
+    // Count appearances per player name
+    const appearances = {};
+    for (const bs of myBoxScores) {
+      const side = bs.away === myId ? (bs.away_lineup || bs.awayLineup) : (bs.home_lineup || bs.homeLineup);
+      if (!Array.isArray(side)) continue;
+      for (const p of side) {
+        const nm = (p.name || '').trim().toLowerCase();
+        if (!nm) continue;
+        appearances[nm] = (appearances[nm] || 0) + 1;
+      }
+    }
+
+    if (!MY_PLAYERS.length) { el.innerHTML = '<div class="empty">No players on roster.</div>'; return; }
+
+    el.innerHTML = `
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${gameCount} final game(s) with box scores recorded</div>
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr><th>Player</th><th>#</th><th style="text-align:center">GP</th><th>Attendance</th></tr></thead>
+        <tbody>${MY_PLAYERS.map(p => {
+          const gp = appearances[p.name.toLowerCase()] || 0;
+          const pct = gameCount > 0 ? Math.round(gp / gameCount * 100) : 0;
+          const barColor = pct >= 75 ? 'var(--green)' : pct >= 50 ? 'var(--yellow)' : 'var(--red)';
+          return `<tr>
+            <td><strong>${esc(p.name)}</strong></td>
+            <td>${p.num || '-'}</td>
+            <td style="text-align:center;font-weight:700">${gp}${gameCount ? `<span style="color:var(--muted);font-weight:400">/${gameCount}</span>` : ''}</td>
+            <td style="min-width:120px">
+              <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${pct}%;background:${barColor};transition:width .3s"></div>
+              </div>
+              <div style="font-size:11px;color:var(--muted2);margin-top:2px">${pct}%</div>
+            </td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table></div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Could not load box scores: ${e.message}</div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CHAT
+// ═══════════════════════════════════════════════════════════════════
+function fmtChatTime(ts) {
+  if (!ts) return '';
+  const d = ts.toDate ? ts.toDate() : new Date(ts);
+  const now = new Date();
+  const diffDays = Math.floor((now - d) / 86400000);
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (diffDays === 0) return time;
+  if (diffDays === 1) return 'Yesterday ' + time;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + time;
+}
+
+function renderChatMessages(msgs, containerId, myEmail) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!msgs.length) { el.innerHTML = '<div class="empty">No messages yet. Say hello!</div>'; return; }
+  el.innerHTML = msgs.map(m => {
+    const mine = m.author_email === myEmail;
+    return `<div class="chat-msg ${mine ? 'mine' : 'theirs'}">
+      ${!mine ? `<div class="chat-meta">${esc(m.team_name || m.author_email)}</div>` : ''}
+      <div class="chat-bubble">${esc(m.text)}</div>
+      <div class="chat-meta">${fmtChatTime(m.timestamp)}</div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function updateBadge(badgeId, lastReadKey) {
+  // Badge is set by the onSnapshot handler when new messages arrive
+}
+
+function setupChatListeners() {
+  // ── Team Chat ──
+  if (_unsubTeamChat) _unsubTeamChat();
+  const teamQ = query(
+    collection(db, 'team_messages'),
+    where('team_id', '==', captainData.team_id),
+    orderBy('timestamp', 'asc'),
+    limit(100)
+  );
+  _unsubTeamChat = onSnapshot(teamQ, snap => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const activeTab = document.querySelector('.tab-item.active')?.dataset?.tab;
+    renderChatMessages(msgs, 'teamchat-messages', currentUser.email);
+    // Show badge if not currently viewing this tab
+    if (activeTab !== 'teamchat' && msgs.length > 0) {
+      const lastRead = parseInt(localStorage.getItem('lastRead_teamchat_' + currentUser.email) || '0');
+      const lastMsg = msgs[msgs.length - 1];
+      const lastMsgTime = lastMsg.timestamp?.toDate ? lastMsg.timestamp.toDate().getTime() : 0;
+      if (lastMsgTime > lastRead) {
+        const unread = msgs.filter(m => {
+          const mt = m.timestamp?.toDate ? m.timestamp.toDate().getTime() : 0;
+          return mt > lastRead && m.author_email !== currentUser.email;
+        }).length;
+        const b = document.getElementById('badge-teamchat');
+        if (b && unread > 0) { b.textContent = unread > 9 ? '9+' : unread; b.hidden = false; }
+      }
+    }
+  });
+
+  // ── Captains Chat ──
+  if (_unsubCaptChat) _unsubCaptChat();
+  const captQ = query(
+    collection(db, 'captain_chat'),
+    orderBy('timestamp', 'asc'),
+    limit(100)
+  );
+  _unsubCaptChat = onSnapshot(captQ, snap => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const activeTab = document.querySelector('.tab-item.active')?.dataset?.tab;
+    renderChatMessages(msgs, 'captchat-messages', currentUser.email);
+    if (activeTab !== 'captchat' && msgs.length > 0) {
+      const lastRead = parseInt(localStorage.getItem('lastRead_captchat_' + currentUser.email) || '0');
+      const unread = msgs.filter(m => {
+        const mt = m.timestamp?.toDate ? m.timestamp.toDate().getTime() : 0;
+        return mt > lastRead && m.author_email !== currentUser.email;
+      }).length;
+      const b = document.getElementById('badge-captchat');
+      if (b && unread > 0) { b.textContent = unread > 9 ? '9+' : unread; b.hidden = false; }
+    }
+  });
+}
+
+window.sendTeamMsg = async function() {
+  const input = document.getElementById('teamchat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.disabled = true;
+  try {
+    await addDoc(collection(db, 'team_messages'), {
+      text,
+      author_email: currentUser.email,
+      team_id: captainData.team_id,
+      team_name: MY_TEAM?.name || captainData.team_name,
+      team_color: MY_TEAM?.color || '#002D72',
+      timestamp: serverTimestamp(),
+    });
+    // Email players who have an email on file
+    if (EMAILJS_ENABLED) {
+      const recipients = MY_PLAYERS.filter(p => p.email);
+      for (const p of recipients) {
+        try {
+          await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEAM_TEMPLATE, {
+            to_email: p.email,
+            to_name: p.name,
+            team_name: MY_TEAM?.name || captainData.team_name,
+            captain_email: currentUser.email,
+            message: text,
+            portal_url: window.location.href,
+          });
+        } catch(e) { console.warn('Email failed for', p.email, e); }
+      }
+    }
+    localStorage.setItem('lastRead_teamchat_' + currentUser.email, Date.now());
+    const b = document.getElementById('badge-teamchat'); if (b) b.hidden = true;
+  } catch(e) { toast('Failed to send: ' + e.message, 'error'); }
+  input.disabled = false;
+  input.focus();
+};
+
+window.sendCaptMsg = async function() {
+  const input = document.getElementById('captchat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.disabled = true;
+  try {
+    await addDoc(collection(db, 'captain_chat'), {
+      text,
+      author_email: currentUser.email,
+      team_id: captainData.team_id,
+      team_name: MY_TEAM?.name || captainData.team_name,
+      team_color: MY_TEAM?.color || '#002D72',
+      timestamp: serverTimestamp(),
+    });
+    // Email all other captains
+    if (EMAILJS_ENABLED) {
+      const others = ALL_CAPTAINS.filter(c => c.email && c.email !== currentUser.email);
+      for (const c of others) {
+        try {
+          await window.emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_CAPT_TEMPLATE, {
+            to_email: c.email,
+            to_name: c.team_name || c.email,
+            from_team: MY_TEAM?.name || captainData.team_name,
+            from_email: currentUser.email,
+            message: text,
+            portal_url: window.location.href,
+          });
+        } catch(e) { console.warn('Email failed for', c.email, e); }
+      }
+    }
+    localStorage.setItem('lastRead_captchat_' + currentUser.email, Date.now());
+    const b = document.getElementById('badge-captchat'); if (b) b.hidden = true;
+  } catch(e) { toast('Failed to send: ' + e.message, 'error'); }
+  input.disabled = false;
+  input.focus();
+};
 
 </script>
 </body>
