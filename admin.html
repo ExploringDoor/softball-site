@@ -363,6 +363,7 @@ select.form-input{cursor:pointer}
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-user"></div>
+      <a href="index.html" style="display:block;text-align:center;font-size:12px;color:var(--muted);text-decoration:none;padding:6px 14px 10px;transition:color .15s" onmouseover="this.style.color='var(--navy)'" onmouseout="this.style.color='var(--muted)'">← Back to Site</a>
       <button class="btn btn-outline btn-sm btn-full" onclick="doLogout()">Sign Out</button>
     </div>
   </aside>
@@ -2160,6 +2161,11 @@ function teamOptionsHtml(selected) {
   ).join('');
 }
 
+const DVSL_FIELDS = ['Mondauk 1','Mondauk 2','Mondauk 3','Mondauk 4','Mondauk 5','Mondauk 6','Southampton 1','Southampton 2','Southampton 3','Southampton 4','Warwick 1','Warwick 2','Plymouth 1','Plymouth 2','TBD'];
+const SOFTBALL_POSITIONS_ADMIN = ['P','C','1B','2B','3B','SS','LF','CF','RF','DH','UTIL','SUB'];
+function fieldOptionsHtml(selected=''){return '<option value="">-- Select Field --</option>'+DVSL_FIELDS.map(f=>`<option value="${f}"${f===selected?' selected':''}>${f}</option>`).join('');}
+function posOptionsHtmlAdmin(selected=''){return '<option value="">-- Position --</option>'+SOFTBALL_POSITIONS_ADMIN.map(p=>`<option value="${p}"${p===selected?' selected':''}>${p}</option>`).join('');}
+
 window.openAddGame = function() {
   const el = document.getElementById('add-game-form');
   if (el.style.display !== 'none') { el.style.display = 'none'; return; }
@@ -2168,16 +2174,15 @@ window.openAddGame = function() {
     <div class="panel-title">Add New Game</div>
     <div class="form-row">
       <div class="form-col form-col-sm"><label class="form-label">Week</label><input type="number" class="form-input" id="ag-wk" min="1"></div>
-      <div class="form-col"><label class="form-label">Date</label><input type="text" class="form-input" id="ag-date" placeholder="e.g. Apr 14"></div>
-      <div class="form-col form-col-sm"><label class="form-label">Day</label><input type="text" class="form-input" id="ag-day" placeholder="e.g. Tue"></div>
-      <div class="form-col"><label class="form-label">Time</label><input type="text" class="form-input" id="ag-time" placeholder="e.g. 7:00 PM"></div>
+      <div class="form-col"><label class="form-label">Date</label><input type="date" class="form-input" id="ag-date"></div>
+      <div class="form-col"><label class="form-label">Time</label><input type="time" class="form-input" id="ag-time"></div>
     </div>
     <div class="form-row">
       <div class="form-col"><label class="form-label">Away Team</label><select class="form-input" id="ag-away">${teamOptionsHtml('')}</select></div>
       <div class="form-col"><label class="form-label">Home Team</label><select class="form-input" id="ag-home">${teamOptionsHtml('')}</select></div>
     </div>
     <div class="form-row">
-      <div class="form-col"><label class="form-label">Field</label><input type="text" class="form-input" id="ag-field" placeholder="e.g. Mondauk 4"></div>
+      <div class="form-col"><label class="form-label">Field</label><select class="form-input" id="ag-field">${fieldOptionsHtml('')}</select></div>
       <div class="form-col"><label class="form-label">Address</label><input type="text" class="form-input" id="ag-addr" placeholder="e.g. 1451 Dillon Rd, Ambler PA"></div>
     </div>
     <div class="form-row">
@@ -2188,14 +2193,26 @@ window.openAddGame = function() {
 };
 
 window.saveNewGame = async function() {
+  const dateIso = document.getElementById('ag-date').value;
+  const time24  = document.getElementById('ag-time').value;
+  let dateDisplay = '', dayDisplay = '', timeDisplay = '';
+  if (dateIso) {
+    const d = new Date(dateIso + 'T12:00:00');
+    dateDisplay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    dayDisplay  = d.toLocaleDateString('en-US', { weekday:'short' });
+  }
+  if (time24) {
+    const [hh, mm] = time24.split(':').map(Number);
+    const suffix = hh >= 12 ? 'PM' : 'AM';
+    timeDisplay = `${hh%12||12}:${String(mm).padStart(2,'0')} ${suffix}`;
+  }
   const data = {
     wk: parseInt(document.getElementById('ag-wk').value) || 1,
-    date: document.getElementById('ag-date').value.trim(),
-    day: document.getElementById('ag-day').value.trim(),
-    time: document.getElementById('ag-time').value.trim(),
+    date: dateDisplay, day: dayDisplay, time: timeDisplay,
+    date_iso: dateIso||'', time_24: time24||'',
     away: document.getElementById('ag-away').value,
     home: document.getElementById('ag-home').value,
-    field: document.getElementById('ag-field').value.trim(),
+    field: document.getElementById('ag-field').value,
     addr: document.getElementById('ag-addr').value.trim(),
     done: false, away_score: null, home_score: null
   };
@@ -2224,16 +2241,15 @@ window.editGame = function(gameId) {
     <div class="inline-form">
       <div class="form-row">
         <div class="form-col form-col-sm"><label class="form-label">Week</label><input type="number" class="form-input" id="eg-wk-${gameId}" value="${g.wk||''}" min="1"></div>
-        <div class="form-col"><label class="form-label">Date</label><input type="text" class="form-input" id="eg-date-${gameId}" value="${esc(g.date||'')}"></div>
-        <div class="form-col form-col-sm"><label class="form-label">Day</label><input type="text" class="form-input" id="eg-day-${gameId}" value="${esc(g.day||'')}"></div>
-        <div class="form-col"><label class="form-label">Time</label><input type="text" class="form-input" id="eg-time-${gameId}" value="${esc(g.time||'')}"></div>
+        <div class="form-col"><label class="form-label">Date</label><input type="date" class="form-input" id="eg-date-${gameId}" value="${esc(g.date_iso||'')}"></div>
+        <div class="form-col"><label class="form-label">Time</label><input type="time" class="form-input" id="eg-time-${gameId}" value="${esc(g.time_24||'')}"></div>
       </div>
       <div class="form-row">
         <div class="form-col"><label class="form-label">Away</label><select class="form-input" id="eg-away-${gameId}">${teamOptionsHtml(g.away)}</select></div>
         <div class="form-col"><label class="form-label">Home</label><select class="form-input" id="eg-home-${gameId}">${teamOptionsHtml(g.home)}</select></div>
       </div>
       <div class="form-row">
-        <div class="form-col"><label class="form-label">Field</label><input type="text" class="form-input" id="eg-field-${gameId}" value="${esc(g.field||'')}"></div>
+        <div class="form-col"><label class="form-label">Field</label><select class="form-input" id="eg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
         <div class="form-col"><label class="form-label">Address</label><input type="text" class="form-input" id="eg-addr-${gameId}" value="${esc(g.addr||'')}"></div>
       </div>
       <div class="form-row">
@@ -2244,14 +2260,26 @@ window.editGame = function(gameId) {
 };
 
 window.saveEditGame = async function(gameId) {
+  const dateIso = document.getElementById('eg-date-' + gameId).value;
+  const time24  = document.getElementById('eg-time-' + gameId).value;
+  let dateDisplay = '', dayDisplay = '', timeDisplay = '';
+  if (dateIso) {
+    const d = new Date(dateIso + 'T12:00:00');
+    dateDisplay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    dayDisplay  = d.toLocaleDateString('en-US', { weekday:'short' });
+  }
+  if (time24) {
+    const [hh, mm] = time24.split(':').map(Number);
+    const suffix = hh >= 12 ? 'PM' : 'AM';
+    timeDisplay = `${hh%12||12}:${String(mm).padStart(2,'0')} ${suffix}`;
+  }
   const data = {
     wk: parseInt(document.getElementById('eg-wk-' + gameId).value) || 1,
-    date: document.getElementById('eg-date-' + gameId).value.trim(),
-    day: document.getElementById('eg-day-' + gameId).value.trim(),
-    time: document.getElementById('eg-time-' + gameId).value.trim(),
+    date: dateDisplay, day: dayDisplay, time: timeDisplay,
+    date_iso: dateIso||'', time_24: time24||'',
     away: document.getElementById('eg-away-' + gameId).value,
     home: document.getElementById('eg-home-' + gameId).value,
-    field: document.getElementById('eg-field-' + gameId).value.trim(),
+    field: document.getElementById('eg-field-' + gameId).value,
     addr: document.getElementById('eg-addr-' + gameId).value.trim()
   };
   try {
@@ -2335,7 +2363,7 @@ window.openAddPlayer = function() {
     <div class="form-row">
       <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ap-name" placeholder="Player name"></div>
       <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ap-num" placeholder="#" min="0"></div>
-      <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ap-pos" placeholder="e.g. SS, CF, P"></div>
+      <div class="form-col"><label class="form-label">Position</label><select class="form-input" id="ap-pos">${posOptionsHtmlAdmin('')}</select></div>
       <div class="form-col"><label class="form-label">Email</label><input type="email" class="form-input" id="ap-email" placeholder="player@email.com"></div>
       <div class="form-col"><label class="form-label">Phone</label><input type="tel" class="form-input" id="ap-phone" placeholder="555-555-5555"></div>
       <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
@@ -2381,7 +2409,7 @@ window.editPlayer = function(playerId) {
       <div class="form-row">
         <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ep-name-${playerId}" value="${esc(p.name)}"></div>
         <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ep-num-${playerId}" value="${p.num||''}" min="0"></div>
-        <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ep-pos-${playerId}" value="${esc(p.pos||'')}"></div>
+        <div class="form-col"><label class="form-label">Position</label><select class="form-input" id="ep-pos-${playerId}">${posOptionsHtmlAdmin(p.pos||'')}</select></div>
         <div class="form-col"><label class="form-label">Email</label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}"></div>
         <div class="form-col"><label class="form-label">Phone</label><input type="tel" class="form-input" id="ep-phone-${playerId}" value="${esc(p.phone||'')}"></div>
         <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">

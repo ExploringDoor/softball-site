@@ -75,12 +75,17 @@ select.form-input{cursor:pointer}
 
 /* ── TABLES ── */
 .tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px}
-.tbl{width:100%;border-collapse:collapse}
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%;max-width:100%}
+.tbl{width:100%;border-collapse:collapse;min-width:480px}
 .tbl th{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:12px 16px;text-align:left;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)}
 .tbl td{font-size:13px;padding:12px 16px;border-bottom:1px solid var(--border2)}
 .tbl tr:last-child td{border-bottom:none}
 .tbl tr:hover td{background:rgba(0,0,0,.02)}
 .tbl .actions{display:flex;gap:6px;flex-wrap:wrap}
+@media(max-width:600px){
+  .tbl th,.tbl td{padding:8px 8px!important;}
+  .tbl-wrap{overflow:hidden}
+}
 
 /* ── PANELS ── */
 .panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:22px;margin-bottom:20px}
@@ -394,6 +399,14 @@ const EMAILJS_ENABLED = EMAILJS_PUBLIC_KEY !== 'YOUR_EMAILJS_PUBLIC_KEY';
 if (EMAILJS_ENABLED) window.emailjs?.init(EMAILJS_PUBLIC_KEY);
 
 // ═══════════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════════
+const DVSL_FIELDS = ['Mondauk 1','Mondauk 2','Mondauk 3','Mondauk 4','Mondauk 5','Mondauk 6','Southampton 1','Southampton 2','Southampton 3','Southampton 4','Warwick 1','Warwick 2','Plymouth 1','Plymouth 2','TBD'];
+const SOFTBALL_POSITIONS = ['P','C','1B','2B','3B','SS','LF','CF','RF','DH','UTIL','SUB'];
+function fieldOptionsHtml(selected=''){return '<option value="">-- Select Field --</option>'+DVSL_FIELDS.map(f=>`<option value="${f}"${f===selected?' selected':''}>${f}</option>`).join('');}
+function posOptionsHtml(selected=''){return '<option value="">-- Position --</option>'+SOFTBALL_POSITIONS.map(p=>`<option value="${p}"${p===selected?' selected':''}>${p}</option>`).join('');}
+
+// ═══════════════════════════════════════════════════════════════════
 // GLOBAL STATE
 // ═══════════════════════════════════════════════════════════════════
 let currentUser = null; // set to team name string when team is selected
@@ -653,21 +666,21 @@ function renderRoster() {
   }
   el.innerHTML = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${MY_PLAYERS.length} player(s)</div>
-    <div class="tbl-wrap"><table class="tbl">
+    <div class="tbl-wrap"><div class="tbl-scroll"><table class="tbl">
       <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Email</th><th>Actions</th></tr></thead>
       <tbody>${MY_PLAYERS.map(p => `<tr>
         <td>${p.num || '-'}</td>
-        <td><strong>${esc(p.name)}</strong></td>
-        <td>${esc(p.pos || '-')}</td>
+        <td><strong style="white-space:nowrap">${esc(p.name)}</strong></td>
+        <td style="white-space:nowrap">${esc(p.pos || '-')}</td>
         <td style="color:var(--muted);font-size:12px">${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
         <td class="actions">
           <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>
         </td>
       </tr>
-      <tr id="player-edit-${p.id}" style="display:none"><td colspan="4" id="player-edit-cell-${p.id}"></td></tr>`).join('')}
+      <tr id="player-edit-${p.id}" style="display:none"><td colspan="5" id="player-edit-cell-${p.id}"></td></tr>`).join('')}
       </tbody>
-    </table></div>
+    </table></div></div>
   `;
 }
 
@@ -680,7 +693,7 @@ window.openAddPlayer = function() {
     <div class="form-row">
       <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ap-name" placeholder="Player name"></div>
       <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ap-num" placeholder="#" min="0"></div>
-      <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ap-pos" placeholder="e.g. SS, CF, P"></div>
+      <div class="form-col"><label class="form-label">Position</label><select class="form-input" id="ap-pos">${posOptionsHtml('')}</select></div>
     </div>
     <div class="form-row">
       <div class="form-col"><label class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(for team chat notifications)</span></label><input type="email" class="form-input" id="ap-email" placeholder="player@email.com"></div>
@@ -726,7 +739,7 @@ window.editPlayer = function(playerId) {
       <div class="form-row">
         <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ep-name-${playerId}" value="${esc(p.name)}"></div>
         <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ep-num-${playerId}" value="${p.num||''}" min="0"></div>
-        <div class="form-col"><label class="form-label">Position</label><input type="text" class="form-input" id="ep-pos-${playerId}" value="${esc(p.pos||'')}"></div>
+        <div class="form-col"><label class="form-label">Position</label><select class="form-input" id="ep-pos-${playerId}">${posOptionsHtml(p.pos||'')}</select></div>
       </div>
       <div class="form-row">
         <div class="form-col"><label class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(team chat notifications)</span></label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}" placeholder="player@email.com"></div>
@@ -818,12 +831,11 @@ window.toggleEditGame = function(gameId) {
   el.style.display = 'block';
   el.innerHTML = `<div class="inline-form" style="margin-top:4px">
     <div class="form-row">
-      <div class="form-col"><label class="form-label">Date</label><input type="text" class="form-input" id="ceg-date-${gameId}" value="${esc(g.date||'')}" placeholder="e.g. Apr 14"></div>
-      <div class="form-col form-col-sm"><label class="form-label">Day</label><input type="text" class="form-input" id="ceg-day-${gameId}" value="${esc(g.day||'')}" placeholder="e.g. Mon"></div>
-      <div class="form-col"><label class="form-label">Time</label><input type="text" class="form-input" id="ceg-time-${gameId}" value="${esc(g.time||'')}" placeholder="e.g. 7:00 PM"></div>
+      <div class="form-col"><label class="form-label">Date</label><input type="date" class="form-input" id="ceg-date-${gameId}" value="${esc(g.date_iso||'')}"></div>
+      <div class="form-col"><label class="form-label">Time</label><input type="time" class="form-input" id="ceg-time-${gameId}" value="${esc(g.time_24||'')}"></div>
     </div>
     <div class="form-row">
-      <div class="form-col"><label class="form-label">Field / Location</label><input type="text" class="form-input" id="ceg-field-${gameId}" value="${esc(g.field||'')}" placeholder="e.g. Mondauk 4"></div>
+      <div class="form-col"><label class="form-label">Field / Location</label><select class="form-input" id="ceg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
       <div class="form-col" style="justify-content:flex-end">
         <div class="form-label" style="opacity:0">Opponent</div>
         <div style="padding:8px 0;font-size:13px;color:var(--muted)">Opponent: <strong>${esc(getTeamFull(g.home === captainData.team_id ? g.away : g.home))}</strong> (read-only)</div>
@@ -837,14 +849,28 @@ window.toggleEditGame = function(gameId) {
 };
 
 window.saveEditGame = async function(gameId) {
-  const date = document.getElementById('ceg-date-' + gameId)?.value.trim();
-  const day = document.getElementById('ceg-day-' + gameId)?.value.trim();
-  const time = document.getElementById('ceg-time-' + gameId)?.value.trim();
-  const field = document.getElementById('ceg-field-' + gameId)?.value.trim();
+  const dateIso = document.getElementById('ceg-date-' + gameId)?.value;
+  const time24  = document.getElementById('ceg-time-' + gameId)?.value;
+  const field   = document.getElementById('ceg-field-' + gameId)?.value;
+  // Convert ISO date → display string (e.g. "Apr 14")
+  let dateDisplay = '', dayDisplay = '';
+  if (dateIso) {
+    const d = new Date(dateIso + 'T12:00:00');
+    dateDisplay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    dayDisplay  = d.toLocaleDateString('en-US', { weekday:'short' });
+  }
+  // Convert 24h time → display string (e.g. "7:00 PM")
+  let timeDisplay = '';
+  if (time24) {
+    const [hh, mm] = time24.split(':').map(Number);
+    const suffix = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 || 12;
+    timeDisplay = `${h12}:${String(mm).padStart(2,'0')} ${suffix}`;
+  }
   try {
-    await updateDoc(doc(db, 'games', gameId), { date, day, time, field });
+    await updateDoc(doc(db, 'games', gameId), { date: dateDisplay, day: dayDisplay, time: timeDisplay, time_24: time24||'', date_iso: dateIso||'', field: field||'' });
     const g = MY_GAMES.find(x => x.id === gameId);
-    if (g) { g.date = date; g.day = day; g.time = time; g.field = field; }
+    if (g) { g.date = dateDisplay; g.day = dayDisplay; g.time = timeDisplay; g.time_24 = time24||''; g.date_iso = dateIso||''; g.field = field||''; }
     toast('Game updated!');
     renderSchedule();
   } catch(e) { toast('Failed to save: ' + e.message, 'error'); }
@@ -881,7 +907,7 @@ function renderPendingGames() {
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('live-score.html?game=${g.id}&from=captain','_blank')">⚡ Score Live</button>
           <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="showUploadZone('${g.id}')">📄 Upload</button>
-          <button class="btn btn-outline btn-sm" onclick="showManualEntry('${g.id}')">✏️ Enter Score</button>
+          <button class="btn btn-outline btn-sm" onclick="showBoxScoreEntry('${g.id}')">📊 Enter Box Score</button>
         </div>`}
       </div>
       ${existing ? '' : `
@@ -913,6 +939,7 @@ function renderPendingGames() {
           <button class="btn btn-success btn-sm" onclick="submitScore('${g.id}')">Submit Score</button>
         </div>
       </div>
+      <div id="boxscore-entry-${g.id}" style="display:none"></div>
       `}
     </div>`;
   }).join('');
@@ -927,6 +954,190 @@ window.showUploadZone = function(gameId) {
 window.showManualEntry = function(gameId) {
   document.getElementById('manual-entry-' + gameId).style.display = 'block';
   document.getElementById('upload-zone-' + gameId).style.display = 'none';
+};
+
+window.showBoxScoreEntry = function(gameId) {
+  const el = document.getElementById('boxscore-entry-' + gameId);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  // Hide other entry zones
+  document.getElementById('upload-zone-' + gameId).style.display = 'none';
+  document.getElementById('manual-entry-' + gameId).style.display = 'none';
+
+  const isHome = g.home === captainData.team_id;
+  const myTeamId = captainData.team_id;
+  const oppTeamId = isHome ? g.away : g.home;
+  const myTeamName = esc(getTeamName(myTeamId));
+  const oppTeamName = esc(getTeamName(oppTeamId));
+  const awayTeamName = esc(getTeamName(g.away));
+  const homeTeamName = esc(getTeamName(g.home));
+
+  // My team's players pre-populated
+  const myPlayers = MY_PLAYERS.slice().sort((a,b) => (a.num||99)-(b.num||99));
+  const statCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
+
+  function buildBatterRows(players, teamPrefix) {
+    let rows = players.map((p,i) => `
+      <tr>
+        <td style="padding:4px 6px;white-space:nowrap"><input type="text" value="${esc(p.name)}" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
+        ${statCols.map(col => `<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/[^a-z0-9]/gi,'')}${i}"></td>`).join('')}
+        <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
+      </tr>`).join('');
+    return rows;
+  }
+
+  function emptyRow(teamPrefix, i) {
+    return `<tr>
+      <td style="padding:4px 6px"><input type="text" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
+      ${statCols.map(col => `<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/[^a-z0-9]/gi,'')}${i}"></td>`).join('')}
+      <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
+    </tr>`;
+  }
+
+  const awayPrefix = 'away';
+  const homePrefix = 'home';
+  const awayIsMyTeam = !isHome;
+  const awayRows = awayIsMyTeam ? buildBatterRows(myPlayers, awayPrefix) : emptyRow(awayPrefix, 0);
+  const homeRows = !awayIsMyTeam ? buildBatterRows(myPlayers, homePrefix) : emptyRow(homePrefix, 0);
+  const awayRowCount = awayIsMyTeam ? myPlayers.length : 1;
+  const homeRowCount = !awayIsMyTeam ? myPlayers.length : 1;
+
+  el.style.display = 'block';
+  el.innerHTML = `<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <div style="background:var(--navy);color:#fff;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em">
+      📊 BOX SCORE — Wk ${g.wk || '?'}: ${awayTeamName} @ ${homeTeamName}
+    </div>
+    <div style="padding:14px 16px;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Away (${awayTeamName})</label>
+        <input type="number" id="bs-${gameId}-away-final" min="0" placeholder="0" style="width:60px;text-align:center;font-size:20px;font-weight:700;padding:4px 8px;border:2px solid var(--border);border-radius:6px;font-family:'Barlow Condensed',sans-serif">
+      </div>
+      <div style="font-size:18px;color:var(--muted);font-weight:700">—</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Home (${homeTeamName})</label>
+        <input type="number" id="bs-${gameId}-home-final" min="0" placeholder="0" style="width:60px;text-align:center;font-size:20px;font-weight:700;padding:4px 8px;border:2px solid var(--border);border-radius:6px;font-family:'Barlow Condensed',sans-serif">
+      </div>
+    </div>
+    <!-- AWAY BATTERS -->
+    <div style="padding:10px 16px 4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);background:rgba(0,45,114,.04)">Away: ${awayTeamName}</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table style="width:100%;border-collapse:collapse;min-width:500px">
+        <thead><tr style="background:rgba(0,0,0,.03)">
+          <th style="text-align:left;padding:6px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:130px">Player</th>
+          ${statCols.map(c=>`<th style="text-align:center;padding:6px 3px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:44px">${c}</th>`).join('')}
+          <th style="width:28px"></th>
+        </tr></thead>
+        <tbody id="bs-${gameId}-away-tbody">${awayRows}</tbody>
+      </table>
+    </div>
+    <div style="padding:6px 16px 10px">
+      <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${awayPrefix}',${awayRowCount})">+ Add Batter</button>
+    </div>
+    <!-- HOME BATTERS -->
+    <div style="padding:10px 16px 4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);background:rgba(0,45,114,.04);border-top:1px solid var(--border)">Home: ${homeTeamName}</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table style="width:100%;border-collapse:collapse;min-width:500px">
+        <thead><tr style="background:rgba(0,0,0,.03)">
+          <th style="text-align:left;padding:6px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:130px">Player</th>
+          ${statCols.map(c=>`<th style="text-align:center;padding:6px 3px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:44px">${c}</th>`).join('')}
+          <th style="width:28px"></th>
+        </tr></thead>
+        <tbody id="bs-${gameId}-home-tbody">${homeRows}</tbody>
+      </table>
+    </div>
+    <div style="padding:6px 16px 10px">
+      <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${homePrefix}',${homeRowCount})">+ Add Batter</button>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-success btn-sm" onclick="submitBoxScore('${gameId}')">Submit Box Score</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('boxscore-entry-${gameId}').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+  // Store row counts on the element for addBsRow
+  el.dataset.awayRows = awayRowCount;
+  el.dataset.homeRows = homeRowCount;
+};
+
+window.removeBsRow = function(btn) {
+  btn.closest('tr').remove();
+};
+
+window.addBsRow = function(gameId, teamPrefix, startIdx) {
+  const el = document.getElementById('boxscore-entry-' + gameId);
+  const tbody = document.getElementById('bs-' + gameId + '-' + teamPrefix + '-tbody');
+  if (!tbody) return;
+  const i = tbody.querySelectorAll('tr').length;
+  const statCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td style="padding:4px 6px"><input type="text" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
+    ${statCols.map(col => `<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/[^a-z0-9]/gi,'')}${i}"></td>`).join('')}
+    <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
+  tbody.appendChild(tr);
+};
+
+window.submitBoxScore = async function(gameId) {
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const awayFinal = parseInt(document.getElementById('bs-' + gameId + '-away-final')?.value);
+  const homeFinal = parseInt(document.getElementById('bs-' + gameId + '-home-final')?.value);
+  if (isNaN(awayFinal) || isNaN(homeFinal)) { toast('Please enter the final scores at the top.', 'error'); return; }
+
+  const statCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
+  function readBatters(teamPrefix) {
+    const tbody = document.getElementById('bs-' + gameId + '-' + teamPrefix + '-tbody');
+    if (!tbody) return [];
+    return Array.from(tbody.querySelectorAll('tr')).map((tr, i) => {
+      const nameInput = tr.querySelector('input[type="text"]');
+      const name = nameInput?.value.trim() || '';
+      if (!name) return null;
+      const obj = { name };
+      statCols.forEach(col => {
+        const inp = tr.querySelector(`input[id$="${col.replace(/[^a-z0-9]/gi,'')}${i}"]`) || tr.querySelectorAll('input[type="number"]')[statCols.indexOf(col)];
+        obj[col.toLowerCase().replace(/[^a-z0-9]/g, '')] = parseInt(inp?.value) || 0;
+      });
+      return obj;
+    }).filter(Boolean);
+  }
+
+  const awayBatters = readBatters('away');
+  const homeBatters = readBatters('home');
+  const awayTeam = ALL_TEAMS.find(t => t.id === g.away || t.short === g.away);
+  const homeTeam = ALL_TEAMS.find(t => t.id === g.home || t.short === g.home);
+
+  const boxScoreData = {
+    game_id: gameId,
+    week: g.wk || 0,
+    date: g.date || '',
+    field: g.field || '',
+    away: g.away, home: g.home,
+    away_score: awayFinal, home_score: homeFinal,
+    awayBatters, homeBatters,
+    submitted_by: captainData.team_name,
+    submitted_by_id: captainData.team_id,
+    status: 'pending_review',
+    timestamp: Timestamp.now(),
+  };
+
+  try {
+    await addDoc(collection(db, 'box_scores'), boxScoreData);
+    // Also submit to score_submissions for captain review flow
+    const subData = {
+      game_id: gameId, away: g.away, home: g.home,
+      away_score: awayFinal, home_score: homeFinal,
+      submitted_by: captainData.team_name, team_id: captainData.team_id,
+      team_name: captainData.team_name, wk: g.wk || 0,
+      timestamp: Timestamp.now(), status: 'pending', has_boxscore: true
+    };
+    const ref = await addDoc(collection(db, 'score_submissions'), subData);
+    subData.id = ref.id;
+    MY_SUBMISSIONS.unshift(subData);
+    toast('Box score submitted! Admin will review and finalize.');
+    await logActivity('Box Score (Captain)', `${captainData.team_name}: ${getTeamName(g.away)} ${awayFinal} - ${getTeamName(g.home)} ${homeFinal}`);
+    renderPendingGames();
+    renderSubmissions();
+  } catch(e) { toast('Failed to submit box score: ' + e.message, 'error'); }
 };
 
 window.handleCaptainScoreUpload = async function(gameId, file) {
