@@ -170,6 +170,55 @@ select.form-input{cursor:pointer}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
 
+/* ── MOBILE FIXES ── */
+@media(max-width:768px){
+  /* Issue 5: prevent full page horizontal scroll */
+  body{overflow-x:hidden}
+  .main{overflow-x:hidden}
+
+  /* Issue 3 & 6: tables scroll internally */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+  /* Issue 3: schedule inputs bigger touch targets */
+  .form-input{min-height:44px;font-size:16px}
+  .form-col{min-width:100%;flex:1 1 100%}
+  .form-col-sm{min-width:100%;flex:1 1 100%}
+  .form-row{flex-direction:column;gap:10px}
+  .inline-form .form-row{flex-direction:column}
+
+  /* Issue 6: financials summary cards stack 2-col */
+  #fin-summary{grid-template-columns:1fr 1fr!important}
+  #fin-summary .lbl,#fin-summary div>div:first-child{font-size:10px!important}
+  #fin-summary div>div:last-child{font-size:22px!important}
+
+  /* Issue 6: financials table abbreviate and shrink */
+  #fin-payments-list .tbl th,#fin-payments-list .tbl td{font-size:11px;padding:8px 8px}
+  #fin-payments-list .tbl td:nth-child(5){display:none}
+  #fin-payments-list .tbl th:nth-child(5){display:none}
+
+  /* Issue 2: box score modal — constrain width, inner table scrolls */
+  #box-score-view{width:100%;max-width:100vw;overflow-x:hidden}
+  .bs-panel{max-width:100%;overflow:hidden}
+  /* Inner scroll wrapper already has overflow-x:auto; reinforce it */
+  .bs-panel [style*="overflow-x:auto"]{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important}
+  .bs-panel [style*="min-width:840px"]{min-width:620px}
+
+  /* Issue 2: bigger touch targets for inputs */
+  .bs-input{min-height:44px!important;font-size:16px!important;width:40px!important}
+  .bs-pos-select{min-height:44px!important;font-size:14px!important}
+  .bs-dnp-check input{width:22px!important;height:22px!important}
+  /* Box score inline inputs */
+  #box-score-view input[type="number"]{min-height:44px!important;font-size:16px!important}
+  #box-score-view select{min-height:44px!important;font-size:14px!important}
+
+  /* Issue 3: schedule table — give it room to scroll */
+  #schedule-content .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #schedule-content .tbl{min-width:640px}
+
+  /* Issue 3: schedule edit form stacks fields */
+  #sched-edit-cell td .inline-form .form-row{flex-direction:column}
+}
+
 /* ── BOX SCORE ENTRY ── */
 .bs-back{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--navy);cursor:pointer;margin-bottom:16px;text-decoration:none}
 .bs-back:hover{text-decoration:underline}
@@ -313,7 +362,10 @@ select.form-input{cursor:pointer}
         <div id="next-game-content" class="empty">Loading...</div>
       </div>
       <div class="panel">
-        <div class="panel-title">Recent Activity</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div class="panel-title" style="margin:0">Recent Activity</div>
+          <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="clearActivityLog()">Clear Activity</button>
+        </div>
         <div id="activity-log">
           <div class="loading"><div class="spinner"></div> Loading activity...</div>
         </div>
@@ -792,6 +844,19 @@ async function loadActivityLog() {
     el.innerHTML = '<div class="empty">Could not load activity log</div>';
   }
 }
+
+window.clearActivityLog = async function() {
+  if (!confirm('Clear all activity log entries? This cannot be undone.')) return;
+  try {
+    const snap = await getDocs(collection(db, 'activity_log'));
+    const deletions = snap.docs.map(d => deleteDoc(doc(db, 'activity_log', d.id)));
+    await Promise.all(deletions);
+    document.getElementById('activity-log').innerHTML = '<div class="empty">Activity log cleared</div>';
+    toast('Activity log cleared');
+  } catch(e) {
+    toast('Failed to clear activity log: ' + e.message, 'error');
+  }
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // AUTH
