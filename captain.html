@@ -785,20 +785,70 @@ function renderSchedule() {
     const opponent = isHome ? g.away : g.home;
     const homeAway = isHome ? 'vs' : '@';
     const done = g.done;
-    return `<div class="game-card">
-      <div class="teams">
-        <strong>${esc(getTeamName(captainData.team_id))}</strong>
-        <span class="vs">${homeAway}</span>
-        <strong>${esc(getTeamName(opponent))}</strong>
+    const canEdit = !done; // only allow editing future/pending games
+    return `<div class="game-card" style="flex-direction:column;align-items:stretch;gap:8px" id="gc-${g.id}">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div class="teams">
+            <strong>${esc(getTeamName(captainData.team_id))}</strong>
+            <span class="vs">${homeAway}</span>
+            <strong>${esc(getTeamName(opponent))}</strong>
+          </div>
+          <div class="meta" style="margin-top:4px">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}<br>${esc(g.field || '')}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${done
+            ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div><span class="badge badge-done">Final</span>`
+            : `<span class="badge badge-pending">Upcoming</span>`
+          }
+          ${canEdit ? `<button class="btn btn-outline btn-sm" onclick="toggleEditGame('${g.id}')">✏️ Edit</button>` : ''}
+        </div>
       </div>
-      <div class="meta">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}<br>${esc(g.field || '')}</div>
-      ${done
-        ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div><span class="badge badge-done">Final</span>`
-        : `<span class="badge badge-pending">Upcoming</span>`
-      }
+      ${canEdit ? `<div id="sched-edit-${g.id}" style="display:none"></div>` : ''}
     </div>`;
   }).join('');
 }
+
+window.toggleEditGame = function(gameId) {
+  const el = document.getElementById('sched-edit-' + gameId);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  el.style.display = 'block';
+  el.innerHTML = `<div class="inline-form" style="margin-top:4px">
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Date</label><input type="text" class="form-input" id="ceg-date-${gameId}" value="${esc(g.date||'')}" placeholder="e.g. Apr 14"></div>
+      <div class="form-col form-col-sm"><label class="form-label">Day</label><input type="text" class="form-input" id="ceg-day-${gameId}" value="${esc(g.day||'')}" placeholder="e.g. Mon"></div>
+      <div class="form-col"><label class="form-label">Time</label><input type="text" class="form-input" id="ceg-time-${gameId}" value="${esc(g.time||'')}" placeholder="e.g. 7:00 PM"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Field / Location</label><input type="text" class="form-input" id="ceg-field-${gameId}" value="${esc(g.field||'')}" placeholder="e.g. Mondauk 4"></div>
+      <div class="form-col" style="justify-content:flex-end">
+        <div class="form-label" style="opacity:0">Opponent</div>
+        <div style="padding:8px 0;font-size:13px;color:var(--muted)">Opponent: <strong>${esc(getTeamFull(g.home === captainData.team_id ? g.away : g.home))}</strong> (read-only)</div>
+      </div>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-success btn-sm" onclick="saveEditGame('${gameId}')">Save Changes</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('sched-edit-${gameId}').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+};
+
+window.saveEditGame = async function(gameId) {
+  const date = document.getElementById('ceg-date-' + gameId)?.value.trim();
+  const day = document.getElementById('ceg-day-' + gameId)?.value.trim();
+  const time = document.getElementById('ceg-time-' + gameId)?.value.trim();
+  const field = document.getElementById('ceg-field-' + gameId)?.value.trim();
+  try {
+    await updateDoc(doc(db, 'games', gameId), { date, day, time, field });
+    const g = MY_GAMES.find(x => x.id === gameId);
+    if (g) { g.date = date; g.day = day; g.time = time; g.field = field; }
+    toast('Game updated!');
+    renderSchedule();
+  } catch(e) { toast('Failed to save: ' + e.message, 'error'); }
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // SUBMIT SCORE
