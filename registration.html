@@ -284,6 +284,25 @@ window.submitSignup = async function() {
       },
       signed_up_at: Timestamp.now(),
     });
+
+    // Add to MailerLite if email provided
+    if (email) {
+      try {
+        await fetch('https://connect.mailerlite.com/api/subscribers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI0IiwianRpIjoiMzgzYzc0NGFlYzJkYWFjOTA3NDgzY2YzOGFhNzQ1ZDIxNzlkMWIzZDY0YmIwNmM1ZjM1ZGU1YmNlYjc5ODY4OTI3NjEwNmE2YWMxMzYxMTIiLCJpYXQiOjE3NzU2MTA5NzUuMTM2MDAxLCJuYmYiOjE3NzU2MTA5NzUuMTM2MDAzLCJleHAiOjQ5MzEyODQ1NzUuMTI5MTQ3LCJzdWIiOiIyMjcyMTc5Iiwic2NvcGVzIjpbXX0.ai_zNxrFdGYWYrZOI8k6nEPPGzukERNWtMpXvDmv9fARDTR9rw66mSPZ0TJYUCmDQB-wJinj4f57UvsZa8rhwLSyQKsoIDo_nxewyL416-2XLLf36BwBbp0cJptLGnM9_yLIU_dtj8OJixL9rPBEn4QZJKXMDwGXSTQcfNDU1w6RsZ6U-sYEnCLOUMSdiNRGvOiMUwmGwIKxCn_nDAttf3spTENteSNtL6tSz04AnIrJ15T4UPcDgSeGq68okIpGFw6tWOJ4E3UXOlpp8fUBDLRkIB-Dlhy9S9WUiV1CwooG0FnZquhhXbLsdyKZDwuvY12RlIS2yQm1JBfplGeP6rwQd4llSvKhZbuPyIpwCVMH6gnK8gmno4Y36A1yaRfzoVpNl_JKxSkTfoPS_vodxtQHsXkOfVL7ttqDl1f2LZLtMEvm1-h3N7Kr2rX2lMQ7x-cdUjOaMmjVxqOKr-vKQvsTtZjVedX4VGJIlWPpadwR_AEXQ3Q5aoyT4-yprMFFouJRBzvlkuHjbSPAdkUi7OOn1gy3qaMHRneX_YgTd_YgKe3TVLEaarzfhfLIamHhv63OZihq2jcs-EucpZWwqSwWFKgeekl6tqvCde5PfAwwnGhhmKbEFJcKWdrR2LGlxQduPLTFZ7vcHFnL5YaV5iFEuDuOLWadLTblWlCgmsQ'
+          },
+          body: JSON.stringify({
+            email,
+            fields: { name, last_name: teamName, phone: phone || '' },
+            groups: ['184141516725290868']
+          })
+        });
+      } catch(mlErr) { /* silent — Firestore save already succeeded */ }
+    }
+
     document.getElementById('form-wrap').style.display = 'none';
     const s = document.getElementById('success-box');
     s.className = 'success-box show';

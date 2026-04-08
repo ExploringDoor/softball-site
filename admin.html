@@ -287,6 +287,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="contacts" data-sec="contacts" onclick="showSection('contacts')"><span class="icon">&#128222;</span> Contacts</div>
       <div class="nav-item" data-section="financials" data-sec="financials" onclick="showSection('financials')"><span class="icon">&#128181;</span> Financials</div>
       <div class="nav-item" data-section="registrations" data-sec="registrations" onclick="showSection('registrations')"><span class="icon">&#128221;</span> Registrations</div>
+      <div class="nav-item" data-section="emailblast" data-sec="emailblast" onclick="showSection('emailblast')"><span class="icon">&#128140;</span> Email Blast</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
       <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
       <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
@@ -667,6 +668,35 @@ select.form-input{cursor:pointer}
       </div>
     </div>
 
+    <!-- ═══ EMAIL BLAST ═══ -->
+    <div class="section" id="sec-emailblast">
+      <div class="main-header">
+        <div class="main-title">Email Blast</div>
+        <div class="main-subtitle">Send an email to all DVSL Players subscribers via MailerLite</div>
+      </div>
+      <div style="max-width:640px">
+        <div class="card" style="padding:24px;margin-bottom:16px">
+          <div id="ml-subscriber-count" style="font-size:13px;color:var(--muted2);margin-bottom:20px">Loading subscriber count...</div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">Subject Line</label>
+            <input type="text" id="blast-subject" class="form-input" placeholder="e.g. Game Reminder — Week 4 Tonight!">
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">Message</label>
+            <textarea id="blast-body" class="form-input" rows="8" placeholder="Write your message here...&#10;&#10;Supports basic HTML — e.g. &lt;b&gt;bold&lt;/b&gt;, &lt;a href='...'&gt;link&lt;/a&gt;"></textarea>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="btn btn-primary" onclick="sendEmailBlast()" id="blast-btn">📧 Send to All Subscribers</button>
+            <button class="btn btn-outline" onclick="previewBlast()">👁 Preview</button>
+          </div>
+          <div id="blast-status" style="margin-top:12px;font-size:13px;display:none"></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted2);line-height:1.6">
+          💡 Sent campaigns are managed at <a href="https://dashboard.mailerlite.com" target="_blank" style="color:var(--blue)">dashboard.mailerlite.com</a>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ SCORE REVIEWS ═══ -->
     <div class="section" id="sec-score-reviews">
       <div class="main-header">
@@ -903,6 +933,7 @@ window.showSection = function(name) {
   if (name === 'contacts') renderContacts();
   if (name === 'financials') renderFinancials();
   if (name === 'registrations') loadRegistrations();
+  if (name === 'emailblast') loadMailerLiteStats();
 };
 
 window.toggleSidebar = function() {
@@ -3097,6 +3128,103 @@ window.deletePayment = async function(paymentId) {
     toast('Payment deleted');
     renderFinancials();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// MAILERLITE EMAIL BLAST
+// ═══════════════════════════════════════════════════════════════════
+const ML_API_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI0IiwianRpIjoiMzgzYzc0NGFlYzJkYWFjOTA3NDgzY2YzOGFhNzQ1ZDIxNzlkMWIzZDY0YmIwNmM1ZjM1ZGU1YmNlYjc5ODY4OTI3NjEwNmE2YWMxMzYxMTIiLCJpYXQiOjE3NzU2MTA5NzUuMTM2MDAxLCJuYmYiOjE3NzU2MTA5NzUuMTM2MDAzLCJleHAiOjQ5MzEyODQ1NzUuMTI5MTQ3LCJzdWIiOiIyMjcyMTc5Iiwic2NvcGVzIjpbXX0.ai_zNxrFdGYWYrZOI8k6nEPPGzukERNWtMpXvDmv9fARDTR9rw66mSPZ0TJYUCmDQB-wJinj4f57UvsZa8rhwLSyQKsoIDo_nxewyL416-2XLLf36BwBbp0cJptLGnM9_yLIU_dtj8OJixL9rPBEn4QZJKXMDwGXSTQcfNDU1w6RsZ6U-sYEnCLOUMSdiNRGvOiMUwmGwIKxCn_nDAttf3spTENteSNtL6tSz04AnIrJ15T4UPcDgSeGq68okIpGFw6tWOJ4E3UXOlpp8fUBDLRkIB-Dlhy9S9WUiV1CwooG0FnZquhhXbLsdyKZDwuvY12RlIS2yQm1JBfplGeP6rwQd4llSvKhZbuPyIpwCVMH6gnK8gmno4Y36A1yaRfzoVpNl_JKxSkTfoPS_vodxtQHsXkOfVL7ttqDl1f2LZLtMEvm1-h3N7Kr2rX2lMQ7x-cdUjOaMmjVxqOKr-vKQvsTtZjVedX4VGJIlWPpadwR_AEXQ3Q5aoyT4-yprMFFouJRBzvlkuHjbSPAdkUi7OOn1gy3qaMHRneX_YgTd_YgKe3TVLEaarzfhfLIamHhv63OZihq2jcs-EucpZWwqSwWFKgeekl6tqvCde5PfAwwnGhhmKbEFJcKWdrR2LGlxQduPLTFZ7vcHFnL5YaV5iFEuDuOLWadLTblWlCgmsQ';
+const ML_GROUP_ID = '184141516725290868';
+const ML_HEADERS = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ML_API_KEY}` };
+
+async function loadMailerLiteStats() {
+  const el = document.getElementById('ml-subscriber-count');
+  if (!el) return;
+  try {
+    const res = await fetch(`https://connect.mailerlite.com/api/groups/${ML_GROUP_ID}`, { headers: ML_HEADERS });
+    const data = await res.json();
+    const count = data?.data?.active_count ?? '—';
+    el.innerHTML = `📬 <strong>${count}</strong> active subscribers in the DVSL Players list`;
+  } catch(e) {
+    el.textContent = 'Could not load subscriber count.';
+  }
+}
+
+window.sendEmailBlast = async function() {
+  const subject = document.getElementById('blast-subject').value.trim();
+  const body    = document.getElementById('blast-body').value.trim();
+  const status  = document.getElementById('blast-status');
+  const btn     = document.getElementById('blast-btn');
+  if (!subject) { toast('Please enter a subject line', 'error'); return; }
+  if (!body)    { toast('Please enter a message', 'error'); return; }
+  if (!confirm(`Send "${subject}" to all DVSL Players subscribers?`)) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Sending…';
+  status.style.display = 'none';
+  try {
+    // 1. Create campaign
+    const createRes = await fetch('https://connect.mailerlite.com/api/campaigns', {
+      method: 'POST', headers: ML_HEADERS,
+      body: JSON.stringify({
+        name: subject,
+        type: 'regular',
+        emails: [{
+          subject,
+          from_name: 'DVSL Softball',
+          from: 'toddharris1222@gmail.com',
+          content: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
+            <div style="background:#002D72;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0;font-family:Arial,sans-serif">
+              <strong style="font-size:20px;letter-spacing:.05em">⚾ DVSL SOFTBALL</strong>
+            </div>
+            <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px;line-height:1.6;color:#1a1a1a">
+              ${body.replace(/\n/g, '<br>')}
+            </div>
+            <div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af">
+              DVSL — Delaware Valley Synagogue League
+            </div>
+          </div>`
+        }],
+        groups: [ML_GROUP_ID]
+      })
+    });
+    const campaign = await createRes.json();
+    if (!campaign?.data?.id) throw new Error(campaign?.message || 'Failed to create campaign');
+    const campaignId = campaign.data.id;
+
+    // 2. Send immediately
+    await fetch(`https://connect.mailerlite.com/api/campaigns/${campaignId}/schedule`, {
+      method: 'POST', headers: ML_HEADERS,
+      body: JSON.stringify({ delivery: 'instant' })
+    });
+
+    status.style.display = 'block';
+    status.style.color = 'var(--green)';
+    status.textContent = '✅ Email sent successfully!';
+    document.getElementById('blast-subject').value = '';
+    document.getElementById('blast-body').value = '';
+    toast('Email blast sent!');
+    await logActivity('Email Blast', `Sent: ${subject}`);
+  } catch(e) {
+    status.style.display = 'block';
+    status.style.color = 'var(--red)';
+    status.textContent = '❌ Failed: ' + e.message;
+    toast('Failed to send: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '📧 Send to All Subscribers';
+};
+
+window.previewBlast = function() {
+  const subject = document.getElementById('blast-subject').value.trim() || '(no subject)';
+  const body    = document.getElementById('blast-body').value.trim() || '(no message)';
+  const win = window.open('', '_blank', 'width=680,height=600');
+  win.document.write(`<!DOCTYPE html><html><head><title>Preview: ${subject}</title></head><body style="margin:0;padding:20px;background:#f5f5f5;font-family:Arial,sans-serif">
+    <div style="max-width:600px;margin:0 auto">
+      <div style="background:#002D72;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0"><strong style="font-size:20px">⚾ DVSL SOFTBALL</strong></div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px;line-height:1.6;color:#1a1a1a">${body.replace(/\n/g,'<br>')}</div>
+      <div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af">DVSL — Delaware Valley Synagogue League</div>
+    </div>
+  </body></html>`);
 };
 
 </script>
