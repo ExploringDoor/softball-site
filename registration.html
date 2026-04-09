@@ -121,7 +121,7 @@ select.form-input{cursor:pointer;appearance:auto}
       </div>
     </li>
   </ul>
-  <button class="hamburger" id="hbg" onclick="document.getElementById('mobMenu').classList.toggle('open');this.classList.toggle('open')"><span></span><span></span><span></span></button>
+  <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
 </nav>
 <div class="mob-menu" id="mobMenu">
   <a href="index.html">Home</a>
@@ -136,6 +136,33 @@ select.form-input{cursor:pointer;appearance:auto}
   <a href="photos.html">📷 Gallery</a>
   <a href="admin.html" style="color:rgba(0,45,114,.6)">⚙ Admin</a>
 </div>
+<script>
+(function(){
+  var hbg=document.getElementById('hbg');
+  var mob=document.getElementById('mobMenu');
+  var _mobScrollY=0;
+  if(hbg) hbg.addEventListener('click',function(){
+    hbg.classList.toggle('open');mob.classList.toggle('open');
+    if(mob.classList.contains('open')){
+      _mobScrollY=window.scrollY||0;
+      document.body.style.overflow='hidden';
+      document.body.style.position='fixed';
+      document.body.style.top='-'+_mobScrollY+'px';
+      document.body.style.width='100%';
+    } else {
+      document.body.style.overflow='';document.body.style.position='';
+      document.body.style.top='';document.body.style.width='';
+      window.scrollTo(0,_mobScrollY);
+    }
+  });
+  if(mob) mob.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){
+    hbg.classList.remove('open');mob.classList.remove('open');
+    document.body.style.overflow='';document.body.style.position='';
+    document.body.style.top='';document.body.style.width='';
+    window.scrollTo(0,_mobScrollY);
+  });});
+})();
+</script>
 
 <!-- PAGE -->
 <div class="page-wrap">

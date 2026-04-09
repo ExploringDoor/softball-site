@@ -1059,7 +1059,21 @@ body.dark [style*="background:#ffffff"]{background:#1a1a1f!important}
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 const hbg=document.getElementById('hbg');
 const mob=document.getElementById('mobMenu');
-hbg.addEventListener('click',()=>{hbg.classList.toggle('open');mob.classList.toggle('open')});
+let _mobScrollY=0;
+hbg.addEventListener('click',()=>{
+  hbg.classList.toggle('open');mob.classList.toggle('open');
+  if(mob.classList.contains('open')){
+    _mobScrollY=window.scrollY||0;
+    document.body.style.overflow='hidden';
+    document.body.style.position='fixed';
+    document.body.style.top='-'+_mobScrollY+'px';
+    document.body.style.width='100%';
+  } else {
+    document.body.style.overflow='';document.body.style.position='';
+    document.body.style.top='';document.body.style.width='';
+    window.scrollTo(0,_mobScrollY);
+  }
+});
 
 function showPanel(name,btn){
   // Tab activation

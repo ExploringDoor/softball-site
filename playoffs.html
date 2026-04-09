@@ -762,8 +762,22 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
   // Hamburger
   const hb = document.getElementById('hbg');
   const mm = document.getElementById('mobMenu');
-  if(hb) hb.addEventListener('click', () => { hb.classList.toggle('open'); mm.classList.toggle('open'); });
-  if(mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); }));
+  let _mobScrollY=0;
+  if(hb) hb.addEventListener('click', () => {
+    hb.classList.toggle('open'); mm.classList.toggle('open');
+    if(mm.classList.contains('open')){
+      _mobScrollY=window.scrollY||0;
+      document.body.style.overflow='hidden';
+      document.body.style.position='fixed';
+      document.body.style.top='-'+_mobScrollY+'px';
+      document.body.style.width='100%';
+    } else {
+      document.body.style.overflow='';document.body.style.position='';
+      document.body.style.top='';document.body.style.width='';
+      window.scrollTo(0,_mobScrollY);
+    }
+  });
+  if(mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); document.body.style.overflow='';document.body.style.position='';document.body.style.top='';document.body.style.width='';window.scrollTo(0,_mobScrollY); }));
 
   // Bracket tabs - bulletproof version
   document.querySelectorAll('.b-tab').forEach(function(btn){
