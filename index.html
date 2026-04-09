@@ -1642,17 +1642,22 @@ thead th.sorted-col .sarrow{opacity:1}
    MOBILE CSS - SINGLE SOURCE OF TRUTH
    ═══════════════════════════════════════════════════ */
 
-/* Ticker - scrollable on mobile, doesn't cause page-level horizontal scroll */
+/* Ticker - 2-col grid on mobile */
 @media(max-width:700px){
   html,body{overflow-x:hidden!important;max-width:100vw!important;}
-  #score-ticker{overflow:hidden!important;max-width:100vw!important;height:64px!important;min-height:64px!important;}
-  .st-scroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;flex:1!important;max-width:100%;}
-  .st-track{animation:none!important;transform:none!important;position:static!important;width:max-content!important;display:inline-flex!important;height:64px!important;align-items:stretch!important;}
-  .st-game{height:64px!important;padding:0 10px!important;align-items:center!important;overflow:visible!important;}
-  .st-game-inner{gap:1px!important;justify-content:center!important;}
-  .st-abbr{font-size:11px!important;}
-  .st-datetime{font-size:8px!important;}
-  .st-label{position:sticky;left:0;z-index:2;flex-shrink:0;background:#002D72!important;height:64px!important;}
+  /* Ticker becomes a 2-col grid, max 2 rows visible, scrolls vertically */
+  #score-ticker{overflow:hidden!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;max-width:100vw!important;height:auto!important;min-height:0!important;max-height:116px!important;display:block!important;}
+  .st-label{display:none!important;}
+  .st-full{display:none!important;}
+  .st-scroll{overflow:visible!important;width:100%!important;height:auto!important;flex:none!important;}
+  .st-track{display:grid!important;grid-template-columns:1fr 1fr!important;width:100%!important;animation:none!important;transform:none!important;position:static!important;height:auto!important;}
+  .st-game{height:58px!important;padding:5px 8px!important;align-items:center!important;border-right:1px solid rgba(255,255,255,.12)!important;border-bottom:1px solid rgba(255,255,255,.12)!important;box-sizing:border-box!important;}
+  .st-game:nth-child(2n){border-right:none!important;}
+  .st-game-inner{gap:2px!important;justify-content:center!important;}
+  .st-abbr{font-size:12px!important;min-width:0!important;}
+  .st-datetime{font-size:7px!important;letter-spacing:.04em!important;}
+  .st-rec{display:none!important;}
+  .st-score{font-size:13px!important;min-width:14px!important;}
   /* Site banner wraps text on mobile, doesn't overflow */
   #site-banner{width:100%!important;box-sizing:border-box!important;padding:12px 50px 12px 16px!important;font-size:14px!important;white-space:normal!important;word-break:break-word!important;max-width:100vw!important;overflow:hidden!important;}
 
@@ -4329,11 +4334,46 @@ function getTickerGames(){
   return games;
 }
 
+// Team mobile abbreviations (voice-requested mapping: full name → short initials)
+const TEAM_NAME_ABBR_RULES = [
+  {match:['kenneth','israel'],abbr:'KI'},
+  {match:['temple sinai','green'],abbr:'TSG'},
+  {match:['temple sinai',"men"],abbr:'TSMC'},
+  {match:['temple sinai','black'],abbr:'TSB/KA'},
+  {match:['temple sinai','kol'],abbr:'TSB/KA'},
+  {match:['temple sinai'],abbr:'TSG'},
+  {match:['beth israel','royal'],abbr:'TBIR'},
+  {match:['beth israel',"men"],abbr:'TBIMC'},
+  {match:['beth israel'],abbr:'TBI'},
+  {match:['beth or','blue'],abbr:'BOB'},
+  {match:['beth or','red'],abbr:'BOR'},
+  {match:['beth or'],abbr:'BO'},
+  {match:['beth shalom','blue'],abbr:'BSB'},
+  {match:['beth shalom',"men"],abbr:'BSMC'},
+  {match:['beth shalom'],abbr:'BS'},
+  {match:['germantown'],abbr:'GJC'},
+  {match:['dn lightning'],abbr:'DN'},
+  {match:['dn'],abbr:'DN'},
+  {match:['lightning'],abbr:'DN'},
+  {match:['adath jeshurun'],abbr:'AJ'},
+  {match:['adath'],abbr:'AJ'},
+];
+function getMobileAbbr(teamShort){
+  const team=TEAMS.find(t=>(t.short||'').toLowerCase()===(teamShort||'').toLowerCase()||t.id===teamShort);
+  if(!team) return teamShort;
+  const name=(team.name||'').toLowerCase();
+  for(const{match,abbr}of TEAM_NAME_ABBR_RULES){
+    if(match.every(k=>name.includes(k))) return abbr;
+  }
+  return team.short||teamShort;
+}
+
 function buildTicker2(){
   const track = document.getElementById('st-track');
   if(!track) return;
   const tickerGames = getTickerGames();
   if(!tickerGames.length) return;
+  const isMob = window.innerWidth <= 700;
   const makeGame = g => {
     const at = getTeamByShort(g.away);
     const ht = getTeamByShort(g.home);
@@ -4345,6 +4385,8 @@ function buildTicker2(){
     const status = done ? 'Final' : (g.date+' · '+g.time);
     const field = g.field||'';
     const timeStr = g.time||'TBD';
+    const awayLabel = isMob ? getMobileAbbr(g.away) : g.away;
+    const homeLabel = isMob ? getMobileAbbr(g.home) : g.home;
     // Click opens gameday popup for upcoming, or recap for completed
     const onclick = done
       ? "openRecap2('"+g.away+"','"+g.home+"',"+g.as+","+g.hs+",'"+field+"','"+g.date+"')"
@@ -4353,12 +4395,12 @@ function buildTicker2(){
       +'<div class="st-game-inner">'
       +'<div class="st-datetime">'+status+'</div>'
       +'<div class="st-row">'
-        +'<span class="st-abbr'+(aWin?' winner':done?' loser':'')+'" style="color:#fff">'+g.away+'</span>'
+        +'<span class="st-abbr'+(aWin?' winner':done?' loser':'')+'" style="color:#fff">'+awayLabel+'</span>'
         +'<span class="st-rec">'+aRec+'</span>'
         +(done?'<span class="st-score'+(aWin?' winner':' loser')+'">'+g.as+'</span>':'')
       +'</div>'
       +'<div class="st-row">'
-        +'<span class="st-abbr'+(hWin?' winner':done?' loser':'')+'" style="color:#fff">'+g.home+'</span>'
+        +'<span class="st-abbr'+(hWin?' winner':done?' loser':'')+'" style="color:#fff">'+homeLabel+'</span>'
         +'<span class="st-rec">'+hRec+'</span>'
         +(done?'<span class="st-score'+(hWin?' winner':' loser')+'">'+g.hs+'</span>':'')
       +'</div>'
@@ -4384,7 +4426,7 @@ function buildTicker2(){
         const mobMenu = document.getElementById('mobMenu');
         if(ticker){
           const isMobile = window.innerWidth <= 700;
-          const tickerH = isMobile ? 64 : 48;
+          const tickerH = ticker.offsetHeight || (isMobile ? 116 : 48);
           const navH = 62;
           if(y > 10){
             ticker.style.transform = 'translateY(-100%)';
