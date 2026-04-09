@@ -701,7 +701,8 @@ window.openAddPlayer = function() {
       <div class="form-col"><label class="form-label">Position</label><select class="form-input" id="ap-pos">${posOptionsHtml('')}</select></div>
     </div>
     <div class="form-row">
-      <div class="form-col"><label class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(for team chat notifications)</span></label><input type="email" class="form-input" id="ap-email" placeholder="player@email.com"></div>
+      <div class="form-col"><label class="form-label">Email</label><input type="email" class="form-input" id="ap-email" placeholder="player@email.com"></div>
+      <div class="form-col"><label class="form-label">Phone</label><input type="tel" class="form-input" id="ap-phone" placeholder="(215) 555-0100"></div>
     </div>
     <div class="form-row">
       <button class="btn btn-success btn-sm" onclick="saveNewPlayer()">Add Player</button>
@@ -712,12 +713,14 @@ window.openAddPlayer = function() {
 
 window.saveNewPlayer = async function() {
   const emailVal = document.getElementById('ap-email').value.trim();
+  const phoneVal = document.getElementById('ap-phone').value.trim();
   const data = {
     name: document.getElementById('ap-name').value.trim(),
     num: parseInt(document.getElementById('ap-num').value) || 0,
     pos: document.getElementById('ap-pos').value.trim(),
     team: captainData.team_id,
     ...(emailVal && { email: emailVal }),
+    ...(phoneVal && { phone: phoneVal }),
   };
   if (!data.name) { toast('Please enter the player\'s name.', 'error'); return; }
   try {
@@ -746,7 +749,10 @@ window.editPlayer = function(playerId) {
         <div><label class="form-label">#</label><input type="number" class="form-input" id="ep-num-${playerId}" value="${p.num||''}" min="0"></div>
         <div><label class="form-label">Position</label><select class="form-input" id="ep-pos-${playerId}">${posOptionsHtml(p.pos||'')}</select></div>
       </div>
-      <div style="margin-bottom:8px"><label class="form-label">Email</label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}" placeholder="player@email.com"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label class="form-label">Email</label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}" placeholder="player@email.com"></div>
+        <div><label class="form-label">Phone</label><input type="tel" class="form-input" id="ep-phone-${playerId}" value="${esc(p.phone||'')}" placeholder="(215) 555-0100"></div>
+      </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-success btn-sm" onclick="saveEditPlayer('${playerId}')">Save</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('player-edit-${playerId}').style.display='none'">Cancel</button>
@@ -756,11 +762,13 @@ window.editPlayer = function(playerId) {
 
 window.saveEditPlayer = async function(playerId) {
   const emailVal = document.getElementById('ep-email-' + playerId).value.trim();
+  const phoneVal = document.getElementById('ep-phone-' + playerId).value.trim();
   const data = {
     name: document.getElementById('ep-name-' + playerId).value.trim(),
     num: parseInt(document.getElementById('ep-num-' + playerId).value) || 0,
     pos: document.getElementById('ep-pos-' + playerId).value.trim(),
     email: emailVal || '',
+    phone: phoneVal || '',
   };
   if (!data.name) { toast('Please enter a name.', 'error'); return; }
   try {
@@ -831,11 +839,32 @@ window.toggleEditGame = function(gameId) {
   if (el.style.display !== 'none') { el.style.display = 'none'; return; }
   const g = MY_GAMES.find(x => x.id === gameId);
   if (!g) return;
+  // Best-effort parse date_iso from display string if missing
+  let dateIsoVal = g.date_iso || '';
+  if (!dateIsoVal && g.date) {
+    try {
+      const d = new Date(g.date + ' 2026');
+      if (!isNaN(d)) dateIsoVal = d.toISOString().slice(0,10);
+    } catch(e) {}
+  }
+  // Best-effort parse time_24 from display string if missing
+  let time24Val = g.time_24 || '';
+  if (!time24Val && g.time) {
+    try {
+      const m = g.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (m) {
+        let h = parseInt(m[1]); const min = m[2]; const ampm = m[3].toUpperCase();
+        if (ampm === 'PM' && h !== 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        time24Val = `${String(h).padStart(2,'0')}:${min}`;
+      }
+    } catch(e) {}
+  }
   el.style.display = 'block';
   el.innerHTML = `<div style="padding:12px;background:#f8f9fb;border-top:1px solid var(--border);margin-top:4px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <div><label class="form-label">Date</label><input type="date" class="form-input" id="ceg-date-${gameId}" value="${esc(g.date_iso||'')}"></div>
-      <div><label class="form-label">Time</label><input type="time" class="form-input" id="ceg-time-${gameId}" value="${esc(g.time_24||'')}"></div>
+      <div><label class="form-label">Date</label><input type="date" class="form-input" id="ceg-date-${gameId}" value="${esc(dateIsoVal)}"></div>
+      <div><label class="form-label">Time</label><input type="time" class="form-input" id="ceg-time-${gameId}" value="${esc(time24Val)}"></div>
     </div>
     <div style="margin-bottom:8px"><label class="form-label">Field</label><select class="form-input" id="ceg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
     <div style="margin-bottom:10px;font-size:13px;color:var(--muted)">vs <strong>${esc(getTeamFull(g.home === captainData.team_id ? g.away : g.home))}</strong></div>
@@ -1002,60 +1031,86 @@ window.showBoxScoreEntry = function(gameId) {
   const awayRowCount = awayIsMyTeam ? myPlayers.length : 1;
   const homeRowCount = !awayIsMyTeam ? myPlayers.length : 1;
 
+  function bsTable(tbodyId, rows) {
+    return `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table style="width:100%;border-collapse:collapse;min-width:460px">
+        <thead><tr style="background:rgba(0,0,0,.03)">
+          <th style="text-align:left;padding:5px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:110px">Player</th>
+          ${statCols.map(c=>`<th style="text-align:center;padding:5px 2px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);width:38px">${c}</th>`).join('')}
+          <th style="width:24px"></th>
+        </tr></thead>
+        <tbody id="${tbodyId}">${rows}</tbody>
+      </table>
+    </div>`;
+  }
+
   el.style.display = 'block';
   el.innerHTML = `<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <!-- Header -->
     <div style="background:var(--navy);color:#fff;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em">
-      📊 BOX SCORE — Wk ${g.wk || '?'}: ${awayTeamName} @ ${homeTeamName}
+      📊 BOX SCORE — Wk ${g.wk||'?'}: ${awayTeamName} @ ${homeTeamName}
     </div>
-    <div style="padding:14px 16px;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap;align-items:center">
-      <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Away (${awayTeamName})</label>
-        <input type="number" id="bs-${gameId}-away-final" min="0" placeholder="0" style="width:60px;text-align:center;font-size:20px;font-weight:700;padding:4px 8px;border:2px solid var(--border);border-radius:6px;font-family:'Barlow Condensed',sans-serif">
+    <!-- Final Score row -->
+    <div style="padding:10px 16px;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">${awayTeamName}</span>
+        <input type="number" id="bs-${gameId}-away-final" min="0" placeholder="0" style="width:52px;text-align:center;font-size:22px;font-weight:700;padding:3px 6px;border:2px solid var(--border);border-radius:6px;font-family:'Barlow Condensed',sans-serif">
       </div>
-      <div style="font-size:18px;color:var(--muted);font-weight:700">—</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)">Home (${homeTeamName})</label>
-        <input type="number" id="bs-${gameId}-home-final" min="0" placeholder="0" style="width:60px;text-align:center;font-size:20px;font-weight:700;padding:4px 8px;border:2px solid var(--border);border-radius:6px;font-family:'Barlow Condensed',sans-serif">
+      <span style="font-size:16px;color:var(--muted);font-weight:700">—</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input type="number" id="bs-${gameId}-home-final" min="0" placeholder="0" style="width:52px;text-align:center;font-size:22px;font-weight:700;padding:3px 6px;border:2px solid var(--border);border-radius:6px;font-family:'Barlow Condensed',sans-serif">
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">${homeTeamName}</span>
       </div>
     </div>
-    <!-- AWAY BATTERS -->
-    <div style="padding:10px 16px 4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);background:rgba(0,45,114,.04)">Away: ${awayTeamName}</div>
-    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <table style="width:100%;border-collapse:collapse;min-width:500px">
-        <thead><tr style="background:rgba(0,0,0,.03)">
-          <th style="text-align:left;padding:6px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:130px">Player</th>
-          ${statCols.map(c=>`<th style="text-align:center;padding:6px 3px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:44px">${c}</th>`).join('')}
-          <th style="width:28px"></th>
-        </tr></thead>
-        <tbody id="bs-${gameId}-away-tbody">${awayRows}</tbody>
-      </table>
+    <!-- Team tabs -->
+    <div style="display:flex;border-bottom:2px solid var(--border)">
+      <button id="bs-tab-away-${gameId}" onclick="bsSwitchTab('${gameId}','away')"
+        style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:var(--navy);color:#fff;border-right:1px solid rgba(255,255,255,.2)">
+        ▲ ${awayTeamName}
+      </button>
+      <button id="bs-tab-home-${gameId}" onclick="bsSwitchTab('${gameId}','home')"
+        style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:#f3f4f6;color:var(--muted)">
+        ▼ ${homeTeamName}
+      </button>
     </div>
-    <div style="padding:6px 16px 10px">
-      <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${awayPrefix}',${awayRowCount})">+ Add Batter</button>
+    <!-- Away panel -->
+    <div id="bs-panel-away-${gameId}">
+      ${bsTable(`bs-${gameId}-away-tbody`, awayRows)}
+      <div style="padding:6px 16px 10px">
+        <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${awayPrefix}',${awayRowCount})">+ Add Batter</button>
+      </div>
     </div>
-    <!-- HOME BATTERS -->
-    <div style="padding:10px 16px 4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);background:rgba(0,45,114,.04);border-top:1px solid var(--border)">Home: ${homeTeamName}</div>
-    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <table style="width:100%;border-collapse:collapse;min-width:500px">
-        <thead><tr style="background:rgba(0,0,0,.03)">
-          <th style="text-align:left;padding:6px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:130px">Player</th>
-          ${statCols.map(c=>`<th style="text-align:center;padding:6px 3px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:44px">${c}</th>`).join('')}
-          <th style="width:28px"></th>
-        </tr></thead>
-        <tbody id="bs-${gameId}-home-tbody">${homeRows}</tbody>
-      </table>
-    </div>
-    <div style="padding:6px 16px 10px">
-      <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${homePrefix}',${homeRowCount})">+ Add Batter</button>
+    <!-- Home panel -->
+    <div id="bs-panel-home-${gameId}" style="display:none">
+      ${bsTable(`bs-${gameId}-home-tbody`, homeRows)}
+      <div style="padding:6px 16px 10px">
+        <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${homePrefix}',${homeRowCount})">+ Add Batter</button>
+      </div>
     </div>
     <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-success btn-sm" onclick="submitBoxScore('${gameId}')">Submit Box Score</button>
+      <button class="btn btn-success btn-sm" onclick="submitBoxScore('${gameId}')">✓ Submit Box Score</button>
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('boxscore-entry-${gameId}').style.display='none'">Cancel</button>
     </div>
   </div>`;
   // Store row counts on the element for addBsRow
   el.dataset.awayRows = awayRowCount;
   el.dataset.homeRows = homeRowCount;
+};
+
+window.bsSwitchTab = function(gameId, tab) {
+  const awayPanel = document.getElementById('bs-panel-away-' + gameId);
+  const homePanel = document.getElementById('bs-panel-home-' + gameId);
+  const awayBtn   = document.getElementById('bs-tab-away-' + gameId);
+  const homeBtn   = document.getElementById('bs-tab-home-' + gameId);
+  if (tab === 'away') {
+    awayPanel.style.display = ''; homePanel.style.display = 'none';
+    awayBtn.style.background = 'var(--navy)'; awayBtn.style.color = '#fff';
+    homeBtn.style.background = '#f3f4f6';     homeBtn.style.color = 'var(--muted)';
+  } else {
+    homePanel.style.display = ''; awayPanel.style.display = 'none';
+    homeBtn.style.background = 'var(--navy)'; homeBtn.style.color = '#fff';
+    awayBtn.style.background = '#f3f4f6';     awayBtn.style.color = 'var(--muted)';
+  }
 };
 
 window.removeBsRow = function(btn) {
