@@ -427,12 +427,14 @@ function renderUI() {
   }
   cardsHtml += '</div>';
 
-  // Build tabs
-  let tabsHtml = '<div class="stat-tabs" style="display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch">';
+  // Build tabs — outer div scrolls, inner div sizes to content
+  let tabsHtml = '<div style="width:100%;overflow-x:scroll;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;border-bottom:2px solid var(--border)">';
+  tabsHtml += '<div style="display:inline-flex;flex-wrap:nowrap;padding:0 20px;min-width:100%;gap:0">';
   for (const cat of CATEGORIES) {
-    tabsHtml += `<button class="stat-tab${cat.key === currentCat ? ' active' : ''}" data-cat="${cat.key}" onclick="switchCat('${cat.key}')" style="flex-shrink:0;white-space:nowrap">${cat.label}</button>`;
+    const isActive = cat.key === currentCat;
+    tabsHtml += `<button class="stat-tab${isActive ? ' active' : ''}" data-cat="${cat.key}" onclick="switchCat('${cat.key}')" style="flex-shrink:0;white-space:nowrap">${cat.label}</button>`;
   }
-  tabsHtml += '</div>';
+  tabsHtml += '</div></div>';
 
   // Build table
   const activeCat = CATEGORIES.find(c => c.key === currentCat);
