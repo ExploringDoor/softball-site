@@ -360,6 +360,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="financials" data-sec="financials" onclick="showSection('financials')"><span class="icon">&#128181;</span> Financials</div>
       <div class="nav-item" data-section="registrations" data-sec="registrations" onclick="showSection('registrations')"><span class="icon">&#128221;</span> Registrations</div>
       <div class="nav-item" data-section="emailblast" data-sec="emailblast" onclick="showSection('emailblast')"><span class="icon">&#128140;</span> Email Blast</div>
+      <div class="nav-item" data-section="pages" data-sec="pages" onclick="showSection('pages')"><span class="icon">&#9998;</span> Page Editor</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
       <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
       <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
@@ -776,6 +777,75 @@ select.form-input{cursor:pointer}
     </div>
 
     <!-- ═══ SCORE REVIEWS ═══ -->
+    <!-- ═══ PAGE EDITOR ═══ -->
+    <div class="section" id="sec-pages">
+      <div class="main-header">
+        <div class="main-title">Page Editor</div>
+        <div class="main-subtitle">Edit the content of any page on the site — no code required</div>
+      </div>
+      <div style="display:grid;grid-template-columns:260px 1fr;gap:20px;align-items:start">
+        <!-- Left: Section picker -->
+        <div class="panel" style="padding:0;overflow:hidden;position:sticky;top:20px">
+          <div style="padding:14px 18px;border-bottom:1px solid var(--border);background:rgba(0,45,114,.04)">
+            <div class="panel-title" style="margin:0">Sections</div>
+          </div>
+          <div id="pe-section-list" style="max-height:70vh;overflow-y:auto">
+            <!-- populated by JS -->
+          </div>
+        </div>
+        <!-- Right: Editor -->
+        <div>
+          <div id="pe-no-selection" class="panel" style="text-align:center;padding:60px 24px;color:var(--muted)">
+            <div style="font-size:48px;margin-bottom:16px">&#9998;</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;color:var(--text);margin-bottom:8px">Pick a Section</div>
+            <div style="font-size:13px">Select a section from the left to start editing</div>
+          </div>
+          <div id="pe-editor-wrap" style="display:none">
+            <div class="panel" style="margin-bottom:0">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+                <div>
+                  <div class="panel-title" style="margin:0" id="pe-editor-title">Section</div>
+                  <div style="font-size:12px;color:var(--muted);margin-top:3px" id="pe-editor-sub"></div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                  <span id="pe-saved-label" style="font-size:11px;color:var(--muted);display:none"></span>
+                  <a id="pe-view-link" href="#" target="_blank" class="btn btn-outline btn-sm">&#128279; View Page</a>
+                  <button class="btn btn-primary btn-sm" onclick="peSave()">&#10003; Save Changes</button>
+                </div>
+              </div>
+              <!-- Toolbar -->
+              <div style="display:flex;flex-wrap:wrap;gap:4px;padding:8px;background:#f8f9fa;border-radius:8px;border:1px solid rgba(0,0,0,.08);margin-bottom:10px">
+                <button onclick="peCmd('bold')" title="Bold" style="font-weight:900;font-size:13px;width:30px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">B</button>
+                <button onclick="peCmd('italic')" title="Italic" style="font-style:italic;font-size:13px;width:30px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">I</button>
+                <button onclick="peCmd('underline')" title="Underline" style="text-decoration:underline;font-size:13px;width:30px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">U</button>
+                <div style="width:1px;background:var(--border);margin:2px 4px"></div>
+                <button onclick="peCmd('insertUnorderedList')" title="Bullet list" style="font-size:14px;width:30px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">&#8226;&#8801;</button>
+                <button onclick="peCmd('insertOrderedList')" title="Numbered list" style="font-size:13px;width:30px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">1&#8801;</button>
+                <div style="width:1px;background:var(--border);margin:2px 4px"></div>
+                <select onchange="peCmd('formatBlock',this.value);this.value=''" style="font-size:12px;padding:3px 6px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;height:28px">
+                  <option value="">Heading</option>
+                  <option value="h3">H3</option>
+                  <option value="h4">H4</option>
+                  <option value="p">Paragraph</option>
+                </select>
+                <div style="width:1px;background:var(--border);margin:2px 4px"></div>
+                <button onclick="peInsertLink()" title="Insert link" style="font-size:13px;padding:0 8px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">&#128279; Link</button>
+                <button onclick="peCmd('removeFormat')" title="Clear formatting" style="font-size:13px;padding:0 8px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;cursor:pointer">&#10006; Clear</button>
+                <button onclick="peRevert()" title="Revert to original" style="font-size:12px;padding:0 8px;height:28px;border:1px solid rgba(0,0,0,.12);border-radius:4px;background:#fff;color:var(--red);cursor:pointer;margin-left:auto">&#8635; Revert</button>
+              </div>
+              <!-- Editable area -->
+              <div id="pe-editor" contenteditable="true"
+                style="min-height:320px;padding:20px;border:2px solid rgba(0,0,0,.1);border-radius:8px;font-size:14px;background:#fff;outline:none;line-height:1.7;font-family:'Inter',sans-serif"
+                data-placeholder="Start typing..."></div>
+              <div style="margin-top:12px;display:flex;justify-content:flex-end">
+                <button class="btn btn-primary" onclick="peSave()">&#10003; Save Changes</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="section" id="sec-score-reviews">
       <div class="main-header">
         <div class="main-title">Submitted Scores</div>
@@ -1025,6 +1095,7 @@ window.showSection = function(name) {
   if (name === 'financials') renderFinancials();
   if (name === 'registrations') loadRegistrations();
   if (name === 'emailblast') loadMailerLiteStats();
+  if (name === 'pages') loadPageEditor();
 };
 
 window.toggleSidebar = function() {
@@ -3439,6 +3510,164 @@ window.sendEmailBlast = async function() {
   btn.disabled = false;
   btn.textContent = '📧 Send to All Subscribers';
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// PAGE EDITOR
+// ═══════════════════════════════════════════════════════════════════
+const PE_SECTIONS = [
+  { group: 'Rules — League Rules', sections: [
+    { id: 'eligibility',   label: 'Eligibility to Play' },
+    { id: 'fastpitch',     label: 'Modified Fast Pitch' },
+    { id: 'roster',        label: 'Roster' },
+    { id: 'officialgame',  label: 'Official Game' },
+    { id: 'equipment',     label: 'Game Equipment' },
+    { id: 'gameplay',      label: 'Game Play & Special Rules' },
+    { id: 'umpiring',      label: 'Umpiring' },
+    { id: 'darkness',      label: 'Darkness & Weather' },
+    { id: 'postponement',  label: 'Postponements & Rescheduling' },
+    { id: 'starting',      label: 'Starting Times' },
+    { id: 'scores',        label: 'Reporting Scores' },
+    { id: 'courtesy',      label: 'Courtesy Base Runners' },
+    { id: 'conduct',       label: 'Conduct & Fighting' },
+    { id: 'scoring',       label: 'Points System' },
+    { id: 'playoffs',      label: 'Post-Season Playoffs' },
+    { id: 'bats',          label: 'Permitted Bats' },
+    { id: 'commissioners', label: 'Commissioners' },
+    { id: 'forfeits',      label: 'Two Forfeits Rule' },
+    { id: 'holidays',      label: 'Jewish Holidays' },
+    { id: 'fieldrules',    label: 'Field / Park Rules' },
+    { id: 'mercy',         label: 'Mercy Rule' },
+    { id: 'ejection',      label: 'Player Ejection' },
+    { id: 'uniforms',      label: 'Uniforms' },
+    { id: 'transfers',     label: 'Changing Teams' },
+    { id: 'despitch',      label: 'Designated Pitcher Rule' },
+  ]},
+  { group: 'Rules — Ground Rules', sections: [
+    { id: 'ground-intro',  label: 'Intro Text' },
+  ]},
+  { group: 'Registration Page', sections: [
+    { id: 'reg-eyebrow',   label: 'Eyebrow (small text above title)' },
+    { id: 'reg-title',     label: 'Page Title' },
+    { id: 'reg-sub',       label: 'Subtitle / Description' },
+  ]},
+];
+
+let peCurrentSection = null;
+let peOriginalHTML = {};
+
+function peDocId(id) { return 'page_' + id; }
+
+function peBuildList() {
+  const list = document.getElementById('pe-section-list');
+  let html = '';
+  for (const group of PE_SECTIONS) {
+    html += `<div style="padding:10px 18px 4px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">${group.group}</div>`;
+    for (const s of group.sections) {
+      html += `<div class="pe-item" data-id="${s.id}" onclick="peSelect('${s.id}')"
+        style="padding:9px 18px;font-size:13px;font-weight:500;cursor:pointer;transition:background .12s;border-left:3px solid transparent"
+        onmouseover="this.style.background='rgba(0,45,114,.05)'" onmouseout="if(peCurrentSection!=='${s.id}')this.style.background=''"
+        >${s.label}</div>`;
+    }
+    html += `<div style="height:1px;background:var(--border);margin:4px 0"></div>`;
+  }
+  list.innerHTML = html;
+}
+
+window.peSelect = async function(id) {
+  peCurrentSection = id;
+  // Highlight active
+  document.querySelectorAll('.pe-item').forEach(el => {
+    const active = el.dataset.id === id;
+    el.style.background = active ? 'var(--navy-light)' : '';
+    el.style.color = active ? 'var(--navy)' : '';
+    el.style.fontWeight = active ? '700' : '500';
+    el.style.borderLeftColor = active ? 'var(--navy)' : 'transparent';
+  });
+  // Find meta
+  let meta = null;
+  for (const g of PE_SECTIONS) { meta = meta || g.sections.find(s => s.id === id); }
+  document.getElementById('pe-editor-title').textContent = meta?.label || id;
+  // Set view link
+  const viewLink = document.getElementById('pe-view-link');
+  if (id.startsWith('reg-')) viewLink.href = 'registration.html';
+  else if (id.startsWith('ground-')) viewLink.href = 'rules.html';
+  else viewLink.href = 'rules.html#' + id;
+
+  document.getElementById('pe-no-selection').style.display = 'none';
+  document.getElementById('pe-editor-wrap').style.display = 'block';
+  document.getElementById('pe-saved-label').style.display = 'none';
+
+  const editor = document.getElementById('pe-editor');
+  editor.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading...</div>';
+
+  try {
+    const snap = await getDoc(doc(db, 'site_content', peDocId(id)));
+    if (snap.exists()) {
+      const d = snap.data();
+      editor.innerHTML = d.html || '';
+      const ts = d.updated_at?.toDate();
+      const lbl = document.getElementById('pe-saved-label');
+      if (ts) {
+        lbl.textContent = 'Last saved ' + ts.toLocaleDateString('en-US', {month:'short',day:'numeric'}) + ' by ' + (d.updated_by || 'admin');
+        lbl.style.display = 'inline';
+      }
+      if (!peOriginalHTML[id]) peOriginalHTML[id] = d.html || '';
+    } else {
+      editor.innerHTML = peOriginalHTML[id] || '<p>No saved content yet. Start editing above.</p>';
+    }
+  } catch(e) {
+    editor.innerHTML = '<p style="color:var(--red)">Error loading content.</p>';
+  }
+};
+
+window.peCmd = function(cmd, val) {
+  document.getElementById('pe-editor').focus();
+  document.execCommand(cmd, false, val || null);
+};
+
+window.peInsertLink = function() {
+  const url = prompt('Enter URL:');
+  if (url) { document.getElementById('pe-editor').focus(); document.execCommand('createLink', false, url); }
+};
+
+window.peSave = async function() {
+  const btn = document.querySelector('#sec-pages .btn-primary');
+  const editor = document.getElementById('pe-editor');
+  const html = editor.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try {
+    await setDoc(doc(db, 'site_content', peDocId(peCurrentSection)), {
+      html,
+      updated_at: Timestamp.now(),
+      updated_by: currentUser?.email || 'admin',
+      section_id: peCurrentSection
+    });
+    const lbl = document.getElementById('pe-saved-label');
+    lbl.textContent = 'Saved just now by ' + (currentUser?.email || 'admin');
+    lbl.style.display = 'inline';
+    peOriginalHTML[peCurrentSection] = html;
+    toast('Section saved!');
+    await logActivity('Page Edit', `Saved section: ${peCurrentSection}`);
+  } catch(e) {
+    toast('Save failed: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '✓ Save Changes';
+};
+
+window.peRevert = async function() {
+  if (!confirm('Revert to the original hardcoded content? This will clear any saved changes.')) return;
+  try {
+    await deleteDoc(doc(db, 'site_content', peDocId(peCurrentSection)));
+    delete peOriginalHTML[peCurrentSection];
+    document.getElementById('pe-editor').innerHTML = '<p>Reverted. Original hardcoded content will show on the site.</p>';
+    document.getElementById('pe-saved-label').style.display = 'none';
+    toast('Reverted to original');
+  } catch(e) { toast('Revert failed', 'error'); }
+};
+
+window.loadPageEditor = function() { peBuildList(); };
 
 window.previewBlast = function() {
   const subject = document.getElementById('blast-subject').value.trim() || '(no subject)';

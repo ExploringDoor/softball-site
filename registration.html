@@ -168,9 +168,9 @@ select.form-input{cursor:pointer;appearance:auto}
 <div class="page-wrap">
   <div class="page-hero">
     <div class="page-hero-inner">
-      <div class="page-eyebrow">Delaware Valley Synagogue League · 2026</div>
-      <div class="page-title">Stay<br>Connected</div>
-      <div class="page-sub">Sign up to get game reminders, score updates, and league news delivered straight to you.</div>
+      <div class="page-eyebrow" id="reg-eyebrow">Delaware Valley Synagogue League · 2026</div>
+      <div class="page-title" id="reg-title">Stay<br>Connected</div>
+      <div class="page-sub" id="reg-sub">Sign up to get game reminders, score updates, and league news delivered straight to you.</div>
     </div>
   </div>
 
@@ -378,6 +378,16 @@ try {
         </div>
       </div>`).join('');
   }
+} catch(e) {}
+
+// Load admin-edited hero text from Firebase
+try {
+  const contentSnap = await getDocs(collection(db, 'site_content'));
+  contentSnap.forEach(d => {
+    const data = d.data();
+    const el = document.getElementById(data.section_id);
+    if (el && data.html) el.innerHTML = data.html;
+  });
 } catch(e) {}
 </script>
 </body>

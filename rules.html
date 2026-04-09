@@ -1179,5 +1179,37 @@ async function loadTicker() {
 }
 loadTicker();
 </script>
+<script type="module">
+// Load any admin-edited page content from Firebase and replace hardcoded rule bodies
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+const _app = initializeApp({
+  apiKey:"AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain:"dvsl-292dd.firebaseapp.com",
+  projectId:"dvsl-292dd",
+  storageBucket:"dvsl-292dd.firebasestorage.app",
+  messagingSenderId:"145862305559",
+  appId:"1:145862305559:web:153ec455bad57e17517952"
+}, 'rules-content-loader');
+const _db = getFirestore(_app);
+(async () => {
+  try {
+    const snap = await getDocs(collection(_db, 'site_content'));
+    snap.forEach(d => {
+      const data = d.data();
+      const sectionId = data.section_id;
+      if (!sectionId || !data.html) return;
+      if (sectionId === 'ground-intro') {
+        const el = document.querySelector('#panel-ground-rules .intro-card');
+        if (el) el.innerHTML = data.html;
+      } else {
+        const section = document.getElementById(sectionId);
+        const body = section?.querySelector('.rule-body');
+        if (body) body.innerHTML = data.html;
+      }
+    });
+  } catch(e) {}
+})();
+</script>
 </body>
 </html>
