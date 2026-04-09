@@ -450,6 +450,8 @@ body.dark .nav-team-item:hover{background:rgba(255,255,255,.07)}
 .col-player .p-pos{font-size:10px;color:var(--muted);font-weight:400;margin-left:5px}
 .col-team{white-space:nowrap}
 .col-team-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.team-name-abbr{display:none}
+@media(max-width:700px){.team-name-full{display:none}.team-name-abbr{display:inline}}
 .stat-hi{color:var(--gold);font-weight:700}
 .stats-table tfoot td{padding:10px 14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);font-style:italic}
 body.dark .pt-btn{color:rgba(237,237,237,.4)!important}body.dark .pt-btn.active{color:#ededed!important;border-color:#5b9aff!important}
@@ -5436,7 +5438,7 @@ function renderStats(){
     return `<tr class="${rowCls}">${cols.map(c=>{
       if(c.key==='_rank') return `<td class="col-rank ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${medal(i)}</td>`;
       if(c.key==='name')  return `<td class="col-player" style="cursor:pointer" onclick="goPlayer('${row.id||''}')" title="View ${row.name} stats">${row.name}${row.pos?`<span class="p-pos">${row.pos}</span>`:''}</td>`;
-      if(c.key==='_team') return `<td class="col-team" style="cursor:pointer" onclick="goTeamPage('${t?.id||''}')"><span class="col-team-dot" style="background:${t?.color||'#888'}"></span>${t?.name||''}</td>`;
+      if(c.key==='_team') return `<td class="col-team" style="cursor:pointer" onclick="goTeamPage('${t?.id||''}')"><span class="col-team-dot" style="background:${t?.color||'#888'}"></span><span class="team-name-full">${t?.name||''}</span><span class="team-name-abbr">${t?.short||t?.name||''}</span></td>`;
       if(c.key==='_w')    return `<td class="${c.cls||''}" style="color:var(--muted);font-size:12px">${row._w||0}–${row._l||0}</td>`;
       const val = row[c.key];
       const isHighlit = c.key===sk && i<3;
