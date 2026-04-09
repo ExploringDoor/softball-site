@@ -584,8 +584,16 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .home-layout-flex > div:last-child{width:100%!important}
   /* Mobile: reduce page header padding */
   .page-header-pad{padding:120px 18px 20px!important}
-  /* Mobile: preview cards single column */
-  .preview-grid{grid-template-columns:1fr!important;gap:12px!important}
+  /* Mobile: preview cards 2-column grid */
+  .preview-grid{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  .preview-card{padding:8px 10px!important;}
+  .preview-logo{width:28px!important;height:28px!important;}
+  .preview-name{display:none!important;}
+  .preview-name-mob{display:block!important;}
+  .preview-time{font-size:10px!important;margin-bottom:4px!important;padding-bottom:3px!important;}
+  .preview-rec{font-size:9px!important;}
+  .preview-link{font-size:11px!important;padding:4px 0!important;}
+  .preview-team-row{gap:5px!important;}
   .pgrid{grid-template-columns:1fr 1fr}
 }
 @media(max-width:420px){
@@ -840,6 +848,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .preview-logo{width:44px;height:44px;border-radius:0;flex-shrink:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .preview-logo img{width:100%;height:100%;object-fit:contain;display:block}
 .preview-name{font-family:'Inter',sans-serif;font-weight:700;font-size:15px;color:#1a1a1a;cursor:pointer;line-height:1.2}
+.preview-name-mob{display:none;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;cursor:pointer;line-height:1.2;text-transform:uppercase;letter-spacing:.02em}
 .preview-rec{font-size:11px;color:rgba(0,0,0,.4);font-weight:500;display:block;margin-top:1px}
 .preview-field{font-size:12px;color:rgba(0,0,0,.5);font-weight:500;margin-bottom:2px}
 .preview-date{font-size:11px;color:rgba(0,0,0,.35);margin-bottom:6px}
@@ -1161,6 +1170,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .preview-logo{width:44px;height:44px;border-radius:0;flex-shrink:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .preview-logo img{width:100%;height:100%;object-fit:contain;display:block}
 .preview-name{font-family:'Inter',sans-serif;font-weight:700;font-size:15px;color:#1a1a1a;cursor:pointer;line-height:1.2}
+.preview-name-mob{display:none;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;cursor:pointer;line-height:1.2;text-transform:uppercase;letter-spacing:.02em}
 .preview-rec{font-size:11px;color:rgba(0,0,0,.4);font-weight:500;display:block;margin-top:1px}
 .preview-field{font-size:12px;color:rgba(0,0,0,.5);font-weight:500;margin-bottom:2px}
 .preview-date{font-size:11px;color:rgba(0,0,0,.35);margin-bottom:6px}
@@ -3424,11 +3434,11 @@ function buildSchedule(){
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,atm?.short||g.away)}</div>
-          <div><span class="preview-name" onclick="goPage('team','${atm?.id||g.away}')">${atm?.name||g.away}</span><span class="preview-rec">${aRec}</span></div>
+          <div><span class="preview-name" onclick="goPage('team','${atm?.id||g.away}')">${atm?.name||g.away}</span><span class="preview-name-mob" onclick="goPage('team','${atm?.id||g.away}')">${getMobileAbbr(g.away)}</span><span class="preview-rec">${aRec}</span></div>
         </div>
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(htm?.id,htm?.short||g.home)}</div>
-          <div><span class="preview-name" onclick="goPage('team','${htm?.id||g.home}')">${htm?.name||g.home}</span><span class="preview-rec">${hRec}</span></div>
+          <div><span class="preview-name" onclick="goPage('team','${htm?.id||g.home}')">${htm?.name||g.home}</span><span class="preview-name-mob" onclick="goPage('team','${htm?.id||g.home}')">${getMobileAbbr(g.home)}</span><span class="preview-rec">${hRec}</span></div>
         </div>
       </div>
       <span class="preview-link" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${g.time||'TBD'}')">Preview</span>
@@ -4048,8 +4058,31 @@ function doSignup(){
 // ════════════════════════════ HAMBURGER ══════════════════════════════════
 const hbg=document.getElementById('hbg');
 const mob=document.getElementById('mobMenu');
-hbg.addEventListener('click',()=>{hbg.classList.toggle('open');mob.classList.toggle('open');document.body.style.overflow=mob.classList.contains('open')?'hidden':''});
-function closeMob(){hbg.classList.remove('open');mob.classList.remove('open');document.body.style.overflow=''}
+let _mobScrollY=0;
+hbg.addEventListener('click',()=>{
+  hbg.classList.toggle('open');mob.classList.toggle('open');
+  if(mob.classList.contains('open')){
+    _mobScrollY=window.scrollY||0;
+    document.body.style.overflow='hidden';
+    document.body.style.position='fixed';
+    document.body.style.top='-'+_mobScrollY+'px';
+    document.body.style.width='100%';
+  } else {
+    document.body.style.overflow='';
+    document.body.style.position='';
+    document.body.style.top='';
+    document.body.style.width='';
+    window.scrollTo(0,_mobScrollY);
+  }
+});
+function closeMob(){
+  hbg.classList.remove('open');mob.classList.remove('open');
+  document.body.style.overflow='';
+  document.body.style.position='';
+  document.body.style.top='';
+  document.body.style.width='';
+  window.scrollTo(0,_mobScrollY);
+}
 
 // ════════════════════════════ TEAMS DROPDOWN ══════════════════════════════
 function populateTeamsDropdown(){
