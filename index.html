@@ -452,6 +452,8 @@ body.dark .nav-team-item:hover{background:rgba(255,255,255,.07)}
 .col-team-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .team-name-abbr{display:none}
 @media(max-width:700px){.team-name-full{display:none}.team-name-abbr{display:inline}}
+.stand-name-abbr{display:none}
+@media(max-width:700px){.stand-name-full{display:none!important}.stand-name-abbr{display:inline!important}}
 .stat-hi{color:var(--gold);font-weight:700}
 .stats-table tfoot td{padding:10px 14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);font-style:italic}
 body.dark .pt-btn{color:rgba(237,237,237,.4)!important}body.dark .pt-btn.active{color:#ededed!important;border-color:#5b9aff!important}
@@ -563,7 +565,7 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .nav-links,.nav-signup-btn{display:none}
   #darkToggle{display:none}
   /* Hamburger pinned directly to viewport — immune to nav/ticker positioning */
-  #hbg{position:fixed!important;top:74px!important;right:14px!important;z-index:500!important;display:flex!important;background:rgba(0,0,0,.55)!important;border-radius:7px!important;padding:8px 10px!important;}
+  #hbg{display:flex!important;}
   .hamburger span{background:#fff!important;}
   .hamburger span{background:#fff!important;}
   .sec,.sec-sm{padding:52px 18px}
@@ -578,6 +580,7 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .sched-wrap{flex-direction:column}
   .ttabs,.team-body,.team-hero{padding-left:18px;padding-right:18px}
   .team-hero{padding-top:124px!important}
+  #team-hero-logo{width:clamp(112px,28vw,188px)!important;height:clamp(112px,28vw,188px)!important;margin-top:16px!important;}
   .modal-av{display:none!important}
   .mob-menu{overflow-y:auto!important;bottom:0!important;}
   .pop-hd .pop-team img{width:72px!important;height:72px!important}
@@ -1956,9 +1959,9 @@ thead th.sorted-col .sarrow{opacity:1}
   <div class="nav-right">
     <button class="nav-signup-btn" onclick="window.location='notifications.html'">🔔 Alerts</button>
     <button id="darkToggle" onclick="toggleDarkMode()" style="background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;transition:all .2s" title="Toggle dark mode">🌙</button>
-    <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
   </div>
 </nav>
+<button class="hamburger" id="hbg" style="position:fixed;top:74px;right:14px;z-index:600;display:none;background:rgba(0,0,0,.55);border-radius:7px;padding:8px 10px"><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span></button>
 <div class="mob-menu" id="mobMenu">
   <span onclick="goPage('home');closeMob()">Home</span>
   <span onclick="goPage('scores');closeMob()">Scores</span>
@@ -3388,7 +3391,7 @@ function buildStandings(){
       const streak=t.streak&&t.streak!=='—'?'<span class="'+(t.streak[0]==='W'?'badge-w':'badge-l')+'">'+t.streak+'</span>':'<span style="color:var(--muted)">—</span>';
       return '<tr class="'+(i===0?'leader':'')+'" style="'+(active?'cursor:pointer':'opacity:.55')+'" onclick="'+(active?'goPage(\'team\',\''+t.id+'\')':'')+'">'
         +'<td style="color:var(--muted);font-size:12px">'+(i+1)+'</td>'
-        +'<td><span style="display:inline-flex;align-items:center;gap:8px">'+(LOGO_TEAMS.has(t.id)?'<img src="logos/'+t.id+'.png" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" loading="lazy">':'<span style="width:8px;height:8px;border-radius:50%;background:'+t.color+';flex-shrink:0;display:inline-block"></span>')+'<span class="tname" style="color:#1a1a1a;font-weight:600'+(active?';cursor:pointer':'')+'" onclick="'+(active?'event.stopPropagation();goPage(\'team\',\''+t.id+'\')':'')+'">'+(active?'<span style="text-decoration:underline dotted;text-underline-offset:3px">'+t.name+'</span>':t.name)+'</span></span>'+(!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':'')+'</td>'
+        +'<td><span style="display:inline-flex;align-items:center;gap:8px">'+(LOGO_TEAMS.has(t.id)?'<img src="logos/'+t.id+'.png" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" loading="lazy">':'<span style="width:8px;height:8px;border-radius:50%;background:'+t.color+';flex-shrink:0;display:inline-block"></span>')+'<span class="tname" style="color:#1a1a1a;font-weight:600'+(active?';cursor:pointer':'')+'" onclick="'+(active?'event.stopPropagation();goPage(\'team\',\''+t.id+'\')':'')+'">'+(active?'<span style="text-decoration:underline dotted;text-underline-offset:3px"><span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span></span>':'<span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span>')+'</span></span>'+(!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':'')+'</td>'
         +'<td>'+t.w+'</td><td>'+t.l+'</td>'
         +'<td style="font-weight:600">'+t.pct.toFixed(3).replace(/^0\./,'.')+'</td>'
         +'<td>'+(t.gb==='—'?'<span style="color:var(--muted)">—</span>':'<span style="color:#1a1a1a;font-weight:600">'+t.gb+'</span>')+'</td>'
