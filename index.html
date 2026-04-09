@@ -555,12 +555,15 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .hist-mvp{display:none}
 }
 @media(max-width:700px){
-  .nav{padding:0 18px}
+  /* Nav becomes transparent floating bar — just the hamburger */
+  .nav{padding:8px 14px!important;background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;border-bottom:none!important;box-shadow:none!important;height:50px!important;}
+  .nav-brand{display:none!important;}
   .nav-links,.nav-signup-btn{display:none}
   #darkToggle{display:none}
-  .hamburger{display:flex}
+  .hamburger{display:flex;background:rgba(0,0,0,.45)!important;border-radius:7px!important;padding:8px 10px!important;backdrop-filter:blur(4px)!important;}
+  .hamburger span{background:#fff!important;}
   .sec,.sec-sm{padding:52px 18px}
-  .hero{padding:0;gap:0;height:calc(100vw / 3.26);min-height:unset;max-height:none;margin-top:126px;}
+  .hero{padding:0;gap:0;height:calc(100vw / 3.26);min-height:unset;max-height:none;margin-top:114px;}
   .hero-cta{flex-direction:column;width:100%}
   .btn-gold,.btn-outline{text-align:center;width:100%;display:block}
   .divider{margin:0 18px}
@@ -597,6 +600,14 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .preview-teams{gap:2px!important;margin-bottom:4px!important;}
   .preview-team-row>div{display:flex;align-items:center;}
   .pgrid{grid-template-columns:1fr 1fr}
+  /* Gameday popup: anchored to top on mobile so it's always reachable */
+  .pop{align-items:flex-start!important;padding:70px 10px 16px!important;}
+  .pop-box{max-height:calc(100vh - 86px)!important;border-radius:12px!important;}
+  .pop-hd{padding:18px 18px 12px!important;}
+  .pop-body{padding:14px 18px!important;}
+  .pop-abbr{font-size:36px!important;}
+  .pop-sc{font-size:48px!important;}
+  .pop-grid2{grid-template-columns:1fr!important;}
 }
 @media(max-width:420px){
   .pgrid{grid-template-columns:1fr}
@@ -976,7 +987,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 /* ── POPUP ─────────────────────────────────── */
 .pop{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
 .pop.open{opacity:1;pointer-events:all}
-.pop-box{background:#ffffff;border:1px solid var(--border2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.15);width:100%;max-width:760px;max-height:90vh;overflow-y:auto;position:relative;animation:popIn .22s ease}
+.pop-box{background:#ffffff;border:1px solid var(--border2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.15);width:100%;max-width:760px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;position:relative;animation:popIn .22s ease}
 @keyframes popIn{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
 .pop-x{position:absolute;top:14px;right:16px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:13px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
 .pop-x:hover{color:var(--white)}
@@ -1298,7 +1309,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 /* ── POPUP ─────────────────────────────────── */
 .pop{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
 .pop.open{opacity:1;pointer-events:all}
-.pop-box{background:#ffffff;border:1px solid var(--border2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.15);width:100%;max-width:760px;max-height:90vh;overflow-y:auto;position:relative;animation:popIn .22s ease}
+.pop-box{background:#ffffff;border:1px solid var(--border2);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.15);width:100%;max-width:760px;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch;position:relative;animation:popIn .22s ease}
 @keyframes popIn{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
 .pop-x{position:absolute;top:14px;right:16px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:13px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
 .pop-x:hover{color:var(--white)}
@@ -1833,7 +1844,7 @@ thead th.sorted-col .sarrow{opacity:1}
 
 <!-- ── ESPN SCORE TICKER ── -->
 <div id="score-ticker">
-  <div class="st-label">⬡ DVSL <span style="color:rgba(255,255,255,.5);font-weight:400">2026</span></div>
+  <div class="st-label" onclick="goPage('home')" style="cursor:pointer" title="Home">⬡ DVSL <span style="color:rgba(255,255,255,.5);font-weight:400">2026</span></div>
   <div class="st-scroll" id="st-scroll">
     <div class="st-track" id="st-track"></div>
   </div>
@@ -5206,8 +5217,23 @@ function goTeam(short){
   const id = t ? t.id : short.toLowerCase();
   goPage('team',id);
 }
-function openScPop(){document.getElementById('scPop').classList.add('open');document.body.style.overflow='hidden';}
-function closeScPop(){document.getElementById('scPop').classList.remove('open');document.body.style.overflow='';}
+let _popScrollY=0;
+function openScPop(){
+  _popScrollY=window.scrollY||0;
+  document.getElementById('scPop').classList.add('open');
+  document.body.style.overflow='hidden';
+  document.body.style.position='fixed';
+  document.body.style.top='-'+_popScrollY+'px';
+  document.body.style.width='100%';
+}
+function closeScPop(){
+  document.getElementById('scPop').classList.remove('open');
+  document.body.style.overflow='';
+  document.body.style.position='';
+  document.body.style.top='';
+  document.body.style.width='';
+  window.scrollTo(0,_popScrollY);
+}
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeScPop();});
 
 // Auto-switch to Schedule tab if ?tab=schedule in URL
