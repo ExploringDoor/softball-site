@@ -633,14 +633,8 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 .wx-field{font-size:10px;color:var(--muted2);margin-top:2px}
 .wx-loading{font-size:12px;color:var(--muted);font-style:italic}
 
-/* ── LIVE BADGE ── */
-.live-badge{display:none;align-items:center;gap:6px;background:var(--red);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:5px 12px;border-radius:100px;cursor:pointer;animation:livePulse 1.5s infinite;margin-left:8px}
-.live-badge.show{display:inline-flex}
-.live-dot{width:6px;height:6px;border-radius:50%;background:#fff;animation:liveBlink 1s infinite}
-@keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(224,60,49,.4)}70%{box-shadow:0 0 0 8px rgba(224,60,49,0)}}
 @keyframes alertGlow{0%,100%{box-shadow:0 0 8px #FFD700,0 0 16px rgba(255,215,0,.4)}50%{box-shadow:0 0 20px #FFD700,0 0 40px rgba(255,215,0,.6)}}
 @keyframes alertBlink{0%,100%{opacity:1}50%{opacity:.2}}
-@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:.2}}
 
 /* ── PLAYER SEARCH ── */
 .player-search-wrap{position:relative;margin-bottom:20px;max-width:420px}
@@ -1932,7 +1926,7 @@ thead th.sorted-col .sarrow{opacity:1}
       </div>
     </li>
   </ul>
-  <div class="nav-right"><span class="live-badge" id="liveBadge" onclick="goPage('scores');setTimeout(()=>setView('scores'),80)"><span class="live-dot"></span>Live</span>
+  <div class="nav-right">
     <button class="nav-signup-btn" onclick="window.location='notifications.html'">🔔 Alerts</button>
     <button id="darkToggle" onclick="toggleDarkMode()" style="background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;transition:all .2s" title="Toggle dark mode">🌙</button>
     <button class="hamburger" id="hbg"><span></span><span></span><span></span></button>
@@ -3021,17 +3015,6 @@ function fetchWeather(lat, lon){
       document.getElementById('wx-desc').textContent = 'Weather unavailable';
     });
 }
-
-// ════ LIVE BADGE ════
-function checkLiveBadge(){
-  const now = new Date();
-  const day = now.getDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu
-  const hr = now.getHours();
-  const isGameNight = [1,2,3,4].includes(day) && hr >= 18 && hr < 22;
-  document.getElementById('liveBadge').classList.toggle('show', isGameNight);
-}
-checkLiveBadge();
-setInterval(checkLiveBadge, 60000);
 
 // ════ PLAYER SEARCH ════
 function filterPlayerSearch(query){

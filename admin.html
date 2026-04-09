@@ -64,6 +64,8 @@ select.form-input{cursor:pointer}
 
 /* Mobile hamburger */
 .mob-toggle{display:none;position:fixed;top:14px;left:14px;z-index:200;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:20px;line-height:1}
+.mob-back-link{display:none;position:fixed;top:16px;right:14px;z-index:200;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;color:var(--navy);text-decoration:none;line-height:1}
+@media(max-width:768px){.mob-back-link{display:block}}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:90}
 @media(max-width:768px){
   .sidebar{transform:translateX(-100%)}
@@ -333,6 +335,7 @@ select.form-input{cursor:pointer}
 
 <!-- ═══ ADMIN APP ═══ -->
 <button class="mob-toggle" onclick="toggleSidebar()">&#9776;</button>
+<a href="index.html" class="mob-back-link">&#8592; Site</a>
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
 <div id="app" class="app">
@@ -544,28 +547,30 @@ select.form-input{cursor:pointer}
           data-placeholder="Type your alert message here..."></div>
 
         <!-- Bg color + border -->
-        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:14px;align-items:center">
-          <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
-            Background:
+        <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+            <span style="font-size:13px;font-weight:600;min-width:90px">Background:</span>
             <input type="color" id="alert-bg-color" value="#fff3cd" onchange="alertUpdatePreview()" style="width:32px;height:28px;border:1px solid rgba(0,0,0,.2);border-radius:4px;cursor:pointer;padding:2px">
-            <button onclick="alertSetBg('#fff3cd')" style="font-size:11px;padding:3px 8px;background:#fff3cd;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Yellow</button>
-            <button onclick="alertSetBg('#d1e7dd')" style="font-size:11px;padding:3px 8px;background:#d1e7dd;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Green</button>
-            <button onclick="alertSetBg('#f8d7da')" style="font-size:11px;padding:3px 8px;background:#f8d7da;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Red</button>
-            <button onclick="alertSetBg('#cfe2ff')" style="font-size:11px;padding:3px 8px;background:#cfe2ff;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Blue</button>
-            <button onclick="alertSetBg('#001a3e')" style="font-size:11px;padding:3px 8px;background:#001a3e;color:#FFD700;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Navy</button>
-          </label>
-          <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
-            Border:
-            <select id="alert-border" onchange="alertUpdatePreview()" style="font-size:12px;padding:4px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px">
-              <option value="none">None</option>
-              <option value="solid">Solid</option>
-              <option value="dashed">Dashed</option>
-              <option value="glow">✨ Glow</option>
-            </select>
-          </label>
-          <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
-            <input type="checkbox" id="alert-blink" onchange="alertUpdatePreview()"> Blink
-          </label>
+            <button onclick="alertSetBg('#fff3cd')" style="font-size:11px;padding:4px 10px;background:#fff3cd;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Yellow</button>
+            <button onclick="alertSetBg('#d1e7dd')" style="font-size:11px;padding:4px 10px;background:#d1e7dd;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Green</button>
+            <button onclick="alertSetBg('#f8d7da')" style="font-size:11px;padding:4px 10px;background:#f8d7da;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Red</button>
+            <button onclick="alertSetBg('#cfe2ff')" style="font-size:11px;padding:4px 10px;background:#cfe2ff;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Blue</button>
+            <button onclick="alertSetBg('#001a3e')" style="font-size:11px;padding:4px 10px;background:#001a3e;color:#FFD700;border:1px solid rgba(0,0,0,.1);border-radius:4px;cursor:pointer">Navy</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+            <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+              Border:
+              <select id="alert-border" onchange="alertUpdatePreview()" style="font-size:12px;padding:4px 8px;border:1px solid rgba(0,0,0,.12);border-radius:4px">
+                <option value="none">None</option>
+                <option value="solid">Solid</option>
+                <option value="dashed">Dashed</option>
+                <option value="glow">✨ Glow</option>
+              </select>
+            </label>
+            <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="alert-blink" onchange="alertUpdatePreview()"> Blink
+            </label>
+          </div>
         </div>
       </div>
 
@@ -1771,8 +1776,14 @@ function renderBoxScore(awayName, homeName, g) {
         </div>`;
       })()}
       ${bsScoreOnlyMode ? '' : `
-      <div style="display:flex;flex-direction:column;gap:32px;margin-top:16px">
+      <div style="display:flex;gap:0;margin-bottom:16px;border:2px solid #001a3e;border-radius:10px;overflow:hidden">
+        <button id="bs-tab-away" onclick="bsSwitchBsTab('away')" style="flex:1;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;background:#001a3e;color:#FFD700;border:none;cursor:pointer;letter-spacing:.04em">${awayName}</button>
+        <button id="bs-tab-home" onclick="bsSwitchBsTab('home')" style="flex:1;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;background:#f4f6f9;color:#001a3e;border:none;cursor:pointer;letter-spacing:.04em">${homeName}</button>
+      </div>
+      <div id="bs-panel-away-wrap">
         ${renderPanel(bsAwayLineup, awayName, 'away')}
+      </div>
+      <div id="bs-panel-home-wrap" style="display:none">
         ${renderPanel(bsHomeLineup, homeName, 'home')}
       </div>`}
       <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1);flex-wrap:wrap">
@@ -1791,6 +1802,15 @@ function bsRerender() {
   const v = document.getElementById('box-score-view');
   renderBoxScore(v.dataset.awayName, v.dataset.homeName, bsGameData);
 }
+
+window.bsSwitchBsTab = function(tab) {
+  document.getElementById('bs-panel-away-wrap').style.display = tab === 'away' ? 'block' : 'none';
+  document.getElementById('bs-panel-home-wrap').style.display = tab === 'home' ? 'block' : 'none';
+  const awayBtn = document.getElementById('bs-tab-away');
+  const homeBtn = document.getElementById('bs-tab-home');
+  if (awayBtn) { awayBtn.style.background = tab==='away'?'#001a3e':'#f4f6f9'; awayBtn.style.color = tab==='away'?'#FFD700':'#001a3e'; }
+  if (homeBtn) { homeBtn.style.background = tab==='home'?'#001a3e':'#f4f6f9'; homeBtn.style.color = tab==='home'?'#FFD700':'#001a3e'; }
+};
 
 let bsDragIdx = null, bsDragSide = null;
 window.bsDragStart = function(e) {
@@ -2715,15 +2735,15 @@ async function alertLoadHistory() {
     list.innerHTML = snap.docs.map((docSnap, i) => {
       const d = docSnap.data();
       const dt = d.createdAt ? new Date(d.createdAt).toLocaleString() : '—';
-      return `<div onclick="alertLoadFromHistory(${i})"
-        style="padding:10px 14px;border-radius:6px;background:#f8f9fa;border:1px solid rgba(0,0,0,.07);cursor:pointer;margin-bottom:8px;display:flex;align-items:center;gap:12px"
-        onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background='#f8f9fa'">
+      const docId = docSnap.id;
+      return `<div style="padding:10px 14px;border-radius:6px;background:#f8f9fa;border:1px solid rgba(0,0,0,.07);margin-bottom:8px;display:flex;align-items:center;gap:12px">
         <div style="width:10px;height:10px;border-radius:50%;background:${d.bgColor||'#fff3cd'};border:1px solid rgba(0,0,0,.2);flex-shrink:0"></div>
-        <div style="flex:1;min-width:0">
+        <div onclick="alertLoadFromHistory(${i})" style="flex:1;min-width:0;cursor:pointer" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
           <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.label||'Alert'}</div>
           <div style="font-size:11px;color:var(--muted)">${dt}</div>
         </div>
-        <div style="font-size:11px;font-weight:700;color:${d.active?'#22c55e':'var(--muted)'}">${d.active?'LIVE':'DRAFT'}</div>
+        <div style="font-size:11px;font-weight:700;color:${d.active?'#22c55e':'var(--muted)'};margin-right:6px">${d.active?'LIVE':'DRAFT'}</div>
+        <button onclick="deleteAlertHistory('${docId}')" style="background:none;border:none;color:rgba(0,0,0,.3);cursor:pointer;font-size:16px;padding:4px 6px;line-height:1;border-radius:4px" onmouseover="this.style.color='#c62828'" onmouseout="this.style.color='rgba(0,0,0,.3)'" title="Delete">×</button>
       </div>`;
     }).join('');
     snap.docs.forEach((docSnap, i) => {
@@ -2731,6 +2751,15 @@ async function alertLoadHistory() {
     });
   } catch(e) { list.innerHTML = '<div style="color:var(--muted);font-size:13px">Could not load history</div>'; }
 }
+
+window.deleteAlertHistory = async function(docId) {
+  if (!confirm('Delete this alert from history?')) return;
+  try {
+    await deleteDoc(doc(db, 'alert_history', docId));
+    toast('Alert deleted');
+    alertLoadHistory();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
 
 window.alertLoadFromHistory = function(idx) {
   const list = document.getElementById('alert-history-list');
@@ -3040,13 +3069,13 @@ window.renderContacts = function() {
         </div>
       </div>
       <div class="tbl-wrap"><table class="tbl">
-        <thead><tr><th>#</th><th>Name</th><th>Pos</th><th>Email</th><th>Phone</th></tr></thead>
+        <thead><tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
         <tbody>${players.length ? players.map(p => `<tr>
           <td style="color:var(--muted2)">${p.num||'—'}</td>
           <td><strong>${esc(p.name)}</strong></td>
-          <td>${esc(p.pos||'—')}</td>
           <td>${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--blue)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
           <td>${p.phone ? `<a href="tel:${esc(p.phone)}" style="color:var(--blue)">${esc(p.phone)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
+          <td><button class="btn btn-outline btn-sm" onclick="editContact('${p.id}')">Edit</button></td>
         </tr>`).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--muted2);padding:12px">No players on roster</td></tr>`}
         </tbody>
       </table></div>
@@ -3073,6 +3102,50 @@ window.emailAllPlayers = function() {
   const emails = PLAYERS.map(p => p.email).filter(Boolean);
   if (!emails.length) { toast('No player emails found. Add emails via Rosters.', 'error'); return; }
   window.location.href = 'mailto:' + emails.join(',');
+};
+
+window.editContact = function(playerId) {
+  const p = PLAYERS.find(x => x.id === playerId);
+  if (!p) return;
+  const modal = document.createElement('div');
+  modal.id = 'contact-edit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;margin-bottom:16px">Edit Contact</div>
+      <div style="margin-bottom:12px">
+        <label class="form-label">Name</label>
+        <input class="form-input" id="ec-name" value="${esc(p.name||'')}">
+      </div>
+      <div style="margin-bottom:12px">
+        <label class="form-label">Email</label>
+        <input class="form-input" type="email" id="ec-email" value="${esc(p.email||'')}">
+      </div>
+      <div style="margin-bottom:20px">
+        <label class="form-label">Phone</label>
+        <input class="form-input" type="tel" id="ec-phone" value="${esc(p.phone||'')}">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="saveContact('${playerId}')">Save</button>
+        <button class="btn btn-outline" onclick="document.getElementById('contact-edit-modal').remove()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+};
+
+window.saveContact = async function(playerId) {
+  const name = document.getElementById('ec-name')?.value.trim();
+  const email = document.getElementById('ec-email')?.value.trim();
+  const phone = document.getElementById('ec-phone')?.value.trim();
+  if (!name) { toast('Name is required', 'error'); return; }
+  try {
+    await updateDoc(doc(db, 'players', playerId), { name, email: email||'', phone: phone||'' });
+    const p = PLAYERS.find(x => x.id === playerId);
+    if (p) { p.name = name; p.email = email||''; p.phone = phone||''; }
+    document.getElementById('contact-edit-modal')?.remove();
+    toast('Contact updated');
+    renderContacts();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 
 // ═══════════════════════════════════════════════════════════════════
