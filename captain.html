@@ -193,6 +193,11 @@ select.form-input{cursor:pointer}
   .chat-wrap{height:400px}
   .chat-msg{max-width:90%}
 }
+@media(max-width:640px){
+  .roster-email-col{display:none}
+  .tbl-wrap{overflow-x:auto}
+  .tbl{min-width:unset!important}
+}
 </style>
 </head>
 <body>
@@ -401,7 +406,7 @@ if (EMAILJS_ENABLED) window.emailjs?.init(EMAILJS_PUBLIC_KEY);
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
-const DVSL_FIELDS = ['Mondauk 1','Mondauk 2','Mondauk 3','Mondauk 4','Mondauk 5','Mondauk 6','Southampton 1','Southampton 2','Southampton 3','Southampton 4','Warwick 1','Warwick 2','Plymouth 1','Plymouth 2','TBD'];
+const DVSL_FIELDS = ['Mondauk 4','Mondauk 5','Southampton','Warwick','Plymouth','TBD'];
 const SOFTBALL_POSITIONS = ['P','C','1B','2B','3B','SS','LF','CF','RF','DH','UTIL','SUB'];
 function fieldOptionsHtml(selected=''){return '<option value="">-- Select Field --</option>'+DVSL_FIELDS.map(f=>`<option value="${f}"${f===selected?' selected':''}>${f}</option>`).join('');}
 function posOptionsHtml(selected=''){return '<option value="">-- Position --</option>'+SOFTBALL_POSITIONS.map(p=>`<option value="${p}"${p===selected?' selected':''}>${p}</option>`).join('');}
@@ -666,21 +671,21 @@ function renderRoster() {
   }
   el.innerHTML = `
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${MY_PLAYERS.length} player(s)</div>
-    <div class="tbl-wrap"><div class="tbl-scroll"><table class="tbl">
-      <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Email</th><th>Actions</th></tr></thead>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>#</th><th>Name</th><th>Pos</th><th class="roster-email-col">Email</th><th>Actions</th></tr></thead>
       <tbody>${MY_PLAYERS.map(p => `<tr>
-        <td>${p.num || '-'}</td>
-        <td><strong style="white-space:nowrap">${esc(p.name)}</strong></td>
-        <td style="white-space:nowrap">${esc(p.pos || '-')}</td>
-        <td style="color:var(--muted);font-size:12px">${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
-        <td class="actions">
+        <td style="width:36px">${p.num || '-'}</td>
+        <td><strong>${esc(p.name)}</strong></td>
+        <td style="width:48px">${esc(p.pos || '-')}</td>
+        <td class="roster-email-col" style="color:var(--muted);font-size:12px">${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
+        <td style="white-space:nowrap;width:120px">
           <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>
+          <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">✕</button>
         </td>
       </tr>
-      <tr id="player-edit-${p.id}" style="display:none"><td colspan="5" id="player-edit-cell-${p.id}"></td></tr>`).join('')}
+      <tr id="player-edit-${p.id}" style="display:none"><td colspan="5" id="player-edit-cell-${p.id}" style="padding:0"></td></tr>`).join('')}
       </tbody>
-    </table></div></div>
+    </table></div>
   `;
 }
 
@@ -735,16 +740,14 @@ window.editPlayer = function(playerId) {
   const p = MY_PLAYERS.find(x => x.id === playerId);
   if (!p) return;
   document.getElementById('player-edit-cell-' + playerId).innerHTML = `
-    <div class="inline-form">
-      <div class="form-row">
-        <div class="form-col"><label class="form-label">Name</label><input type="text" class="form-input" id="ep-name-${playerId}" value="${esc(p.name)}"></div>
-        <div class="form-col form-col-sm"><label class="form-label">Number</label><input type="number" class="form-input" id="ep-num-${playerId}" value="${p.num||''}" min="0"></div>
-        <div class="form-col"><label class="form-label">Position</label><select class="form-input" id="ep-pos-${playerId}">${posOptionsHtml(p.pos||'')}</select></div>
+    <div style="padding:12px;background:#f8f9fb;border-top:1px solid var(--border)">
+      <div style="display:grid;grid-template-columns:1fr 72px 1fr;gap:8px;margin-bottom:8px">
+        <div><label class="form-label">Name</label><input type="text" class="form-input" id="ep-name-${playerId}" value="${esc(p.name)}"></div>
+        <div><label class="form-label">#</label><input type="number" class="form-input" id="ep-num-${playerId}" value="${p.num||''}" min="0"></div>
+        <div><label class="form-label">Position</label><select class="form-input" id="ep-pos-${playerId}">${posOptionsHtml(p.pos||'')}</select></div>
       </div>
-      <div class="form-row">
-        <div class="form-col"><label class="form-label">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(team chat notifications)</span></label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}" placeholder="player@email.com"></div>
-      </div>
-      <div class="form-row">
+      <div style="margin-bottom:8px"><label class="form-label">Email</label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}" placeholder="player@email.com"></div>
+      <div style="display:flex;gap:8px">
         <button class="btn btn-success btn-sm" onclick="saveEditPlayer('${playerId}')">Save</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('player-edit-${playerId}').style.display='none'">Cancel</button>
       </div>
@@ -829,20 +832,15 @@ window.toggleEditGame = function(gameId) {
   const g = MY_GAMES.find(x => x.id === gameId);
   if (!g) return;
   el.style.display = 'block';
-  el.innerHTML = `<div class="inline-form" style="margin-top:4px">
-    <div class="form-row">
-      <div class="form-col"><label class="form-label">Date</label><input type="date" class="form-input" id="ceg-date-${gameId}" value="${esc(g.date_iso||'')}"></div>
-      <div class="form-col"><label class="form-label">Time</label><input type="time" class="form-input" id="ceg-time-${gameId}" value="${esc(g.time_24||'')}"></div>
+  el.innerHTML = `<div style="padding:12px;background:#f8f9fb;border-top:1px solid var(--border);margin-top:4px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><label class="form-label">Date</label><input type="date" class="form-input" id="ceg-date-${gameId}" value="${esc(g.date_iso||'')}"></div>
+      <div><label class="form-label">Time</label><input type="time" class="form-input" id="ceg-time-${gameId}" value="${esc(g.time_24||'')}"></div>
     </div>
-    <div class="form-row">
-      <div class="form-col"><label class="form-label">Field / Location</label><select class="form-input" id="ceg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
-      <div class="form-col" style="justify-content:flex-end">
-        <div class="form-label" style="opacity:0">Opponent</div>
-        <div style="padding:8px 0;font-size:13px;color:var(--muted)">Opponent: <strong>${esc(getTeamFull(g.home === captainData.team_id ? g.away : g.home))}</strong> (read-only)</div>
-      </div>
-    </div>
-    <div class="form-row">
-      <button class="btn btn-success btn-sm" onclick="saveEditGame('${gameId}')">Save Changes</button>
+    <div style="margin-bottom:8px"><label class="form-label">Field</label><select class="form-input" id="ceg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
+    <div style="margin-bottom:10px;font-size:13px;color:var(--muted)">vs <strong>${esc(getTeamFull(g.home === captainData.team_id ? g.away : g.home))}</strong></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success btn-sm" onclick="saveEditGame('${gameId}')">Save</button>
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('sched-edit-${gameId}').style.display='none'">Cancel</button>
     </div>
   </div>`;
