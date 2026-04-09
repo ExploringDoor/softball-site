@@ -3212,7 +3212,7 @@ async function loadRegistrations() {
     el.innerHTML = `
       <div style="margin-bottom:8px;font-size:13px;color:var(--muted)">${regs.length} player signup${regs.length!==1?'s':''}</div>
       <div class="tbl-wrap"><table class="tbl">
-        <thead><tr><th>Date</th><th>Name</th><th>Team</th><th>Email</th><th>Phone</th><th>Notifications</th></tr></thead>
+        <thead><tr><th>Date</th><th>Name</th><th>Team</th><th>Email</th><th>Phone</th><th>Notifications</th><th></th></tr></thead>
         <tbody>${regs.map(r => {
           const ts = r.signed_up_at;
           const date = ts ? (ts.toDate ? ts.toDate().toLocaleDateString() : new Date(ts).toLocaleDateString()) : '—';
@@ -3224,6 +3224,7 @@ async function loadRegistrations() {
             <td><a href="mailto:${esc(r.email||'')}" style="color:var(--blue);font-size:12px">${esc(r.email||'—')}</a></td>
             <td style="font-size:12px">${esc(r.phone||'—')}</td>
             <td style="font-size:11px;color:var(--muted2)">${esc(notifs)}</td>
+            <td><button class="btn btn-danger btn-sm" onclick="deleteRegistration('${r.id}','${esc(r.name||'')}')">Delete</button></td>
           </tr>`;
         }).join('')}
         </tbody>
@@ -3232,6 +3233,16 @@ async function loadRegistrations() {
     el.innerHTML = `<div class="empty">Could not load signups: ${e.message}</div>`;
   }
 }
+
+window.deleteRegistration = async function(id, name) {
+  if (!confirm(`Delete signup for ${name || 'this player'}? This cannot be undone.`)) return;
+  try {
+    await deleteDoc(doc(db, 'player_signups', id));
+    toast('Signup deleted');
+    await logActivity('Registrations', `Deleted signup: ${name}`);
+    loadRegistrations();
+  } catch(e) { toast('Failed to delete: ' + e.message, 'error'); }
+};
 
 window.deletePayment = async function(paymentId) {
   if (!confirm('Delete this payment record?')) return;
