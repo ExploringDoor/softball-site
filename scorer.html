@@ -50,7 +50,7 @@
   }
 
   body > * {
-    max-width: 480px;
+    max-width: 520px;
     width: 100%;
   }
 
@@ -1009,13 +1009,13 @@
     }
   }
 
-  /* Desktop centering — fixed-position screens stay within 480px column */
+  /* Desktop centering — fixed-position screens stay within 520px column */
   #setup-screen, #app, #lineup-screen, #hr-overlay, #flash-overlay {
     right: auto;
     left: 50%;
     transform: translateX(-50%);
     width: 100%;
-    max-width: 480px;
+    max-width: 520px;
   }
 
   /* Sheet content constrained on wide screens */
@@ -1037,7 +1037,7 @@
     right: auto;
     transform: translateX(-50%);
     width: 100%;
-    max-width: 480px;
+    max-width: 520px;
     background: var(--bg);
     display: none;
     flex-direction: column;
@@ -1229,6 +1229,7 @@
     <select id="game-select" style="display:none"></select>
     <button class="btn-primary" id="start-btn" disabled>START SCORING</button>
   </div>
+  <button id="practice-btn" style="background:none;border:1px solid rgba(255,255,255,0.2);color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:2px;padding:12px 32px;border-radius:10px;cursor:pointer;margin-top:4px;">PRACTICE MODE</button>
 </div>
 
 <!-- Lineup Screen -->
@@ -1865,18 +1866,18 @@ function endAtBat(result, details) {
     flashFeedback('WALK', 'var(--blue)');
   } else if (result === 'single') {
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
-    const batEntry = b ? { name: b.name, num: b.num, pid: sid } : null;
+    const batEntry = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid:null };
     resetRunnersForHit('single', batEntry, sid, team);
     advanceLineup(team);
     flashFeedback('SINGLE', 'var(--green)');
   } else if (result === 'double') {
     if (sid) { stats.h++; stats.doubles = (stats.doubles||0)+1; }
-    resetRunnersForHit('double', b ? { name:b.name, num:b.num, pid:sid } : null, sid, team);
+    resetRunnersForHit('double', b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null }, sid, team);
     advanceLineup(team);
     flashFeedback('DOUBLE', 'var(--green)');
   } else if (result === 'triple') {
     if (sid) { stats.h++; stats.triples = (stats.triples||0)+1; }
-    resetRunnersForHit('triple', b ? { name:b.name, num:b.num, pid:sid } : null, sid, team);
+    resetRunnersForHit('triple', b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null }, sid, team);
     advanceLineup(team);
     flashFeedback('TRIPLE', 'var(--green)');
   } else if (result === 'homerun' || result === 'itphr') {
@@ -1889,8 +1890,7 @@ function endAtBat(result, details) {
     flashFeedback('K', 'var(--red)');
   } else if (result === 'error') {
     if (sid) stats.ab++;
-    // batter reaches 1B
-    G.runners[1] = b ? { name: b.name, num: b.num, pid: sid } : null;
+    G.runners[1] = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid:null };
     advanceLineup(team);
     flashFeedback('ERROR', 'var(--orange)');
   } else if (['groundout','flyout','popout','bunt-out','fielderscChoice'].includes(result)) {
@@ -2872,6 +2872,35 @@ document.getElementById('start-btn').addEventListener('click', async () => {
   G._prevAwayScore = 0; G._prevHomeScore = 0;
 
   // Show lineup screen before scoring starts
+  document.getElementById('setup-screen').style.display = 'none';
+  showLineupScreen();
+});
+
+// ===== PRACTICE MODE =====
+document.getElementById('practice-btn').addEventListener('click', () => {
+  G.gameId = 'practice';
+  G.awayTeam = { id:'dn', name:'Dead Nuts', short:'DN', color:'#C41E3A' };
+  G.homeTeam = { id:'tbir', name:'TBIR', short:'TBIR', color:'#002D72' };
+
+  const makeRoster = (abbr, color) => Array.from({length:10}, (_, i) => ({
+    pid: `${abbr}${i+1}`, id: `${abbr}${i+1}`,
+    name: `Player ${i+1}`, num: String(i+1), pos: ''
+  }));
+
+  G.lineups.away = makeRoster('dn', G.awayTeam.color);
+  G.lineups.home = makeRoster('tbir', G.homeTeam.color);
+
+  G.inning = 1; G.half = 'top';
+  G.outs = 0; G.balls = 0; G.strikes = 0;
+  G.awayScore = 0; G.homeScore = 0;
+  G.runners = { 1: null, 2: null, 3: null };
+  G.lineupIdx = { away: 0, home: 0 };
+  G.linescores = { away: [], home: [] };
+  G.plays = [];
+  G.selectedRunner = null;
+  G.playerStats = { away: {}, home: {} };
+  G._prevAwayScore = 0; G._prevHomeScore = 0;
+
   document.getElementById('setup-screen').style.display = 'none';
   showLineupScreen();
 });
