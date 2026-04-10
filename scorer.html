@@ -41,10 +41,17 @@
     height: 100%;
     width: 100%;
     overflow: hidden;
-    background: var(--bg);
+    background: #000;
     color: var(--text);
     font-family: 'Barlow Condensed', sans-serif;
     touch-action: manipulation;
+    display: flex;
+    justify-content: center;
+  }
+
+  body > * {
+    max-width: 480px;
+    width: 100%;
   }
 
   /* ===== SETUP SCREEN ===== */
@@ -1002,9 +1009,182 @@
     }
   }
 
+  /* Desktop centering — fixed-position screens stay within 480px column */
+  #setup-screen, #app, #lineup-screen, #hr-overlay, #flash-overlay {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+  }
+
+  /* Sheet content constrained on wide screens */
+  .sheet {
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
   /* Scrollbar hiding for sheets */
   .sheet::-webkit-scrollbar { display: none; }
   .sheet { scrollbar-width: none; }
+
+  /* ===== LINEUP SCREEN ===== */
+  #lineup-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: none;
+    flex-direction: column;
+    z-index: 900;
+    overflow: hidden;
+  }
+
+  #lineup-screen.visible {
+    display: flex;
+  }
+
+  .lineup-header-top {
+    background: var(--navy);
+    padding: 16px 16px 14px;
+    padding-top: max(16px, env(safe-area-inset-top));
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  #lineup-matchup-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.55);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .lineup-title {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--gold);
+    letter-spacing: 4px;
+    line-height: 1;
+  }
+
+  .lineup-hint {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.35);
+    letter-spacing: 0.5px;
+    margin-top: 6px;
+  }
+
+  .lineup-tabs {
+    display: flex;
+    background: var(--card);
+    border-bottom: 2px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+
+  .ltab {
+    flex: 1;
+    padding: 14px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--text-muted);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    margin-bottom: -2px;
+  }
+
+  .ltab.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+  }
+
+  #lineup-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .lu-row {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    min-height: 62px;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .lu-order {
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--text-muted);
+    min-width: 26px;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .lu-num-badge {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: var(--navy);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 900;
+    flex-shrink: 0;
+    letter-spacing: 0;
+  }
+
+  .lu-name {
+    flex: 1;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.3px;
+  }
+
+  .lu-arrows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .lu-arrow-btn {
+    width: 32px;
+    height: 26px;
+    background: var(--card2);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-family: 'Barlow Condensed', sans-serif;
+  }
+
+  .lu-arrow-btn:active {
+    background: var(--navy);
+    color: white;
+    border-color: var(--navy);
+  }
+
+  .lineup-footer {
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    background: var(--card);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }
 
   /* Close handle on sheets */
   .sheet::before {
@@ -1029,6 +1209,23 @@
     <div id="setup-loading" class="loading-text">Loading games...</div>
     <select id="game-select" style="display:none"></select>
     <button class="btn-primary" id="start-btn" disabled>START SCORING</button>
+  </div>
+</div>
+
+<!-- Lineup Screen -->
+<div id="lineup-screen">
+  <div class="lineup-header-top">
+    <div id="lineup-matchup-label">AWY vs HME</div>
+    <div class="lineup-title">SET LINEUP</div>
+    <div class="lineup-hint">Tap ▲ ▼ to set batting order</div>
+  </div>
+  <div class="lineup-tabs">
+    <button class="ltab active" data-team="away" onclick="showLineupTeam('away')">AWAY</button>
+    <button class="ltab" data-team="home" onclick="showLineupTeam('home')">HOME</button>
+  </div>
+  <div id="lineup-list"></div>
+  <div class="lineup-footer">
+    <button class="btn-primary" onclick="startScoring()">START SCORING ›</button>
   </div>
 </div>
 
@@ -1083,53 +1280,90 @@
   <!-- Field -->
   <div id="field-container">
     <svg id="field-svg" viewBox="0 0 390 280" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-      <!-- Dark bg -->
-      <rect width="390" height="280" fill="#0d120d"/>
+      <defs>
+        <radialGradient id="grass-grad" cx="50%" cy="85%" r="85%">
+          <stop offset="0%" stop-color="#2a5c14"/>
+          <stop offset="55%" stop-color="#1c4a0c"/>
+          <stop offset="100%" stop-color="#0f2a06"/>
+        </radialGradient>
+        <linearGradient id="dirt-grad" x1="10%" y1="0%" x2="90%" y2="100%">
+          <stop offset="0%" stop-color="#d8a86a"/>
+          <stop offset="50%" stop-color="#c49058"/>
+          <stop offset="100%" stop-color="#a87040"/>
+        </linearGradient>
+        <pattern id="grass-stripe" x="0" y="0" width="20" height="280" patternUnits="userSpaceOnUse">
+          <rect width="10" height="280" fill="#1b4a0e"/>
+          <rect x="10" width="10" height="280" fill="#22560f"/>
+        </pattern>
+        <clipPath id="of-shape">
+          <path d="M 195 258 L -15 285 L -15 155 Q 8 -10 195 -8 Q 382 -10 405 155 L 405 285 Z"/>
+        </clipPath>
+        <clipPath id="if-circle">
+          <circle cx="195" cy="152" r="64"/>
+        </clipPath>
+      </defs>
 
-      <!-- Outfield grass - arc from left to right field -->
-      <path d="M 195 255 L 10 280 L 0 180 Q 20 20 195 5 Q 370 20 390 180 L 380 280 Z" fill="#1c5c1c"/>
+      <!-- Black outer bg -->
+      <rect width="390" height="280" fill="#0a1e05"/>
+
+      <!-- Outfield grass base -->
+      <path d="M 195 258 L -15 285 L -15 155 Q 8 -10 195 -8 Q 382 -10 405 155 L 405 285 Z" fill="url(#grass-grad)"/>
+
+      <!-- Grass mow stripes (clipped to outfield) -->
+      <rect x="0" y="0" width="390" height="280" fill="url(#grass-stripe)" clip-path="url(#of-shape)" opacity="0.5"/>
+
+      <!-- Warning track -->
+      <path d="M 195 258 L 8 285 L 0 160 Q 20 2 195 2 Q 370 2 390 160 L 382 285 Z"
+            fill="none" stroke="#9a8260" stroke-width="22" stroke-opacity="0.38" clip-path="url(#of-shape)"/>
 
       <!-- Foul lines -->
-      <line x1="195" y1="255" x2="0" y2="40" stroke="white" stroke-width="1.5" stroke-opacity="0.4"/>
-      <line x1="195" y1="255" x2="390" y2="40" stroke="white" stroke-width="1.5" stroke-opacity="0.4"/>
+      <line x1="195" y1="258" x2="-15" y2="45" stroke="white" stroke-width="1.5" stroke-opacity="0.45"/>
+      <line x1="195" y1="258" x2="405" y2="45" stroke="white" stroke-width="1.5" stroke-opacity="0.45"/>
 
-      <!-- Infield dirt area (rotated square between bases) -->
-      <polygon points="195,255 315,155 195,60 75,155" fill="#c49060"/>
+      <!-- Infield dirt diamond -->
+      <polygon points="195,258 318,152 195,52 72,152" fill="url(#dirt-grad)"/>
 
       <!-- Infield grass circle -->
-      <circle cx="195" cy="155" r="58" fill="#1c5c1c"/>
+      <circle cx="195" cy="152" r="64" fill="url(#grass-grad)"/>
 
-      <!-- Base path dirt trails -->
-      <line x1="195" y1="255" x2="315" y2="155" stroke="#c49060" stroke-width="14" stroke-opacity="0.4"/>
-      <line x1="315" y1="155" x2="195" y2="60" stroke="#c49060" stroke-width="14" stroke-opacity="0.4"/>
-      <line x1="195" y1="60" x2="75" y2="155" stroke="#c49060" stroke-width="14" stroke-opacity="0.4"/>
-      <line x1="75" y1="155" x2="195" y2="255" stroke="#c49060" stroke-width="14" stroke-opacity="0.4"/>
+      <!-- Infield grass stripes -->
+      <rect x="0" y="0" width="390" height="280" fill="url(#grass-stripe)" clip-path="url(#if-circle)" opacity="0.5"/>
 
-      <!-- Pitcher's mound dirt -->
-      <ellipse cx="195" cy="150" rx="22" ry="15" fill="#b8835a"/>
+      <!-- Pitcher's mound -->
+      <ellipse cx="195" cy="148" rx="26" ry="19" fill="#cc9a6a"/>
+      <ellipse cx="195" cy="148" rx="26" ry="19" fill="none" stroke="#a07848" stroke-width="1.5" stroke-opacity="0.45"/>
 
-      <!-- DVSL watermark text -->
-      <text x="195" y="166" text-anchor="middle" fill="white" fill-opacity="0.12"
-        font-family="Barlow Condensed, sans-serif" font-size="38" font-weight="900" letter-spacing="6">DVSL</text>
+      <!-- DVSL carved text — shadow layer -->
+      <text x="197" y="174" text-anchor="middle" fill="#6a3c18" fill-opacity="0.8"
+        font-family="Barlow Condensed, sans-serif" font-size="48" font-weight="900" letter-spacing="7">DVSL</text>
+      <!-- DVSL carved text — highlight layer -->
+      <text x="195" y="172" text-anchor="middle" fill="#f0d4a0" fill-opacity="0.21"
+        font-family="Barlow Condensed, sans-serif" font-size="48" font-weight="900" letter-spacing="7">DVSL</text>
+
+      <!-- Base paths (chalk) -->
+      <line x1="195" y1="258" x2="318" y2="152" stroke="white" stroke-width="1.2" stroke-opacity="0.18"/>
+      <line x1="318" y1="152" x2="195" y2="52" stroke="white" stroke-width="1.2" stroke-opacity="0.18"/>
+      <line x1="195" y1="52" x2="72" y2="152" stroke="white" stroke-width="1.2" stroke-opacity="0.18"/>
+      <line x1="72" y1="152" x2="195" y2="258" stroke="white" stroke-width="1.2" stroke-opacity="0.18"/>
 
       <!-- Batter's boxes -->
-      <rect x="165" y="240" width="22" height="30" fill="none" stroke="white" stroke-width="1" stroke-opacity="0.25" rx="1"/>
-      <rect x="203" y="240" width="22" height="30" fill="none" stroke="white" stroke-width="1" stroke-opacity="0.25" rx="1"/>
+      <rect x="164" y="243" width="23" height="28" fill="none" stroke="white" stroke-width="1" stroke-opacity="0.28" rx="1"/>
+      <rect x="203" y="243" width="23" height="28" fill="none" stroke="white" stroke-width="1" stroke-opacity="0.28" rx="1"/>
 
       <!-- Pitcher's rubber -->
-      <rect x="186" y="147" width="18" height="5" fill="white" opacity="0.9" rx="1"/>
+      <rect x="187" y="145" width="16" height="6" fill="white" opacity="0.88" rx="1"/>
 
-      <!-- Home plate pentagon -->
-      <polygon points="195,266 203,258 203,248 187,248 187,258" fill="white" opacity="0.9"/>
+      <!-- Home plate -->
+      <polygon points="195,270 204,261 204,251 186,251 186,261" fill="white" opacity="0.9"/>
 
-      <!-- 1B square (rotated 45) -->
-      <rect x="305" y="145" width="16" height="16" fill="white" opacity="0.9" rx="1" transform="rotate(45 313 153)"/>
+      <!-- 1B (right) -->
+      <rect x="309" y="144" width="16" height="16" fill="white" opacity="0.9" rx="1" transform="rotate(45 317 152)"/>
 
-      <!-- 2B square (rotated 45) -->
-      <rect x="185" y="50" width="16" height="16" fill="white" opacity="0.9" rx="1" transform="rotate(45 193 58)"/>
+      <!-- 2B (top) -->
+      <rect x="187" y="44" width="16" height="16" fill="white" opacity="0.9" rx="1" transform="rotate(45 195 52)"/>
 
-      <!-- 3B square (rotated 45) -->
-      <rect x="65" y="145" width="16" height="16" fill="white" opacity="0.9" rx="1" transform="rotate(45 73 153)"/>
+      <!-- 3B (left) -->
+      <rect x="63" y="144" width="16" height="16" fill="white" opacity="0.9" rx="1" transform="rotate(45 71 152)"/>
     </svg>
 
     <!-- Position labels -->
@@ -1338,10 +1572,10 @@
 
 <script type="module">
 // ===== FIREBASE =====
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
   getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where
-} from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+} from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -1612,47 +1846,18 @@ function endAtBat(result, details) {
     flashFeedback('WALK', 'var(--blue)');
   } else if (result === 'single') {
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
-    // 3B→score, 2B→3B, 1B→2B, batter→1B
-    if (G.runners[3]) { rbis++; markRunnerScored(G.runners[3], team); }
-    if (G.runners[2]) markRunnerToBase(G.runners[2], 3, team);
-    if (G.runners[1]) markRunnerToBase(G.runners[1], 2, team);
-    G.runners[3] = null;
-    G.runners[2] = G.runners[2] ? G.runners[2] : null;
-    // shift
-    const r3old = G.runners[3]; // already nulled
-    const r2new = G.runners[2]; // this is old 1b
-    G.runners[3] = null;
-    // re-do cleanly
-    const old1 = G.runners[1], old2 = G.runners[2], old3 = G.runners[3];
-    // just set fresh
     const batEntry = b ? { name: b.name, num: b.num, pid: sid } : null;
-    const r2_was = G.runners[2];
-    const r3_was = G.runners[3];
-    // score 3b
-    if (G.runners[3]) { if (team==='away') G.awayScore++; else G.homeScore++; rbis++; }
-    const new3 = G.runners[2];
-    const new2 = G.runners[1];
-    G.runners[3] = null;
-    G.runners[2] = new3;
-    G.runners[1] = new2;
-    // advance old2 to 3
-    if (G.runners[2]) G.runners[3] = G.runners[2]; // this is wrong approach
-
-    // redo properly:
     resetRunnersForHit('single', batEntry, sid, team);
-    if (sid) stats.rbi = (stats.rbi || 0) + rbis;
     advanceLineup(team);
     flashFeedback('SINGLE', 'var(--green)');
   } else if (result === 'double') {
     if (sid) { stats.h++; stats.doubles = (stats.doubles||0)+1; }
     resetRunnersForHit('double', b ? { name:b.name, num:b.num, pid:sid } : null, sid, team);
-    if (sid) stats.rbi = (stats.rbi || 0);
     advanceLineup(team);
     flashFeedback('DOUBLE', 'var(--green)');
   } else if (result === 'triple') {
     if (sid) { stats.h++; stats.triples = (stats.triples||0)+1; }
     resetRunnersForHit('triple', b ? { name:b.name, num:b.num, pid:sid } : null, sid, team);
-    if (sid) stats.rbi = (stats.rbi || 0);
     advanceLineup(team);
     flashFeedback('TRIPLE', 'var(--green)');
   } else if (result === 'homerun' || result === 'itphr') {
@@ -1732,8 +1937,6 @@ function markRunnerScored(runner, team) {
     G.playerStats[team][pid].r = (G.playerStats[team][pid].r || 0) + 1;
   }
 }
-
-function markRunnerToBase(runner, base, team) {}
 
 // ===== ADVANCE LINEUP =====
 function advanceLineup(team) {
@@ -2412,6 +2615,63 @@ function closeAllSheets() {
   document.querySelectorAll('.sheet-overlay').forEach(el => el.classList.remove('open'));
 }
 
+// ===== LINEUP SCREEN =====
+let lineupActiveTeam = 'away';
+
+function showLineupScreen() {
+  document.getElementById('lineup-matchup-label').textContent =
+    `${G.awayTeam.short} vs ${G.homeTeam.short}`;
+  lineupActiveTeam = 'away';
+  document.querySelectorAll('.ltab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.team === 'away');
+  });
+  renderLineupList();
+  document.getElementById('lineup-screen').classList.add('visible');
+}
+
+function showLineupTeam(team) {
+  lineupActiveTeam = team;
+  document.querySelectorAll('.ltab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.team === team);
+  });
+  renderLineupList();
+}
+
+function renderLineupList() {
+  const list = document.getElementById('lineup-list');
+  const lineup = G.lineups[lineupActiveTeam];
+  list.innerHTML = '';
+  lineup.forEach((player, idx) => {
+    const row = document.createElement('div');
+    row.className = 'lu-row';
+    row.innerHTML = `
+      <div class="lu-order">${idx + 1}</div>
+      <div class="lu-num-badge">#${player.num}</div>
+      <div class="lu-name">${player.name}</div>
+      <div class="lu-arrows">
+        <button class="lu-arrow-btn" onclick="moveInLineup(${idx}, -1)">▲</button>
+        <button class="lu-arrow-btn" onclick="moveInLineup(${idx},  1)">▼</button>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function moveInLineup(idx, dir) {
+  const lineup = G.lineups[lineupActiveTeam];
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= lineup.length) return;
+  [lineup[idx], lineup[newIdx]] = [lineup[newIdx], lineup[idx]];
+  renderLineupList();
+}
+
+function startScoring() {
+  document.getElementById('lineup-screen').classList.remove('visible');
+  document.getElementById('app').classList.add('visible');
+  renderAll();
+  saveScore();
+}
+
 // ===== FIREBASE SETUP =====
 async function loadGames() {
   try {
@@ -2583,11 +2843,9 @@ document.getElementById('start-btn').addEventListener('click', async () => {
   G.playerStats = { away: {}, home: {} };
   G._prevAwayScore = 0; G._prevHomeScore = 0;
 
-  // Show app
+  // Show lineup screen before scoring starts
   document.getElementById('setup-screen').style.display = 'none';
-  document.getElementById('app').classList.add('visible');
-  renderAll();
-  saveScore();
+  showLineupScreen();
 });
 
 // ===== INIT =====
