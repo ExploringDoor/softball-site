@@ -1192,6 +1192,19 @@
     flex-shrink: 0;
   }
 
+  .lineup-footer .btn-primary {
+    width: 100%;
+  }
+
+  .lineup-empty {
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
   /* Close handle on sheets */
   .sheet::before {
     content: '';
@@ -2647,6 +2660,10 @@ function renderLineupList() {
   const list = document.getElementById('lineup-list');
   const lineup = G.lineups[lineupActiveTeam];
   list.innerHTML = '';
+  if (!lineup || lineup.length === 0) {
+    list.innerHTML = '<div class="lineup-empty">No players loaded for this team.</div>';
+    return;
+  }
   lineup.forEach((player, idx) => {
     const row = document.createElement('div');
     row.className = 'lu-row';
@@ -2677,6 +2694,11 @@ function startScoring() {
   renderAll();
   saveScore();
 }
+
+// Expose lineup functions to global scope (required for inline onclick in module scripts)
+window.showLineupTeam = showLineupTeam;
+window.moveInLineup = moveInLineup;
+window.startScoring = startScoring;
 
 // ===== FIREBASE SETUP =====
 async function loadGames() {
