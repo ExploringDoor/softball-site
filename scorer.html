@@ -179,8 +179,6 @@
   #app {
     display: none;
     flex-direction: column;
-    height: 100dvh;
-    height: 100vh;
     overflow: hidden;
     position: fixed;
     inset: 0;
@@ -499,15 +497,15 @@
     justify-content: center;
     gap: 3px;
     border-radius: 10px;
-    min-height: 58px;
+    min-height: 52px;
     cursor: pointer;
-    padding: 8px 4px;
+    padding: 6px 4px;
     border: none;
     font-family: 'Barlow Condensed', sans-serif;
     transition: transform 0.1s, opacity 0.1s;
   }
   .pb5:active { transform: scale(0.93); opacity: 0.8; }
-  .pb5-icon { font-size: 20px; font-weight: 900; line-height: 1; }
+  .pb5-icon { font-size: 19px; font-weight: 900; line-height: 1; }
   .pb5-sub  { font-size: 9px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; opacity: 0.75; line-height: 1; }
 
   .pb5-ball   { background: rgba(59,130,246,0.18); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
@@ -586,10 +584,16 @@
   }
 
   /* ===== SHEET OVERLAY ===== */
+  /* Full-viewport overlays — override body > * max-width constraint */
+  #game-over-overlay, #play-edit-overlay {
+    width: 100vw !important;
+    max-width: none !important;
+  }
+
   .sheet-overlay {
     position: fixed;
-    top: 0; left: 0;
-    width: 100vw !important; height: 100vh;
+    inset: 0;
+    width: 100% !important;
     max-width: none !important;
     background: rgba(0,0,0,0.6);
     z-index: 200;
@@ -1613,6 +1617,163 @@
     color: var(--text-muted);
     margin-right: 4px;
   }
+
+  /* ===== MOBILE COMPACTION ===== */
+  @media (max-height: 640px) {
+    .pb5 { min-height: 42px; padding: 4px 2px; gap: 1px; }
+    .pb5-sub { display: none; }
+    .pb5-icon { font-size: 17px; }
+    #undo-btn-row { margin-top: 3px; }
+    #undo-pitch-btn { min-height: 28px; padding: 4px 48px; font-size: 13px; }
+    .bnav-tab { padding: 6px 4px; }
+    .bnav-label { font-size: 9px; }
+    #bottom-area { padding: 5px 10px 6px; }
+  }
+
+  /* ===== PLAY EDIT OVERLAY ===== */
+  #play-edit-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(0,0,0,0.75);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #play-edit-overlay.open { display: flex; }
+  #play-edit-modal {
+    background: var(--sheet-bg);
+    border-radius: 18px;
+    width: 100%;
+    max-width: 380px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .pem-header {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    color: var(--text);
+    text-align: center;
+  }
+  .pem-player {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-align: center;
+  }
+  .pem-field-label {
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .pem-input {
+    width: 100%;
+    background: var(--card2);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 10px 12px;
+    outline: none;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  .pem-input:focus { border-color: var(--blue); }
+  .pem-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .pem-btns button {
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    cursor: pointer;
+  }
+  #pem-cancel-btn { background: var(--card2); color: var(--text-muted); }
+  #pem-save-btn   { background: var(--navy); color: white; }
+
+  /* ===== GAME OVER OVERLAY ===== */
+  #game-over-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: rgba(0,0,0,0.85);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  #game-over-overlay.open { display: flex; }
+  #game-over-modal {
+    background: var(--sheet-bg);
+    border-radius: 20px;
+    width: 100%;
+    max-width: 360px;
+    padding: 28px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+  .gom-title {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: var(--gold);
+  }
+  .gom-score {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .gom-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: none;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .gom-btn:active { transform: scale(0.97); }
+  #gom-pdf-btn      { background: var(--navy); color: white; }
+  #gom-continue-btn { background: var(--card2); color: var(--text); }
+  #gom-exit-btn     { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3) !important; }
+
+  /* Play log edit icon */
+  .play-log-edit-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 6px;
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
+  .play-log-entry:hover .play-log-edit-btn,
+  .play-log-edit-btn:active { opacity: 1; color: var(--blue); }
 </style>
 </head>
 <body>
@@ -2008,6 +2169,37 @@
       <button id="rdm-out-btn">✗ OUT</button>
       <button id="rdm-held-btn">⟵ HELD</button>
     </div>
+  </div>
+</div>
+
+<!-- Play Edit Overlay -->
+<div id="play-edit-overlay">
+  <div id="play-edit-modal">
+    <div class="pem-header">EDIT PLAY</div>
+    <div class="pem-player" id="pem-player"></div>
+    <div>
+      <div class="pem-field-label">Result</div>
+      <input class="pem-input" id="pem-result" type="text" autocomplete="off">
+    </div>
+    <div>
+      <div class="pem-field-label">Description</div>
+      <input class="pem-input" id="pem-desc" type="text" autocomplete="off">
+    </div>
+    <div class="pem-btns">
+      <button id="pem-cancel-btn">Cancel</button>
+      <button id="pem-save-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Game Over Overlay -->
+<div id="game-over-overlay">
+  <div id="game-over-modal">
+    <div class="gom-title">GAME OVER</div>
+    <div class="gom-score" id="gom-score">0 – 0</div>
+    <button class="gom-btn" id="gom-pdf-btn">📄 Create PDF of Box Score</button>
+    <button class="gom-btn" id="gom-continue-btn">↩ Continue Scoring</button>
+    <button class="gom-btn" id="gom-exit-btn">Exit Game</button>
   </div>
 </div>
 
@@ -3115,14 +3307,8 @@ document.getElementById('menu-swap').addEventListener('click', () => {
 });
 
 document.getElementById('menu-game-over').addEventListener('click', () => {
-  if (confirm('End the game and save box score?')) {
-    closeMenuSheet();
-    saveBoxScore();
-    updateDoc(doc(db, 'games', G.gameId), { done: true, live: false });
-    alert('Game saved!');
-    document.getElementById('app').classList.remove('visible');
-    document.getElementById('setup-screen').style.display = 'flex';
-  }
+  closeMenuSheet();
+  showGameOverOverlay();
 });
 
 document.getElementById('menu-exit').addEventListener('click', () => {
@@ -3362,29 +3548,69 @@ document.getElementById('mound-baseball').addEventListener('click', () => {
   openPitchSheet();
 });
 
+// ===== PLAY LOG SHARED RENDER =====
+function renderPlayLogEntries(container) {
+  container.innerHTML = '';
+  if (!G.playLog || G.playLog.length === 0) {
+    container.innerHTML = '<div class="play-log-empty">No plays recorded yet.</div>';
+    return;
+  }
+  G.playLog.forEach((entry, idx) => {
+    const row = document.createElement('div');
+    row.className = 'play-log-entry';
+    row.innerHTML = `
+      <div class="play-log-inning">${entry.inning}</div>
+      <div class="play-log-body">
+        <div class="play-log-player">${entry.team} · ${entry.player}</div>
+        <div class="play-log-desc">${entry.desc}</div>
+      </div>
+      <div class="play-log-score">${entry.score}</div>
+      <button class="play-log-edit-btn" title="Edit play">✎</button>
+    `;
+    row.querySelector('.play-log-edit-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openPlayEdit(idx);
+    });
+    container.appendChild(row);
+  });
+}
+
 // ===== PLAY LOG SHEET =====
 function openPlayLogSheet() {
-  const content = document.getElementById('playlog-content');
-  content.innerHTML = '';
-  if (G.playLog.length === 0) {
-    content.innerHTML = '<div class="play-log-empty">No plays recorded yet.</div>';
-  } else {
-    G.playLog.forEach(entry => {
-      const row = document.createElement('div');
-      row.className = 'play-log-entry';
-      row.innerHTML = `
-        <div class="play-log-inning">${entry.inning}</div>
-        <div class="play-log-body">
-          <div class="play-log-player">${entry.team} · ${entry.player}</div>
-          <div class="play-log-desc">${entry.desc}</div>
-        </div>
-        <div class="play-log-score">${entry.score}</div>
-      `;
-      content.appendChild(row);
-    });
-  }
+  renderPlayLogEntries(document.getElementById('playlog-content'));
   document.getElementById('playlog-sheet-overlay').classList.add('open');
 }
+
+// ===== PLAY EDIT =====
+let _editingPlayIdx = null;
+function openPlayEdit(idx) {
+  _editingPlayIdx = idx;
+  const entry = G.playLog[idx];
+  document.getElementById('pem-player').textContent = `${entry.team} · ${entry.player} · ${entry.inning}`;
+  document.getElementById('pem-result').value = entry.result || '';
+  document.getElementById('pem-desc').value = entry.desc || '';
+  document.getElementById('play-edit-overlay').classList.add('open');
+}
+document.getElementById('pem-cancel-btn').addEventListener('click', () => {
+  document.getElementById('play-edit-overlay').classList.remove('open');
+  _editingPlayIdx = null;
+});
+document.getElementById('pem-save-btn').addEventListener('click', () => {
+  if (_editingPlayIdx === null) return;
+  G.playLog[_editingPlayIdx].result = document.getElementById('pem-result').value.trim();
+  G.playLog[_editingPlayIdx].desc = document.getElementById('pem-desc').value.trim();
+  document.getElementById('play-edit-overlay').classList.remove('open');
+  _editingPlayIdx = null;
+  // Re-render wherever the log is visible
+  const plSheet = document.getElementById('playlog-content');
+  if (document.getElementById('playlog-sheet-overlay').classList.contains('open')) {
+    renderPlayLogEntries(plSheet);
+  }
+  if (document.getElementById('plays-panel').style.display !== 'none') {
+    renderPlaysPanel();
+  }
+  saveScore();
+});
 
 document.getElementById('playlog-close-btn').addEventListener('click', () => {
   document.getElementById('playlog-sheet-overlay').classList.remove('open');
@@ -3592,6 +3818,104 @@ window.moveInLineup = moveInLineup;
 window.startScoring = startScoring;
 window.backFromLineup = backFromLineup;
 
+// ===== GAME OVER OVERLAY =====
+function showGameOverOverlay() {
+  document.getElementById('gom-score').textContent =
+    `${G.awayTeam.short} ${G.awayScore}  ·  ${G.homeTeam.short} ${G.homeScore}`;
+  document.getElementById('game-over-overlay').classList.add('open');
+}
+
+document.getElementById('gom-pdf-btn').addEventListener('click', () => {
+  exportBoxScorePDF();
+});
+
+document.getElementById('gom-continue-btn').addEventListener('click', () => {
+  document.getElementById('game-over-overlay').classList.remove('open');
+});
+
+document.getElementById('gom-exit-btn').addEventListener('click', () => {
+  document.getElementById('game-over-overlay').classList.remove('open');
+  saveBoxScore();
+  if (G.gameId) updateDoc(doc(db, 'games', G.gameId), { done: true, live: false }).catch(() => {});
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('bottom-nav').classList.remove('active');
+  document.getElementById('setup-screen').style.display = 'flex';
+});
+
+function exportBoxScorePDF() {
+  const away = G.awayTeam.name || G.awayTeam.short;
+  const home = G.homeTeam.name || G.homeTeam.short;
+  const maxInning = Math.max(G.linescores.away.length, G.linescores.home.length, 1);
+  const innings = Array.from({ length: maxInning }, (_, i) => i + 1);
+
+  function buildBattingRows(side) {
+    const lineup = G.lineups[side] || [];
+    const stats = G.playerStats[side] || {};
+    const players = lineup.length > 0
+      ? lineup
+      : Object.keys(stats).map(pid => ({ pid, name: pid, num: '?' }));
+    let tot = { ab:0,h:0,doubles:0,triples:0,hr:0,rbi:0,r:0,bb:0,so:0 };
+    let rows = players.map(p => {
+      const pid = p.pid || p.id || p.name;
+      const s = stats[pid] || {};
+      const ab=s.ab||0, h=s.h||0, d=s.doubles||0, tri=s.triples||0, hr=s.hr||0,
+            rbi=s.rbi||0, r=s.r||0, bb=s.bb||0, so=s.so||0;
+      tot.ab+=ab; tot.h+=h; tot.doubles+=d; tot.triples+=tri; tot.hr+=hr;
+      tot.rbi+=rbi; tot.r+=r; tot.bb+=bb; tot.so+=so;
+      return `<tr><td>#${p.num} ${p.name}</td><td>${ab}</td><td>${h}</td><td>${d}</td><td>${tri}</td><td>${hr}</td><td>${rbi}</td><td>${r}</td><td>${bb}</td><td>${so}</td></tr>`;
+    }).join('');
+    rows += `<tr class="totals"><td>TOTALS</td><td>${tot.ab}</td><td>${tot.h}</td><td>${tot.doubles}</td><td>${tot.triples}</td><td>${tot.hr}</td><td>${tot.rbi}</td><td>${tot.r}</td><td>${tot.bb}</td><td>${tot.so}</td></tr>`;
+    return rows;
+  }
+
+  function lsCell(side, i) {
+    const ls = G.linescores[side];
+    if (ls[i] !== undefined) return ls[i];
+    const notYetPlayed = i >= G.inning - 1 &&
+      !(i === G.inning - 1 && G.half === 'bottom' && side === 'away');
+    return notYetPlayed ? '' : 0;
+  }
+
+  const lsInnings = innings.map(n => `<th>${n}</th>`).join('');
+  const awayLS = innings.map((_, i) => `<td>${lsCell('away', i)}</td>`).join('');
+  const homeLS = innings.map((_, i) => `<td>${lsCell('home', i)}</td>`).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Box Score — ${away} vs ${home}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; margin: 24px; color: #111; }
+    h1 { font-size: 20px; margin-bottom: 4px; }
+    h2 { font-size: 14px; font-weight: bold; margin: 18px 0 6px; background: #002D72; color: white; padding: 4px 8px; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+    th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: center; }
+    th { background: #f0f0f0; font-weight: bold; }
+    td:first-child, th:first-child { text-align: left; min-width: 140px; }
+    .totals td { font-weight: bold; background: #f8f8f8; }
+    .final { font-size: 22px; font-weight: bold; margin: 8px 0 18px; }
+    @media print { body { margin: 12px; } }
+  </style></head><body>
+  <h1>DVSL Box Score</h1>
+  <div class="final">${away} ${G.awayScore} — ${G.homeTeam.short} ${G.homeScore}</div>
+  <h2>Linescore</h2>
+  <table><thead><tr><th>Team</th>${lsInnings}<th>R</th></tr></thead>
+  <tbody>
+    <tr><td>${away}</td>${awayLS}<td><b>${G.awayScore}</b></td></tr>
+    <tr><td>${home}</td>${homeLS}<td><b>${G.homeScore}</b></td></tr>
+  </tbody></table>
+  <h2>${away.toUpperCase()} Batting</h2>
+  <table><thead><tr><th>Player</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>K</th></tr></thead>
+  <tbody>${buildBattingRows('away')}</tbody></table>
+  <h2>${home.toUpperCase()} Batting</h2>
+  <table><thead><tr><th>Player</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>K</th></tr></thead>
+  <tbody>${buildBattingRows('home')}</tbody></table>
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+  else { alert('Allow popups to export the PDF.'); }
+}
+
 // ===== BOTTOM NAV TABS =====
 function switchTab(tab) {
   document.querySelectorAll('.bnav-tab').forEach(b => b.classList.remove('active'));
@@ -3613,32 +3937,7 @@ function switchTab(tab) {
 window.switchTab = switchTab;
 
 function renderPlaysPanel() {
-  const panel = document.getElementById('plays-panel');
-  panel.innerHTML = '';
-  if (!G.playLog || G.playLog.length === 0) {
-    panel.innerHTML = '<div class="play-log-empty">No plays recorded yet.</div>';
-    return;
-  }
-  let lastInning = null;
-  G.playLog.forEach(entry => {
-    if (entry.inning !== lastInning) {
-      lastInning = entry.inning;
-      const hdr = document.createElement('div');
-      hdr.className = 'play-log-inning-hdr';
-      hdr.textContent = entry.inning;
-      panel.appendChild(hdr);
-    }
-    const row = document.createElement('div');
-    row.className = 'play-log-entry';
-    row.innerHTML = `
-      <div class="play-log-body">
-        <div class="play-log-player">${entry.team} · ${entry.player}</div>
-        <div class="play-log-desc">${entry.desc}</div>
-      </div>
-      <div class="play-log-score">${entry.score}</div>
-    `;
-    panel.appendChild(row);
-  });
+  renderPlayLogEntries(document.getElementById('plays-panel'));
 }
 
 function renderStatsPanel() {
