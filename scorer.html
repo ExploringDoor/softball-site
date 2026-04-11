@@ -585,7 +585,7 @@
 
   /* ===== SHEET OVERLAY ===== */
   /* Full-viewport overlays — override body > * max-width constraint */
-  #game-over-overlay, #play-edit-overlay {
+  #game-over-overlay, #play-edit-overlay, #runner-advance-overlay {
     width: 100vw !important;
     max-width: none !important;
   }
@@ -1388,70 +1388,110 @@
     filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
   }
 
-  /* ===== RUNNER DECISION OVERLAY ===== */
-  #runner-decision-overlay {
+  /* ===== RUNNER ADVANCE SHEET ===== */
+  #runner-advance-overlay {
     display: none;
     position: fixed;
     inset: 0;
     width: 100% !important;
     max-width: none !important;
-    background: rgba(0,0,0,0.75);
+    background: rgba(0,0,0,0.6);
     z-index: 600;
-    align-items: center;
+    align-items: flex-end;
     justify-content: center;
   }
-  #runner-decision-modal {
+  #runner-advance-sheet {
     background: var(--sheet-bg);
-    border-radius: 18px;
-    width: 88%;
-    max-width: 340px;
-    padding: 24px 20px 20px;
-    text-align: center;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
-  }
-  #runner-decision-modal .rdm-label {
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-  #runner-decision-modal .rdm-runner {
-    font-size: 22px;
-    font-weight: 900;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
-  #runner-decision-modal .rdm-sub {
-    font-size: 13px;
-    color: var(--text-muted);
-    margin-bottom: 20px;
-  }
-  #runner-decision-modal #rdm-btns {
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-width: 520px;
+    max-height: 88vh;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    width: 100%;
+    overflow: hidden;
   }
-  .rdm-option-btn {
-    width: 100%;
-    padding: 13px 16px;
-    border-radius: 12px;
-    border: 2px solid transparent;
+  .ras-handle {
+    width: 36px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 12px auto 0;
+    flex-shrink: 0;
+  }
+  .ras-head {
+    padding: 12px 20px 10px;
+    flex-shrink: 0;
+  }
+  .ras-title {
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 17px;
-    font-weight: 800;
+    font-size: 20px; font-weight: 900;
+    color: var(--text);
     letter-spacing: 0.5px;
-    cursor: pointer;
-    transition: transform 0.1s;
-    text-align: center;
   }
-  .rdm-option-btn:active { transform: scale(0.96); }
-  .rdm-btn-score { background: rgba(34,197,94,0.2);   color: #4ade80; border-color: rgba(34,197,94,0.4); }
-  .rdm-btn-base  { background: rgba(59,130,246,0.15); color: #60a5fa; border-color: rgba(59,130,246,0.35); }
-  .rdm-btn-hold  { background: rgba(250,204,21,0.15); color: #fbbf24; border-color: rgba(250,204,21,0.35); }
-  .rdm-btn-out   { background: rgba(239,68,68,0.2);   color: #f87171; border-color: rgba(239,68,68,0.4); }
+  .ras-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+  .ras-stats {
+    display: flex;
+    gap: 18px;
+    padding: 8px 20px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .ras-stat { font-size: 13px; color: var(--text-muted); }
+  .ras-stat strong { color: var(--text); font-size: 15px; margin-left: 3px; }
+  #ras-rows {
+    overflow-y: auto;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ras-row {
+    display: flex;
+    align-items: center;
+    padding: 11px 20px;
+    border-bottom: 1px solid var(--border);
+    gap: 10px;
+  }
+  .ras-row-info { min-width: 80px; flex-shrink: 0; }
+  .ras-runner-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px; font-weight: 800;
+    color: var(--text);
+  }
+  .ras-runner-from { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .ras-btns { display: flex; flex-wrap: wrap; gap: 5px; flex: 1; }
+  .ras-btn {
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1.5px solid var(--border);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px; font-weight: 700;
+    color: var(--text-muted);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.1s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .ras-btn.sel-score { background: #22c55e; border-color: #22c55e; color: #fff; }
+  .ras-btn.sel-base  { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .ras-btn.sel-out   { background: #ef4444; border-color: #ef4444; color: #fff; }
+  .ras-btn.btn-out   { border-color: rgba(239,68,68,0.35); color: #f87171; }
+  .ras-btn:disabled  { opacity: 0.6; cursor: default; }
+  .ras-confirm {
+    display: block;
+    width: 100%;
+    padding: 16px;
+    background: var(--navy);
+    color: #fff;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px; font-weight: 900;
+    letter-spacing: 1px;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
 
   /* ===== PLAY LOG SHEET ===== */
   .play-log-entry {
@@ -2162,13 +2202,21 @@
   </div>
 </div>
 
-<!-- Runner Decision Overlay -->
-<div id="runner-decision-overlay">
-  <div id="runner-decision-modal">
-    <div class="rdm-label">RUNNER ADVANCING?</div>
-    <div class="rdm-runner" id="rdm-runner-name">#7 Smith</div>
-    <div class="rdm-sub" id="rdm-runner-from">Started at 3rd · Single</div>
-    <div id="rdm-btns"></div>
+<!-- Runner Advance Sheet -->
+<div id="runner-advance-overlay">
+  <div id="runner-advance-sheet">
+    <div class="ras-handle"></div>
+    <div class="ras-head">
+      <div class="ras-title" id="ras-title">BATTER — SINGLE</div>
+      <div class="ras-sub">Tap to adjust runner destinations</div>
+    </div>
+    <div class="ras-stats">
+      <div class="ras-stat">Runs: <strong id="ras-runs">0</strong></div>
+      <div class="ras-stat">Outs: <strong id="ras-outs">0</strong></div>
+      <div class="ras-stat">RBI: <strong id="ras-rbi">0</strong></div>
+    </div>
+    <div id="ras-rows"></div>
+    <button class="ras-confirm" id="ras-confirm-btn" onclick="confirmRunnerAdvance()">CONFIRM</button>
   </div>
 </div>
 
@@ -2515,33 +2563,24 @@ function endAtBat(result, details) {
     flashFeedback('WALK', 'var(--blue)');
   } else if (result === 'single') {
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
-    const batEntry = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid:null };
-    const runners1 = resetRunnersForHit('single', batEntry);
+    const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
+    const allRunners = resetRunnersForHit('single', batEntry);
     advanceLineup(team);
-    _runnerBatterSid = sid; _runnerTeam = team; _currentHitType = 'single';
-    _runnerQueue = [...runners1];
-    _runnerFinalize = () => { logPlay('Single', `1B — Single${locStr}`); flashFeedback('SINGLE', 'var(--green)'); };
-    processRunnerQueue();
+    showRunnerAdvanceSheet('single', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'double') {
     if (sid) { stats.h++; stats.doubles = (stats.doubles||0)+1; }
-    const batEntry2 = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
-    const runners2 = resetRunnersForHit('double', batEntry2);
+    const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
+    const allRunners = resetRunnersForHit('double', batEntry);
     advanceLineup(team);
-    _runnerBatterSid = sid; _runnerTeam = team; _currentHitType = 'double';
-    _runnerQueue = [...runners2];
-    _runnerFinalize = () => { logPlay('Double', `2B — Double${locStr}`); flashFeedback('DOUBLE', 'var(--green)'); };
-    processRunnerQueue();
+    showRunnerAdvanceSheet('double', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'triple') {
     if (sid) { stats.h++; stats.triples = (stats.triples||0)+1; }
-    const batEntry3 = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
-    const runners3 = resetRunnersForHit('triple', batEntry3);
+    const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
+    const allRunners = resetRunnersForHit('triple', batEntry);
     advanceLineup(team);
-    _runnerBatterSid = sid; _runnerTeam = team; _currentHitType = 'triple';
-    _runnerQueue = [...runners3];
-    _runnerFinalize = () => { logPlay('Triple', `3B — Triple${locStr}`); flashFeedback('TRIPLE', 'var(--green)'); };
-    processRunnerQueue();
+    showRunnerAdvanceSheet('triple', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'homerun' || result === 'itphr') {
     if (sid) { stats.h++; stats.hr = (stats.hr||0)+1; }
@@ -2602,137 +2641,153 @@ function endAtBat(result, details) {
 }
 
 // ===== RUNNER ADVANCEMENT HELPER =====
-// Clears all bases, places batter at their destination, returns ALL runners who need decisions (most advanced first)
 function resetRunnersForHit(hitType, batterEntry) {
   const old1 = G.runners[1] ? { ...G.runners[1] } : null;
   const old2 = G.runners[2] ? { ...G.runners[2] } : null;
   const old3 = G.runners[3] ? { ...G.runners[3] } : null;
-
-  // Clear all bases
-  G.runners[1] = null;
-  G.runners[2] = null;
-  G.runners[3] = null;
-
-  // Place batter at destination
-  if (hitType === 'single')       G.runners[1] = batterEntry;
-  else if (hitType === 'double')  G.runners[2] = batterEntry;
-  else if (hitType === 'triple')  G.runners[3] = batterEntry;
-
-  // Return all runners who need placement decisions, most advanced first
-  const allRunners = [];
-  if (old3) allRunners.push({ runner: old3, from: 3 });
-  if (old2) allRunners.push({ runner: old2, from: 2 });
-  if (old1) allRunners.push({ runner: old1, from: 1 });
-  return allRunners;
+  G.runners[1] = null; G.runners[2] = null; G.runners[3] = null;
+  if (hitType === 'single')      G.runners[1] = batterEntry;
+  else if (hitType === 'double') G.runners[2] = batterEntry;
+  else if (hitType === 'triple') G.runners[3] = batterEntry;
+  const all = [];
+  if (old3) all.push({ runner: old3, from: 3 });
+  if (old2) all.push({ runner: old2, from: 2 });
+  if (old1) all.push({ runner: old1, from: 1 });
+  return all;
 }
 
-// ===== RUNNER SAFE/OUT DECISION QUEUE =====
-let _runnerQueue = [];
-let _runnerFinalize = null;
-let _runnerBatterSid = null;
-let _runnerTeam = null;
-let _currentHitType = null;
+// ===== RUNNER ADVANCE SHEET =====
+let _rasRunners = [];   // [{runner, from, sel}]  sel = 'score'|'out'|1|2|3
+let _rasBatEntry = null;
+let _rasHitType = null;
+let _rasBatterSid = null;
+let _rasTeam = null;
 
-function scoreRunner(runner) {
-  if (_runnerTeam === 'away') G.awayScore++; else G.homeScore++;
-  markRunnerScored(runner, _runnerTeam);
-  if (_runnerBatterSid && G.playerStats[_runnerTeam][_runnerBatterSid]) {
-    G.playerStats[_runnerTeam][_runnerBatterSid].rbi = (G.playerStats[_runnerTeam][_runnerBatterSid].rbi || 0) + 1;
-  }
-}
+function showRunnerAdvanceSheet(hitType, batEntry, allRunners, team, sid, locStr) {
+  _rasHitType = hitType;
+  _rasBatEntry = batEntry;
+  _rasBatterSid = sid;
+  _rasTeam = team;
 
-function getRunnerOptions(from, hitType) {
-  const opts = [];
-  if (hitType === 'single') {
-    if (from === 3) {
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
-    } else if (from === 2) {
-      opts.push({ label: '→ Advance to 3rd',   cls: 'rdm-btn-base',  action: 'base', base: 3 });
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-      opts.push({ label: '⟵ Hold at 2nd',      cls: 'rdm-btn-hold',  action: 'hold', base: 2 });
-    } else if (from === 1) {
-      opts.push({ label: '→ Advance to 2nd',   cls: 'rdm-btn-base',  action: 'base', base: 2 });
-      opts.push({ label: '→ Advance to 3rd',   cls: 'rdm-btn-base',  action: 'base', base: 3 });
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-    }
-  } else if (hitType === 'double') {
-    if (from === 3) {
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
-    } else if (from === 2) {
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-      opts.push({ label: '→ Advance to 3rd',   cls: 'rdm-btn-base',  action: 'base', base: 3 });
-      opts.push({ label: '⟵ Hold at 2nd',      cls: 'rdm-btn-hold',  action: 'hold', base: 2 });
-    } else if (from === 1) {
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-      opts.push({ label: '→ Advance to 3rd',   cls: 'rdm-btn-base',  action: 'base', base: 3 });
-      opts.push({ label: '→ Advance to 2nd',   cls: 'rdm-btn-base',  action: 'base', base: 2 });
-    }
-  } else if (hitType === 'triple') {
-    if (from === 3) {
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
-    } else if (from === 2) {
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
-    } else if (from === 1) {
-      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
-      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
-    }
-  }
-  opts.push({ label: '✗ OUT',                  cls: 'rdm-btn-out',   action: 'out' });
-  return opts;
-}
-
-function processRunnerQueue() {
-  renderAll();
-  if (_runnerQueue.length === 0) {
-    if (_runnerFinalize) { _runnerFinalize(); _runnerFinalize = null; }
-    return;
-  }
-  const { runner, from } = _runnerQueue.shift();
-  const hitType = _currentHitType;
-  const fromLabel = from === 1 ? '1st' : from === 2 ? '2nd' : '3rd';
-  const hitLabel  = hitType === 'single' ? 'Single' : hitType === 'double' ? 'Double' : 'Triple';
-
-  document.getElementById('rdm-runner-name').textContent = `#${runner.num} ${runner.name}`;
-  document.getElementById('rdm-runner-from').textContent = `Started at ${fromLabel} · ${hitLabel}`;
-
-  const btnsDiv = document.getElementById('rdm-btns');
-  btnsDiv.innerHTML = '';
-  // Filter out advance options to already-occupied bases
-  const opts = getRunnerOptions(from, hitType).filter(opt =>
-    opt.action !== 'base' || !G.runners[opt.base]
-  );
-  opts.forEach(opt => {
-    const btn = document.createElement('button');
-    btn.className = `rdm-option-btn ${opt.cls}`;
-    btn.textContent = opt.label;
-    btn.addEventListener('click', () => {
-      document.getElementById('runner-decision-overlay').style.display = 'none';
-      if (opt.action === 'score') {
-        scoreRunner(runner);
-        processRunnerQueue();
-      } else if (opt.action === 'base' || opt.action === 'hold') {
-        G.runners[opt.base] = runner;
-        processRunnerQueue();
-      } else if (opt.action === 'out') {
-        G.outs++;
-        if (G.outs >= 3) {
-          _runnerQueue = [];
-          if (_runnerFinalize) { _runnerFinalize(); _runnerFinalize = null; }
-          renderAll();
-        } else {
-          processRunnerQueue();
-        }
-      }
-    });
-    btnsDiv.appendChild(btn);
+  const batterBase = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
+  // Smart defaults: runners advance by hit distance; runner on 3rd scores on single/double, etc.
+  _rasRunners = allRunners.map(({ runner, from }) => {
+    let sel;
+    if (hitType === 'single')      sel = from === 3 ? 'score' : from === 2 ? 3 : 2;
+    else if (hitType === 'double') sel = from === 3 ? 'score' : from === 2 ? 'score' : 3;
+    else                           sel = 'score'; // triple: everyone scores by default
+    return { runner, from, sel };
   });
 
-  document.getElementById('runner-decision-overlay').style.display = 'flex';
+  const hitLabel = hitType === 'single' ? 'SINGLE' : hitType === 'double' ? 'DOUBLE' : 'TRIPLE';
+  const name = batEntry.name && batEntry.name !== 'Batter' ? batEntry.name.toUpperCase() : 'BATTER';
+  document.getElementById('ras-title').textContent = `${name} — ${hitLabel}`;
+
+  // Store locStr for confirm
+  window._rasLocStr = locStr;
+
+  renderRasSheet();
+  document.getElementById('runner-advance-overlay').style.display = 'flex';
 }
+
+function getRasBtns(from, hitType) {
+  // Returns [{label, val}] — val is 'score'|'out'|1|2|3
+  const batterBase = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
+  const btns = [{ label: 'Scored', val: 'score' }];
+  // Offer all base destinations > from, excluding batter's base
+  for (let b = 3; b >= 1; b--) {
+    if (b > from && b !== batterBase) btns.push({ label: b === 3 ? '3B' : b === 2 ? '2B' : '1B', val: b });
+  }
+  // Also offer staying at current base (holding) if not batter's base
+  if (from !== batterBase) btns.push({ label: from === 3 ? '3B' : from === 2 ? '2B' : '1B', val: from });
+  btns.push({ label: 'Out✕', val: 'out', cls: 'btn-out' });
+  return btns;
+}
+
+function renderRasSheet() {
+  let runs = 0, outs = 0, rbi = 0;
+  _rasRunners.forEach(r => {
+    if (r.sel === 'score') { runs++; rbi++; }
+    if (r.sel === 'out') outs++;
+  });
+  document.getElementById('ras-runs').textContent = runs;
+  document.getElementById('ras-outs').textContent = outs;
+  document.getElementById('ras-rbi').textContent = rbi;
+
+  const container = document.getElementById('ras-rows');
+  container.innerHTML = '';
+  const fromLabel = b => b === 1 ? '1st base' : b === 2 ? '2nd base' : '3rd base';
+
+  _rasRunners.forEach((entry, idx) => {
+    const row = document.createElement('div');
+    row.className = 'ras-row';
+    const info = document.createElement('div');
+    info.className = 'ras-row-info';
+    const nm = entry.runner.name && entry.runner.name !== 'Batter'
+      ? entry.runner.name : (entry.runner.num ? '#' + entry.runner.num : 'Runner');
+    info.innerHTML = `<div class="ras-runner-name">${nm}</div><div class="ras-runner-from">${fromLabel(entry.from)}</div>`;
+    const btnsDiv = document.createElement('div');
+    btnsDiv.className = 'ras-btns';
+    getRasBtns(entry.from, _rasHitType).forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'ras-btn' + (opt.cls ? ' ' + opt.cls : '');
+      btn.textContent = opt.label;
+      if (entry.sel === opt.val) {
+        btn.classList.add(opt.val === 'score' ? 'sel-score' : opt.val === 'out' ? 'sel-out' : 'sel-base');
+      }
+      btn.addEventListener('click', () => { entry.sel = opt.val; renderRasSheet(); });
+      btnsDiv.appendChild(btn);
+    });
+    row.appendChild(info); row.appendChild(btnsDiv);
+    container.appendChild(row);
+  });
+
+  // Batter row (locked)
+  const batterBase = _rasHitType === 'single' ? 1 : _rasHitType === 'double' ? 2 : 3;
+  const batterBaseLabel = batterBase === 1 ? '1B' : batterBase === 2 ? '2B' : '3B';
+  const bRow = document.createElement('div');
+  bRow.className = 'ras-row';
+  const bNm = _rasBatEntry.name && _rasBatEntry.name !== 'Batter'
+    ? _rasBatEntry.name : (_rasBatEntry.num ? '#' + _rasBatEntry.num : 'Batter');
+  bRow.innerHTML = `
+    <div class="ras-row-info"><div class="ras-runner-name">${bNm}</div><div class="ras-runner-from">batter</div></div>
+    <div class="ras-btns"><button class="ras-btn sel-base" disabled>${batterBaseLabel}</button></div>
+  `;
+  container.appendChild(bRow);
+}
+
+function confirmRunnerAdvance() {
+  document.getElementById('runner-advance-overlay').style.display = 'none';
+  const team = _rasTeam;
+  const sid = _rasBatterSid;
+  const stats = sid && G.playerStats[team] ? G.playerStats[team][sid] : null;
+
+  _rasRunners.forEach(({ runner, sel }) => {
+    if (sel === 'score') {
+      if (team === 'away') G.awayScore++; else G.homeScore++;
+      markRunnerScored(runner, team);
+      if (stats) stats.rbi = (stats.rbi || 0) + 1;
+    } else if (sel === 'out') {
+      G.outs++;
+    } else {
+      G.runners[sel] = runner;
+    }
+  });
+
+  const hitLabel = _rasHitType === 'single' ? 'Single' : _rasHitType === 'double' ? 'Double' : 'Triple';
+  const abLabel  = _rasHitType === 'single' ? '1B' : _rasHitType === 'double' ? '2B' : '3B';
+  const locStr   = window._rasLocStr || '';
+  logPlay(hitLabel, `${abLabel} — ${hitLabel}${locStr}`);
+  flashFeedback(hitLabel.toUpperCase(), 'var(--green)');
+
+  if (G.outs >= 3) {
+    setTimeout(() => endHalfInning(), 800);
+  } else {
+    renderAll();
+    saveScore();
+  }
+}
+window.confirmRunnerAdvance = confirmRunnerAdvance;
 
 function markRunnerScored(runner, team) {
   if (!runner) return;
