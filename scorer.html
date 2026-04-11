@@ -2207,7 +2207,10 @@
   <div id="runner-advance-sheet">
     <div class="ras-handle"></div>
     <div class="ras-head">
-      <div class="ras-title" id="ras-title">BATTER — SINGLE</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+        <div class="ras-title" id="ras-title">BATTER — SINGLE</div>
+        <div id="ras-score" style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--text-muted);white-space:nowrap"></div>
+      </div>
       <div class="ras-sub">Tap to adjust runner destinations</div>
     </div>
     <div class="ras-stats">
@@ -2682,6 +2685,8 @@ function showRunnerAdvanceSheet(hitType, batEntry, allRunners, team, sid, locStr
   const hitLabel = hitType === 'single' ? 'SINGLE' : hitType === 'double' ? 'DOUBLE' : 'TRIPLE';
   const name = batEntry.name && batEntry.name !== 'Batter' ? batEntry.name.toUpperCase() : 'BATTER';
   document.getElementById('ras-title').textContent = `${name} — ${hitLabel}`;
+  document.getElementById('ras-score').textContent =
+    `${G.awayTeam.short} ${G.awayScore} – ${G.homeScore} ${G.homeTeam.short}`;
 
   // Store locStr for confirm
   window._rasLocStr = locStr;
@@ -2777,7 +2782,15 @@ function confirmRunnerAdvance() {
   const hitLabel = _rasHitType === 'single' ? 'Single' : _rasHitType === 'double' ? 'Double' : 'Triple';
   const abLabel  = _rasHitType === 'single' ? '1B' : _rasHitType === 'double' ? '2B' : '3B';
   const locStr   = window._rasLocStr || '';
-  logPlay(hitLabel, `${abLabel} — ${hitLabel}${locStr}`);
+  // Build detailed play description: "1B — Single to CF. Jones scores. Brown to 3B. Miller to 2B."
+  const runnerParts = _rasRunners.map(({ runner, sel, from }) => {
+    const nm = (runner.name && runner.name !== 'Batter') ? runner.name : (runner.num ? '#' + runner.num : 'Runner');
+    if (sel === 'score') return `${nm} scores`;
+    if (sel === 'out')   return `${nm} out at ${from === 1 ? '1st' : from === 2 ? '2nd' : '3rd'}`;
+    return `${nm} to ${sel === 1 ? '1st' : sel === 2 ? '2nd' : '3rd'}`;
+  });
+  const desc = `${abLabel} — ${hitLabel}${locStr}${runnerParts.length ? '. ' + runnerParts.join('. ') : ''}`;
+  logPlay(hitLabel, desc);
   flashFeedback(hitLabel.toUpperCase(), 'var(--green)');
 
   if (G.outs >= 3) {
