@@ -1392,8 +1392,8 @@
   #runner-decision-overlay {
     display: none;
     position: fixed;
-    top: 0; left: 0;
-    width: 100vw !important; height: 100vh;
+    inset: 0;
+    width: 100% !important;
     max-width: none !important;
     background: rgba(0,0,0,0.75);
     z-index: 600;
@@ -1428,26 +1428,30 @@
     color: var(--text-muted);
     margin-bottom: 20px;
   }
-  #runner-decision-modal .rdm-btns {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+  #runner-decision-modal #rdm-btns {
+    display: flex;
+    flex-direction: column;
     gap: 8px;
+    width: 100%;
   }
-  #runner-decision-modal .rdm-btns button {
-    padding: 14px 8px;
+  .rdm-option-btn {
+    width: 100%;
+    padding: 13px 16px;
     border-radius: 12px;
-    border: none;
+    border: 2px solid transparent;
     font-family: 'Barlow Condensed', sans-serif;
-    font-size: 20px;
-    font-weight: 900;
-    letter-spacing: 1px;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
     cursor: pointer;
     transition: transform 0.1s;
+    text-align: center;
   }
-  #runner-decision-modal .rdm-btns button:active { transform: scale(0.95); }
-  #rdm-safe-btn { background: rgba(34,197,94,0.2); color: #4ade80; border: 2px solid rgba(34,197,94,0.4) !important; }
-  #rdm-out-btn  { background: rgba(239,68,68,0.2); color: #f87171; border: 2px solid rgba(239,68,68,0.4) !important; }
-  #rdm-held-btn { background: rgba(250,204,21,0.15); color: #fbbf24; border: 2px solid rgba(250,204,21,0.35) !important; font-size: 11px; }
+  .rdm-option-btn:active { transform: scale(0.96); }
+  .rdm-btn-score { background: rgba(34,197,94,0.2);   color: #4ade80; border-color: rgba(34,197,94,0.4); }
+  .rdm-btn-base  { background: rgba(59,130,246,0.15); color: #60a5fa; border-color: rgba(59,130,246,0.35); }
+  .rdm-btn-hold  { background: rgba(250,204,21,0.15); color: #fbbf24; border-color: rgba(250,204,21,0.35); }
+  .rdm-btn-out   { background: rgba(239,68,68,0.2);   color: #f87171; border-color: rgba(239,68,68,0.4); }
 
   /* ===== PLAY LOG SHEET ===== */
   .play-log-entry {
@@ -2158,17 +2162,13 @@
   </div>
 </div>
 
-<!-- Runner Decision Overlay (safe or out at home) -->
+<!-- Runner Decision Overlay -->
 <div id="runner-decision-overlay">
   <div id="runner-decision-modal">
-    <div class="rdm-label">Runner Scoring?</div>
+    <div class="rdm-label">RUNNER ADVANCING?</div>
     <div class="rdm-runner" id="rdm-runner-name">#7 Smith</div>
-    <div class="rdm-sub" id="rdm-runner-from">Coming home from 3rd</div>
-    <div class="rdm-btns">
-      <button id="rdm-safe-btn">✓ SAFE</button>
-      <button id="rdm-out-btn">✗ OUT</button>
-      <button id="rdm-held-btn">⟵ HELD</button>
-    </div>
+    <div class="rdm-sub" id="rdm-runner-from">Started at 3rd · Single</div>
+    <div id="rdm-btns"></div>
   </div>
 </div>
 
@@ -2516,30 +2516,30 @@ function endAtBat(result, details) {
   } else if (result === 'single') {
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
     const batEntry = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid:null };
-    const wouldScore1 = resetRunnersForHit('single', batEntry);
+    const runners1 = resetRunnersForHit('single', batEntry);
     advanceLineup(team);
-    _runnerBatterSid = sid; _runnerTeam = team;
-    _runnerQueue = [...wouldScore1];
+    _runnerBatterSid = sid; _runnerTeam = team; _currentHitType = 'single';
+    _runnerQueue = [...runners1];
     _runnerFinalize = () => { logPlay('Single', `1B — Single${locStr}`); flashFeedback('SINGLE', 'var(--green)'); };
     processRunnerQueue();
     return;
   } else if (result === 'double') {
     if (sid) { stats.h++; stats.doubles = (stats.doubles||0)+1; }
     const batEntry2 = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
-    const wouldScore2 = resetRunnersForHit('double', batEntry2);
+    const runners2 = resetRunnersForHit('double', batEntry2);
     advanceLineup(team);
-    _runnerBatterSid = sid; _runnerTeam = team;
-    _runnerQueue = [...wouldScore2];
+    _runnerBatterSid = sid; _runnerTeam = team; _currentHitType = 'double';
+    _runnerQueue = [...runners2];
     _runnerFinalize = () => { logPlay('Double', `2B — Double${locStr}`); flashFeedback('DOUBLE', 'var(--green)'); };
     processRunnerQueue();
     return;
   } else if (result === 'triple') {
     if (sid) { stats.h++; stats.triples = (stats.triples||0)+1; }
     const batEntry3 = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
-    const wouldScore3 = resetRunnersForHit('triple', batEntry3);
+    const runners3 = resetRunnersForHit('triple', batEntry3);
     advanceLineup(team);
-    _runnerBatterSid = sid; _runnerTeam = team;
-    _runnerQueue = [...wouldScore3];
+    _runnerBatterSid = sid; _runnerTeam = team; _currentHitType = 'triple';
+    _runnerQueue = [...runners3];
     _runnerFinalize = () => { logPlay('Triple', `3B — Triple${locStr}`); flashFeedback('TRIPLE', 'var(--green)'); };
     processRunnerQueue();
     return;
@@ -2602,33 +2602,28 @@ function endAtBat(result, details) {
 }
 
 // ===== RUNNER ADVANCEMENT HELPER =====
-// Returns array of runners who would score — caller must handle safe/out decisions
+// Clears all bases, places batter at their destination, returns ALL runners who need decisions (most advanced first)
 function resetRunnersForHit(hitType, batterEntry) {
   const old1 = G.runners[1] ? { ...G.runners[1] } : null;
   const old2 = G.runners[2] ? { ...G.runners[2] } : null;
   const old3 = G.runners[3] ? { ...G.runners[3] } : null;
-  const wouldScore = []; // { runner, from }
 
-  if (hitType === 'single') {
-    if (old3) wouldScore.push({ runner: old3, from: 3 });
-    G.runners[3] = old2;
-    G.runners[2] = old1;
-    G.runners[1] = batterEntry;
-  } else if (hitType === 'double') {
-    if (old3) wouldScore.push({ runner: old3, from: 3 });
-    if (old2) wouldScore.push({ runner: old2, from: 2 });
-    G.runners[3] = old1;
-    G.runners[2] = batterEntry;
-    G.runners[1] = null;
-  } else if (hitType === 'triple') {
-    if (old3) wouldScore.push({ runner: old3, from: 3 });
-    if (old2) wouldScore.push({ runner: old2, from: 2 });
-    if (old1) wouldScore.push({ runner: old1, from: 1 });
-    G.runners[3] = batterEntry;
-    G.runners[2] = null;
-    G.runners[1] = null;
-  }
-  return wouldScore;
+  // Clear all bases
+  G.runners[1] = null;
+  G.runners[2] = null;
+  G.runners[3] = null;
+
+  // Place batter at destination
+  if (hitType === 'single')       G.runners[1] = batterEntry;
+  else if (hitType === 'double')  G.runners[2] = batterEntry;
+  else if (hitType === 'triple')  G.runners[3] = batterEntry;
+
+  // Return all runners who need placement decisions, most advanced first
+  const allRunners = [];
+  if (old3) allRunners.push({ runner: old3, from: 3 });
+  if (old2) allRunners.push({ runner: old2, from: 2 });
+  if (old1) allRunners.push({ runner: old1, from: 1 });
+  return allRunners;
 }
 
 // ===== RUNNER SAFE/OUT DECISION QUEUE =====
@@ -2636,6 +2631,7 @@ let _runnerQueue = [];
 let _runnerFinalize = null;
 let _runnerBatterSid = null;
 let _runnerTeam = null;
+let _currentHitType = null;
 
 function scoreRunner(runner) {
   if (_runnerTeam === 'away') G.awayScore++; else G.homeScore++;
@@ -2645,6 +2641,50 @@ function scoreRunner(runner) {
   }
 }
 
+function getRunnerOptions(from, hitType) {
+  const opts = [];
+  if (hitType === 'single') {
+    if (from === 3) {
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
+    } else if (from === 2) {
+      opts.push({ label: '→ Advance to 3rd',   cls: 'rdm-btn-base',  action: 'base', base: 3 });
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+      opts.push({ label: '⟵ Hold at 2nd',      cls: 'rdm-btn-hold',  action: 'hold', base: 2 });
+    } else if (from === 1) {
+      opts.push({ label: '→ Advance to 2nd',   cls: 'rdm-btn-base',  action: 'base', base: 2 });
+      opts.push({ label: '→ Advance to 3rd',   cls: 'rdm-btn-base',  action: 'base', base: 3 });
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+    }
+  } else if (hitType === 'double') {
+    if (from === 3) {
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
+    } else if (from === 2) {
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+      opts.push({ label: '→ Advance to 3rd',   cls: 'rdm-btn-base',  action: 'base', base: 3 });
+      opts.push({ label: '⟵ Hold at 2nd',      cls: 'rdm-btn-hold',  action: 'hold', base: 2 });
+    } else if (from === 1) {
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+      opts.push({ label: '→ Advance to 3rd',   cls: 'rdm-btn-base',  action: 'base', base: 3 });
+      opts.push({ label: '→ Advance to 2nd',   cls: 'rdm-btn-base',  action: 'base', base: 2 });
+    }
+  } else if (hitType === 'triple') {
+    if (from === 3) {
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
+    } else if (from === 2) {
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
+    } else if (from === 1) {
+      opts.push({ label: '✓ Score!',           cls: 'rdm-btn-score', action: 'score' });
+      opts.push({ label: '⟵ Hold at 3rd',      cls: 'rdm-btn-hold',  action: 'hold', base: 3 });
+    }
+  }
+  opts.push({ label: '✗ OUT',                  cls: 'rdm-btn-out',   action: 'out' });
+  return opts;
+}
+
 function processRunnerQueue() {
   renderAll();
   if (_runnerQueue.length === 0) {
@@ -2652,34 +2692,46 @@ function processRunnerQueue() {
     return;
   }
   const { runner, from } = _runnerQueue.shift();
+  const hitType = _currentHitType;
   const fromLabel = from === 1 ? '1st' : from === 2 ? '2nd' : '3rd';
-  document.getElementById('rdm-runner-name').textContent = `#${runner.num} ${runner.name}`;
-  document.getElementById('rdm-runner-from').textContent = `Coming home from ${fromLabel}`;
-  document.getElementById('rdm-held-btn').textContent = `⟵ Held at ${fromLabel}`;
-  const overlay = document.getElementById('runner-decision-overlay');
-  overlay.style.display = 'flex';
+  const hitLabel  = hitType === 'single' ? 'Single' : hitType === 'double' ? 'Double' : 'Triple';
 
-  document.getElementById('rdm-safe-btn').onclick = () => {
-    overlay.style.display = 'none';
-    scoreRunner(runner);
-    processRunnerQueue();
-  };
-  document.getElementById('rdm-out-btn').onclick = () => {
-    overlay.style.display = 'none';
-    G.outs++;
-    if (G.outs >= 3) {
-      _runnerQueue = [];
-      if (_runnerFinalize) { _runnerFinalize(); _runnerFinalize = null; }
-    } else {
-      processRunnerQueue();
-    }
-  };
-  document.getElementById('rdm-held-btn').onclick = () => {
-    overlay.style.display = 'none';
-    // Restore runner to their original base (overwrite auto-advance)
-    G.runners[from] = runner;
-    processRunnerQueue();
-  };
+  document.getElementById('rdm-runner-name').textContent = `#${runner.num} ${runner.name}`;
+  document.getElementById('rdm-runner-from').textContent = `Started at ${fromLabel} · ${hitLabel}`;
+
+  const btnsDiv = document.getElementById('rdm-btns');
+  btnsDiv.innerHTML = '';
+  // Filter out advance options to already-occupied bases
+  const opts = getRunnerOptions(from, hitType).filter(opt =>
+    opt.action !== 'base' || !G.runners[opt.base]
+  );
+  opts.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = `rdm-option-btn ${opt.cls}`;
+    btn.textContent = opt.label;
+    btn.addEventListener('click', () => {
+      document.getElementById('runner-decision-overlay').style.display = 'none';
+      if (opt.action === 'score') {
+        scoreRunner(runner);
+        processRunnerQueue();
+      } else if (opt.action === 'base' || opt.action === 'hold') {
+        G.runners[opt.base] = runner;
+        processRunnerQueue();
+      } else if (opt.action === 'out') {
+        G.outs++;
+        if (G.outs >= 3) {
+          _runnerQueue = [];
+          if (_runnerFinalize) { _runnerFinalize(); _runnerFinalize = null; }
+          renderAll();
+        } else {
+          processRunnerQueue();
+        }
+      }
+    });
+    btnsDiv.appendChild(btn);
+  });
+
+  document.getElementById('runner-decision-overlay').style.display = 'flex';
 }
 
 function markRunnerScored(runner, team) {
