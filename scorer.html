@@ -583,6 +583,58 @@
     z-index: 1;
   }
 
+  /* ===== HALF-INNING END SUMMARY ===== */
+  .half-end-stat-cell {
+    flex: 1;
+    text-align: center;
+    font-family: 'Barlow Condensed', sans-serif;
+  }
+  .half-end-stat-cell .hes-val {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--text);
+    line-height: 1;
+  }
+  .half-end-stat-cell .hes-lbl {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .half-end-batter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px;
+    border-radius: 8px;
+    margin-bottom: 3px;
+  }
+  .half-end-batter-row:first-child {
+    background: rgba(255,255,255,0.06);
+  }
+  .half-end-batter-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--gold);
+    min-width: 36px;
+    text-align: center;
+  }
+  .half-end-batter-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    flex: 1;
+  }
+  .half-end-batter-stats {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
   /* ===== SHEET OVERLAY ===== */
   /* Full-viewport overlays — override body > * max-width constraint */
   #game-over-overlay, #play-edit-overlay, #runner-advance-overlay {
@@ -2253,6 +2305,33 @@
   </div>
 </div>
 
+<!-- Half-Inning End Summary -->
+<div id="half-end-overlay" style="display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;padding:16px;box-sizing:border-box;">
+  <div style="background:var(--card);border-radius:18px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+    <!-- Header -->
+    <div style="background:var(--navy);padding:16px 20px;text-align:center;">
+      <div id="half-end-title" style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:white;letter-spacing:1px;"></div>
+      <div id="half-end-score" style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:rgba(255,255,255,0.65);margin-top:3px;"></div>
+    </div>
+    <!-- Inning Stats -->
+    <div style="display:flex;padding:16px 20px;gap:0;border-bottom:1px solid rgba(255,255,255,0.07);">
+      <div class="half-end-stat-cell" id="hes-runs"></div>
+      <div class="half-end-stat-cell" id="hes-hits"></div>
+      <div class="half-end-stat-cell" id="hes-errors"></div>
+      <div class="half-end-stat-cell" id="hes-pitches"></div>
+    </div>
+    <!-- Next batters label -->
+    <div style="padding:12px 20px 6px;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);" id="half-end-batting-label">UP NEXT</div>
+    <!-- Next 3 batters -->
+    <div id="half-end-batters" style="padding:0 12px 8px;"></div>
+    <!-- Buttons -->
+    <div style="display:flex;gap:10px;padding:12px 16px 20px;">
+      <button id="half-end-cancel-btn" style="flex:1;background:rgba(255,255,255,0.08);color:var(--text-muted);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:1px;cursor:pointer;">CANCEL</button>
+      <button id="half-end-switch-btn" style="flex:2;background:var(--navy);color:white;border:none;border-radius:10px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:1px;cursor:pointer;">SWITCH ›</button>
+    </div>
+  </div>
+</div>
+
 <!-- Flash Overlay -->
 <div id="flash-overlay">
   <div id="flash-text"></div>
@@ -2322,6 +2401,9 @@ const G = {
   pitcher: { name: 'Pitcher', num: '--' },
   pitchers: { away: null, home: null },
   pitcherStats: { away: {}, home: {} },
+  halfInningPitches: 0,
+  halfInningHits: 0,
+  halfInningErrors: 0,
 };
 
 let gamesData = [];
@@ -2605,6 +2687,7 @@ document.getElementById('undo-pitch-btn').addEventListener('click', () => undoLa
 function handlePitch(type) {
   if (type === 'bip') { openBipSheet('level1'); return; }
   snapshotState();
+  if (type !== 'bip') G.halfInningPitches++;
   if (type === 'ball') {
     G.balls++;
     if (G.balls >= 4) { endAtBat('walk'); } else { flashFeedback('BALL', 'var(--blue)'); renderAll(); }
@@ -2684,6 +2767,7 @@ function endAtBat(result, details) {
     advanceLineup(team);
     flashFeedback('WALK', 'var(--blue)');
   } else if (result === 'single') {
+    G.halfInningHits++;
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
     const pStatsH1 = currentPitcherStats(fieldingTeam());
     if (pStatsH1) pStatsH1.h++;
@@ -2693,6 +2777,7 @@ function endAtBat(result, details) {
     showRunnerAdvanceSheet('single', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'double') {
+    G.halfInningHits++;
     if (sid) { stats.h++; stats.doubles = (stats.doubles||0)+1; }
     const pStatsH2 = currentPitcherStats(fieldingTeam());
     if (pStatsH2) pStatsH2.h++;
@@ -2702,6 +2787,7 @@ function endAtBat(result, details) {
     showRunnerAdvanceSheet('double', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'triple') {
+    G.halfInningHits++;
     if (sid) { stats.h++; stats.triples = (stats.triples||0)+1; }
     const pStatsH3 = currentPitcherStats(fieldingTeam());
     if (pStatsH3) pStatsH3.h++;
@@ -2711,6 +2797,7 @@ function endAtBat(result, details) {
     showRunnerAdvanceSheet('triple', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'homerun' || result === 'itphr') {
+    G.halfInningHits++;
     if (sid) { stats.h++; stats.hr = (stats.hr||0)+1; }
     const pStatsHR = currentPitcherStats(fieldingTeam());
     if (pStatsHR) pStatsHR.h++;
@@ -2725,6 +2812,7 @@ function endAtBat(result, details) {
     showKIndicator();
     flashFeedback('K', 'var(--red)');
   } else if (result === 'error') {
+    G.halfInningErrors++;
     if (sid) stats.ab++;
     G.runners[1] = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid:null };
     logPlay('Error', `E — Reached on error${locStr}`);
@@ -3145,10 +3233,68 @@ function advanceLineup(team) {
 
 // ===== END HALF INNING =====
 function endHalfInning() {
-  // Record linescore
+  // Snapshot BEFORE switching so CANCEL can restore
+  snapshotState();
+
+  const team = battingTeam();    // team that just batted
+  const prevScore = team === 'away' ? G._prevAwayScore : G._prevHomeScore;
+  const curScore  = team === 'away' ? G.awayScore      : G.homeScore;
+  const runsThisHalf = curScore - prevScore;
+
+  // Figure out next batting team and their next 3 batters
+  const nextTeam = team === 'away' ? 'home' : 'away';
+  const nextLineup = G.lineups[nextTeam] || [];
+  const nextIdx = G.lineupIdx[nextTeam] || 0;
+  const next3 = [0, 1, 2].map(i => nextLineup[(nextIdx + i) % nextLineup.length]).filter(Boolean);
+
+  // Inning label
+  const halfLabel = G.half === 'top' ? 'TOP' : 'BOTTOM';
+  const inningLabel = ['1ST','2ND','3RD','4TH','5TH','6TH','7TH','8TH','9TH'][G.inning - 1] || (G.inning + 'TH');
+  document.getElementById('half-end-title').textContent = `${halfLabel} ${inningLabel} — OVER`;
+  document.getElementById('half-end-score').textContent =
+    `${G.awayTeam.short} ${G.awayScore}  –  ${G.homeScore} ${G.homeTeam.short}`;
+
+  // Stats cells
+  function setCell(id, val, lbl) {
+    document.getElementById(id).innerHTML =
+      `<div class="hes-val">${val}</div><div class="hes-lbl">${lbl}</div>`;
+  }
+  setCell('hes-runs',    runsThisHalf,         'RUNS');
+  setCell('hes-hits',    G.halfInningHits,      'HITS');
+  setCell('hes-errors',  G.halfInningErrors,    'ERRORS');
+  setCell('hes-pitches', G.halfInningPitches,   'PITCHES');
+
+  // Next 3 batters
+  const nextTeamShort = nextTeam === 'away' ? G.awayTeam.short : G.homeTeam.short;
+  document.getElementById('half-end-batting-label').textContent =
+    `${nextTeamShort} UP NEXT`;
+  const bDiv = document.getElementById('half-end-batters');
+  bDiv.innerHTML = '';
+  next3.forEach((p) => {
+    const pid = p.pid || p.id || p.name;
+    const pStats = (G.playerStats[nextTeam] && G.playerStats[nextTeam][pid]) || {};
+    const h = pStats.h || 0, ab = pStats.ab || 0;
+    const row = document.createElement('div');
+    row.className = 'half-end-batter-row';
+    row.innerHTML = `
+      <div class="half-end-batter-num">#${p.num || '?'}</div>
+      <div class="half-end-batter-name">${p.name || 'Player'}</div>
+      <div class="half-end-batter-stats">${h}-${ab}</div>
+    `;
+    bDiv.appendChild(row);
+  });
+
+  // Show overlay
+  const overlay = document.getElementById('half-end-overlay');
+  overlay.style.display = 'flex';
+}
+
+function doHalfInningSwitch() {
+  document.getElementById('half-end-overlay').style.display = 'none';
+
   const team = battingTeam();
   const prevScore = team === 'away' ? G._prevAwayScore : G._prevHomeScore;
-  const curScore = team === 'away' ? G.awayScore : G.homeScore;
+  const curScore  = team === 'away' ? G.awayScore      : G.homeScore;
   const runsThisHalf = curScore - prevScore;
 
   if (team === 'away') {
@@ -3161,12 +3307,14 @@ function endHalfInning() {
     G._prevHomeScore = G.homeScore;
   }
 
-  // Switch sides
-  G.runners = { 1: null, 2: null, 3: null };
-  G.balls = 0;
-  G.strikes = 0;
-  G.outs = 0;
+  G.runners  = { 1: null, 2: null, 3: null };
+  G.balls    = 0;
+  G.strikes  = 0;
+  G.outs     = 0;
   G.selectedRunner = null;
+  G.halfInningPitches = 0;
+  G.halfInningHits    = 0;
+  G.halfInningErrors  = 0;
 
   if (G.half === 'top') {
     G.half = 'bottom';
@@ -3178,6 +3326,7 @@ function endHalfInning() {
   renderAll();
   saveScore();
 }
+window.doHalfInningSwitch = doHalfInningSwitch;
 
 // ===== TRIGGER HR =====
 function triggerHR(batter, sid, team, isItphr) {
@@ -3338,6 +3487,7 @@ function snapshotState() {
     pitcherStats: JSON.parse(JSON.stringify(G.pitcherStats)),
     playLog: JSON.parse(JSON.stringify(G.playLog)),
     _prevAwayScore: G._prevAwayScore, _prevHomeScore: G._prevHomeScore,
+    halfInningPitches: G.halfInningPitches, halfInningHits: G.halfInningHits, halfInningErrors: G.halfInningErrors,
   }));
   if (G.plays.length > 50) G.plays.shift();
 }
@@ -3354,6 +3504,9 @@ function undoLast() {
   if (snap.pitcherStats) G.pitcherStats = snap.pitcherStats;
   if (snap.playLog)      G.playLog = snap.playLog;
   G._prevAwayScore = snap._prevAwayScore; G._prevHomeScore = snap._prevHomeScore;
+  if (snap.halfInningPitches !== undefined) G.halfInningPitches = snap.halfInningPitches;
+  if (snap.halfInningHits    !== undefined) G.halfInningHits    = snap.halfInningHits;
+  if (snap.halfInningErrors  !== undefined) G.halfInningErrors  = snap.halfInningErrors;
   G.selectedRunner = null;
   closeAllSheets();
   renderAll();
@@ -3498,6 +3651,7 @@ function renderBipContent() {
           showFielderOverlay('hit');
         } else if (opt.result) {
           snapshotState();
+          G.halfInningPitches++;
           closeBipSheet();
           endAtBat(opt.result);
         }
@@ -3941,6 +4095,7 @@ document.querySelectorAll('.fielder-btn').forEach(btn => {
     const action = fielderAction;
     hideFielderOverlay();
     snapshotState();
+    G.halfInningPitches++;
     if (action === 'hit')     endAtBat(bipHitResult, { location: pos });
     else if (action === 'flyout') endAtBat('flyout', { location: pos });
     else if (action === 'out-go') endAtBat('groundout', { location: pos });
@@ -4710,6 +4865,13 @@ document.getElementById('practice-btn').addEventListener('click', () => {
 
   document.getElementById('setup-screen').style.display = 'none';
   showLineupScreen();
+});
+
+// ===== HALF-INNING END OVERLAY BUTTONS =====
+document.getElementById('half-end-switch-btn').addEventListener('click', doHalfInningSwitch);
+document.getElementById('half-end-cancel-btn').addEventListener('click', () => {
+  document.getElementById('half-end-overlay').style.display = 'none';
+  undoLast();
 });
 
 // ===== INIT =====
