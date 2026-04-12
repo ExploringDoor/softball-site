@@ -2643,16 +2643,37 @@ function endAtBat(result, details) {
     advanceLineup(team);
     flashFeedback('ERROR', 'var(--orange)');
   } else if (result === 'groundout') {
-    maybeDoublePlay('OUT', `GO — Ground out${locStr}`, team, sid);
-    return;
+    G.outs++;
+    logPlay('Out', `GO — Ground out${locStr}`);
+    const psGO = currentPitcherStats(fieldingTeam());
+    if (psGO) psGO.outs++;
+    flashFeedback('OUT', 'var(--red)');
   } else if (result === 'flyout') {
-    maybeDoublePlay('OUT', `FO — Fly out${locStr}`, team, sid);
-    return;
+    G.outs++;
+    logPlay('Out', `FO — Fly out${locStr}`);
+    const psFO = currentPitcherStats(fieldingTeam());
+    if (psFO) psFO.outs++;
+    flashFeedback('OUT', 'var(--red)');
   } else if (result === 'popout') {
-    maybeDoublePlay('OUT', `PO — Pop out`, team, sid);
-    return;
+    G.outs++;
+    logPlay('Out', 'PO — Pop out');
+    const psPO = currentPitcherStats(fieldingTeam());
+    if (psPO) psPO.outs++;
+    flashFeedback('OUT', 'var(--red)');
   } else if (result === 'bunt-out') {
-    maybeDoublePlay('OUT', `BO — Bunt out`, team, sid);
+    G.outs++;
+    logPlay('Out', 'BO — Bunt out');
+    const psBO = currentPitcherStats(fieldingTeam());
+    if (psBO) psBO.outs++;
+    flashFeedback('OUT', 'var(--red)');
+  } else if (result === 'doublePlay') {
+    G.outs++;
+    logPlay('Out', `DP — Double play${locStr}`);
+    const psDP = currentPitcherStats(fieldingTeam());
+    if (psDP) psDP.outs++;
+    advanceLineup(team);
+    flashFeedback('OUT', 'var(--red)');
+    setTimeout(() => showDpRunnerSheet(team), 400);
     return;
   } else if (result === 'fielderscChoice') {
     // Batter reaches 1B on FC; a runner is out — show runner sheet
@@ -2684,37 +2705,23 @@ function endAtBat(result, details) {
   }
 }
 
-// ===== DOUBLE PLAY =====
-function maybeDoublePlay(outLabel, logDesc, team, sid) {
-  const pStatsOut = currentPitcherStats(fieldingTeam());
-  if (pStatsOut) pStatsOut.outs++;
-
-  const hasRunners = G.runners[1] || G.runners[2] || G.runners[3];
-  if (!hasRunners) {
-    G.outs++;
-    logPlay('Out', logDesc);
-    flashFeedback('OUT', 'var(--red)');
-    G.balls = 0; G.strikes = 0;
-    if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); }
-    else { renderAll(); saveScore(); }
-    return;
-  }
-
-  // Has runners — ask about double play
-  G.outs++;
-  logPlay('Out', logDesc);
-  flashFeedback('OUT', 'var(--red)');
-
-  // Show DP sheet after brief flash
-  setTimeout(() => showDpSheet(team), 400);
-}
-window.maybeDoublePlay = maybeDoublePlay;
-
-function showDpSheet(team) {
+// ===== DOUBLE PLAY RUNNER SELECTION =====
+function showDpRunnerSheet(team) {
   const runners = [];
   [3, 2, 1].forEach(base => {
     if (G.runners[base]) runners.push({ runner: G.runners[base], base });
   });
+
+  function closeDpRunner() {
+    document.getElementById('runner-advance-overlay').style.display = 'none';
+    document.getElementById('ras-stats').style.display = '';
+    document.getElementById('ras-confirm-btn').style.display = '';
+    document.getElementById('ras-sub').textContent = 'Tap to adjust runner destinations';
+    G.balls = 0; G.strikes = 0;
+    if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
+    else { renderAll(); saveScore(); }
+  }
+
   if (runners.length === 0 || G.outs >= 3) {
     G.balls = 0; G.strikes = 0;
     if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
@@ -2724,20 +2731,10 @@ function showDpSheet(team) {
 
   const container = document.getElementById('ras-rows');
   container.innerHTML = '';
-  document.getElementById('ras-title').textContent = 'DOUBLE PLAY?';
-  document.getElementById('ras-sub').textContent = 'Tap a runner to record 2nd out, or skip';
+  document.getElementById('ras-title').textContent = 'DOUBLE PLAY';
+  document.getElementById('ras-sub').textContent = 'Which runner was also out?';
   document.getElementById('ras-stats').style.display = 'none';
   document.getElementById('ras-confirm-btn').style.display = 'none';
-
-  // "No DP" option at top
-  const skipRow = document.createElement('div');
-  skipRow.className = 'ras-row';
-  skipRow.style.cursor = 'pointer';
-  skipRow.innerHTML = `<div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--text-muted)">No double play</div>`;
-  skipRow.addEventListener('click', () => {
-    closeDpSheet();
-  });
-  container.appendChild(skipRow);
 
   // Runner options
   runners.forEach(({ runner, base }) => {
@@ -2748,39 +2745,39 @@ function showDpSheet(team) {
     row.style.cursor = 'pointer';
     row.innerHTML = `
       <div style="flex:1">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--text)">${name} out at ${baseLabel}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--text)">${name}</div>
         <div style="font-size:12px;color:var(--text-muted)">Runner on ${baseLabel}</div>
       </div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:#f87171;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);padding:6px 12px;border-radius:8px">DP OUT</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:#f87171;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);padding:6px 12px;border-radius:8px">OUT</div>
     `;
     row.addEventListener('click', () => {
       G.outs++;
-      const dpLogDesc = `DP — ${name} out at ${baseLabel} (double play)`;
       G.runners[base] = null;
-      logPlay('Out', dpLogDesc);
-      const pStatsDP = currentPitcherStats(fieldingTeam());
-      if (pStatsDP) pStatsDP.outs++;
-      closeDpSheet();
+      logPlay('Out', `DP — ${name} out at ${baseLabel} (2nd out)`);
+      const psDPR = currentPitcherStats(fieldingTeam());
+      if (psDPR) psDPR.outs++;
+      closeDpRunner();
     });
     container.appendChild(row);
   });
 
-  document.getElementById('runner-advance-overlay').style.display = 'flex';
-  window._dpMode = true;
-}
-window.showDpSheet = showDpSheet;
+  // Skip option
+  const skipRow = document.createElement('div');
+  skipRow.className = 'ras-row';
+  skipRow.style.cursor = 'pointer';
+  skipRow.innerHTML = `<div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--text-muted)">Skip (record 2 outs, no runner specified)</div>`;
+  skipRow.addEventListener('click', () => {
+    G.outs++;
+    logPlay('Out', 'DP — 2nd out (runner not specified)');
+    const psDPSkip = currentPitcherStats(fieldingTeam());
+    if (psDPSkip) psDPSkip.outs++;
+    closeDpRunner();
+  });
+  container.appendChild(skipRow);
 
-function closeDpSheet() {
-  window._dpMode = false;
-  document.getElementById('runner-advance-overlay').style.display = 'none';
-  document.getElementById('ras-stats').style.display = '';
-  document.getElementById('ras-confirm-btn').style.display = '';
-  document.getElementById('ras-sub').textContent = 'Tap to adjust runner destinations';
-  G.balls = 0; G.strikes = 0;
-  if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
-  else { renderAll(); saveScore(); }
+  document.getElementById('runner-advance-overlay').style.display = 'flex';
 }
-window.closeDpSheet = closeDpSheet;
+window.showDpRunnerSheet = showDpRunnerSheet;
 
 // ===== RUNNER ADVANCEMENT HELPER =====
 function resetRunnersForHit(hitType, batterEntry) {
@@ -3275,6 +3272,7 @@ function renderBipContent() {
     if (isGroundBall) {
       options = [
         { icon:'GO', cls:'out',  label:'Out at 1st',           result:'groundout',        textCls:'out-text' },
+        { icon:'DP', cls:'out',  label:'Double Play',          result:'doublePlay',       textCls:'out-text' },
         { icon:'FC', cls:'warn', label:"Fielder's Choice",     result:'fielderscChoice',  textCls:'warn-text' },
         { icon:'1B', cls:'safe', label:'Single',               result:'single',           textCls:'safe-text' },
         { icon:'2B', cls:'safe', label:'Double',            result:'double',           textCls:'safe-text' },
@@ -3287,6 +3285,7 @@ function renderBipContent() {
     } else if (isBunt) {
       options = [
         { icon:'BO', cls:'out', label:'Batter Out', result:'bunt-out', textCls:'out-text' },
+        { icon:'DP', cls:'out', label:'Double Play', result:'doublePlay', textCls:'out-text' },
         { icon:'FC', cls:'warn', label:"Fielder's Choice", result:'fielderscChoice', textCls:'warn-text' },
         { icon:'F', cls:'warn', label:'Foul Ball', result:null, textCls:'warn-text', action:'foul' },
         { icon:'1B', cls:'safe', label:'Single', result:'single', textCls:'safe-text' },
@@ -3300,6 +3299,7 @@ function renderBipContent() {
     } else if (isFlyType) {
       options = [
         { icon:'FO', cls:'out', label:'Batter Out', result:null, textCls:'out-text', drilldown:'flyout-who' },
+        { icon:'DP', cls:'out', label:'Double Play', result:'doublePlay', textCls:'out-text' },
         { icon:'FC', cls:'warn', label:"Fielder's Choice", result:'fielderscChoice', textCls:'warn-text' },
         { icon:'1B', cls:'safe', label:'Single', result:'single', textCls:'safe-text' },
         { icon:'2B', cls:'safe', label:'Double', result:'double', textCls:'safe-text' },
