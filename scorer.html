@@ -2210,9 +2210,9 @@
         <div class="ras-title" id="ras-title">BATTER — SINGLE</div>
         <div id="ras-score" style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--text-muted);white-space:nowrap;text-align:right"></div>
       </div>
-      <div class="ras-sub">Tap to adjust runner destinations</div>
+      <div class="ras-sub" id="ras-sub">Tap to adjust runner destinations</div>
     </div>
-    <div class="ras-stats">
+    <div class="ras-stats" id="ras-stats">
       <div class="ras-stat">Runs: <strong id="ras-runs">0</strong></div>
       <div class="ras-stat">Outs: <strong id="ras-outs">0</strong></div>
       <div class="ras-stat">RBI: <strong id="ras-rbi">0</strong></div>
@@ -2320,6 +2320,8 @@ const G = {
   playerStats: { away: {}, home: {} },
   _prevAwayScore: 0, _prevHomeScore: 0,
   pitcher: { name: 'Pitcher', num: '--' },
+  pitchers: { away: null, home: null },
+  pitcherStats: { away: {}, home: {} },
 };
 
 let gamesData = [];
@@ -2342,6 +2344,20 @@ function inningDisplay() {
 // ===== BATTING TEAM =====
 function battingTeam() {
   return G.half === 'top' ? 'away' : 'home';
+}
+
+// ===== FIELDING TEAM =====
+function fieldingTeam() { return G.half === 'top' ? 'home' : 'away'; }
+
+// ===== PITCHER STATS HELPER =====
+function currentPitcherStats(fTeam) {
+  const p = G.pitchers[fTeam];
+  if (!p) return null;
+  const key = p.pid || p.name;
+  if (!G.pitcherStats[fTeam][key]) {
+    G.pitcherStats[fTeam][key] = { name: p.name, num: p.num, outs: 0, h: 0, r: 0, bb: 0, k: 0 };
+  }
+  return G.pitcherStats[fTeam][key];
 }
 
 // ===== CURRENT BATTER =====
@@ -2574,11 +2590,15 @@ function endAtBat(result, details) {
       G.runners[1] = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid: null };
     }
     if (sid) stats.rbi = (stats.rbi || 0) + rbis;
+    const pStatsBB = currentPitcherStats(fieldingTeam());
+    if (pStatsBB) pStatsBB.bb++;
     logPlay('Walk', rbis > 0 ? `BB — Walk, scores a run` : 'BB — Base on balls');
     advanceLineup(team);
     flashFeedback('WALK', 'var(--blue)');
   } else if (result === 'single') {
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
+    const pStatsH1 = currentPitcherStats(fieldingTeam());
+    if (pStatsH1) pStatsH1.h++;
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     const allRunners = resetRunnersForHit('single', batEntry);
     advanceLineup(team);
@@ -2586,6 +2606,8 @@ function endAtBat(result, details) {
     return;
   } else if (result === 'double') {
     if (sid) { stats.h++; stats.doubles = (stats.doubles||0)+1; }
+    const pStatsH2 = currentPitcherStats(fieldingTeam());
+    if (pStatsH2) pStatsH2.h++;
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     const allRunners = resetRunnersForHit('double', batEntry);
     advanceLineup(team);
@@ -2593,6 +2615,8 @@ function endAtBat(result, details) {
     return;
   } else if (result === 'triple') {
     if (sid) { stats.h++; stats.triples = (stats.triples||0)+1; }
+    const pStatsH3 = currentPitcherStats(fieldingTeam());
+    if (pStatsH3) pStatsH3.h++;
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     const allRunners = resetRunnersForHit('triple', batEntry);
     advanceLineup(team);
@@ -2600,11 +2624,15 @@ function endAtBat(result, details) {
     return;
   } else if (result === 'homerun' || result === 'itphr') {
     if (sid) { stats.h++; stats.hr = (stats.hr||0)+1; }
+    const pStatsHR = currentPitcherStats(fieldingTeam());
+    if (pStatsHR) pStatsHR.h++;
     triggerHR(b, sid, team, result === 'itphr');
     return; // HR handles its own flow
   } else if (result === 'strikeout') {
     if (sid) stats.so = (stats.so || 0) + 1;
     G.outs++;
+    const pStatsK = currentPitcherStats(fieldingTeam());
+    if (pStatsK) { pStatsK.k++; pStatsK.outs++; }
     logPlay('Strikeout', 'K — Struck out');
     showKIndicator();
     flashFeedback('K', 'var(--red)');
@@ -2615,25 +2643,25 @@ function endAtBat(result, details) {
     advanceLineup(team);
     flashFeedback('ERROR', 'var(--orange)');
   } else if (result === 'groundout') {
-    G.outs++;
-    logPlay('Out', `GO — Ground out${locStr}`);
-    flashFeedback('OUT', 'var(--red)');
+    maybeDoublePlay('OUT', `GO — Ground out${locStr}`, team, sid);
+    return;
   } else if (result === 'flyout') {
-    G.outs++;
-    logPlay('Out', `FO — Fly out${locStr}`);
-    flashFeedback('OUT', 'var(--red)');
+    maybeDoublePlay('OUT', `FO — Fly out${locStr}`, team, sid);
+    return;
   } else if (result === 'popout') {
-    G.outs++;
-    logPlay('Out', 'PO — Pop out');
-    flashFeedback('OUT', 'var(--red)');
+    maybeDoublePlay('OUT', `PO — Pop out`, team, sid);
+    return;
   } else if (result === 'bunt-out') {
-    G.outs++;
-    logPlay('Out', 'BO — Bunt out');
-    flashFeedback('OUT', 'var(--red)');
+    maybeDoublePlay('OUT', `BO — Bunt out`, team, sid);
+    return;
   } else if (result === 'fielderscChoice') {
-    G.outs++;
-    logPlay('Out', 'FC — Fielder\'s choice');
-    flashFeedback('OUT', 'var(--red)');
+    // Batter reaches 1B on FC; a runner is out — show runner sheet
+    const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
+    const allRunners = resetRunnersForHit('single', batEntry); // batter goes to 1B
+    advanceLineup(team);
+    // Default one runner to out in the advance sheet
+    showRunnerAdvanceSheet('fc', batEntry, allRunners, team, sid, locStr);
+    return;
   } else if (result === 'batterinterference') {
     G.outs++;
     logPlay('Out', 'BI — Batter interference');
@@ -2655,6 +2683,104 @@ function endAtBat(result, details) {
     saveScore();
   }
 }
+
+// ===== DOUBLE PLAY =====
+function maybeDoublePlay(outLabel, logDesc, team, sid) {
+  const pStatsOut = currentPitcherStats(fieldingTeam());
+  if (pStatsOut) pStatsOut.outs++;
+
+  const hasRunners = G.runners[1] || G.runners[2] || G.runners[3];
+  if (!hasRunners) {
+    G.outs++;
+    logPlay('Out', logDesc);
+    flashFeedback('OUT', 'var(--red)');
+    G.balls = 0; G.strikes = 0;
+    if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); }
+    else { renderAll(); saveScore(); }
+    return;
+  }
+
+  // Has runners — ask about double play
+  G.outs++;
+  logPlay('Out', logDesc);
+  flashFeedback('OUT', 'var(--red)');
+
+  // Show DP sheet after brief flash
+  setTimeout(() => showDpSheet(team), 400);
+}
+window.maybeDoublePlay = maybeDoublePlay;
+
+function showDpSheet(team) {
+  const runners = [];
+  [3, 2, 1].forEach(base => {
+    if (G.runners[base]) runners.push({ runner: G.runners[base], base });
+  });
+  if (runners.length === 0 || G.outs >= 3) {
+    G.balls = 0; G.strikes = 0;
+    if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
+    else { renderAll(); saveScore(); }
+    return;
+  }
+
+  const container = document.getElementById('ras-rows');
+  container.innerHTML = '';
+  document.getElementById('ras-title').textContent = 'DOUBLE PLAY?';
+  document.getElementById('ras-sub').textContent = 'Tap a runner to record 2nd out, or skip';
+  document.getElementById('ras-stats').style.display = 'none';
+  document.getElementById('ras-confirm-btn').style.display = 'none';
+
+  // "No DP" option at top
+  const skipRow = document.createElement('div');
+  skipRow.className = 'ras-row';
+  skipRow.style.cursor = 'pointer';
+  skipRow.innerHTML = `<div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--text-muted)">No double play</div>`;
+  skipRow.addEventListener('click', () => {
+    closeDpSheet();
+  });
+  container.appendChild(skipRow);
+
+  // Runner options
+  runners.forEach(({ runner, base }) => {
+    const baseLabel = base === 3 ? '3rd' : base === 2 ? '2nd' : '1st';
+    const name = (runner.name && runner.name !== 'Batter') ? runner.name : (runner.num ? '#' + runner.num : 'Runner');
+    const row = document.createElement('div');
+    row.className = 'ras-row';
+    row.style.cursor = 'pointer';
+    row.innerHTML = `
+      <div style="flex:1">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--text)">${name} out at ${baseLabel}</div>
+        <div style="font-size:12px;color:var(--text-muted)">Runner on ${baseLabel}</div>
+      </div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:#f87171;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);padding:6px 12px;border-radius:8px">DP OUT</div>
+    `;
+    row.addEventListener('click', () => {
+      G.outs++;
+      const dpLogDesc = `DP — ${name} out at ${baseLabel} (double play)`;
+      G.runners[base] = null;
+      logPlay('Out', dpLogDesc);
+      const pStatsDP = currentPitcherStats(fieldingTeam());
+      if (pStatsDP) pStatsDP.outs++;
+      closeDpSheet();
+    });
+    container.appendChild(row);
+  });
+
+  document.getElementById('runner-advance-overlay').style.display = 'flex';
+  window._dpMode = true;
+}
+window.showDpSheet = showDpSheet;
+
+function closeDpSheet() {
+  window._dpMode = false;
+  document.getElementById('runner-advance-overlay').style.display = 'none';
+  document.getElementById('ras-stats').style.display = '';
+  document.getElementById('ras-confirm-btn').style.display = '';
+  document.getElementById('ras-sub').textContent = 'Tap to adjust runner destinations';
+  G.balls = 0; G.strikes = 0;
+  if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
+  else { renderAll(); saveScore(); }
+}
+window.closeDpSheet = closeDpSheet;
 
 // ===== RUNNER ADVANCEMENT HELPER =====
 function resetRunnersForHit(hitType, batterEntry) {
@@ -2685,17 +2811,18 @@ function showRunnerAdvanceSheet(hitType, batEntry, allRunners, team, sid, locStr
   _rasBatterSid = sid;
   _rasTeam = team;
 
-  const batterBase = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
+  const batterBase = hitType === 'single' || hitType === 'fc' ? 1 : hitType === 'double' ? 2 : 3;
   // Smart defaults: runners advance by hit distance; runner on 3rd scores on single/double, etc.
-  _rasRunners = allRunners.map(({ runner, from }) => {
+  _rasRunners = allRunners.map(({ runner, from }, idx) => {
     let sel;
     if (hitType === 'single')      sel = from === 3 ? 'score' : from === 2 ? 3 : 2;
     else if (hitType === 'double') sel = from === 3 ? 'score' : from === 2 ? 'score' : 3;
+    else if (hitType === 'fc')     sel = idx === allRunners.length - 1 ? 'out' : (from === 3 ? 'score' : from === 2 ? 3 : 2);
     else                           sel = 'score'; // triple: everyone scores by default
     return { runner, from, sel };
   });
 
-  const hitLabel = hitType === 'single' ? 'SINGLE' : hitType === 'double' ? 'DOUBLE' : 'TRIPLE';
+  const hitLabel = hitType === 'single' ? 'SINGLE' : hitType === 'double' ? 'DOUBLE' : hitType === 'triple' ? 'TRIPLE' : "FIELDER'S CHOICE";
   const name = batEntry.name && batEntry.name !== 'Batter' ? batEntry.name.toUpperCase() : 'BATTER';
   document.getElementById('ras-title').textContent = `${name} — ${hitLabel}`;
   document.getElementById('ras-score').textContent =
@@ -2710,7 +2837,7 @@ function showRunnerAdvanceSheet(hitType, batEntry, allRunners, team, sid, locStr
 
 function getRasBtns(from, hitType) {
   // Returns [{label, val}] — val is 'score'|'out'|1|2|3
-  const batterBase = hitType === 'single' ? 1 : hitType === 'double' ? 2 : 3;
+  const batterBase = hitType === 'single' || hitType === 'fc' ? 1 : hitType === 'double' ? 2 : 3;
   const btns = [{ label: 'Scored', val: 'score' }];
   // Offer all base destinations > from, excluding batter's base
   for (let b = 3; b >= 1; b--) {
@@ -2761,7 +2888,7 @@ function renderRasSheet() {
   });
 
   // Batter row (locked)
-  const batterBase = _rasHitType === 'single' ? 1 : _rasHitType === 'double' ? 2 : 3;
+  const batterBase = _rasHitType === 'single' || _rasHitType === 'fc' ? 1 : _rasHitType === 'double' ? 2 : 3;
   const batterBaseLabel = batterBase === 1 ? '1B' : batterBase === 2 ? '2B' : '3B';
   const bRow = document.createElement('div');
   bRow.className = 'ras-row';
@@ -2785,15 +2912,20 @@ function confirmRunnerAdvance() {
       if (team === 'away') G.awayScore++; else G.homeScore++;
       markRunnerScored(runner, team);
       if (stats) stats.rbi = (stats.rbi || 0) + 1;
+      // Track pitcher R — pitcher is fielding team (opposite of batting team)
+      const pStatsR = currentPitcherStats(team === 'away' ? 'home' : 'away');
+      if (pStatsR) pStatsR.r++;
     } else if (sel === 'out') {
       G.outs++;
+      const pStatsRunnerOut = currentPitcherStats(team === 'away' ? 'home' : 'away');
+      if (pStatsRunnerOut) pStatsRunnerOut.outs++;
     } else {
       G.runners[sel] = runner;
     }
   });
 
-  const hitLabel = _rasHitType === 'single' ? 'Single' : _rasHitType === 'double' ? 'Double' : 'Triple';
-  const abLabel  = _rasHitType === 'single' ? '1B' : _rasHitType === 'double' ? '2B' : '3B';
+  const hitLabel = _rasHitType === 'single' ? 'Single' : _rasHitType === 'double' ? 'Double' : _rasHitType === 'triple' ? 'Triple' : "Fielder's Choice";
+  const abLabel  = _rasHitType === 'single' ? '1B' : _rasHitType === 'double' ? '2B' : _rasHitType === 'triple' ? '3B' : 'FC';
   const locStr   = window._rasLocStr || '';
   // Build detailed play description: "1B — Single to CF. Jones scores. Brown to 3B. Miller to 2B."
   const runnerParts = _rasRunners.map(({ runner, sel, from }) => {
@@ -2997,6 +3129,10 @@ function triggerHR(batter, sid, team, isItphr) {
     if (team === 'away') G.awayScore += runs;
     else G.homeScore += runs;
 
+    // Track pitcher runs allowed for HR
+    const pStatsHRr = currentPitcherStats(team === 'away' ? 'home' : 'away');
+    if (pStatsHRr) { pStatsHRr.r = (pStatsHRr.r || 0) + runs; pStatsHRr.outs = (pStatsHRr.outs || 0); }
+
     // Log the play
     const hrType = isItphr ? 'ITPHR' : 'HR';
     const runNote = runs > 1 ? ` (${runs} RBI)` : '';
@@ -3138,8 +3274,9 @@ function renderBipContent() {
 
     if (isGroundBall) {
       options = [
-        { icon:'GO', cls:'out',  label:'Out at 1st',        result:'groundout',        textCls:'out-text' },
-        { icon:'1B', cls:'safe', label:'Single',            result:'single',           textCls:'safe-text' },
+        { icon:'GO', cls:'out',  label:'Out at 1st',           result:'groundout',        textCls:'out-text' },
+        { icon:'FC', cls:'warn', label:"Fielder's Choice",     result:'fielderscChoice',  textCls:'warn-text' },
+        { icon:'1B', cls:'safe', label:'Single',               result:'single',           textCls:'safe-text' },
         { icon:'2B', cls:'safe', label:'Double',            result:'double',           textCls:'safe-text' },
         { icon:'3B', cls:'safe', label:'Triple',            result:'triple',           textCls:'safe-text' },
         { icon:'E',  cls:'warn', label:'Error',             result:'error',            textCls:'warn-text' },
@@ -3150,6 +3287,7 @@ function renderBipContent() {
     } else if (isBunt) {
       options = [
         { icon:'BO', cls:'out', label:'Batter Out', result:'bunt-out', textCls:'out-text' },
+        { icon:'FC', cls:'warn', label:"Fielder's Choice", result:'fielderscChoice', textCls:'warn-text' },
         { icon:'F', cls:'warn', label:'Foul Ball', result:null, textCls:'warn-text', action:'foul' },
         { icon:'1B', cls:'safe', label:'Single', result:'single', textCls:'safe-text' },
         { icon:'E', cls:'warn', label:'Error', result:'error', textCls:'warn-text' },
@@ -3162,6 +3300,7 @@ function renderBipContent() {
     } else if (isFlyType) {
       options = [
         { icon:'FO', cls:'out', label:'Batter Out', result:null, textCls:'out-text', drilldown:'flyout-who' },
+        { icon:'FC', cls:'warn', label:"Fielder's Choice", result:'fielderscChoice', textCls:'warn-text' },
         { icon:'1B', cls:'safe', label:'Single', result:'single', textCls:'safe-text' },
         { icon:'2B', cls:'safe', label:'Double', result:'double', textCls:'safe-text' },
         { icon:'3B', cls:'safe', label:'Triple', result:'triple', textCls:'safe-text' },
@@ -3538,7 +3677,7 @@ document.getElementById('set-pitcher-btn').addEventListener('click', () => {
 });
 
 function openBatterSheet(mode) {
-  const team = battingTeam();
+  const team = mode === 'pitcher' ? fieldingTeam() : battingTeam();
   const lineup = G.lineups[team];
   const content = document.getElementById('batter-content');
   content.innerHTML = '';
@@ -3585,7 +3724,10 @@ function openBatterSheet(mode) {
 
       row.addEventListener('click', () => {
         if (mode === 'pitcher') {
-          G.pitcher = { name: player.name, num: player.num || '?' };
+          const fTeam = fieldingTeam();
+          const pid = player.pid || player.id || player.name;
+          G.pitchers[fTeam] = { name: player.name, num: player.num || '?', pid };
+          G.pitcher = G.pitchers[fTeam]; // keep backwards compat
         } else {
           G.lineupIdx[team] = idx;
         }
@@ -3870,6 +4012,40 @@ function openBoxScoreSheet() {
     bt.appendChild(btbody);
     bsWrap.appendChild(bt);
     content.appendChild(bsWrap);
+  });
+
+  // ---- Pitching stats per team ----
+  ['away', 'home'].forEach(side => {
+    const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
+    const pStats = G.pitcherStats[side];
+    const pitcherKeys = Object.keys(pStats);
+    if (pitcherKeys.length === 0) return;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'bs-section-hdr';
+    hdr.textContent = `${teamObj.name.toUpperCase()} PITCHING`;
+    content.appendChild(hdr);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'bs-batting-wrap';
+    const pt = document.createElement('table');
+    pt.className = 'bs-batting-table';
+    pt.innerHTML = `<thead><tr>
+      <th class="bs-name-th">PITCHER</th>
+      <th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th>
+    </tr></thead>`;
+    const ptbody = document.createElement('tbody');
+    pitcherKeys.forEach(key => {
+      const s = pStats[key];
+      const ip = Math.floor(s.outs / 3) + '.' + (s.outs % 3);
+      ptbody.innerHTML += `<tr>
+        <td class="bs-name-td"><span class="bs-player-num">#${s.num}</span>${s.name}</td>
+        <td>${ip}</td><td>${s.h||0}</td><td>${s.r||0}</td><td>${s.bb||0}</td><td>${s.k||0}</td>
+      </tr>`;
+    });
+    pt.appendChild(ptbody);
+    wrap.appendChild(pt);
+    content.appendChild(wrap);
   });
 
   document.getElementById('boxscore-sheet-overlay').classList.add('open');
@@ -4274,6 +4450,7 @@ async function saveBoxScore() {
       inning: G.inning,
       linescores: G.linescores,
       playerStats: G.playerStats,
+      pitcherStats: G.pitcherStats,
       awayTeam: G.awayTeam,
       homeTeam: G.homeTeam,
       createdAt: new Date().toISOString(),
