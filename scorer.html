@@ -2364,7 +2364,7 @@
 // ===== FIREBASE =====
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
-  getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where, serverTimestamp
+  getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, query, where, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -4501,7 +4501,10 @@ document.getElementById('gom-continue-btn').addEventListener('click', () => {
 document.getElementById('gom-exit-btn').addEventListener('click', () => {
   document.getElementById('game-over-overlay').classList.remove('open');
   saveBoxScore();
-  if (G.gameId) updateDoc(doc(db, 'games', G.gameId), { done: true, live: false }).catch(() => {});
+  if (G.gameId && G.gameId !== 'practice') {
+    updateDoc(doc(db, 'games', G.gameId), { done: true, live: false }).catch(() => {});
+    deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {}); // game over — remove saved state
+  }
   document.getElementById('app').classList.remove('visible');
   document.getElementById('bottom-nav').classList.remove('active');
   document.getElementById('setup-screen').style.display = 'flex';
@@ -4770,7 +4773,7 @@ async function loadRosters(awayTeamId, homeTeamId) {
 
 // ===== SAVE SCORE =====
 async function saveScore() {
-  if (!G.gameId) return;
+  if (!G.gameId || G.gameId === 'practice') return;
   try {
     await updateDoc(doc(db, 'games', G.gameId), {
       away_score: G.awayScore,
@@ -4780,8 +4783,43 @@ async function saveScore() {
       inning: G.inning,
       half: G.half,
     });
+    // Also save full state so page refresh restores everything
+    saveFullState();
   } catch (err) {
     console.warn('saveScore error:', err);
+  }
+}
+
+async function saveFullState() {
+  if (!G.gameId || G.gameId === 'practice') return;
+  try {
+    await setDoc(doc(db, 'game_states', G.gameId), {
+      savedAt: serverTimestamp(),
+      inning: G.inning,
+      half: G.half,
+      outs: G.outs,
+      balls: G.balls,
+      strikes: G.strikes,
+      awayScore: G.awayScore,
+      homeScore: G.homeScore,
+      runners: G.runners,
+      lineupIdx: G.lineupIdx,
+      lineups: G.lineups,
+      linescores: G.linescores,
+      playerStats: G.playerStats,
+      pitchers: G.pitchers,
+      pitcherStats: G.pitcherStats,
+      playLog: (G.playLog || []).slice(0, 150),
+      _prevAwayScore: G._prevAwayScore,
+      _prevHomeScore: G._prevHomeScore,
+      halfInningPitches: G.halfInningPitches || 0,
+      halfInningHits: G.halfInningHits || 0,
+      halfInningErrors: G.halfInningErrors || 0,
+      awayTeam: G.awayTeam,
+      homeTeam: G.homeTeam,
+    });
+  } catch (err) {
+    console.warn('saveFullState error:', err);
   }
 }
 
@@ -4843,21 +4881,65 @@ document.getElementById('start-btn').addEventListener('click', async () => {
   // Load rosters
   await loadRosters(awayId, homeId);
 
-  // Reset state
-  G.inning = 1; G.half = 'top';
-  G.outs = 0; G.balls = 0; G.strikes = 0;
-  G.awayScore = 0; G.homeScore = 0;
-  G.runners = { 1: null, 2: null, 3: null };
-  G.lineupIdx = { away: 0, home: 0 };
-  G.linescores = { away: [], home: [] };
-  G.plays = [];
-  G.selectedRunner = null;
-  G.playerStats = { away: {}, home: {} };
-  G._prevAwayScore = 0; G._prevHomeScore = 0;
+  // Check for a saved mid-game state
+  let resumed = false;
+  try {
+    const stateSnap = await getDoc(doc(db, 'game_states', gameId));
+    if (stateSnap.exists()) {
+      const s = stateSnap.data();
+      G.inning     = s.inning     ?? 1;
+      G.half       = s.half       ?? 'top';
+      G.outs       = s.outs       ?? 0;
+      G.balls      = s.balls      ?? 0;
+      G.strikes    = s.strikes    ?? 0;
+      G.awayScore  = s.awayScore  ?? 0;
+      G.homeScore  = s.homeScore  ?? 0;
+      G.runners    = s.runners    ?? { 1: null, 2: null, 3: null };
+      G.lineupIdx  = s.lineupIdx  ?? { away: 0, home: 0 };
+      if (s.lineups) G.lineups    = s.lineups;
+      G.linescores = s.linescores ?? { away: [], home: [] };
+      G.playerStats   = s.playerStats   ?? { away: {}, home: {} };
+      G.pitchers      = s.pitchers      ?? { away: null, home: null };
+      G.pitcherStats  = s.pitcherStats  ?? { away: {}, home: {} };
+      G.playLog       = s.playLog       ?? [];
+      G._prevAwayScore    = s._prevAwayScore    ?? 0;
+      G._prevHomeScore    = s._prevHomeScore    ?? 0;
+      G.halfInningPitches = s.halfInningPitches ?? 0;
+      G.halfInningHits    = s.halfInningHits    ?? 0;
+      G.halfInningErrors  = s.halfInningErrors  ?? 0;
+      G.plays = [];
+      G.selectedRunner = null;
+      resumed = true;
+    }
+  } catch (err) {
+    console.warn('Could not load saved state:', err);
+  }
 
-  // Show lineup screen before scoring starts
-  document.getElementById('setup-screen').style.display = 'none';
-  showLineupScreen();
+  if (resumed) {
+    // Jump straight back into scoring — no lineup screen needed
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    document.getElementById('bottom-nav').classList.add('active');
+    renderAll();
+    saveScore();
+    // Show a brief "Resumed" flash
+    setTimeout(() => flashFeedback('RESUMED', 'var(--gold)'), 300);
+  } else {
+    // Fresh game — reset state and show lineup screen
+    G.inning = 1; G.half = 'top';
+    G.outs = 0; G.balls = 0; G.strikes = 0;
+    G.awayScore = 0; G.homeScore = 0;
+    G.runners = { 1: null, 2: null, 3: null };
+    G.lineupIdx = { away: 0, home: 0 };
+    G.linescores = { away: [], home: [] };
+    G.plays = [];
+    G.selectedRunner = null;
+    G.playerStats = { away: {}, home: {} };
+    G._prevAwayScore = 0; G._prevHomeScore = 0;
+
+    document.getElementById('setup-screen').style.display = 'none';
+    showLineupScreen();
+  }
 });
 
 // ===== PRACTICE MODE =====
