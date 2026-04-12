@@ -2491,11 +2491,95 @@ function renderRunners() {
 
 function selectRunner(base) {
   if (G.selectedRunner === base) {
+    // Second tap on same runner: deselect
     G.selectedRunner = null;
-  } else {
-    G.selectedRunner = base;
+    renderRunners();
+    return;
   }
+  openRunnerActionSheet(base);
+}
+
+function openRunnerActionSheet(base) {
+  const runner = G.runners[base];
+  if (!runner) return;
+  G.selectedRunner = null;
   renderRunners();
+
+  const nm = (runner.name && runner.name !== 'Batter') ? runner.name : '#' + (runner.num || '?');
+  const baseLabel = base === 1 ? '1st' : base === 2 ? '2nd' : '3rd';
+  document.getElementById('runner-sheet-title').textContent = nm + ' — ' + baseLabel + ' Base';
+
+  const content = document.getElementById('runner-sheet-content');
+  content.innerHTML = '';
+
+  // Move Runner
+  const moveRow = document.createElement('div');
+  moveRow.className = 'sheet-row';
+  moveRow.innerHTML = `<div class="sheet-row-content"><div class="sheet-row-label">Move Runner</div><div class="sheet-row-sub">Advance, steal, or record out</div></div><div class="sheet-row-chevron">›</div>`;
+  moveRow.addEventListener('click', () => {
+    document.getElementById('runner-sheet-overlay').classList.remove('open');
+    G.selectedRunner = base;
+    renderRunners();
+  });
+  content.appendChild(moveRow);
+
+  // Courtesy / Pinch Runner
+  const subRow = document.createElement('div');
+  subRow.className = 'sheet-row';
+  subRow.innerHTML = `<div class="sheet-row-content"><div class="sheet-row-label" style="color:var(--gold)">Courtesy / Pinch Runner</div><div class="sheet-row-sub">Replace with another player</div></div><div class="sheet-row-chevron">›</div>`;
+  subRow.addEventListener('click', () => showSubRunnerPicker(base, runner));
+  content.appendChild(subRow);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'runner-sheet-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', closeRunnerSheet);
+  content.appendChild(cancelBtn);
+
+  document.getElementById('runner-sheet-overlay').classList.add('open');
+}
+
+function showSubRunnerPicker(base, originalRunner) {
+  const team = battingTeam();
+  const lineup = G.lineups[team] || [];
+  const baseLabel = base === 1 ? '1st' : base === 2 ? '2nd' : '3rd';
+
+  document.getElementById('runner-sheet-title').textContent = 'Sub on ' + baseLabel + ' Base';
+
+  const content = document.getElementById('runner-sheet-content');
+  content.innerHTML = '';
+
+  const note = document.createElement('div');
+  note.className = 'runner-sheet-question';
+  note.textContent = 'Select the replacement runner:';
+  content.appendChild(note);
+
+  lineup.forEach(player => {
+    const isOnBase = [1, 2, 3].some(b => G.runners[b] && G.runners[b].pid === player.pid);
+    const row = document.createElement('div');
+    row.className = 'sheet-row';
+    row.style.opacity = isOnBase ? '0.4' : '1';
+    const nm2 = player.name || ('Player ' + player.num);
+    row.innerHTML = `<div class="sheet-row-content"><div class="sheet-row-label">#${player.num || '?'} ${nm2}</div>${isOnBase ? '<div class="sheet-row-sub" style="color:var(--red)">Already on base</div>' : ''}</div>`;
+    if (!isOnBase) {
+      row.addEventListener('click', () => {
+        snapshotState();
+        const origName = (originalRunner.name && originalRunner.name !== 'Batter') ? originalRunner.name : '#' + originalRunner.num;
+        G.runners[base] = { name: player.name, num: player.num, pid: player.pid };
+        closeRunnerSheet();
+        logPlay('Sub', `PR — #${player.num} ${nm2} replaces ${origName} on ${baseLabel}`);
+        renderAll();
+        saveScore();
+      });
+    }
+    content.appendChild(row);
+  });
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'runner-sheet-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', closeRunnerSheet);
+  content.appendChild(cancelBtn);
 }
 
 // ===== BASE TAP ZONES =====
