@@ -2845,7 +2845,12 @@ function endAtBat(result, details) {
   } else if (result === 'doublePlay') {
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     advanceLineup(team);
-    showDoublePlaySheet(batEntry, team, sid, locStr);
+    showDoublePlaySheet(batEntry, team, sid, locStr, 2);
+    return;
+  } else if (result === 'triplePlay') {
+    const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
+    advanceLineup(team);
+    showDoublePlaySheet(batEntry, team, sid, locStr, 3);
     return;
   } else if (result === 'fielderscChoice') {
     // Batter reaches 1B on FC; a runner is out — show runner sheet
@@ -2877,12 +2882,14 @@ function endAtBat(result, details) {
   }
 }
 
-// ===== DOUBLE PLAY SHEET =====
+// ===== DOUBLE / TRIPLE PLAY SHEET =====
 let _dpEntries = [];  // [{runner, from, isBatter, sel}]
 let _dpTeam = null;
 let _dpBatterSid = null;
+let _dpRequired = 2;  // 2 = double play, 3 = triple play
 
-function showDoublePlaySheet(batEntry, team, sid, locStr) {
+function showDoublePlaySheet(batEntry, team, sid, locStr, requiredOuts = 2) {
+  _dpRequired = requiredOuts;
   _dpTeam = team;
   _dpBatterSid = sid;
   window._dpLocStr = locStr;
@@ -2897,14 +2904,11 @@ function showDoublePlaySheet(batEntry, team, sid, locStr) {
   });
   entries.push({ runner: batEntry, from: 0, isBatter: true, sel: null });
 
-  // Smart defaults: typical ground-ball DP
-  // Runner on 1st → out, batter → out; others advance one base
-  let outsLeft = 2;
-  // First pass: runner on 1st out (most common)
-  entries.forEach(e => {
-    if (e.from === 1 && outsLeft > 0) { e.sel = 'out'; outsLeft--; }
+  // Smart defaults: most common play — runner on 1st out, batter out; TP also gets runner on 2nd out
+  let outsLeft = requiredOuts;
+  [1, 2, 3].forEach(base => {
+    entries.forEach(e => { if (e.from === base && outsLeft > 0) { e.sel = 'out'; outsLeft--; } });
   });
-  // Second pass: batter out
   entries.forEach(e => {
     if (e.isBatter && outsLeft > 0) { e.sel = 'out'; outsLeft--; }
   });
@@ -2944,16 +2948,20 @@ function renderDpSheet() {
   const outCount = _dpEntries.filter(e => e.sel === 'out').length;
   const runCount = _dpEntries.filter(e => e.sel === 'score').length;
 
-  document.getElementById('ras-title').textContent = 'DOUBLE PLAY';
-  document.getElementById('ras-sub').textContent = outCount === 2 ? '2 outs selected — confirm when ready' : `Select 2 outs (${outCount}/2)`;
+  const req = _dpRequired;
+  const playLabel = req === 3 ? 'TRIPLE PLAY' : 'DOUBLE PLAY';
+  const abbr      = req === 3 ? 'TP' : 'DP';
+  const done      = outCount === req;
+  document.getElementById('ras-title').textContent = playLabel;
+  document.getElementById('ras-sub').textContent = done ? `${req} outs selected — confirm when ready` : `Select ${req} outs (${outCount}/${req})`;
   document.getElementById('ras-runs').textContent = runCount;
   document.getElementById('ras-outs').textContent = outCount;
   document.getElementById('ras-rbi').textContent = '—';
   document.getElementById('ras-stats').style.display = '';
   const confirmBtn = document.getElementById('ras-confirm-btn');
   confirmBtn.style.display = '';
-  confirmBtn.textContent = outCount === 2 ? 'CONFIRM DP' : `CONFIRM DP (${outCount}/2 outs)`;
-  confirmBtn.style.opacity = outCount === 2 ? '1' : '0.55';
+  confirmBtn.textContent = done ? `CONFIRM ${abbr}` : `CONFIRM ${abbr} (${outCount}/${req} outs)`;
+  confirmBtn.style.opacity = done ? '1' : '0.55';
 
   const fromLabel = b => b === 0 ? 'batter' : b === 1 ? '1st base' : b === 2 ? '2nd base' : '3rd base';
   const container = document.getElementById('ras-rows');
@@ -3012,8 +3020,10 @@ function confirmDoublePlay() {
   });
 
   const locStr = window._dpLocStr || '';
-  logPlay('Double Play', `DP — Double play${locStr}. ${outNames.join('; ')}.`);
-  flashFeedback('DOUBLE PLAY', 'var(--red)');
+  const playName = _dpRequired === 3 ? 'Triple Play' : 'Double Play';
+  const playAbbr = _dpRequired === 3 ? 'TP' : 'DP';
+  logPlay(playName, `${playAbbr} — ${playName}${locStr}. ${outNames.join('; ')}.`);
+  flashFeedback(_dpRequired === 3 ? 'TRIPLE PLAY' : 'DOUBLE PLAY', 'var(--red)');
 
   G.balls = 0; G.strikes = 0;
   if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); }
@@ -3586,48 +3596,60 @@ function renderBipContent() {
     const typeLabel = {gb:'Ground Ball',hgb:'Hard Ground Ball',fb:'Fly Ball',ld:'Line Drive',bunt:'Bunt',pf:'Pop Fly'}[bipContactType];
     document.getElementById('bip-title').textContent = typeLabel;
 
+    // Runner/out context for conditional options
+    const runnersOnBase = [1,2,3].filter(b => G.runners[b]).length;
+    const hasRunner  = runnersOnBase >= 1;
+    const canDP      = hasRunner;                          // need ≥1 runner for DP
+    const canTP      = runnersOnBase >= 2 && G.outs === 0; // need ≥2 runners, 0 outs for TP
+
+    const dpOpt = { icon:'DP', cls:'out', label:'Double Play',  result:'doublePlay',  textCls:'out-text' };
+    const tpOpt = { icon:'TP', cls:'out', label:'Triple Play',  result:'triplePlay',  textCls:'out-text' };
+
     let options = [];
 
     if (isGroundBall) {
       options = [
         { icon:'GO', cls:'out',  label:'Out at 1st',           result:'groundout',        textCls:'out-text' },
-        { icon:'DP', cls:'out',  label:'Double Play',          result:'doublePlay',       textCls:'out-text' },
+        ...(canDP ? [dpOpt] : []),
+        ...(canTP ? [tpOpt] : []),
         { icon:'FC', cls:'warn', label:"Fielder's Choice",     result:'fielderscChoice',  textCls:'warn-text' },
         { icon:'1B', cls:'safe', label:'Single',               result:'single',           textCls:'safe-text' },
-        { icon:'2B', cls:'safe', label:'Double',            result:'double',           textCls:'safe-text' },
-        { icon:'3B', cls:'safe', label:'Triple',            result:'triple',           textCls:'safe-text' },
-        { icon:'E',  cls:'warn', label:'Error',             result:'error',            textCls:'warn-text' },
-        { icon:'HR', cls:'safe', label:'In-the-park HR',    result:'itphr',            textCls:'safe-text' },
-        { icon:'F',  cls:'warn', label:'Foul Ball',         result:null,               textCls:'warn-text', action:'foul' },
-        { icon:'BI', cls:'out',  label:'Batter Interference', result:'batterinterference', textCls:'out-text' },
+        { icon:'2B', cls:'safe', label:'Double',               result:'double',           textCls:'safe-text' },
+        { icon:'3B', cls:'safe', label:'Triple',               result:'triple',           textCls:'safe-text' },
+        { icon:'E',  cls:'warn', label:'Error',                result:'error',            textCls:'warn-text' },
+        { icon:'HR', cls:'safe', label:'In-the-park HR',       result:'itphr',            textCls:'safe-text' },
+        { icon:'F',  cls:'warn', label:'Foul Ball',            result:null,               textCls:'warn-text', action:'foul' },
+        { icon:'BI', cls:'out',  label:'Batter Interference',  result:'batterinterference', textCls:'out-text' },
       ];
     } else if (isBunt) {
       options = [
-        { icon:'BO', cls:'out', label:'Batter Out', result:'bunt-out', textCls:'out-text' },
-        { icon:'DP', cls:'out', label:'Double Play', result:'doublePlay', textCls:'out-text' },
-        { icon:'FC', cls:'warn', label:"Fielder's Choice", result:'fielderscChoice', textCls:'warn-text' },
-        { icon:'F', cls:'warn', label:'Foul Ball', result:null, textCls:'warn-text', action:'foul' },
-        { icon:'1B', cls:'safe', label:'Single', result:'single', textCls:'safe-text' },
-        { icon:'E', cls:'warn', label:'Error', result:'error', textCls:'warn-text' },
-        { icon:'BI', cls:'out', label:'Batter Interference', result:'batterinterference', textCls:'out-text' },
-        { icon:'2B', cls:'safe', label:'Double', result:'double', textCls:'safe-text' },
-        { icon:'3B', cls:'safe', label:'Triple', result:'triple', textCls:'safe-text' },
-        { icon:'PFE', cls:'warn', label:'Pop Foul + Error', result:'error', textCls:'warn-text' },
-        { icon:'HR', cls:'safe', label:'ITPHR', result:'itphr', textCls:'safe-text' },
+        { icon:'BO', cls:'out',  label:'Batter Out',           result:'bunt-out',         textCls:'out-text' },
+        ...(canDP ? [dpOpt] : []),
+        ...(canTP ? [tpOpt] : []),
+        { icon:'FC', cls:'warn', label:"Fielder's Choice",     result:'fielderscChoice',  textCls:'warn-text' },
+        { icon:'F',  cls:'warn', label:'Foul Ball',            result:null,               textCls:'warn-text', action:'foul' },
+        { icon:'1B', cls:'safe', label:'Single',               result:'single',           textCls:'safe-text' },
+        { icon:'E',  cls:'warn', label:'Error',                result:'error',            textCls:'warn-text' },
+        { icon:'BI', cls:'out',  label:'Batter Interference',  result:'batterinterference', textCls:'out-text' },
+        { icon:'2B', cls:'safe', label:'Double',               result:'double',           textCls:'safe-text' },
+        { icon:'3B', cls:'safe', label:'Triple',               result:'triple',           textCls:'safe-text' },
+        { icon:'PFE',cls:'warn', label:'Pop Foul + Error',     result:'error',            textCls:'warn-text' },
+        { icon:'HR', cls:'safe', label:'ITPHR',                result:'itphr',            textCls:'safe-text' },
       ];
     } else if (isFlyType) {
       options = [
-        { icon:'FO', cls:'out', label:'Batter Out', result:null, textCls:'out-text', drilldown:'flyout-who' },
-        { icon:'DP', cls:'out', label:'Double Play', result:'doublePlay', textCls:'out-text' },
-        { icon:'FC', cls:'warn', label:"Fielder's Choice", result:'fielderscChoice', textCls:'warn-text' },
-        { icon:'1B', cls:'safe', label:'Single', result:'single', textCls:'safe-text' },
-        { icon:'2B', cls:'safe', label:'Double', result:'double', textCls:'safe-text' },
-        { icon:'3B', cls:'safe', label:'Triple', result:'triple', textCls:'safe-text' },
-        { icon:'HR', cls:'safe', label:'Home Run', result:'homerun', textCls:'safe-text' },
-        { icon:'HR', cls:'safe', label:'In-the-park HR', result:'itphr', textCls:'safe-text' },
-        { icon:'E', cls:'warn', label:'Error', result:'error', textCls:'warn-text' },
-        { icon:'F', cls:'warn', label:'Foul Ball', result:null, textCls:'warn-text', action:'foul' },
-        { icon:'FE', cls:'warn', label:'Foul Ball + Error', result:'error', textCls:'warn-text' },
+        { icon:'FO', cls:'out',  label:'Batter Out',           result:null,               textCls:'out-text', drilldown:'flyout-who' },
+        ...(canDP ? [dpOpt] : []),
+        ...(canTP ? [tpOpt] : []),
+        { icon:'FC', cls:'warn', label:"Fielder's Choice",     result:'fielderscChoice',  textCls:'warn-text' },
+        { icon:'1B', cls:'safe', label:'Single',               result:'single',           textCls:'safe-text' },
+        { icon:'2B', cls:'safe', label:'Double',               result:'double',           textCls:'safe-text' },
+        { icon:'3B', cls:'safe', label:'Triple',               result:'triple',           textCls:'safe-text' },
+        { icon:'HR', cls:'safe', label:'Home Run',             result:'homerun',          textCls:'safe-text' },
+        { icon:'HR', cls:'safe', label:'In-the-park HR',       result:'itphr',            textCls:'safe-text' },
+        { icon:'E',  cls:'warn', label:'Error',                result:'error',            textCls:'warn-text' },
+        { icon:'F',  cls:'warn', label:'Foul Ball',            result:null,               textCls:'warn-text', action:'foul' },
+        { icon:'FE', cls:'warn', label:'Foul Ball + Error',    result:'error',            textCls:'warn-text' },
       ];
     }
 
