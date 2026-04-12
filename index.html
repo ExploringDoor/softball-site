@@ -838,6 +838,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .score-row:last-child{border-bottom:none}
 .score-row:hover{background:rgba(0,0,0,.04)}
 .score-status{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:60px;flex-shrink:0}
+.live-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;font-size:11px;font-weight:800;letter-spacing:1px;padding:2px 8px;border-radius:4px;animation:livePulse 1.5s ease-in-out infinite}
+@keyframes livePulse{0%,100%{opacity:1}50%{opacity:0.5}}
 .score-teams{flex:1;min-width:0}
 .score-team-row{display:flex;align-items:center;gap:6px;padding:0}
 .score-logo{width:125px;height:125px;border-radius:0;flex-shrink:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -2763,7 +2765,7 @@ async function loadAllData() {
         field: g.field, addr: g.addr||'',
         away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
         home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
-        as: g.away_score, hs: g.home_score, done: g.done||false
+        as: g.away_score, hs: g.home_score, done: g.done||false, live: g.live||false
       }))
       .sort((a,b) => a.wk - b.wk || (a.time||'').localeCompare(b.time||''));
 
@@ -4430,7 +4432,7 @@ function buildTicker2(){
     const done = g.done && g.as !== null && g.hs !== null;
     const aWin = done && g.as > g.hs;
     const hWin = done && g.hs > g.as;
-    const status = done ? 'Final' : (g.date+' · '+g.time);
+    const status = done ? 'Final' : (g.live ? '<span class="live-badge">🔴 LIVE</span>' : (g.date+' · '+g.time));
     const field = g.field||'';
     const timeStr = g.time||'TBD';
     const awayLabel = isMob ? getMobileAbbr(g.away) : g.away;
@@ -4869,7 +4871,7 @@ function scheduleBlock(g, isNext){
     const aw=g.as>g.hs;
     const _bsArgs=`'${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}'`;
     return `<div class="score-row" style="cursor:pointer" onclick="openBox(${_bsArgs})">
-      <div class="score-status">FINAL</div>
+      <div class="score-status">${g.live?'<span class="live-badge">🔴 LIVE</span>':'FINAL'}</div>
       <div class="score-teams">
         <div class="score-team-row">
           <div class="score-logo">${teamLogoEl(atm?.id,aShort)}</div>
@@ -4899,7 +4901,7 @@ function scheduleBlock(g, isNext){
     const timeStr=g.time||'TBD';
     const timeField=timeStr+(g.field?` · ${g.field}`:'');
     return `<div class="preview-card${isNext?' next':''}">
-      <div class="preview-time">${timeField}</div>
+      <div class="preview-time">${timeField}${g.live?' <span class="live-badge">🔴 LIVE</span>':''}</div>
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,aShort)}</div>
