@@ -2285,7 +2285,7 @@
 // ===== FIREBASE =====
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
-  getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where
+  getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -4431,6 +4431,7 @@ async function saveScore() {
       away_score: G.awayScore,
       home_score: G.homeScore,
       live: true,
+      liveAt: serverTimestamp(),
       inning: G.inning,
       half: G.half,
     });
@@ -4545,6 +4546,22 @@ document.getElementById('practice-btn').addEventListener('click', () => {
 
 // ===== INIT =====
 loadGames();
+
+// ===== CLEAR LIVE FLAG ON TAB CLOSE / HIDE =====
+function clearLiveFlag() {
+  if (G.gameId) {
+    // Use sendBeacon for reliable delivery on page unload
+    const url = `https://firestore.googleapis.com/v1/projects/dvsl-292dd/databases/(default)/documents/games/${G.gameId}?updateMask.fieldPaths=live`;
+    // Best-effort: use navigator.sendBeacon if available, fallback to sync XHR
+    try {
+      updateDoc(doc(db, 'games', G.gameId), { live: false }).catch(() => {});
+    } catch(e) {}
+  }
+}
+window.addEventListener('beforeunload', clearLiveFlag);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') clearLiveFlag();
+});
 
 </script>
 </body>

@@ -2765,7 +2765,12 @@ async function loadAllData() {
         field: g.field, addr: g.addr||'',
         away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
         home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
-        as: g.away_score, hs: g.home_score, done: g.done||false, live: g.live||false
+        as: g.away_score, hs: g.home_score, done: g.done||false,
+        live: (g.live||false) && (() => {
+          if (!g.liveAt) return true; // no timestamp = old data, trust the flag
+          const ts = g.liveAt.toDate ? g.liveAt.toDate() : new Date(g.liveAt);
+          return (Date.now() - ts.getTime()) < 60 * 60 * 1000; // stale after 60 min
+        })()
       }))
       .sort((a,b) => a.wk - b.wk || (a.time||'').localeCompare(b.time||''));
 
