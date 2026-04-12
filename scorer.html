@@ -3975,12 +3975,15 @@ function openPitchSheet() {
   ];
   pitches.forEach(p => {
     const row = createSheetRow(p.icon, p.cls, p.label, p.color, p.pitch === 'bip');
-    row.addEventListener('click', () => {
+    row.addEventListener('click', (e) => {
+      e.stopPropagation(); // prevent touch bubbling to overlay background on mobile
       const stayOpen = ['ball','called-strike','swing-miss','foul'];
-      if (!stayOpen.includes(p.pitch)) {
-        document.getElementById('pitch-sheet-overlay').style.display = 'none';
-      }
       handlePitch(p.pitch);
+      if (stayOpen.includes(p.pitch)) {
+        // Re-open to refresh count display; endAtBat will close it if needed (e.g. strikeout)
+        const overlay = document.getElementById('pitch-sheet-overlay');
+        if (overlay.style.display !== 'none') openPitchSheet();
+      }
     });
     content.appendChild(row);
   });
