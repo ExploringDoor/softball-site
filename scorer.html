@@ -1731,48 +1731,7 @@
   }
 
   /* ===== PLAY EDIT OVERLAY ===== */
-  #play-edit-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 2000;
-    background: rgba(0,0,0,0.75);
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }
-  #play-edit-overlay.open { display: flex; }
-  #play-edit-modal {
-    background: var(--sheet-bg);
-    border-radius: 18px;
-    width: 100%;
-    max-width: 380px;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .pem-header {
-    font-size: 18px;
-    font-weight: 900;
-    letter-spacing: 1px;
-    color: var(--text);
-    text-align: center;
-  }
-  .pem-player {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-muted);
-    text-align: center;
-  }
-  .pem-field-label {
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
+  /* #play-edit-overlay uses .sheet-overlay / .sheet classes — no extra modal CSS needed */
   .pem-input {
     width: 100%;
     background: var(--card2);
@@ -1784,28 +1743,11 @@
     font-weight: 600;
     padding: 10px 12px;
     outline: none;
+    box-sizing: border-box;
     user-select: text;
     -webkit-user-select: text;
   }
   .pem-input:focus { border-color: var(--blue); }
-  .pem-btns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 4px;
-  }
-  .pem-btns button {
-    padding: 12px;
-    border-radius: 12px;
-    border: none;
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 16px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    cursor: pointer;
-  }
-  #pem-cancel-btn { background: var(--card2); color: var(--text-muted); }
-  #pem-save-btn   { background: var(--navy); color: white; }
 
   /* ===== GAME OVER OVERLAY ===== */
   #game-over-overlay {
@@ -2275,21 +2217,32 @@
 </div>
 
 <!-- Play Edit Overlay -->
-<div id="play-edit-overlay">
-  <div id="play-edit-modal">
-    <div class="pem-header">EDIT PLAY</div>
-    <div class="pem-player" id="pem-player"></div>
-    <div>
-      <div class="pem-field-label">Result</div>
-      <input class="pem-input" id="pem-result" type="text" autocomplete="off">
+<div id="play-edit-overlay" class="sheet-overlay">
+  <div id="play-edit-modal" class="sheet">
+    <div class="sheet-header">
+      <button class="sheet-back-btn" id="pem-cancel-btn">Cancel</button>
+      <div class="sheet-title">CORRECT PLAY</div>
+      <button class="sheet-back-btn" id="pem-save-btn" style="color:var(--gold);text-align:right;">Save</button>
     </div>
-    <div>
-      <div class="pem-field-label">Description</div>
-      <input class="pem-input" id="pem-desc" type="text" autocomplete="off">
+    <div id="pem-player" style="padding:10px 16px 4px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;"></div>
+    <div id="pem-desc-row" style="padding:2px 16px 10px;font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--text-muted);font-style:italic;"></div>
+
+    <!-- Result type picker -->
+    <div style="padding:0 16px 8px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:8px;">CHANGE RESULT TO</div>
+      <div id="pem-result-options" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
-    <div class="pem-btns">
-      <button id="pem-cancel-btn">Cancel</button>
-      <button id="pem-save-btn">Save</button>
+
+    <!-- Error fielder picker (shown only when Error is selected) -->
+    <div id="pem-fielder-section" style="display:none;padding:0 16px 8px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:8px;">ASSIGN ERROR TO (FIELDER)</div>
+      <div id="pem-fielder-options" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+
+    <!-- Description edit -->
+    <div style="padding:0 16px 12px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:6px;">NOTES (OPTIONAL)</div>
+      <input class="pem-input" id="pem-desc" type="text" autocomplete="off" placeholder="Edit description...">
     </div>
   </div>
 </div>
@@ -3216,10 +3169,13 @@ function logPlay(resultLabel, desc) {
   const team = battingTeam();
   const player = b ? `#${b.num} ${b.name}` : 'Batter';
   const teamShort = team === 'away' ? G.awayTeam.short : G.homeTeam.short;
+  const pid = b ? (b.pid || b.id || b.name) : null;
   G.playLog.unshift({
     inning: inningDisplay(),
     team: teamShort,
+    battingTeam: team,
     player,
+    pid,
     result: resultLabel,
     desc,
     score: `${G.awayScore}-${G.homeScore}`,
@@ -4214,33 +4170,200 @@ function openPlayLogSheet() {
 
 // ===== PLAY EDIT =====
 let _editingPlayIdx = null;
+let _pemNewResult   = null;   // selected new result key
+let _pemNewFielder  = null;   // selected fielder pid/name (for errors)
+
+const PEM_RESULT_OPTIONS = [
+  { key: 'single',    label: '1B  Single',    cls: 'safe' },
+  { key: 'double',    label: '2B  Double',    cls: 'safe' },
+  { key: 'triple',    label: '3B  Triple',    cls: 'safe' },
+  { key: 'homerun',   label: 'HR  Home Run',  cls: 'safe' },
+  { key: 'error',     label: 'E   Error',     cls: 'warn' },
+  { key: 'out',       label: 'OUT  Out',      cls: 'out'  },
+  { key: 'strikeout', label: 'K   Strikeout', cls: 'out'  },
+  { key: 'walk',      label: 'BB  Walk',      cls: 'safe' },
+];
+
+function inferResultKey(resultLabel) {
+  const r = (resultLabel || '').toLowerCase();
+  if (r === 'single' || r === '1b') return 'single';
+  if (r === 'double' || r === '2b') return 'double';
+  if (r === 'triple' || r === '3b') return 'triple';
+  if (r === 'home run' || r === 'hr' || r === 'itphr') return 'homerun';
+  if (r === 'error' || r === 'e') return 'error';
+  if (r === 'k' || r === 'strikeout') return 'strikeout';
+  if (r === 'walk' || r === 'bb' || r === 'hbp') return 'walk';
+  if (r.includes('out') || r.includes('go') || r.includes('fo') || r.includes('po') || r.includes('bo')) return 'out';
+  if (r.includes('double play') || r.includes('dp') || r.includes('triple play') || r.includes('tp')) return 'out';
+  return 'out';
+}
+
+function statsForResult(key) {
+  switch (key) {
+    case 'single':    return { ab:1, h:1, singles:1 };
+    case 'double':    return { ab:1, h:1, doubles:1 };
+    case 'triple':    return { ab:1, h:1, triples:1 };
+    case 'homerun':   return { ab:1, h:1, hr:1 };
+    case 'error':     return { ab:1 };
+    case 'out':       return { ab:1 };
+    case 'strikeout': return { ab:1, so:1 };
+    case 'walk':      return { bb:1 };
+    default:          return {};
+  }
+}
+
+function applyStatDelta(stats, delta, sign) {
+  if (!stats) return;
+  Object.entries(delta).forEach(([k, v]) => {
+    stats[k] = (stats[k] || 0) + sign * v;
+    if (stats[k] < 0) stats[k] = 0;
+  });
+}
+
+function renderPemFielderSection(entry, selectedKey) {
+  const sec = document.getElementById('pem-fielder-section');
+  if (selectedKey !== 'error') { sec.style.display = 'none'; return; }
+
+  // Fielding team = opposite of batting team
+  const fieldingTeamKey = entry.battingTeam === 'away' ? 'home' : 'away';
+  const fieldingLineup  = G.lineups[fieldingTeamKey] || [];
+
+  const container = document.getElementById('pem-fielder-options');
+  container.innerHTML = '';
+  _pemNewFielder = null;
+
+  fieldingLineup.forEach(player => {
+    const btn = document.createElement('button');
+    btn.style.cssText = `font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;
+      padding:7px 10px;border-radius:8px;cursor:pointer;border:2px solid transparent;
+      background:var(--card2);color:var(--text-muted);`;
+    btn.textContent = `#${player.num} ${player.name || ''}`;
+    const bpid = player.pid || player.id || player.name;
+    btn.dataset.pid = bpid;
+    btn.addEventListener('click', () => {
+      _pemNewFielder = { num: player.num, name: player.name, pid: bpid };
+      container.querySelectorAll('button').forEach(b => {
+        b.style.border = '2px solid transparent';
+        b.style.color = 'var(--text-muted)';
+        b.style.background = 'var(--card2)';
+      });
+      btn.style.border = '2px solid var(--orange)';
+      btn.style.color = 'var(--text)';
+      btn.style.background = 'rgba(249,115,22,0.12)';
+    });
+    container.appendChild(btn);
+  });
+
+  sec.style.display = 'block';
+}
+
 function openPlayEdit(idx) {
   _editingPlayIdx = idx;
-  const entry = G.playLog[idx];
-  document.getElementById('pem-player').textContent = `${entry.team} · ${entry.player} · ${entry.inning}`;
-  document.getElementById('pem-result').value = entry.result || '';
+  _pemNewResult   = null;
+  _pemNewFielder  = null;
+
+  const entry      = G.playLog[idx];
+  const currentKey = inferResultKey(entry.result);
+
+  document.getElementById('pem-player').textContent =
+    `${entry.inning}  ·  ${entry.team}  ·  ${entry.player}`;
+  document.getElementById('pem-desc-row').textContent = entry.desc || '';
+
+  const optContainer = document.getElementById('pem-result-options');
+  optContainer.innerHTML = '';
+  PEM_RESULT_OPTIONS.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.style.cssText = `font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;
+      padding:7px 12px;border-radius:8px;cursor:pointer;border:2px solid transparent;
+      background:var(--card2);color:var(--text-muted);letter-spacing:0.5px;`;
+    if (opt.key === currentKey) {
+      btn.style.border = '2px solid rgba(255,255,255,0.3)';
+      btn.style.color  = 'var(--text)';
+    }
+    btn.textContent  = opt.label;
+    btn.dataset.key  = opt.key;
+    btn.addEventListener('click', () => {
+      _pemNewResult = opt.key;
+      optContainer.querySelectorAll('button').forEach(b => {
+        b.style.border     = '2px solid transparent';
+        b.style.color      = 'var(--text-muted)';
+        b.style.background = 'var(--card2)';
+      });
+      btn.style.border = opt.cls === 'safe' ? '2px solid var(--green)' :
+                         opt.cls === 'warn' ? '2px solid var(--orange)' : '2px solid var(--red)';
+      btn.style.color      = 'var(--text)';
+      btn.style.background = opt.cls === 'safe' ? 'rgba(34,197,94,0.12)' :
+                             opt.cls === 'warn' ? 'rgba(249,115,22,0.12)' : 'rgba(239,68,68,0.12)';
+      renderPemFielderSection(entry, opt.key);
+    });
+    optContainer.appendChild(btn);
+  });
+
+  document.getElementById('pem-fielder-section').style.display = 'none';
   document.getElementById('pem-desc').value = entry.desc || '';
   document.getElementById('play-edit-overlay').classList.add('open');
 }
+
 document.getElementById('pem-cancel-btn').addEventListener('click', () => {
   document.getElementById('play-edit-overlay').classList.remove('open');
   _editingPlayIdx = null;
+  _pemNewResult   = null;
+  _pemNewFielder  = null;
 });
+
 document.getElementById('pem-save-btn').addEventListener('click', () => {
   if (_editingPlayIdx === null) return;
-  G.playLog[_editingPlayIdx].result = document.getElementById('pem-result').value.trim();
-  G.playLog[_editingPlayIdx].desc = document.getElementById('pem-desc').value.trim();
+  const entry = G.playLog[_editingPlayIdx];
+
+  if (_pemNewResult && _pemNewResult !== inferResultKey(entry.result)) {
+    // Reverse old stat impact
+    const oldKey   = inferResultKey(entry.result);
+    const oldDelta = statsForResult(oldKey);
+    if (entry.pid && entry.battingTeam && G.playerStats[entry.battingTeam]) {
+      const stats = G.playerStats[entry.battingTeam][entry.pid];
+      if (stats) applyStatDelta(stats, oldDelta, -1);
+    }
+
+    // Apply new stat impact
+    const newDelta = statsForResult(_pemNewResult);
+    if (entry.pid && entry.battingTeam && G.playerStats[entry.battingTeam]) {
+      const stats = G.playerStats[entry.battingTeam][entry.pid];
+      if (stats) applyStatDelta(stats, newDelta, +1);
+    }
+
+    // Update result label
+    const labelMap = {
+      single:'Single', double:'Double', triple:'Triple', homerun:'Home Run',
+      error:'Error', out:'Out', strikeout:'K', walk:'Walk'
+    };
+    entry.result = labelMap[_pemNewResult] || _pemNewResult;
+
+    // Update description
+    let newDesc = document.getElementById('pem-desc').value.trim() || entry.desc;
+    if (_pemNewResult === 'error' && _pemNewFielder) {
+      newDesc = `E — Error by #${_pemNewFielder.num} ${_pemNewFielder.name}` +
+                (newDesc && !newDesc.startsWith('E —') ? `. ${newDesc}` : '');
+    }
+    entry.desc = newDesc;
+  } else {
+    // Just update description
+    entry.desc = document.getElementById('pem-desc').value.trim() || entry.desc;
+  }
+
   document.getElementById('play-edit-overlay').classList.remove('open');
   _editingPlayIdx = null;
+  _pemNewResult   = null;
+  _pemNewFielder  = null;
+
   // Re-render wherever the log is visible
-  const plSheet = document.getElementById('playlog-content');
   if (document.getElementById('playlog-sheet-overlay').classList.contains('open')) {
-    renderPlayLogEntries(plSheet);
+    renderPlayLogEntries(document.getElementById('playlog-content'));
   }
   if (document.getElementById('plays-panel').style.display !== 'none') {
     renderPlaysPanel();
   }
   saveScore();
+  saveFullState();
 });
 
 document.getElementById('playlog-close-btn').addEventListener('click', () => {
