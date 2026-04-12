@@ -2670,13 +2670,9 @@ function endAtBat(result, details) {
     if (psBO) psBO.outs++;
     flashFeedback('OUT', 'var(--red)');
   } else if (result === 'doublePlay') {
-    G.outs++;
-    logPlay('Out', `DP — Double play${locStr}`);
-    const psDP = currentPitcherStats(fieldingTeam());
-    if (psDP) psDP.outs++;
+    const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     advanceLineup(team);
-    flashFeedback('OUT', 'var(--red)');
-    setTimeout(() => showDpRunnerSheet(team), 400);
+    showDoublePlaySheet(batEntry, team, sid, locStr);
     return;
   } else if (result === 'fielderscChoice') {
     // Batter reaches 1B on FC; a runner is out — show runner sheet
@@ -2708,79 +2704,149 @@ function endAtBat(result, details) {
   }
 }
 
-// ===== DOUBLE PLAY RUNNER SELECTION =====
-function showDpRunnerSheet(team) {
-  const runners = [];
+// ===== DOUBLE PLAY SHEET =====
+let _dpEntries = [];  // [{runner, from, isBatter, sel}]
+let _dpTeam = null;
+let _dpBatterSid = null;
+
+function showDoublePlaySheet(batEntry, team, sid, locStr) {
+  _dpTeam = team;
+  _dpBatterSid = sid;
+  window._dpLocStr = locStr;
+
+  // Capture current runners then clear the bases
+  const entries = [];
   [3, 2, 1].forEach(base => {
-    if (G.runners[base]) runners.push({ runner: G.runners[base], base });
-  });
-
-  function closeDpRunner() {
-    document.getElementById('runner-advance-overlay').style.display = 'none';
-    document.getElementById('ras-stats').style.display = '';
-    document.getElementById('ras-confirm-btn').style.display = '';
-    document.getElementById('ras-sub').textContent = 'Tap to adjust runner destinations';
-    G.balls = 0; G.strikes = 0;
-    if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
-    else { renderAll(); saveScore(); }
-  }
-
-  if (runners.length === 0 || G.outs >= 3) {
-    G.balls = 0; G.strikes = 0;
-    if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
-    else { renderAll(); saveScore(); }
-    return;
-  }
-
-  const container = document.getElementById('ras-rows');
-  container.innerHTML = '';
-  document.getElementById('ras-title').textContent = 'DOUBLE PLAY';
-  document.getElementById('ras-sub').textContent = 'Which runner was also out?';
-  document.getElementById('ras-stats').style.display = 'none';
-  document.getElementById('ras-confirm-btn').style.display = 'none';
-
-  // Runner options
-  runners.forEach(({ runner, base }) => {
-    const baseLabel = base === 3 ? '3rd' : base === 2 ? '2nd' : '1st';
-    const name = (runner.name && runner.name !== 'Batter') ? runner.name : (runner.num ? '#' + runner.num : 'Runner');
-    const row = document.createElement('div');
-    row.className = 'ras-row';
-    row.style.cursor = 'pointer';
-    row.innerHTML = `
-      <div style="flex:1">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--text)">${name}</div>
-        <div style="font-size:12px;color:var(--text-muted)">Runner on ${baseLabel}</div>
-      </div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:#f87171;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);padding:6px 12px;border-radius:8px">OUT</div>
-    `;
-    row.addEventListener('click', () => {
-      G.outs++;
+    if (G.runners[base]) {
+      entries.push({ runner: { ...G.runners[base] }, from: base, isBatter: false, sel: null });
       G.runners[base] = null;
-      logPlay('Out', `DP — ${name} out at ${baseLabel} (2nd out)`);
-      const psDPR = currentPitcherStats(fieldingTeam());
-      if (psDPR) psDPR.outs++;
-      closeDpRunner();
-    });
-    container.appendChild(row);
+    }
+  });
+  entries.push({ runner: batEntry, from: 0, isBatter: true, sel: null });
+
+  // Smart defaults: typical ground-ball DP
+  // Runner on 1st → out, batter → out; others advance one base
+  let outsLeft = 2;
+  // First pass: runner on 1st out (most common)
+  entries.forEach(e => {
+    if (e.from === 1 && outsLeft > 0) { e.sel = 'out'; outsLeft--; }
+  });
+  // Second pass: batter out
+  entries.forEach(e => {
+    if (e.isBatter && outsLeft > 0) { e.sel = 'out'; outsLeft--; }
+  });
+  // Remaining runners advance
+  entries.forEach(e => {
+    if (e.sel !== null) return;
+    if (e.from === 3) e.sel = 'score';
+    else if (e.from === 2) e.sel = 3;
+    else e.sel = 2;
   });
 
-  // Skip option
-  const skipRow = document.createElement('div');
-  skipRow.className = 'ras-row';
-  skipRow.style.cursor = 'pointer';
-  skipRow.innerHTML = `<div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--text-muted)">Skip (record 2 outs, no runner specified)</div>`;
-  skipRow.addEventListener('click', () => {
-    G.outs++;
-    logPlay('Out', 'DP — 2nd out (runner not specified)');
-    const psDPSkip = currentPitcherStats(fieldingTeam());
-    if (psDPSkip) psDPSkip.outs++;
-    closeDpRunner();
-  });
-  container.appendChild(skipRow);
+  _dpEntries = entries;
 
+  // Point confirm button at confirmDoublePlay
+  document.getElementById('ras-confirm-btn').onclick = confirmDoublePlay;
+
+  renderDpSheet();
   document.getElementById('runner-advance-overlay').style.display = 'flex';
 }
-window.showDpRunnerSheet = showDpRunnerSheet;
+
+function getDpOpts(from, isBatter) {
+  const opts = [];
+  if (!isBatter) opts.push({ label: 'Scored', val: 'score' });
+  // Base options
+  const maxBase = isBatter ? 3 : 3;
+  const minBase = isBatter ? 1 : 1;
+  for (let b = maxBase; b >= minBase; b--) {
+    if (isBatter || b >= from) {
+      opts.push({ label: b === 1 ? '1B' : b === 2 ? '2B' : '3B', val: b });
+    }
+  }
+  opts.push({ label: 'Out✕', val: 'out', cls: 'btn-out' });
+  return opts;
+}
+
+function renderDpSheet() {
+  const outCount = _dpEntries.filter(e => e.sel === 'out').length;
+  const runCount = _dpEntries.filter(e => e.sel === 'score').length;
+
+  document.getElementById('ras-title').textContent = 'DOUBLE PLAY';
+  document.getElementById('ras-sub').textContent = outCount === 2 ? '2 outs selected — confirm when ready' : `Select 2 outs (${outCount}/2)`;
+  document.getElementById('ras-runs').textContent = runCount;
+  document.getElementById('ras-outs').textContent = outCount;
+  document.getElementById('ras-rbi').textContent = '—';
+  document.getElementById('ras-stats').style.display = '';
+  const confirmBtn = document.getElementById('ras-confirm-btn');
+  confirmBtn.style.display = '';
+  confirmBtn.textContent = outCount === 2 ? 'CONFIRM DP' : `CONFIRM DP (${outCount}/2 outs)`;
+  confirmBtn.style.opacity = outCount === 2 ? '1' : '0.55';
+
+  const fromLabel = b => b === 0 ? 'batter' : b === 1 ? '1st base' : b === 2 ? '2nd base' : '3rd base';
+  const container = document.getElementById('ras-rows');
+  container.innerHTML = '';
+
+  _dpEntries.forEach(entry => {
+    const row = document.createElement('div');
+    row.className = 'ras-row';
+    const info = document.createElement('div');
+    info.className = 'ras-row-info';
+    const nm = (entry.runner.name && entry.runner.name !== 'Batter')
+      ? entry.runner.name : (entry.runner.num ? '#' + entry.runner.num : 'Runner');
+    info.innerHTML = `<div class="ras-runner-name">${nm}</div><div class="ras-runner-from">${fromLabel(entry.from)}</div>`;
+    const btnsDiv = document.createElement('div');
+    btnsDiv.className = 'ras-btns';
+    getDpOpts(entry.from, entry.isBatter).forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'ras-btn' + (opt.cls ? ' ' + opt.cls : '');
+      btn.textContent = opt.label;
+      if (entry.sel === opt.val) {
+        btn.classList.add(opt.val === 'score' ? 'sel-score' : opt.val === 'out' ? 'sel-out' : 'sel-base');
+      }
+      btn.addEventListener('click', () => { entry.sel = opt.val; renderDpSheet(); });
+      btnsDiv.appendChild(btn);
+    });
+    row.appendChild(info);
+    row.appendChild(btnsDiv);
+    container.appendChild(row);
+  });
+}
+
+function confirmDoublePlay() {
+  document.getElementById('runner-advance-overlay').style.display = 'none';
+  // Restore confirm button to normal
+  document.getElementById('ras-confirm-btn').onclick = confirmRunnerAdvance;
+
+  const team = _dpTeam;
+  const fTeam = team === 'away' ? 'home' : 'away';
+
+  const outNames = [];
+  _dpEntries.forEach(entry => {
+    const nm = (entry.runner.name && entry.runner.name !== 'Batter') ? entry.runner.name : '#' + entry.runner.num;
+    if (entry.sel === 'out') {
+      G.outs++;
+      const ps = currentPitcherStats(fTeam);
+      if (ps) ps.outs++;
+      outNames.push(nm + (entry.isBatter ? ' (batter)' : ` (from ${entry.from === 1 ? '1st' : entry.from === 2 ? '2nd' : '3rd'})`));
+    } else if (entry.sel === 'score') {
+      if (team === 'away') G.awayScore++; else G.homeScore++;
+      if (!entry.isBatter) markRunnerScored(entry.runner, team);
+      const ps = currentPitcherStats(fTeam);
+      if (ps) ps.r++;
+    } else {
+      G.runners[entry.sel] = entry.runner;
+    }
+  });
+
+  const locStr = window._dpLocStr || '';
+  logPlay('Double Play', `DP — Double play${locStr}. ${outNames.join('; ')}.`);
+  flashFeedback('DOUBLE PLAY', 'var(--red)');
+
+  G.balls = 0; G.strikes = 0;
+  if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); }
+  else { renderAll(); saveScore(); }
+}
+window.confirmDoublePlay = confirmDoublePlay;
 
 // ===== RUNNER ADVANCEMENT HELPER =====
 function resetRunnersForHit(hitType, batterEntry) {
@@ -2830,6 +2896,9 @@ function showRunnerAdvanceSheet(hitType, batEntry, allRunners, team, sid, locStr
 
   // Store locStr for confirm
   window._rasLocStr = locStr;
+
+  // Ensure confirm button points to normal handler (not DP)
+  document.getElementById('ras-confirm-btn').onclick = confirmRunnerAdvance;
 
   renderRasSheet();
   document.getElementById('runner-advance-overlay').style.display = 'flex';
