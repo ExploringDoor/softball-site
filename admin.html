@@ -3516,6 +3516,10 @@ window.loadWaivers = async function() {
               <td style="font-size:13px;color:var(--muted)">${p.pos||'—'}</td>
               <td style="font-size:12px;color:${signed?'var(--green)':'var(--muted2)'};white-space:nowrap">${signed ? dateStr : '<span style="color:var(--red)">Not signed</span>'}</td>
               <td><a href="mailto:${esc(p.email||'')}" style="color:var(--blue);font-size:12px">${esc(p.email||'—')}</a></td>
+              <td style="white-space:nowrap;display:flex;gap:6px">
+                ${signed ? `<button class="btn btn-outline btn-sm" onclick="resetWaiver('${p.id}','${esc(p.name||'')}')">↺ Reset</button>` : ''}
+                <button class="btn btn-danger btn-sm" onclick="deleteWaiverPlayer('${p.id}','${esc(p.name||'')}')">Delete</button>
+              </td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -3523,6 +3527,26 @@ window.loadWaivers = async function() {
   } catch(e) {
     el.innerHTML = `<div class="empty">Could not load waiver data: ${e.message}</div>`;
   }
+};
+
+window.resetWaiver = async function(id, name) {
+  if (!confirm(`Reset waiver for ${name}? Their signature will be cleared and they'll need to re-sign.`)) return;
+  try {
+    await updateDoc(doc(db, 'players', id), { waiver_signed: false, waiver_signed_at: null });
+    toast(`Waiver reset for ${name}`);
+    await logActivity('Waivers', `Reset waiver: ${name}`);
+    loadWaivers();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.deleteWaiverPlayer = async function(id, name) {
+  if (!confirm(`Permanently delete ${name} from the roster? This cannot be undone.`)) return;
+  try {
+    await deleteDoc(doc(db, 'players', id));
+    toast(`${name} removed from roster`);
+    await logActivity('Waivers', `Deleted player: ${name}`);
+    loadWaivers();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 
 window.deleteRegistration = async function(id, name) {
