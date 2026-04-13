@@ -3,12 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Player Signup — DVSL Softball</title>
+<title>Player Registration — DVSL Softball</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#f5f6f8;--card:#fff;--border:rgba(0,0,0,.1);--navy:#002D72;--navy-light:rgba(0,45,114,.07);--text:#1a1a1a;--muted:#6b7280;--muted2:#9ca3af;--green:#16a34a;--green-bg:rgba(22,163,74,.08);--red:#dc2626}
+:root{
+  --bg:#f5f6f8;--card:#fff;--border:rgba(0,0,0,.1);
+  --navy:#002D72;--navy-light:rgba(0,45,114,.07);
+  --text:#1a1a1a;--muted:#6b7280;--muted2:#9ca3af;
+  --green:#16a34a;--green-bg:rgba(22,163,74,.08);--red:#dc2626;
+  --gold:#e6a800;
+}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.6}
 
 /* NAV */
@@ -27,7 +33,6 @@ nav{position:fixed;top:48px;left:0;right:0;z-index:100;display:flex;align-items:
 .nav-dd-item{display:block;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;color:#1a1a1a;text-decoration:none;transition:background .12s;white-space:nowrap}
 .nav-dd-item:hover{background:var(--navy-light);color:var(--navy)}
 .hamburger{display:none;flex-direction:column;gap:5px;cursor:pointer;background:none;border:none;padding:10px}
-.hamburger span{display:block;width:22px;height:2px;background:var(--text);border-radius:2px;transition:all .3s}
 .mob-menu{display:none;position:fixed;top:110px;left:0;right:0;z-index:350;background:#fff;border-bottom:1px solid var(--border);flex-direction:column;padding:20px;max-height:calc(100vh - 110px);overflow-y:auto}
 .mob-menu.open{display:flex}
 .mob-menu a,.mob-menu>span{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:24px;text-transform:uppercase;color:var(--text);text-decoration:none;padding:12px 0;border-bottom:1px solid var(--border);cursor:pointer}
@@ -40,11 +45,26 @@ nav{position:fixed;top:48px;left:0;right:0;z-index:100;display:flex;align-items:
 .page-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(40px,7vw,68px);text-transform:uppercase;line-height:.95;letter-spacing:-.01em;margin-bottom:14px}
 .page-sub{font-size:15px;color:rgba(255,255,255,.7);line-height:1.6}
 
+/* PROGRESS STEPS */
+.step-bar{max-width:640px;margin:0 auto;padding:28px 24px 0;display:flex;align-items:center;gap:0}
+.step-item{display:flex;align-items:center;gap:8px;flex:1}
+.step-item:last-child{flex:0}
+.step-circle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;border:2px solid var(--border);background:#fff;color:var(--muted);flex-shrink:0;transition:all .25s}
+.step-circle.active{border-color:var(--navy);background:var(--navy);color:#fff}
+.step-circle.done{border-color:var(--green);background:var(--green);color:#fff}
+.step-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);transition:color .25s;white-space:nowrap}
+.step-label.active{color:var(--navy)}
+.step-label.done{color:var(--green)}
+.step-line{flex:1;height:2px;background:var(--border);margin:0 8px;transition:background .25s}
+.step-line.done{background:var(--green)}
+
 /* FORM */
-.content-wrap{max-width:640px;margin:0 auto;padding:48px 24px 80px}
-.form-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:36px;margin-bottom:20px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
+.content-wrap{max-width:640px;margin:0 auto;padding:24px 24px 80px}
+.form-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:36px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,.04)}
 .form-card-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;color:var(--navy);margin-bottom:18px;border-left:3px solid var(--navy);padding-left:10px}
-.form-group{margin-bottom:18px}
+.form-row-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.form-group{margin-bottom:16px}
+.form-group:last-child{margin-bottom:0}
 .form-label{display:block;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
 .form-label .opt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted2)}
 .form-input{width:100%;padding:11px 14px;font-size:14px;font-family:'Inter',sans-serif;border:1.5px solid var(--border);border-radius:8px;outline:none;transition:border-color .15s,box-shadow .15s;background:#fff;color:var(--text)}
@@ -53,24 +73,46 @@ nav{position:fixed;top:48px;left:0;right:0;z-index:100;display:flex;align-items:
 select.form-input{cursor:pointer;appearance:auto}
 .form-hint{font-size:11px;color:var(--muted2);margin-top:4px}
 
-/* CHECKBOXES */
-.check-group{display:flex;flex-direction:column;gap:10px}
-.check-row{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
-.check-row input[type=checkbox]{width:16px;height:16px;margin-top:2px;accent-color:var(--navy);cursor:pointer;flex-shrink:0}
-.check-row-label{font-size:14px;color:var(--text);line-height:1.4}
-.check-row-sub{font-size:12px;color:var(--muted);line-height:1.3;margin-top:1px}
+/* WAIVER */
+.waiver-scroll{height:360px;overflow-y:scroll;border:1.5px solid var(--border);border-radius:10px;padding:20px 20px;font-size:12.5px;line-height:1.75;color:#333;background:#fafafa;scroll-behavior:smooth}
+.waiver-scroll h4{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--navy);margin:16px 0 6px}
+.waiver-scroll h4:first-child{margin-top:0}
+.waiver-scroll p{margin-bottom:10px}
+.waiver-scroll ol,.waiver-scroll ul{padding-left:20px;margin-bottom:10px}
+.waiver-scroll li{margin-bottom:4px}
+.waiver-scroll .section-block{margin-bottom:16px}
+.scroll-indicator{text-align:center;font-size:12px;color:var(--muted);padding:8px 0;transition:opacity .3s}
+.scroll-indicator.hidden{opacity:0;pointer-events:none}
 
-/* SUBMIT */
+/* SIGNATURE */
+.sig-box{border:1.5px solid var(--border);border-radius:10px;padding:20px;background:#fafafa;margin-bottom:16px}
+.sig-box-label{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.sig-line{border-bottom:2px solid #333;padding-bottom:4px;margin-bottom:4px}
+.sig-line input{width:100%;border:none;background:transparent;outline:none;font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:#1a1a1a;letter-spacing:.02em}
+.sig-line input::placeholder{color:var(--muted2);font-size:16px;font-family:'Inter',sans-serif;font-weight:400}
+.sig-date{font-size:11px;color:var(--muted2);margin-top:4px}
+
+.check-row{display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:10px}
+.check-row input[type=checkbox]{width:16px;height:16px;margin-top:3px;accent-color:var(--navy);cursor:pointer;flex-shrink:0}
+.check-row-label{font-size:13px;color:var(--text);line-height:1.5}
+
+/* BUTTONS */
 .btn-submit{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;letter-spacing:.08em;text-transform:uppercase;background:var(--navy);color:#fff;border:none;border-radius:10px;padding:14px 40px;cursor:pointer;transition:background .15s;width:100%}
 .btn-submit:hover{background:#001d4a}
 .btn-submit:disabled{background:var(--muted2);cursor:not-allowed}
+.btn-back{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;background:none;color:var(--muted);border:1.5px solid var(--border);border-radius:10px;padding:12px 24px;cursor:pointer;transition:all .15s;width:100%;margin-bottom:10px}
+.btn-back:hover{color:var(--navy);border-color:var(--navy)}
 
 /* SUCCESS */
-.success-box{display:none;background:var(--green-bg);border:1.5px solid rgba(22,163,74,.25);border-radius:14px;padding:32px;text-align:center}
+.success-box{display:none;background:var(--green-bg);border:1.5px solid rgba(22,163,74,.25);border-radius:14px;padding:40px 32px;text-align:center}
 .success-box.show{display:block}
-.success-icon{font-size:48px;margin-bottom:12px}
-.success-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;text-transform:uppercase;color:var(--green);margin-bottom:8px}
-.success-text{font-size:14px;color:rgba(0,0,0,.6);line-height:1.6}
+.success-icon{font-size:56px;margin-bottom:16px}
+.success-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;text-transform:uppercase;color:var(--green);margin-bottom:10px}
+.success-text{font-size:14px;color:rgba(0,0,0,.6);line-height:1.6;margin-bottom:20px}
+.success-detail{background:#fff;border:1px solid rgba(22,163,74,.2);border-radius:10px;padding:16px 20px;text-align:left;display:inline-block;width:100%;max-width:380px}
+.success-detail-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.05)}
+.success-detail-row:last-child{border:none}
+.success-detail-row span:first-child{color:var(--muted);font-weight:600}
 
 /* ERROR */
 .error-box{display:none;background:rgba(220,38,38,.06);border:1px solid rgba(220,38,38,.2);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--red);margin-bottom:16px}
@@ -81,8 +123,10 @@ select.form-input{cursor:pointer;appearance:auto}
   .nav-links{display:none}
   #hbg{display:flex!important}
   .page-hero{padding:36px 20px 28px}
-  .content-wrap{padding:28px 16px 60px}
-  .form-card{padding:24px 20px}
+  .content-wrap{padding:20px 16px 60px}
+  .form-card{padding:24px 18px}
+  .form-row-2{grid-template-columns:1fr}
+  .step-label{display:none}
 }
 </style>
 </head>
@@ -122,7 +166,11 @@ select.form-input{cursor:pointer;appearance:auto}
     </li>
   </ul>
 </nav>
-<button class="hamburger" id="hbg" style="position:fixed;top:58px;right:14px;z-index:600;display:none;background:rgba(0,0,0,.55);border-radius:7px;padding:8px 10px"><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span></button>
+<button class="hamburger" id="hbg" style="position:fixed;top:58px;right:14px;z-index:600;display:none;background:rgba(0,0,0,.55);border-radius:7px;padding:8px 10px">
+  <span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px"></span>
+  <span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;margin-top:5px"></span>
+  <span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;margin-top:5px"></span>
+</button>
 <div class="mob-menu" id="mobMenu">
   <a href="index.html">Home</a>
   <a href="index.html#scores">Scores</a>
@@ -136,60 +184,59 @@ select.form-input{cursor:pointer;appearance:auto}
   <a href="photos.html">📷 Gallery</a>
   <a href="admin.html" style="color:rgba(0,45,114,.6)">⚙ Admin</a>
 </div>
-<script>
-(function(){
-  var hbg=document.getElementById('hbg');
-  var mob=document.getElementById('mobMenu');
-  var _mobScrollY=0;
-  if(hbg) hbg.addEventListener('click',function(){
-    hbg.classList.toggle('open');mob.classList.toggle('open');
-    if(mob.classList.contains('open')){
-      _mobScrollY=window.scrollY||0;
-      document.body.style.overflow='hidden';
-      document.body.style.position='fixed';
-      document.body.style.top='-'+_mobScrollY+'px';
-      document.body.style.width='100%';
-    } else {
-      document.body.style.overflow='';document.body.style.position='';
-      document.body.style.top='';document.body.style.width='';
-      window.scrollTo(0,_mobScrollY);
-    }
-  });
-  if(mob) mob.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){
-    hbg.classList.remove('open');mob.classList.remove('open');
-    document.body.style.overflow='';document.body.style.position='';
-    document.body.style.top='';document.body.style.width='';
-    window.scrollTo(0,_mobScrollY);
-  });});
-})();
-</script>
 
-<!-- PAGE -->
 <div class="page-wrap">
   <div class="page-hero">
     <div class="page-hero-inner">
-      <div class="page-eyebrow" id="reg-eyebrow">Delaware Valley Synagogue League · 2026</div>
-      <div class="page-title" id="reg-title">Stay<br>Connected</div>
-      <div class="page-sub" id="reg-sub">Sign up to get game reminders, score updates, and league news delivered straight to you.</div>
+      <div class="page-eyebrow">Delaware Valley Synagogue League · 2026</div>
+      <div class="page-title">Player<br>Registration</div>
+      <div class="page-sub">Register for the 2026 season. You'll review and sign the league waiver as part of this process.</div>
+    </div>
+  </div>
+
+  <!-- STEP PROGRESS BAR -->
+  <div class="step-bar" id="step-bar">
+    <div class="step-item">
+      <div class="step-circle active" id="sc-1">1</div>
+      <div class="step-label active" id="sl-1">Your Info</div>
+    </div>
+    <div class="step-line" id="line-1"></div>
+    <div class="step-item">
+      <div class="step-circle" id="sc-2">2</div>
+      <div class="step-label" id="sl-2">Waiver</div>
+    </div>
+    <div class="step-line" id="line-2"></div>
+    <div class="step-item">
+      <div class="step-circle" id="sc-3">3</div>
+      <div class="step-label" id="sl-3">Sign</div>
     </div>
   </div>
 
   <div class="content-wrap">
 
+    <!-- SUCCESS -->
     <div id="success-box" class="success-box">
       <div class="success-icon">⚾</div>
-      <div class="success-title">You're In!</div>
-      <div class="success-text" id="success-text">You're all set to receive updates for your team.</div>
+      <div class="success-title">You're Registered!</div>
+      <div class="success-text">Your waiver is signed and you've been added to the roster. See you on the field.</div>
+      <div class="success-detail" id="success-detail"></div>
     </div>
 
-    <div id="form-wrap">
+    <!-- ── STEP 1: INFO ── -->
+    <div id="step-1">
       <div class="form-card">
         <div class="form-card-title">Your Info</div>
-        <div id="error-box" class="error-box"></div>
+        <div id="error-box-1" class="error-box"></div>
 
-        <div class="form-group">
-          <label class="form-label">Your Name</label>
-          <input type="text" id="f-name" class="form-input" placeholder="First and last name" autocomplete="name">
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label">First Name</label>
+            <input type="text" id="f-first" class="form-input" placeholder="First" autocomplete="given-name">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Last Name</label>
+            <input type="text" id="f-last" class="form-input" placeholder="Last" autocomplete="family-name">
+          </div>
         </div>
 
         <div class="form-group">
@@ -199,72 +246,134 @@ select.form-input{cursor:pointer;appearance:auto}
           </select>
         </div>
 
+        <div class="form-row-2">
+          <div class="form-group">
+            <label class="form-label">Jersey # <span class="opt">(if you have one)</span></label>
+            <input type="number" id="f-num" class="form-input" placeholder="e.g. 12" min="0" max="99">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Position</label>
+            <select id="f-pos" class="form-input">
+              <option value="">— Select —</option>
+              <option value="P">P — Pitcher</option>
+              <option value="C">C — Catcher</option>
+              <option value="1B">1B — First Base</option>
+              <option value="2B">2B — Second Base</option>
+              <option value="3B">3B — Third Base</option>
+              <option value="SS">SS — Shortstop</option>
+              <option value="LF">LF — Left Field</option>
+              <option value="CF">CF — Center Field</option>
+              <option value="RF">RF — Right Field</option>
+              <option value="DH">DH — Designated Hitter</option>
+              <option value="UTIL">UTIL — Utility</option>
+              <option value="SUB">SUB — Substitute</option>
+            </select>
+          </div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Email</label>
           <input type="email" id="f-email" class="form-input" placeholder="you@example.com" autocomplete="email">
         </div>
 
         <div class="form-group">
-          <label class="form-label">Preferred Position <span class="opt">(optional)</span></label>
-          <select id="f-pos" class="form-input">
-            <option value="">— Select position —</option>
-            <option value="P">P — Pitcher</option>
-            <option value="C">C — Catcher</option>
-            <option value="1B">1B — First Base</option>
-            <option value="2B">2B — Second Base</option>
-            <option value="3B">3B — Third Base</option>
-            <option value="SS">SS — Shortstop</option>
-            <option value="LF">LF — Left Field</option>
-            <option value="CF">CF — Center Field</option>
-            <option value="RF">RF — Right Field</option>
-            <option value="DH">DH — Designated Hitter</option>
-            <option value="UTIL">UTIL — Utility</option>
-            <option value="SUB">SUB — Substitute</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Phone <span class="opt">(optional — for text alerts)</span></label>
+          <label class="form-label">Phone</label>
           <input type="tel" id="f-phone" class="form-input" placeholder="(215) 555-0100" autocomplete="tel">
-          <div class="form-hint">US number only. Standard message rates apply.</div>
         </div>
       </div>
 
+      <button class="btn-submit" onclick="goToStep2()">Next: Read Waiver →</button>
+    </div>
+
+    <!-- ── STEP 2: WAIVER ── -->
+    <div id="step-2" style="display:none">
       <div class="form-card">
-        <div class="form-card-title">What do you want to hear about?</div>
-        <div class="check-group">
-          <label class="check-row">
-            <input type="checkbox" id="n-reminder" checked>
-            <div>
-              <div class="check-row-label">Game day reminders</div>
-              <div class="check-row-sub">Notification a few hours before your game with time, field, and opponent</div>
-            </div>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" id="n-scores" checked>
-            <div>
-              <div class="check-row-label">Score updates</div>
-              <div class="check-row-sub">Final score posted after your game</div>
-            </div>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" id="n-standings">
-            <div>
-              <div class="check-row-label">Weekly standings update</div>
-              <div class="check-row-sub">Standings after each week's games</div>
-            </div>
-          </label>
-          <label class="check-row">
-            <input type="checkbox" id="n-news">
-            <div>
-              <div class="check-row-label">League announcements</div>
-              <div class="check-row-sub">Rainouts, schedule changes, playoffs info, league news</div>
-            </div>
-          </label>
+        <div class="form-card-title">League Waiver — 2026 Season</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Please read the full waiver below before signing. Scroll to the bottom to continue.</p>
+
+        <div class="waiver-scroll" id="waiver-scroll">
+          <div class="section-block">
+            <h4>General Liability Release and Medical Release</h4>
+            <p>I, the Undersigned, being a fully competent adult, of sound mind and understanding, and recognizing the possibility of physical injury associated with sports and the playing of softball (the "Program"), and in consideration for the Delaware Valley Synagogue League (DVSL) and, specifically, the above-referenced Team, as stated above, accepting me as a player and active participant in its Program and activities of the Team and the DVSL, and otherwise now intending to be legally bound hereby, I do hereby and forever release, acquit, discharge and/or otherwise indemnify the DVSL and the Team, including, but not necessarily limited to, all of the management personnel of both the DVSL and the Team (including the DVSL Commissioners as well as the Captain/Manager of the above-stated Team), its associated and respective personnel, members, organizers and the like, against any and all claims, of whatever nature, kind, character or type, including but not limited to any claims that may be related to the contraction of coronavirus disease ("COVID-19"), that can or may be made by or on behalf of the Undersigned as a result of my participation in these activities and Programs.</p>
+            <p>The Undersigned further attests, affirms, warrants and certifies that (s)he is covered by a personal or family medical plan (including, but not necessarily limited to, hospitalization, dental, and the like), which would fully cover, reimburse and/or indemnify the Undersigned for any and all injuries, of any nature, character or type, which could or may possibly result from my participation in the said activities and Program hereof. However, in the event that I do incur any medical bills/expenses as a result of my participation in the said activities and Program, then the said medical bills/expenses shall be paid by me as my sole responsibility to do so and, thus, I hereby release, acquit, discharge and/or otherwise indemnify the DVSL and the Team (including, but not necessarily limited to, all of the management personnel of both the DVSL and the Team (including the DVSL Commissioners as well as the Captain/Manager of the above-stated Team), its associated and respective personnel, members, organizers and the like) against any and all medical or dental claims, of any nature, type, kind or character, that may be made by me or on my behalf.</p>
+          </div>
+
+          <div class="section-block">
+            <h4>DVSL Rule 1 — Eligibility Certification</h4>
+            <p>To be eligible to play on any team in the DVSL, a player must:</p>
+            <ol type="a">
+              <li style="margin-bottom:8px">be Jewish or a member of a Jewish household; <strong>and</strong></li>
+              <li style="margin-bottom:8px">be either:
+                <ol type="1" style="margin-top:6px">
+                  <li>twenty-one (21) years of age or older; <strong>or</strong></li>
+                  <li>an "Underage Player", defined to be sixteen (16) years of age at the beginning of the season OR the underage player becomes eligible once they turn 16 during the present league season — and with a parent on the roster of the same DVSL team as the Underage Player — and with a parent playing in the lineup of the DVSL team in any game in which the Underage Player is playing on the same team;</li>
+                </ol>
+              </li>
+              <li style="margin-bottom:8px">comply with one (or more) of the following:
+                <ol type="1" style="margin-top:6px">
+                  <li>be a full-time dues paying member of a synagogue; or</li>
+                  <li>have a child in a Jewish Day School program; or</li>
+                  <li>be a full-time employee of Goldstein's; or</li>
+                  <li>make a verifiable charitable donation to a Jewish charity or Jewish organization in an amount of $100 or greater.</li>
+                </ol>
+              </li>
+            </ol>
+            <p>The Undersigned further affirms, warrants, acknowledges and confirms his/her understanding that DVSL Rule 1, governing Eligibility, is and will be actively enforced, and should it be determined that (s)he does not meet the Eligibility Requirements set forth in DVSL Rule 1 and as certified to herein, penalties shall be imposed upon the Undersigned, the Undersigned's Team, the Undersigned Team's Captain, and/or other players on the Undersigned's Team.</p>
+          </div>
+
+          <div class="section-block">
+            <h4>Electronic Signature</h4>
+            <p>The Undersigned further attests, affirms, acknowledges, confirms and ratifies that his/her signing of this Release may be electronically signed and/or forwarded (by fax, scan, etc.) and that his/her/their signature on such electronic transmittal shall be as valid as an original signed document.</p>
+            <p>THEREFORE, and intending to be legally bound hereby, I so agree, attest, affirm, certify and warrant.</p>
+          </div>
+
+          <div class="section-block">
+            <h4>Minor Players</h4>
+            <p>If the person executing the foregoing release is a minor, the following section must be completed: I represent that I am a parent or legal guardian of the minor who has signed the above release and I hereby agree that we both shall be bound by it.</p>
+          </div>
+        </div>
+
+        <div class="scroll-indicator" id="scroll-indicator" style="margin-top:8px">
+          ↓ Scroll down to read the full waiver
         </div>
       </div>
 
-      <button class="btn-submit" id="submit-btn" onclick="submitSignup()">Sign Me Up</button>
+      <button class="btn-submit" id="waiver-next-btn" onclick="goToStep3()" disabled>Read the full waiver to continue</button>
+      <button class="btn-back" onclick="goToStep1()">← Back</button>
+    </div>
+
+    <!-- ── STEP 3: SIGN ── -->
+    <div id="step-3" style="display:none">
+      <div class="form-card">
+        <div class="form-card-title">Sign the Waiver</div>
+        <div id="error-box-3" class="error-box"></div>
+
+        <p style="font-size:13px;color:var(--muted);margin-bottom:20px">By typing your full legal name below you are signing the DVSL 2026 General Liability &amp; Medical Release electronically. This signature is legally binding.</p>
+
+        <div class="sig-box">
+          <div class="sig-box-label">Electronic Signature — Type your full legal name</div>
+          <div class="sig-line">
+            <input type="text" id="f-sig" placeholder="Your full name" autocomplete="name" oninput="checkSigMatch()">
+          </div>
+          <div class="sig-date" id="sig-date-display"></div>
+        </div>
+
+        <div id="sig-match-msg" style="font-size:12px;color:var(--muted2);margin-bottom:16px;min-height:18px"></div>
+
+        <label class="check-row" style="margin-bottom:16px">
+          <input type="checkbox" id="agree-check" onchange="checkCanSubmit()">
+          <div class="check-row-label">I have read the DVSL waiver in full and I agree to be legally bound by its terms for the 2026 season.</div>
+        </label>
+
+        <label class="check-row" id="minor-row" style="display:none;margin-bottom:16px">
+          <input type="checkbox" id="minor-check" onchange="checkCanSubmit()">
+          <div class="check-row-label">I am a parent or legal guardian of the minor player listed above, and I agree that we are both bound by this release.</div>
+        </label>
+      </div>
+
+      <div id="error-box-submit" class="error-box"></div>
+      <button class="btn-submit" id="submit-btn" onclick="submitRegistration()" disabled>✍ Sign &amp; Complete Registration</button>
+      <button class="btn-back" style="margin-top:10px" onclick="goToStep2()">← Back to Waiver</button>
     </div>
 
   </div>
@@ -285,7 +394,9 @@ const FIREBASE_CONFIG = {
 const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 
-// Load teams into dropdown
+const SEASON = '2026';
+
+// ─── LOAD TEAMS ───
 async function loadTeams() {
   const sel = document.getElementById('f-team');
   try {
@@ -299,41 +410,119 @@ async function loadTeams() {
 }
 loadTeams();
 
-window.submitSignup = async function() {
-  const name   = document.getElementById('f-name').value.trim();
-  const teamId = document.getElementById('f-team').value;
-  const email  = document.getElementById('f-email').value.trim();
-  const phone  = document.getElementById('f-phone').value.trim();
-  const pos    = document.getElementById('f-pos').value;
-  const errEl  = document.getElementById('error-box');
+// Set today's date in signature box
+const today = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+document.getElementById('sig-date-display').textContent = `Date: ${today}`;
+
+// ─── STEP NAVIGATION ───
+function setStep(n) {
+  [1,2,3].forEach(i => {
+    document.getElementById(`step-${i}`).style.display = i === n ? 'block' : 'none';
+    const sc = document.getElementById(`sc-${i}`);
+    const sl = document.getElementById(`sl-${i}`);
+    if (i < n)       { sc.className = 'step-circle done';   sc.textContent = '✓'; sl.className = 'step-label done'; }
+    else if (i === n){ sc.className = 'step-circle active'; sc.textContent = String(i); sl.className = 'step-label active'; }
+    else             { sc.className = 'step-circle';        sc.textContent = String(i); sl.className = 'step-label'; }
+    if (i < 3) document.getElementById(`line-${i}`).className = i < n ? 'step-line done' : 'step-line';
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+window.goToStep1 = () => setStep(1);
+
+window.goToStep2 = () => {
+  const err = document.getElementById('error-box-1');
+  err.className = 'error-box';
+  const first = document.getElementById('f-first').value.trim();
+  const last  = document.getElementById('f-last').value.trim();
+  const team  = document.getElementById('f-team').value;
+  const email = document.getElementById('f-email').value.trim();
+  const phone = document.getElementById('f-phone').value.trim();
+  if (!first)          { err.textContent = 'Please enter your first name.';          err.className = 'error-box show'; return; }
+  if (!last)           { err.textContent = 'Please enter your last name.';           err.className = 'error-box show'; return; }
+  if (!team)           { err.textContent = 'Please select your team.';               err.className = 'error-box show'; return; }
+  if (!email && !phone){ err.textContent = 'Please enter an email or phone number.'; err.className = 'error-box show'; return; }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ err.textContent = 'Please enter a valid email address.'; err.className = 'error-box show'; return; }
+  setStep(2);
+}
+
+window.goToStep3 = () => setStep(3);
+
+// ─── WAIVER SCROLL TRACKING ───
+const waiverDiv  = document.getElementById('waiver-scroll');
+const nextBtn    = document.getElementById('waiver-next-btn');
+const scrollInd  = document.getElementById('scroll-indicator');
+
+waiverDiv.addEventListener('scroll', () => {
+  const pct = waiverDiv.scrollTop / (waiverDiv.scrollHeight - waiverDiv.clientHeight);
+  if (pct > 0.92) {
+    nextBtn.disabled = false;
+    nextBtn.textContent = 'I Have Read the Waiver — Continue →';
+    scrollInd.classList.add('hidden');
+  }
+});
+
+// ─── SIGNATURE MATCH ───
+window.checkSigMatch = () => {
+  const sig   = document.getElementById('f-sig').value.trim().toLowerCase();
+  const full  = (document.getElementById('f-first').value.trim() + ' ' + document.getElementById('f-last').value.trim()).toLowerCase();
+  const msg   = document.getElementById('sig-match-msg');
+  if (!sig) { msg.textContent = ''; msg.style.color = ''; return; }
+  if (sig === full) {
+    msg.textContent = '✓ Name matches your registration';
+    msg.style.color = 'var(--green)';
+  } else {
+    msg.textContent = `Enter your full name exactly: "${document.getElementById('f-first').value.trim()} ${document.getElementById('f-last').value.trim()}"`;
+    msg.style.color = 'var(--muted2)';
+  }
+  checkCanSubmit();
+};
+
+window.checkCanSubmit = () => {
+  const sig      = document.getElementById('f-sig').value.trim().toLowerCase();
+  const full     = (document.getElementById('f-first').value.trim() + ' ' + document.getElementById('f-last').value.trim()).toLowerCase();
+  const agreed   = document.getElementById('agree-check').checked;
+  const btn      = document.getElementById('submit-btn');
+  btn.disabled   = !(sig === full && agreed);
+};
+
+// ─── SUBMIT ───
+window.submitRegistration = async () => {
+  const btn    = document.getElementById('submit-btn');
+  const errEl  = document.getElementById('error-box-submit');
   errEl.className = 'error-box';
-
-  if (!name)   { errEl.textContent = 'Please enter your name.';          errEl.className = 'error-box show'; return; }
-  if (!teamId) { errEl.textContent = 'Please select your team.';         errEl.className = 'error-box show'; return; }
-  if (!email && !phone) { errEl.textContent = 'Please enter an email or phone number so we can reach you.'; errEl.className = 'error-box show'; return; }
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email address.'; errEl.className = 'error-box show'; return; }
-
-  const teamName = document.getElementById('f-team').options[document.getElementById('f-team').selectedIndex].text;
-  const btn = document.getElementById('submit-btn');
   btn.disabled = true;
-  btn.textContent = 'Signing up...';
+  btn.textContent = 'Registering...';
+
+  const first    = document.getElementById('f-first').value.trim();
+  const last     = document.getElementById('f-last').value.trim();
+  const name     = `${first} ${last}`;
+  const teamId   = document.getElementById('f-team').value;
+  const teamName = document.getElementById('f-team').options[document.getElementById('f-team').selectedIndex].text;
+  const numVal   = document.getElementById('f-num').value.trim();
+  const pos      = document.getElementById('f-pos').value;
+  const email    = document.getElementById('f-email').value.trim();
+  const phone    = document.getElementById('f-phone').value.trim();
+  const now      = Timestamp.now();
 
   try {
-    await addDoc(collection(db, 'player_signups'), {
-      name, team_id: teamId, team_name: teamName,
-      email: email || null,
-      phone: phone || null,
-      preferred_position: pos || null,
-      notifications: {
-        game_reminders: document.getElementById('n-reminder').checked,
-        scores:         document.getElementById('n-scores').checked,
-        standings:      document.getElementById('n-standings').checked,
-        news:           document.getElementById('n-news').checked,
-      },
-      signed_up_at: Timestamp.now(),
+    // Write directly to players collection — auto-adds to roster
+    await addDoc(collection(db, 'players'), {
+      first_name: first,
+      last_name:  last,
+      name,
+      num:  numVal ? parseInt(numVal, 10) : 0,
+      pos:  pos || '',
+      team: teamId,
+      email:  email  || null,
+      phone:  phone  || null,
+      season: SEASON,
+      waiver_signed:    true,
+      waiver_signed_at: now,
+      added_at:         now,
     });
 
-    // Add to MailerLite if email provided
+    // MailerLite sync (best-effort)
     if (email) {
       try {
         await fetch('https://connect.mailerlite.com/api/subscribers', {
@@ -344,34 +533,44 @@ window.submitSignup = async function() {
           },
           body: JSON.stringify({
             email,
-            fields: { name, last_name: teamName, phone: phone || '' },
+            fields: { name, last_name: last, phone: phone || '' },
             groups: ['184141516725290868']
           })
         });
-      } catch(mlErr) { /* silent — Firestore save already succeeded */ }
+      } catch(e) { /* silent */ }
     }
 
-    document.getElementById('form-wrap').style.display = 'none';
-    const s = document.getElementById('success-box');
-    s.className = 'success-box show';
-    document.getElementById('success-text').textContent =
-      `You're signed up for ${teamName} updates. We'll send alerts to ${email || phone}.`;
+    // Show success
+    document.getElementById('step-3').style.display = 'none';
+    document.getElementById('step-bar').style.display = 'none';
+    const sb = document.getElementById('success-box');
+    sb.className = 'success-box show';
+    document.getElementById('success-detail').innerHTML = `
+      <div class="success-detail-row"><span>Name</span><span>${name}</span></div>
+      <div class="success-detail-row"><span>Team</span><span>${teamName}</span></div>
+      ${numVal ? `<div class="success-detail-row"><span>Jersey #</span><span>${numVal}</span></div>` : ''}
+      ${pos     ? `<div class="success-detail-row"><span>Position</span><span>${pos}</span></div>` : ''}
+      <div class="success-detail-row"><span>Season</span><span>${SEASON}</span></div>
+      <div class="success-detail-row"><span>Waiver Signed</span><span style="color:var(--green);font-weight:700">✓ ${today}</span></div>
+    `;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
   } catch(e) {
     errEl.textContent = 'Something went wrong. Please try again.';
     errEl.className = 'error-box show';
     btn.disabled = false;
-    btn.textContent = 'Sign Me Up';
+    btn.textContent = '✍ Sign & Complete Registration';
   }
 };
 
-// Simple ticker — load games
+// ─── TICKER ───
 try {
   const snap = await getDocs(query(collection(db, 'games'), orderBy('wk')));
   const track = document.getElementById('st-track');
   const games = snap.docs.map(d => d.data()).slice(0, 20);
   if (games.length) {
     track.innerHTML = games.map(g => `
-      <div class="st-game" style="display:flex;align-items:center;padding:0 16px;border-right:1px solid rgba(255,255,255,.1);flex-shrink:0">
+      <div style="display:flex;align-items:center;padding:0 16px;border-right:1px solid rgba(255,255,255,.1);flex-shrink:0">
         <div style="display:flex;flex-direction:column;gap:1px">
           <div style="font-size:9px;color:rgba(255,255,255,.5);letter-spacing:.04em">${g.date||''} · ${g.time||''}</div>
           <div style="font-size:11px;font-weight:700;color:#fff">${(g.away||'').toUpperCase()} <span style="color:rgba(255,255,255,.4);font-weight:400">vs</span> ${(g.home||'').toUpperCase()}</div>
@@ -379,16 +578,35 @@ try {
       </div>`).join('');
   }
 } catch(e) {}
+</script>
 
-// Load admin-edited hero text from Firebase
-try {
-  const contentSnap = await getDocs(collection(db, 'site_content'));
-  contentSnap.forEach(d => {
-    const data = d.data();
-    const el = document.getElementById(data.section_id);
-    if (el && data.html) el.innerHTML = data.html;
+<script>
+// Hamburger
+(function(){
+  var hbg=document.getElementById('hbg');
+  var mob=document.getElementById('mobMenu');
+  var _y=0;
+  if(hbg) hbg.addEventListener('click',function(){
+    hbg.classList.toggle('open');mob.classList.toggle('open');
+    if(mob.classList.contains('open')){
+      _y=window.scrollY||0;
+      document.body.style.overflow='hidden';
+      document.body.style.position='fixed';
+      document.body.style.top='-'+_y+'px';
+      document.body.style.width='100%';
+    } else {
+      document.body.style.overflow='';document.body.style.position='';
+      document.body.style.top='';document.body.style.width='';
+      window.scrollTo(0,_y);
+    }
   });
-} catch(e) {}
+  if(mob) mob.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){
+    hbg.classList.remove('open');mob.classList.remove('open');
+    document.body.style.overflow='';document.body.style.position='';
+    document.body.style.top='';document.body.style.width='';
+    window.scrollTo(0,_y);
+  });});
+})();
 </script>
 </body>
 </html>

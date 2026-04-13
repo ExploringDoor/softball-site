@@ -352,6 +352,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="scores" data-sec="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
       <div class="nav-item" data-section="schedule" data-sec="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
       <div class="nav-item" data-section="rosters" data-sec="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
+      <div class="nav-item" data-section="waivers" data-sec="waivers" onclick="showSection('waivers')"><span class="icon">&#128221;</span> Waivers</div>
       <div class="nav-item" data-section="standings" data-sec="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
       <div class="nav-item" data-section="recaps" data-sec="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
       <div class="nav-item" data-section="banner" data-sec="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
@@ -363,7 +364,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="pages" data-sec="pages" onclick="showSection('pages')"><span class="icon">&#9998;</span> Page Editor</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
       <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
-      <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
+      <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')" style="display:none"><span class="icon">&#9989;</span> Score Reviews</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-user"></div>
@@ -445,6 +446,29 @@ select.form-input{cursor:pointer}
       </div>
       <div id="add-player-form" style="display:none"></div>
       <div id="roster-content"></div>
+    </div>
+
+    <!-- ═══ WAIVERS ═══ -->
+    <div class="section" id="sec-waivers">
+      <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="main-title">Waivers</div>
+          <div class="main-subtitle">2026 season waiver status by team</div>
+        </div>
+        <a href="registration.html" target="_blank" class="btn btn-primary" style="text-decoration:none">🔗 Registration Link</a>
+      </div>
+      <div class="form-row" style="margin-bottom:20px">
+        <div class="form-col" style="max-width:300px">
+          <label class="form-label">Select Team</label>
+          <select class="form-input" id="waiver-team-select" onchange="loadWaivers()">
+            <option value="">— All Teams —</option>
+          </select>
+        </div>
+      </div>
+      <div id="waiver-summary" style="display:none;margin-bottom:16px"></div>
+      <div id="waivers-content">
+        <div class="empty" style="padding:40px;text-align:center;color:var(--muted2)">Select a team above to view waiver status</div>
+      </div>
     </div>
 
     <!-- ═══ STANDINGS ═══ -->
@@ -1096,6 +1120,7 @@ window.showSection = function(name) {
   if (name === 'registrations') loadRegistrations();
   if (name === 'emailblast') loadMailerLiteStats();
   if (name === 'pages') loadPageEditor();
+  if (name === 'waivers') initWaiversSection();
 };
 
 window.toggleSidebar = function() {
@@ -3406,6 +3431,103 @@ async function loadRegistrations() {
     el.innerHTML = `<div class="empty">Could not load signups: ${e.message}</div>`;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// WAIVERS
+// ═══════════════════════════════════════════════════════════════════
+function initWaiversSection() {
+  // Populate team dropdown from already-loaded TEAMS
+  const sel = document.getElementById('waiver-team-select');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— All Teams —</option>' +
+    TEAMS.map(t => `<option value="${t.id}"${t.id === current ? ' selected' : ''}>${t.name}</option>`).join('');
+}
+
+window.loadWaivers = async function() {
+  const teamId = document.getElementById('waiver-team-select').value;
+  const el     = document.getElementById('waivers-content');
+  const sumEl  = document.getElementById('waiver-summary');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+  sumEl.style.display = 'none';
+
+  try {
+    // Fetch players, filtered by team if selected
+    let q2;
+    if (teamId) {
+      q2 = query(collection(db, 'players'), where('team', '==', teamId), orderBy('name'));
+    } else {
+      q2 = query(collection(db, 'players'), orderBy('name'));
+    }
+    const snap = await getDocs(q2);
+    const players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (!players.length) {
+      el.innerHTML = '<div class="empty">No players found for this team.</div>';
+      return;
+    }
+
+    const signed   = players.filter(p => p.waiver_signed);
+    const unsigned = players.filter(p => !p.waiver_signed);
+    const pct = Math.round((signed.length / players.length) * 100);
+
+    // Summary bar
+    sumEl.style.display = 'block';
+    sumEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:16px;padding:14px 18px;background:#fff;border:1px solid var(--border);border-radius:10px;flex-wrap:wrap">
+        <div style="font-size:22px;font-weight:900;font-family:'Barlow Condensed',sans-serif;color:${pct===100?'var(--green)':'var(--navy)'}">
+          ${signed.length} / ${players.length}
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Waivers Signed</div>
+          <div style="height:6px;background:var(--bg);border-radius:4px;margin-top:5px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${pct===100?'var(--green)':'var(--navy)'};border-radius:4px;transition:width .4s"></div>
+          </div>
+        </div>
+        ${unsigned.length > 0 ? `<div style="font-size:12px;color:var(--red);font-weight:700">${unsigned.length} unsigned</div>` : '<div style="font-size:12px;color:var(--green);font-weight:700">✓ All signed</div>'}
+      </div>`;
+
+    // Player table
+    const teamMap = {};
+    TEAMS.forEach(t => teamMap[t.id] = t.name);
+
+    el.innerHTML = `
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr>
+          <th>Status</th>
+          <th>Name</th>
+          ${!teamId ? '<th>Team</th>' : ''}
+          <th>#</th>
+          <th>Position</th>
+          <th>Signed At</th>
+          <th>Email</th>
+        </tr></thead>
+        <tbody>
+          ${players.sort((a,b) => {
+            // Sort unsigned first, then by team, then by name
+            if (!!a.waiver_signed !== !!b.waiver_signed) return a.waiver_signed ? 1 : -1;
+            return (a.name||'').localeCompare(b.name||'');
+          }).map(p => {
+            const signed = p.waiver_signed;
+            const ts = p.waiver_signed_at;
+            const dateStr = ts ? (ts.toDate ? ts.toDate().toLocaleString() : new Date(ts).toLocaleString()) : '—';
+            const teamName = teamMap[p.team] || p.team || '—';
+            return `<tr>
+              <td style="text-align:center;font-size:18px">${signed ? '✅' : '❌'}</td>
+              <td><strong>${esc(p.name||'—')}</strong></td>
+              ${!teamId ? `<td style="font-size:13px;color:var(--muted)">${esc(teamName)}</td>` : ''}
+              <td style="font-size:13px;color:var(--muted)">${p.num||'—'}</td>
+              <td style="font-size:13px;color:var(--muted)">${p.pos||'—'}</td>
+              <td style="font-size:12px;color:${signed?'var(--green)':'var(--muted2)'};white-space:nowrap">${signed ? dateStr : '<span style="color:var(--red)">Not signed</span>'}</td>
+              <td><a href="mailto:${esc(p.email||'')}" style="color:var(--blue);font-size:12px">${esc(p.email||'—')}</a></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Could not load waiver data: ${e.message}</div>`;
+  }
+};
 
 window.deleteRegistration = async function(id, name) {
   if (!confirm(`Delete signup for ${name || 'this player'}? This cannot be undone.`)) return;
