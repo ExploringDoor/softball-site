@@ -294,7 +294,8 @@ select.form-input{cursor:pointer}
     <!-- SUBMIT SCORE -->
     <div class="section" id="sec-scores">
       <div class="section-title">Submit Score</div>
-      <div class="section-sub">Submit final scores for your games. An admin will review and approve them.</div>
+      <div class="section-sub">Submit final scores for your games. Both captains must confirm — scores are live once both agree.</div>
+      <div id="score-confirm-banners"></div>
       <div class="panel-title" style="margin-top:8px">Games Awaiting Scores</div>
       <div id="pending-games">
         <div class="loading"><div class="spinner"></div> Loading games...</div>
@@ -910,6 +911,9 @@ function renderPendingGames() {
   const el = document.getElementById('pending-games');
   const pending = MY_GAMES.filter(g => !g.done);
 
+  // Render confirm banners for games where other team already submitted but we haven't
+  renderScoreConfirmBanners();
+
   if (!pending.length) {
     el.innerHTML = '<div class="empty">All your games have final scores. Nothing to submit.</div>';
     return;
@@ -917,9 +921,37 @@ function renderPendingGames() {
 
   el.innerHTML = pending.map(g => {
     const isHome = g.home === captainData.team_id;
+    const myRole = isHome ? 'home' : 'away';
     const opponent = isHome ? g.away : g.home;
     const homeAway = isHome ? 'vs' : '@';
-    const existing = MY_SUBMISSIONS.find(s => s.game_id === g.id && s.status === 'pending');
+
+    // Check if I've already submitted for this game in score_submitted_ fields
+    const alreadySubmitted = g[`score_submitted_${myRole}_away`] !== undefined;
+
+    // Check if other captain already submitted
+    const otherRole = myRole === 'away' ? 'home' : 'away';
+    const otherHasSubmitted = g[`score_submitted_${otherRole}_away`] !== undefined;
+    const otherAwayScore = g[`score_submitted_${otherRole}_away`];
+    const otherHomeScore = g[`score_submitted_${otherRole}_home`];
+    const otherByName = g[`score_submitted_${otherRole}_by`] || getTeamName(opponent);
+
+    const hasConflict = g.score_conflict === true;
+
+    // Build other team info string
+    let otherTeamInfo = '';
+    if (otherHasSubmitted) {
+      otherTeamInfo = `<div style="font-size:12px;padding:8px 12px;background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.15);border-radius:8px;margin-top:8px;color:var(--navy)">
+        ℹ️ <strong>${esc(otherByName)}</strong> submitted: <strong>${esc(getTeamName(g.away))} ${otherAwayScore ?? '?'} – ${esc(getTeamName(g.home))} ${otherHomeScore ?? '?'}</strong>. Enter your score to confirm.
+      </div>`;
+    }
+
+    let conflictInfo = '';
+    if (hasConflict) {
+      conflictInfo = `<div style="padding:10px 14px;background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:8px;font-size:13px;color:var(--yellow);font-weight:600;margin-top:8px">
+        ⚠ Score conflict — scores don't match. The admin will review and set the final score.
+      </div>`;
+    }
+
     return `<div class="game-card" style="flex-direction:column;align-items:stretch">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
         <div>
@@ -930,14 +962,16 @@ function renderPendingGames() {
           </div>
           <div class="meta" style="margin-top:4px">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}</div>
         </div>
-        ${existing ? `<span class="badge badge-pending">Pending Approval</span>` : `
+        ${alreadySubmitted && !hasConflict ? `<span class="badge badge-pending">Score Submitted</span>` : hasConflict ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">⚠ Conflict</span>` : `
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('live-score.html?game=${g.id}&from=captain','_blank')">⚡ Score Live</button>
           <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="showUploadZone('${g.id}')">📄 Upload</button>
           <button class="btn btn-outline btn-sm" onclick="showBoxScoreEntry('${g.id}')">📊 Enter Box Score</button>
         </div>`}
       </div>
-      ${existing ? '' : `
+      ${otherTeamInfo}
+      ${conflictInfo}
+      ${alreadySubmitted || hasConflict ? '' : `
       <div id="upload-zone-${g.id}" style="display:none;border:2px dashed #7c3aed;border-radius:12px;padding:36px 20px;text-align:center;background:rgba(124,58,237,.04);cursor:pointer;position:relative" ondragover="event.preventDefault();this.style.background='rgba(124,58,237,.1)'" ondragleave="this.style.background='rgba(124,58,237,.04)'" ondrop="event.preventDefault();this.style.background='rgba(124,58,237,.04)';handleCaptainScoreUpload('${g.id}',event.dataTransfer.files[0])">
         <input type="file" accept=".pdf,image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="handleCaptainScoreUpload('${g.id}',this.files[0])">
         <div style="font-size:36px;margin-bottom:8px">📋</div>
@@ -968,6 +1002,38 @@ function renderPendingGames() {
       </div>
       <div id="boxscore-entry-${g.id}" style="display:none"></div>
       `}
+    </div>`;
+  }).join('');
+}
+
+function renderScoreConfirmBanners() {
+  const el = document.getElementById('score-confirm-banners');
+  if (!el) return;
+  const myId = captainData.team_id;
+  // Find games where other team submitted but I haven't yet
+  const needsConfirm = MY_GAMES.filter(g => {
+    if (g.done || g.score_conflict) return false;
+    if (!g.score_pending) return false;
+    const isHome = g.home === myId;
+    const myRole = isHome ? 'home' : 'away';
+    const otherRole = isHome ? 'away' : 'home';
+    const iHaveSubmitted = g[`score_submitted_${myRole}_away`] !== undefined;
+    const otherHasSubmitted = g[`score_submitted_${otherRole}_away`] !== undefined;
+    return otherHasSubmitted && !iHaveSubmitted;
+  });
+  if (!needsConfirm.length) { el.innerHTML = ''; return; }
+  el.innerHTML = needsConfirm.map(g => {
+    const isHome = g.home === myId;
+    const opponent = isHome ? g.away : g.home;
+    const otherRole = isHome ? 'away' : 'home';
+    const otherAwayScore = g[`score_submitted_${otherRole}_away`];
+    const otherHomeScore = g[`score_submitted_${otherRole}_home`];
+    return `<div style="background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:10px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+      <div>
+        <div style="font-weight:700;color:var(--yellow);font-size:13px">⚠ Confirm Score Needed</div>
+        <div style="font-size:13px;margin-top:2px"><strong>${esc(getTeamName(opponent))}</strong> submitted a score for Wk ${g.wk}: ${esc(getTeamName(g.away))} ${otherAwayScore ?? '?'} – ${esc(getTeamName(g.home))} ${otherHomeScore ?? '?'}</div>
+      </div>
+      <button class="btn btn-warning btn-sm" onclick="showTab('scores')">Submit Your Score</button>
     </div>`;
   }).join('');
 }
@@ -1169,24 +1235,67 @@ window.submitBoxScore = async function(gameId) {
     awayBatters, homeBatters,
     submitted_by: captainData.team_name,
     submitted_by_id: captainData.team_id,
-    status: 'pending_review',
+    status: 'approved',
     timestamp: Timestamp.now(),
   };
 
+  const myId = captainData.team_id;
+  const isHome = g.home === myId;
+  const myRole = isHome ? 'home' : 'away';
+  const otherRole = isHome ? 'away' : 'home';
+
+  const gameUpdate = {
+    [`score_submitted_${myRole}_away`]: awayFinal,
+    [`score_submitted_${myRole}_home`]: homeFinal,
+    [`score_submitted_${myRole}_by`]: captainData.team_name,
+    score_pending: true
+  };
+
+  const otherAwayKey = `score_submitted_${otherRole}_away`;
+  const otherHomeKey = `score_submitted_${otherRole}_home`;
+  const otherHasSubmitted = g[otherAwayKey] !== undefined && g[otherHomeKey] !== undefined;
+
+  let finalStatus = 'pending';
+  let toastMsg = 'Box score submitted! Waiting for the other captain to confirm.';
+
+  if (otherHasSubmitted) {
+    const otherAway = g[otherAwayKey];
+    const otherHome = g[otherHomeKey];
+    if (otherAway === awayFinal && otherHome === homeFinal) {
+      gameUpdate.done = true;
+      gameUpdate.away_score = awayFinal;
+      gameUpdate.home_score = homeFinal;
+      gameUpdate.score_confirmed = true;
+      gameUpdate.score_pending = false;
+      gameUpdate.score_conflict = false;
+      finalStatus = 'approved';
+      toastMsg = 'Scores match! Box score and game are now live.';
+    } else {
+      gameUpdate.score_conflict = true;
+      gameUpdate.score_pending = false;
+      finalStatus = 'conflict';
+      toastMsg = 'Scores don\'t match — the admin will review and set the final score.';
+      await logActivity('Score Conflict', `Box score conflict on game ${gameId}: ${captainData.team_name} submitted ${getTeamName(g.away)} ${awayFinal}–${getTeamName(g.home)} ${homeFinal}; other captain had ${getTeamName(g.away)} ${otherAway}–${getTeamName(g.home)} ${otherHome}`);
+    }
+  }
+
+  boxScoreData.status = finalStatus === 'approved' ? 'approved' : 'pending';
+
   try {
     await addDoc(collection(db, 'box_scores'), boxScoreData);
-    // Also submit to score_submissions for captain review flow
+    await updateDoc(doc(db, 'games', gameId), gameUpdate);
+    Object.assign(g, gameUpdate);
     const subData = {
       game_id: gameId, away: g.away, home: g.home,
       away_score: awayFinal, home_score: homeFinal,
       submitted_by: captainData.team_name, team_id: captainData.team_id,
       team_name: captainData.team_name, wk: g.wk || 0,
-      timestamp: Timestamp.now(), status: 'pending', has_boxscore: true
+      timestamp: Timestamp.now(), status: finalStatus, has_boxscore: true
     };
     const ref = await addDoc(collection(db, 'score_submissions'), subData);
     subData.id = ref.id;
     MY_SUBMISSIONS.unshift(subData);
-    toast('Box score submitted! Admin will review and finalize.');
+    toast(toastMsg, finalStatus === 'conflict' ? 'error' : 'success');
     await logActivity('Box Score (Captain)', `${captainData.team_name}: ${getTeamName(g.away)} ${awayFinal} - ${getTeamName(g.home)} ${homeFinal}`);
     renderPendingGames();
     renderSubmissions();
@@ -1302,7 +1411,52 @@ window.submitScore = async function(gameId) {
   const homeScore = parseInt(document.getElementById('ss-home-' + gameId).value);
   if (isNaN(awayScore) || isNaN(homeScore)) { toast('Please enter both scores.', 'error'); return; }
 
-  const data = {
+  const myId = captainData.team_id;
+  const isHome = g.home === myId;
+  const myRole = isHome ? 'home' : 'away';
+  const otherRole = isHome ? 'away' : 'home';
+
+  // Build the update for this team's submission
+  const gameUpdate = {
+    [`score_submitted_${myRole}_away`]: awayScore,
+    [`score_submitted_${myRole}_home`]: homeScore,
+    [`score_submitted_${myRole}_by`]: captainData.team_name,
+    score_pending: true
+  };
+
+  // Check if other team already submitted
+  const otherAwayKey = `score_submitted_${otherRole}_away`;
+  const otherHomeKey = `score_submitted_${otherRole}_home`;
+  const otherHasSubmitted = g[otherAwayKey] !== undefined && g[otherHomeKey] !== undefined;
+
+  let finalStatus = 'pending';
+  let toastMsg = 'Score submitted! Waiting for the other captain to confirm.';
+
+  if (otherHasSubmitted) {
+    const otherAway = g[otherAwayKey];
+    const otherHome = g[otherHomeKey];
+    if (otherAway === awayScore && otherHome === homeScore) {
+      // Scores match — go live!
+      gameUpdate.done = true;
+      gameUpdate.away_score = awayScore;
+      gameUpdate.home_score = homeScore;
+      gameUpdate.score_confirmed = true;
+      gameUpdate.score_pending = false;
+      gameUpdate.score_conflict = false;
+      finalStatus = 'approved';
+      toastMsg = 'Scores match! Game is now live.';
+    } else {
+      // Conflict!
+      gameUpdate.score_conflict = true;
+      gameUpdate.score_pending = false;
+      finalStatus = 'conflict';
+      toastMsg = 'Scores don\'t match — the admin will review and set the final score.';
+      // Log conflict to activity_log
+      await logActivity('Score Conflict', `Conflict on game ${gameId}: ${captainData.team_name} submitted ${getTeamName(g.away)} ${awayScore}–${getTeamName(g.home)} ${homeScore}; other captain had ${getTeamName(g.away)} ${otherAway}–${getTeamName(g.home)} ${otherHome}`);
+    }
+  }
+
+  const subData = {
     game_id: gameId,
     away: g.away,
     home: g.home,
@@ -1313,15 +1467,18 @@ window.submitScore = async function(gameId) {
     team_name: captainData.team_name,
     wk: g.wk || 0,
     timestamp: Timestamp.now(),
-    status: 'pending'
+    status: finalStatus
   };
 
   try {
-    const ref = await addDoc(collection(db, 'score_submissions'), data);
-    data.id = ref.id;
-    MY_SUBMISSIONS.unshift(data);
-    toast('Score submitted! The admin will review and approve it.');
-    await logActivity('Score Submission', `${captainData.team_name}: ${getTeamName(g.away)} ${awayScore} - ${getTeamName(g.home)} ${homeScore}`);
+    await updateDoc(doc(db, 'games', gameId), gameUpdate);
+    // Update local state
+    Object.assign(g, gameUpdate);
+    const ref = await addDoc(collection(db, 'score_submissions'), subData);
+    subData.id = ref.id;
+    MY_SUBMISSIONS.unshift(subData);
+    toast(toastMsg, finalStatus === 'conflict' ? 'error' : 'success');
+    await logActivity('Score Submission', `${captainData.team_name}: ${getTeamName(g.away)} ${awayScore} – ${getTeamName(g.home)} ${homeScore}`);
     renderPendingGames();
     renderSubmissions();
   } catch(e) { toast('Failed to submit score: ' + e.message, 'error'); }
