@@ -3452,15 +3452,11 @@ window.loadWaivers = async function() {
   sumEl.style.display = 'none';
 
   try {
-    // Fetch players, filtered by team if selected
-    let q2;
-    if (teamId) {
-      q2 = query(collection(db, 'players'), where('team', '==', teamId), orderBy('name'));
-    } else {
-      q2 = query(collection(db, 'players'), orderBy('name'));
-    }
-    const snap = await getDocs(q2);
-    const players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // Fetch all players, filter + sort in JS to avoid composite index requirement
+    const snap = await getDocs(collection(db, 'players'));
+    let players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (teamId) players = players.filter(p => p.team === teamId);
+    players.sort((a, b) => (a.name||'').localeCompare(b.name||''));
 
     if (!players.length) {
       el.innerHTML = '<div class="empty">No players found for this team.</div>';
