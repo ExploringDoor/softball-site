@@ -178,6 +178,8 @@ body.dark [style*="border-bottom:1px solid rgba(0,0,0"]{border-bottom-color:rgba
 @keyframes ddIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 .nav-dropdown-right{left:auto;right:0}
 .nav-dd-wrap:hover .nav-dropdown{display:block}
+#more-dd-wrap:hover #more-dropdown{display:none!important}
+#more-dd-wrap #more-dropdown[style*="block"]{display:block!important}
 .nav-dd-head{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:rgba(0,0,0,.35);padding:4px 10px 8px;border-bottom:1px solid rgba(0,0,0,.07);margin-bottom:6px}
 .nav-dd-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;font-size:12.5px;font-weight:600;color:#1a1a1a;text-decoration:none;cursor:pointer;transition:background .1s;letter-spacing:.02em;white-space:nowrap}
 .nav-dd-item:hover{background:rgba(0,45,114,.07);color:#002D72}
@@ -1946,9 +1948,9 @@ thead th.sorted-col .sarrow{opacity:1}
         </div>
       </div>
     </li>
-    <li class="nav-dd-wrap">
-      <span>More<svg class="nav-dd-arrow" viewBox="0 0 9 6" fill="none"><path d="M1 1l3.5 4L8 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-      <div class="nav-dropdown nav-dropdown-right">
+    <li class="nav-dd-wrap" id="more-dd-wrap">
+      <span onclick="toggleMoreDd(event)" style="cursor:pointer">More<svg class="nav-dd-arrow" viewBox="0 0 9 6" fill="none"><path d="M1 1l3.5 4L8 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <div class="nav-dropdown nav-dropdown-right" id="more-dropdown">
         <a class="nav-dd-item" href="playoffs.html">🏆 Brackets</a>
         <a class="nav-dd-item" href="rules.html">📋 Field Guide</a>
         <a class="nav-dd-item" href="photos.html">📷 Gallery</a>
@@ -4052,6 +4054,20 @@ function buildHistory(){
 
 // ════════════════════════════ SIGNUP ═════════════════════════════════════
 // ═══ DARK MODE ═══
+function toggleMoreDd(e) {
+  e.stopPropagation();
+  const dd = document.getElementById('more-dropdown');
+  const open = dd.style.display === 'block';
+  dd.style.display = open ? 'none' : 'block';
+  if (!open) {
+    // Close when clicking anywhere else
+    setTimeout(() => document.addEventListener('click', function handler() {
+      dd.style.display = 'none';
+      document.removeEventListener('click', handler);
+    }), 0);
+  }
+}
+
 function toggleDarkMode(){
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
