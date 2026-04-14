@@ -352,6 +352,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="scores" data-sec="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
       <div class="nav-item" data-section="schedule" data-sec="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
       <div class="nav-item" data-section="rosters" data-sec="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
+      <div class="nav-item" data-section="waivers" data-sec="waivers" onclick="showSection('waivers')"><span class="icon">&#128221;</span> Waivers</div>
       <div class="nav-item" data-section="standings" data-sec="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
       <div class="nav-item" data-section="recaps" data-sec="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
       <div class="nav-item" data-section="banner" data-sec="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
@@ -363,7 +364,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="pages" data-sec="pages" onclick="showSection('pages')"><span class="icon">&#9998;</span> Page Editor</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
       <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
-      <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')"><span class="icon">&#9989;</span> Score Reviews</div>
+      <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')" style="display:none"><span class="icon">&#9989;</span> Score Reviews</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-user"></div>
@@ -418,7 +419,10 @@ select.form-input{cursor:pointer}
           <div class="main-title">Schedule</div>
           <div class="main-subtitle">Manage the game schedule</div>
         </div>
-        <button class="btn btn-primary" onclick="openAddGame()">+ Add Game</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="openAddGame()">+ Add Game</button>
+          <button class="btn btn-outline" onclick="openImportCsv()">📋 Import CSV</button>
+        </div>
       </div>
       <div id="add-game-form" style="display:none"></div>
       <div id="schedule-content">
@@ -445,6 +449,29 @@ select.form-input{cursor:pointer}
       </div>
       <div id="add-player-form" style="display:none"></div>
       <div id="roster-content"></div>
+    </div>
+
+    <!-- ═══ WAIVERS ═══ -->
+    <div class="section" id="sec-waivers">
+      <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <div class="main-title">Waivers</div>
+          <div class="main-subtitle">2026 season waiver status by team</div>
+        </div>
+        <a href="registration.html" target="_blank" class="btn btn-primary" style="text-decoration:none">🔗 Registration Link</a>
+      </div>
+      <div class="form-row" style="margin-bottom:20px">
+        <div class="form-col" style="max-width:300px">
+          <label class="form-label">Select Team</label>
+          <select class="form-input" id="waiver-team-select" onchange="loadWaivers()">
+            <option value="">— All Teams —</option>
+          </select>
+        </div>
+      </div>
+      <div id="waiver-summary" style="display:none;margin-bottom:16px"></div>
+      <div id="waivers-content">
+        <div class="empty" style="padding:40px;text-align:center;color:var(--muted2)">Select a team above to view waiver status</div>
+      </div>
     </div>
 
     <!-- ═══ STANDINGS ═══ -->
@@ -1096,6 +1123,7 @@ window.showSection = function(name) {
   if (name === 'registrations') loadRegistrations();
   if (name === 'emailblast') loadMailerLiteStats();
   if (name === 'pages') loadPageEditor();
+  if (name === 'waivers') initWaiversSection();
 };
 
 window.toggleSidebar = function() {
@@ -1206,9 +1234,18 @@ function renderScores() {
       <div class="week-header">Week ${w}</div>
       ${byWeek[w].map(g => {
         const done = g.done;
+        const hasConflict = g.score_conflict === true;
+        const hasPending = !done && g.score_pending === true;
+        const conflictBadge = hasConflict
+          ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow);cursor:pointer;border:1px solid var(--yellow)" onclick="openConflictResolve('${g.id}')">⚠ Score Conflict</span>`
+          : '';
+        const pendingBadge = hasPending && !hasConflict
+          ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">⏳ Score Pending</span>`
+          : '';
         return `<div class="game-row-card" id="score-game-${g.id}">
           <div class="teams">${getTeamName(g.away)} <span class="vs">@</span> ${getTeamName(g.home)}</div>
           <div class="meta">${g.date||''} ${g.day||''} &bull; ${g.time||''} &bull; ${g.field||''}</div>
+          ${conflictBadge}${pendingBadge}
           ${done
             ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div>
                <span class="badge badge-done">Final</span>
@@ -1298,6 +1335,61 @@ window.resetGame = async function(gameId) {
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 
+// ─── CONFLICT RESOLUTION ───────────────────────────────────────────
+window.openConflictResolve = function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const formEl = document.getElementById('score-form-' + gameId);
+  if (formEl.style.display !== 'none' && formEl.dataset.mode === 'conflict') { formEl.style.display = 'none'; return; }
+  formEl.dataset.mode = 'conflict';
+  formEl.style.display = 'block';
+  const awayName = getTeamName(g.away);
+  const homeName = getTeamName(g.home);
+  const awaySubmitted = g.score_submitted_away !== undefined ? `${getTeamName(g.away)}: ${g.score_submitted_away_by||'Away'} submitted ${g.score_submitted_away_away ?? '?'}–${g.score_submitted_away_home ?? '?'}` : 'No submission';
+  const homeSubmitted = g.score_submitted_home !== undefined ? `${getTeamName(g.home)}: ${g.score_submitted_home_by||'Home'} submitted ${g.score_submitted_home_away ?? '?'}–${g.score_submitted_home_home ?? '?'}` : 'No submission';
+  formEl.innerHTML = `
+    <div class="inline-form" style="border-color:var(--yellow)">
+      <div style="font-weight:700;color:var(--yellow);margin-bottom:10px;font-size:13px">⚠ Score Conflict — ${awayName} vs ${homeName}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        <div><strong>Away captain reported:</strong> ${esc(g.score_submitted_away_by||'—')} → ${awayName} ${g.score_submitted_away_away ?? '?'} – ${homeName} ${g.score_submitted_away_home ?? '?'}</div>
+        <div style="margin-top:4px"><strong>Home captain reported:</strong> ${esc(g.score_submitted_home_by||'—')} → ${awayName} ${g.score_submitted_home_away ?? '?'} – ${homeName} ${g.score_submitted_home_home ?? '?'}</div>
+      </div>
+      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px">Choose the correct final score:</div>
+      <div class="form-row">
+        <div class="form-col form-col-sm">
+          <label class="form-label">${awayName} Score</label>
+          <input type="number" class="form-input" id="cr-away-${gameId}" min="0" placeholder="0">
+        </div>
+        <div class="form-col form-col-sm">
+          <label class="form-label">${homeName} Score</label>
+          <input type="number" class="form-input" id="cr-home-${gameId}" min="0" placeholder="0">
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
+          <button class="btn btn-success btn-sm" onclick="resolveConflict('${gameId}')">Confirm Final</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('score-form-${gameId}').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+};
+
+window.resolveConflict = async function(gameId) {
+  const as = parseInt(document.getElementById('cr-away-' + gameId).value);
+  const hs = parseInt(document.getElementById('cr-home-' + gameId).value);
+  if (isNaN(as) || isNaN(hs)) { toast('Enter both scores', 'error'); return; }
+  const g = GAMES.find(x => x.id === gameId);
+  try {
+    await updateDoc(doc(db, 'games', gameId), {
+      away_score: as, home_score: hs, done: true,
+      score_conflict: false, score_pending: false, score_confirmed: true
+    });
+    if (g) { g.away_score = as; g.home_score = hs; g.done = true; g.score_conflict = false; g.score_pending = false; }
+    toast('Score conflict resolved and game marked final!');
+    await logActivity('Score Conflict', `Admin resolved: ${getTeamName(g?.away)} ${as} – ${getTeamName(g?.home)} ${hs}`);
+    await recalcStandingsFromGames();
+    renderScores(); renderDashboard(); renderStandings();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
 // ═══════════════════════════ BOX SCORE ═════════════════════════════
 let bsAwayLineup = [], bsHomeLineup = [], bsGameId = null, bsGameData = null;
 let bsAwayPitchers = [{name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''}];
@@ -1306,6 +1398,9 @@ let bsInnings = {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
 let bsAwayErrors = 0;
 let bsHomeErrors = 0;
 let bsScoreOnlyMode = false;
+let bsGameRecap = '';
+let bsPotgName = '';
+let bsPotgTeam = '';
 let bsAwayOrderMode = false, bsHomeOrderMode = false;
 let bsAwayOrderMap = {}, bsHomeOrderMap = {};
 let bsAwayOrdered = false, bsHomeOrdered = false;
@@ -1488,7 +1583,8 @@ function applyParsedToBoxScore(parsed) {
     name: p.name || '', num: p.num || '', ip: p.ip || '',
     h: parseInt(p.h) || 0, r: parseInt(p.r) || 0,
     er: parseInt(p.er) || 0, bb: parseInt(p.bb) || 0,
-    so: parseInt(p.so) || 0, strikes: parseInt(p.strikes) || 0,
+    so: parseInt(p.so) || 0, bf: parseInt(p.bf) || 0,
+    strikes: parseInt(p.strikes) || 0,
     balls: parseInt(p.balls) || 0, decision: p.decision || ''
   }));
 
@@ -1554,12 +1650,15 @@ window.openBoxScore = async function(gameId, skipClear) {
     bsAwayOrderMap = {}; bsHomeOrderMap = {};
     bsScoreOnlyMode = false;
     bsAwayScoreOverride = null; bsHomeScoreOverride = null;
-    const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''});
+    const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,bf:0,strikes:0,balls:0,decision:''});
     bsAwayPitchers = existing?.away_pitchers || (existing?.away_pitcher ? [existing.away_pitcher] : [defP()]);
     bsHomePitchers = existing?.home_pitchers || (existing?.home_pitcher ? [existing.home_pitcher] : [defP()]);
     bsInnings = existing?.innings ? {away:[...existing.innings.away], home:[...existing.innings.home]} : {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
     bsAwayErrors = existing?.away_errors || 0;
     bsHomeErrors = existing?.home_errors || 0;
+    bsGameRecap = existing?.recap || '';
+    bsPotgName = existing?.potg_name || '';
+    bsPotgTeam = existing?.potg_team || '';
   }
 
   document.getElementById('sec-scores').querySelector('.main-header').style.display = 'none';
@@ -1748,6 +1847,10 @@ function renderBoxScore(awayName, homeName, g) {
               <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${pit.so}" min="0" oninput="bsUpdatePitcher('${side}',${pi},'so',this.value)">
             </div>
             <div style="width:44px">
+              <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">BF</label>
+              <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${pit.bf||0}" min="0" oninput="bsUpdatePitcher('${side}',${pi},'bf',this.value)" placeholder="0">
+            </div>
+            <div style="width:44px">
               <label style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4);display:block;margin-bottom:3px">STR</label>
               <input type="number" style="width:100%;padding:5px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:4px;font-size:13px;font-family:'Oswald',sans-serif" value="${pit.strikes||0}" min="0" oninput="bsUpdatePitcher('${side}',${pi},'strikes',this.value)" placeholder="0">
             </div>
@@ -1773,6 +1876,10 @@ function renderBoxScore(awayName, homeName, g) {
   const awayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
   const homeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
 
+  const _awayNeedsOrder = bsAwayOrderMode;
+  const _homeNeedsOrder = bsHomeOrderMode;
+  const _inOrderStep = _awayNeedsOrder || _homeNeedsOrder;
+
   view.innerHTML = `
     <div style="padding:20px 0">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -1784,6 +1891,14 @@ function renderBoxScore(awayName, homeName, g) {
           ${bsScoreOnlyMode ? '📊 Full Stats Mode' : '🎯 Score Only Mode'}
         </button>
       </div>
+      ${_inOrderStep && !bsScoreOnlyMode ? `
+      <div style="display:flex;align-items:center;gap:10px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:14px">
+        <div style="font-size:20px">📋</div>
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase;color:#856404">Step 1 of 2 — Set Batting Order</div>
+          <div style="font-size:12px;color:#856404;margin-top:1px">Tap players in batting order (1→2→3…) for each team, then enter stats</div>
+        </div>
+      </div>` : ''}
       <!-- Dark navy game banner -->
       <div style="background:#001a3e;border-radius:12px;padding:16px 24px;margin-bottom:18px;text-align:center;color:#fff">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.45);margin-bottom:10px">${g.date||''} · ${g.time||''} · ${g.field||''}</div>
@@ -1817,7 +1932,10 @@ function renderBoxScore(awayName, homeName, g) {
         const tdStyle = 'padding:4px 2px;text-align:center';
         const inputStyle = 'width:36px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:3px;font-size:13px;font-family:Oswald,sans-serif;background:#fff';
         const totalStyle = 'padding:6px 4px;text-align:center;font-family:Oswald,sans-serif;font-size:15px;font-weight:700';
-        return `<div style="overflow-x:auto;margin:20px 0">
+        return `<div style="margin-bottom:6px;margin-top:20px;display:flex;align-items:center;justify-content:space-between">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,0,0,.5)">Line Score</div>
+        </div>
+        <div style="overflow-x:auto;margin-bottom:20px;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:10px">
           <table style="border-collapse:collapse;margin:0 auto;font-family:Oswald,sans-serif">
             <thead><tr>
               <th style="min-width:120px;text-align:left;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(0,0,0,.4)">TEAM</th>
@@ -1846,6 +1964,28 @@ function renderBoxScore(awayName, homeName, g) {
           <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
         </div>`;
       })()}
+      <!-- Player of the Game + Game Recap -->
+      <div style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:14px 16px;margin-bottom:16px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,0,0,.5);margin-bottom:12px">Player of the Game & Recap</div>
+        <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:180px">
+            <label style="display:block;font-size:11px;font-weight:700;color:rgba(0,0,0,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Player of the Game</label>
+            <select id="bs-potg-name" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:13px;background:#f8f9fa" onchange="bsPotgName=this.value;bsPotgTeam=this.options[this.selectedIndex].dataset.team||''">
+              <option value="">— None —</option>
+              <optgroup label="${awayName}">
+                ${bsAwayLineup.filter(p=>p.name&&!p.dnp).map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}" data-team="${g.away}" ${bsPotgName===p.name&&bsPotgTeam===g.away?'selected':''}>${p.name}</option>`).join('')}
+              </optgroup>
+              <optgroup label="${homeName}">
+                ${bsHomeLineup.filter(p=>p.name&&!p.dnp).map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}" data-team="${g.home}" ${bsPotgName===p.name&&bsPotgTeam===g.home?'selected':''}>${p.name}</option>`).join('')}
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:rgba(0,0,0,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Game Recap</label>
+          <textarea id="bs-recap-text" rows="4" placeholder="Write a brief game summary..." style="width:100%;padding:8px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;background:#f8f9fa" oninput="bsGameRecap=this.value">${bsGameRecap.replace(/</g,'&lt;')}</textarea>
+        </div>
+      </div>
       ${bsScoreOnlyMode ? '' : `
       <div style="display:flex;gap:0;margin-bottom:16px;border:2px solid #001a3e;border-radius:10px;overflow:hidden">
         <button id="bs-tab-away" onclick="bsSwitchBsTab('away')" style="flex:1;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;background:#001a3e;color:#FFD700;border:none;cursor:pointer;letter-spacing:.04em">${awayName}</button>
@@ -1870,6 +2010,11 @@ function renderBoxScore(awayName, homeName, g) {
 }
 
 function bsRerender() {
+  // Capture any in-flight edits from the recap/POTG fields before re-rendering
+  const recapEl = document.getElementById('bs-recap-text');
+  if(recapEl) bsGameRecap = recapEl.value;
+  const potgEl = document.getElementById('bs-potg-name');
+  if(potgEl){ bsPotgName = potgEl.value; bsPotgTeam = potgEl.options[potgEl.selectedIndex]?.dataset.team||bsPotgTeam; }
   const v = document.getElementById('box-score-view');
   renderBoxScore(v.dataset.awayName, v.dataset.homeName, bsGameData);
 }
@@ -2021,11 +2166,14 @@ window.saveBoxScore = async function(markFinal) {
     away: bsGameData.away, home: bsGameData.home,
     away_lineup: bsAwayLineup.filter(p=>!p.dnp).map(p=>{const s=parseInt(p.s)||0,d=parseInt(p.d)||0,t=parseInt(p.t)||0,hr=parseInt(p.hr)||0;return{name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,s,d,t,hr,h:s+d+t+hr,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0};}),
     home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>{const s=parseInt(p.s)||0,d=parseInt(p.d)||0,t=parseInt(p.t)||0,hr=parseInt(p.hr)||0;return{name:p.name,num:p.num,pos:p.pos,ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,s,d,t,hr,h:s+d+t+hr,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0};}),
-    away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
-    home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
+    away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,bf:parseInt(p.bf)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
+    home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,bf:parseInt(p.bf)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
     innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
     away_errors: bsAwayErrors, home_errors: bsHomeErrors,
-    away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
+    away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft',
+    recap: (document.getElementById('bs-recap-text')?.value||bsGameRecap||'').trim(),
+    potg_name: (document.getElementById('bs-potg-name')?.value||bsPotgName||'').trim(),
+    potg_team: bsPotgTeam||''
   };
   try {
     const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
@@ -2101,6 +2249,10 @@ window.bsFinalizeOrder = function(side) {
   if (side === 'away') { bsAwayLineup = [...withOrder, ...dnpPlayers]; bsAwayOrderMode = false; bsAwayOrdered = true; bsAwayOrderMap = {}; }
   else { bsHomeLineup = [...withOrder, ...dnpPlayers]; bsHomeOrderMode = false; bsHomeOrdered = true; bsHomeOrderMap = {}; }
   bsRerender();
+  // After finalizing away order, auto-switch to home tab (which may still need ordering)
+  if (side === 'away' && bsHomeOrderMode) {
+    setTimeout(() => { if (window.bsSwitchBsTab) bsSwitchBsTab('home'); }, 100);
+  }
 };
 
 // ── Score-Only Mode ───────────────────────────────────────────────
@@ -2205,7 +2357,7 @@ function renderStandings() {
   if (!TEAMS.length) { el.innerHTML = '<div class="empty">No teams found</div>'; return; }
   const sorted = [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Actions</th></tr></thead>
+    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Player Password</th><th>Actions</th></tr></thead>
     <tbody>${sorted.map((t, i) => `<tr id="standing-row-${t.id}">
       <td>${i+1}</td>
       <td><strong>${esc(t.name)}</strong></td>
@@ -2217,6 +2369,7 @@ function renderStandings() {
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.rs||0}" id="st-rs-${t.id}" min="0"></td>
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.ra||0}" id="st-ra-${t.id}" min="0"></td>
       <td>${t.streak||'-'}</td>
+      <td><input type="text" class="form-input" style="width:110px;padding:5px" placeholder="set password" value="${esc(t.player_password||'')}" id="st-pw-${t.id}"></td>
       <td><button class="btn btn-outline btn-sm" onclick="saveOneStanding('${t.id}')">Save</button></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
@@ -2229,10 +2382,13 @@ window.saveOneStanding = async function(teamId) {
   const rs = parseInt(document.getElementById('st-rs-' + teamId).value) || 0;
   const ra = parseInt(document.getElementById('st-ra-' + teamId).value) || 0;
   const pct = (w + l + ties) > 0 ? parseFloat(((w + ties * 0.5) / (w + l + ties)).toFixed(3)) : 0;
+  const pw = (document.getElementById('st-pw-' + teamId)?.value || '').trim();
   try {
-    await updateDoc(doc(db, 'teams', teamId), { w, l, t: ties, pct, rs, ra });
+    const update = { w, l, t: ties, pct, rs, ra };
+    if (pw !== undefined) update.player_password = pw;
+    await updateDoc(doc(db, 'teams', teamId), update);
     const tm = TEAMS.find(x => x.id === teamId);
-    if (tm) { tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra; }
+    if (tm) { tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra; tm.player_password = pw; }
     toast('Saved standings for ' + getTeamName(teamId));
     await logActivity('Standings', `Updated ${getTeamFull(teamId)}: ${w}-${l}-${ties}`);
   } catch(e) {
@@ -2288,7 +2444,8 @@ function posOptionsHtmlAdmin(selected=''){return '<option value="">-- Position -
 
 window.openAddGame = function() {
   const el = document.getElementById('add-game-form');
-  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  if (el.style.display !== 'none' && el.dataset.mode === 'manual') { el.style.display = 'none'; return; }
+  el.dataset.mode = 'manual';
   el.style.display = 'block';
   el.innerHTML = `<div class="inline-form" style="margin-bottom:20px">
     <div class="panel-title">Add New Game</div>
@@ -2349,6 +2506,100 @@ window.saveNewGame = async function() {
     renderScores();
     renderDashboard();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ─── CSV IMPORT ────────────────────────────────────────────────────
+window.openImportCsv = function() {
+  const el = document.getElementById('add-game-form');
+  // If already showing the CSV panel, toggle it off
+  if (el.style.display !== 'none' && el.dataset.mode === 'csv') { el.style.display = 'none'; return; }
+  el.dataset.mode = 'csv';
+  el.style.display = 'block';
+  el.innerHTML = `<div class="inline-form" style="margin-bottom:20px">
+    <div class="panel-title">Import Schedule from CSV</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+      <strong>Format (one game per line):</strong> Week, Date (YYYY-MM-DD), Time (HH:MM 24hr), Away Team ID, Home Team ID, Field, Address<br>
+      <span style="font-family:monospace;font-size:11px;color:var(--text)">Example: 1, 2026-06-05, 19:00, dn, tbir, Mondauk 4, 1451 Dillon Rd Ambler PA</span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Paste CSV Data</label>
+      <textarea class="form-input" id="csv-input" rows="8" placeholder="1, 2026-06-05, 19:00, dn, tbir, Mondauk 4, 1451 Dillon Rd Ambler PA&#10;1, 2026-06-05, 20:15, team1, team2, Mondauk 5, ..."></textarea>
+    </div>
+    <div class="form-row">
+      <button class="btn btn-primary" onclick="previewCsvGames()">Preview</button>
+      <button class="btn btn-outline" onclick="document.getElementById('add-game-form').style.display='none'">Cancel</button>
+    </div>
+    <div id="csv-preview" style="margin-top:16px;display:none"></div>
+  </div>`;
+};
+
+window.previewCsvGames = function() {
+  const raw = document.getElementById('csv-input').value.trim();
+  if (!raw) { toast('Paste CSV data first', 'error'); return; }
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const parsed = [];
+  const errors = [];
+  for (let i = 0; i < lines.length; i++) {
+    const cols = lines[i].split(',').map(c => c.trim());
+    // Skip header rows (first column non-numeric)
+    if (isNaN(parseInt(cols[0]))) continue;
+    if (cols.length < 5) { errors.push(`Row ${i+1}: not enough columns`); continue; }
+    const [wkStr, date_iso, time_24, away, home, field, ...addrParts] = cols;
+    const wk = parseInt(wkStr);
+    if (!wk || !date_iso || !away || !home) { errors.push(`Row ${i+1}: missing required field`); continue; }
+    // Compute display fields
+    let dateDisplay = '', dayDisplay = '', timeDisplay = '';
+    try {
+      const d = new Date(date_iso + 'T12:00:00');
+      if (isNaN(d)) throw new Error('bad date');
+      dateDisplay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+      dayDisplay  = d.toLocaleDateString('en-US', { weekday:'short' });
+    } catch(e) { errors.push(`Row ${i+1}: invalid date "${date_iso}"`); continue; }
+    if (time_24) {
+      try {
+        const [hh, mm] = time_24.split(':').map(Number);
+        const suffix = hh >= 12 ? 'PM' : 'AM';
+        timeDisplay = `${hh%12||12}:${String(mm).padStart(2,'0')} ${suffix}`;
+      } catch(e) {}
+    }
+    const addr = addrParts.join(',').trim();
+    parsed.push({ wk, date: dateDisplay, day: dayDisplay, time: timeDisplay, date_iso, time_24: time_24||'', away, home, field: field||'', addr, done: false, away_score: null, home_score: null });
+  }
+  const previewEl = document.getElementById('csv-preview');
+  if (!parsed.length && errors.length) {
+    previewEl.style.display = 'block';
+    previewEl.innerHTML = `<div style="color:var(--red);font-size:13px">${errors.map(e => `<div>⚠ ${esc(e)}</div>`).join('')}</div>`;
+    return;
+  }
+  // Store parsed for import
+  window._csvParsed = parsed;
+  let html = `<div style="font-weight:700;font-size:13px;margin-bottom:10px">${parsed.length} game(s) to import${errors.length ? ` <span style="color:var(--yellow)">(${errors.length} row(s) skipped)</span>` : ''}:</div>`;
+  html += `<div class="tbl-wrap" style="margin-bottom:12px"><table class="tbl"><thead><tr><th>Wk</th><th>Date</th><th>Time</th><th>Away</th><th>Home</th><th>Field</th></tr></thead><tbody>`;
+  parsed.forEach(g => {
+    html += `<tr><td>${g.wk}</td><td>${esc(g.date)} ${esc(g.day)}</td><td>${esc(g.time)}</td><td>${esc(g.away)}</td><td>${esc(g.home)}</td><td>${esc(g.field)}</td></tr>`;
+  });
+  html += `</tbody></table></div>`;
+  if (errors.length) html += `<div style="color:var(--yellow);font-size:12px;margin-bottom:10px">${errors.map(e => `<div>⚠ ${esc(e)}</div>`).join('')}</div>`;
+  html += `<div style="display:flex;gap:8px"><button class="btn btn-success" onclick="importCsvGames()">Import ${parsed.length} Game${parsed.length !== 1 ? 's' : ''}</button><button class="btn btn-outline" onclick="document.getElementById('csv-preview').style.display='none'">Back</button></div>`;
+  previewEl.style.display = 'block';
+  previewEl.innerHTML = html;
+};
+
+window.importCsvGames = async function() {
+  const games = window._csvParsed;
+  if (!games || !games.length) return;
+  try {
+    const refs = await Promise.all(games.map(g => addDoc(collection(db, 'games'), g)));
+    refs.forEach((ref, i) => { games[i].id = ref.id; });
+    GAMES.push(...games);
+    GAMES.sort((a,b) => (a.wk||0) - (b.wk||0));
+    document.getElementById('add-game-form').style.display = 'none';
+    toast(`Imported ${games.length} game${games.length !== 1 ? 's' : ''}`);
+    await logActivity('Schedule', `CSV import: added ${games.length} game(s)`);
+    renderSchedule();
+    renderScores();
+    renderDashboard();
+  } catch(e) { toast('Import failed: ' + e.message, 'error'); }
 };
 
 window.editGame = function(gameId) {
@@ -2462,15 +2713,25 @@ window.loadRoster = function() {
   }
   el.innerHTML = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">${teamPlayers.length} player(s)</div>
     <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Actions</th></tr></thead>
-    <tbody>${teamPlayers.map(p => `<tr id="player-row-${p.id}">
+    <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Added</th><th>Actions</th></tr></thead>
+    <tbody>${teamPlayers.map(p => {
+      let added = '—';
+      if (p.added_at) {
+        try {
+          const d = p.added_at.toDate ? p.added_at.toDate() : new Date(p.added_at);
+          added = d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+        } catch(e) {}
+      }
+      return `<tr id="player-row-${p.id}">
       <td>${p.num||'-'}</td><td><strong>${esc(p.name)}</strong></td><td>${esc(p.pos||'-')}</td>
+      <td style="font-size:12px;color:var(--muted2);white-space:nowrap">${added}</td>
       <td class="actions">
         <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>
       </td>
     </tr>
-    <tr id="player-edit-${p.id}" style="display:none"><td colspan="4" id="player-edit-cell-${p.id}"></td></tr>`).join('')}
+    <tr id="player-edit-${p.id}" style="display:none"><td colspan="5" id="player-edit-cell-${p.id}"></td></tr>`;
+    }).join('')}
     </tbody></table></div>`;
 };
 
@@ -2503,7 +2764,8 @@ window.saveNewPlayer = async function() {
     pos: document.getElementById('ap-pos').value.trim(),
     email: document.getElementById('ap-email').value.trim(),
     phone: document.getElementById('ap-phone').value.trim(),
-    team: teamId
+    team: teamId,
+    added_at: Timestamp.now()
   };
   if (!data.name) { toast('Enter a player name', 'error'); return; }
   try {
@@ -3406,6 +3668,123 @@ async function loadRegistrations() {
     el.innerHTML = `<div class="empty">Could not load signups: ${e.message}</div>`;
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// WAIVERS
+// ═══════════════════════════════════════════════════════════════════
+function initWaiversSection() {
+  // Populate team dropdown from already-loaded TEAMS
+  const sel = document.getElementById('waiver-team-select');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— All Teams —</option>' +
+    TEAMS.map(t => `<option value="${t.id}"${t.id === current ? ' selected' : ''}>${t.name}</option>`).join('');
+}
+
+window.loadWaivers = async function() {
+  const teamId = document.getElementById('waiver-team-select').value;
+  const el     = document.getElementById('waivers-content');
+  const sumEl  = document.getElementById('waiver-summary');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+  sumEl.style.display = 'none';
+
+  try {
+    // Fetch all players, filter + sort in JS to avoid composite index requirement
+    const snap = await getDocs(collection(db, 'players'));
+    let players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (teamId) players = players.filter(p => p.team === teamId);
+    players.sort((a, b) => (a.name||'').localeCompare(b.name||''));
+
+    if (!players.length) {
+      el.innerHTML = '<div class="empty">No players found for this team.</div>';
+      return;
+    }
+
+    const signed   = players.filter(p => p.waiver_signed);
+    const unsigned = players.filter(p => !p.waiver_signed);
+    const pct = Math.round((signed.length / players.length) * 100);
+
+    // Summary bar
+    sumEl.style.display = 'block';
+    sumEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:16px;padding:14px 18px;background:#fff;border:1px solid var(--border);border-radius:10px;flex-wrap:wrap">
+        <div style="font-size:22px;font-weight:900;font-family:'Barlow Condensed',sans-serif;color:${pct===100?'var(--green)':'var(--navy)'}">
+          ${signed.length} / ${players.length}
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Waivers Signed</div>
+          <div style="height:6px;background:var(--bg);border-radius:4px;margin-top:5px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${pct===100?'var(--green)':'var(--navy)'};border-radius:4px;transition:width .4s"></div>
+          </div>
+        </div>
+        ${unsigned.length > 0 ? `<div style="font-size:12px;color:var(--red);font-weight:700">${unsigned.length} unsigned</div>` : '<div style="font-size:12px;color:var(--green);font-weight:700">✓ All signed</div>'}
+      </div>`;
+
+    // Player table
+    const teamMap = {};
+    TEAMS.forEach(t => teamMap[t.id] = t.name);
+
+    el.innerHTML = `
+      <div class="tbl-wrap"><table class="tbl">
+        <thead><tr>
+          <th>Status</th>
+          <th>Name</th>
+          ${!teamId ? '<th>Team</th>' : ''}
+          <th>#</th>
+          <th>Position</th>
+          <th>Signed At</th>
+          <th>Email</th>
+        </tr></thead>
+        <tbody>
+          ${players.sort((a,b) => {
+            // Sort unsigned first, then by team, then by name
+            if (!!a.waiver_signed !== !!b.waiver_signed) return a.waiver_signed ? 1 : -1;
+            return (a.name||'').localeCompare(b.name||'');
+          }).map(p => {
+            const signed = p.waiver_signed;
+            const ts = p.waiver_signed_at;
+            const dateStr = ts ? (ts.toDate ? ts.toDate().toLocaleString() : new Date(ts).toLocaleString()) : '—';
+            const teamName = teamMap[p.team] || p.team || '—';
+            return `<tr>
+              <td style="text-align:center;font-size:18px">${signed ? '✅' : '❌'}</td>
+              <td><strong>${esc(p.name||'—')}</strong></td>
+              ${!teamId ? `<td style="font-size:13px;color:var(--muted)">${esc(teamName)}</td>` : ''}
+              <td style="font-size:13px;color:var(--muted)">${p.num||'—'}</td>
+              <td style="font-size:13px;color:var(--muted)">${p.pos||'—'}</td>
+              <td style="font-size:12px;color:${signed?'var(--green)':'var(--muted2)'};white-space:nowrap">${signed ? dateStr : '<span style="color:var(--red)">Not signed</span>'}</td>
+              <td><a href="mailto:${esc(p.email||'')}" style="color:var(--blue);font-size:12px">${esc(p.email||'—')}</a></td>
+              <td style="white-space:nowrap;display:flex;gap:6px">
+                ${signed ? `<button class="btn btn-outline btn-sm" onclick="resetWaiver('${p.id}','${esc(p.name||'')}')">↺ Reset</button>` : ''}
+                <button class="btn btn-danger btn-sm" onclick="deleteWaiverPlayer('${p.id}','${esc(p.name||'')}')">Delete</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table></div>`;
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Could not load waiver data: ${e.message}</div>`;
+  }
+};
+
+window.resetWaiver = async function(id, name) {
+  if (!confirm(`Reset waiver for ${name}? Their signature will be cleared and they'll need to re-sign.`)) return;
+  try {
+    await updateDoc(doc(db, 'players', id), { waiver_signed: false, waiver_signed_at: null });
+    toast(`Waiver reset for ${name}`);
+    await logActivity('Waivers', `Reset waiver: ${name}`);
+    loadWaivers();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.deleteWaiverPlayer = async function(id, name) {
+  if (!confirm(`Permanently delete ${name} from the roster? This cannot be undone.`)) return;
+  try {
+    await deleteDoc(doc(db, 'players', id));
+    toast(`${name} removed from roster`);
+    await logActivity('Waivers', `Deleted player: ${name}`);
+    loadWaivers();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
 
 window.deleteRegistration = async function(id, name) {
   if (!confirm(`Delete signup for ${name || 'this player'}? This cannot be undone.`)) return;
