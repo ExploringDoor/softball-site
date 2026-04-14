@@ -583,6 +583,58 @@
     z-index: 1;
   }
 
+  /* ===== HALF-INNING END SUMMARY ===== */
+  .half-end-stat-cell {
+    flex: 1;
+    text-align: center;
+    font-family: 'Barlow Condensed', sans-serif;
+  }
+  .half-end-stat-cell .hes-val {
+    font-size: 28px;
+    font-weight: 900;
+    color: var(--text);
+    line-height: 1;
+  }
+  .half-end-stat-cell .hes-lbl {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+  .half-end-batter-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px;
+    border-radius: 8px;
+    margin-bottom: 3px;
+  }
+  .half-end-batter-row:first-child {
+    background: rgba(255,255,255,0.06);
+  }
+  .half-end-batter-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 900;
+    color: var(--gold);
+    min-width: 36px;
+    text-align: center;
+  }
+  .half-end-batter-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+    flex: 1;
+  }
+  .half-end-batter-stats {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
   /* ===== SHEET OVERLAY ===== */
   /* Full-viewport overlays — override body > * max-width constraint */
   #game-over-overlay, #play-edit-overlay, #runner-advance-overlay {
@@ -1679,48 +1731,7 @@
   }
 
   /* ===== PLAY EDIT OVERLAY ===== */
-  #play-edit-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 2000;
-    background: rgba(0,0,0,0.75);
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }
-  #play-edit-overlay.open { display: flex; }
-  #play-edit-modal {
-    background: var(--sheet-bg);
-    border-radius: 18px;
-    width: 100%;
-    max-width: 380px;
-    padding: 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .pem-header {
-    font-size: 18px;
-    font-weight: 900;
-    letter-spacing: 1px;
-    color: var(--text);
-    text-align: center;
-  }
-  .pem-player {
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-muted);
-    text-align: center;
-  }
-  .pem-field-label {
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
+  /* #play-edit-overlay uses .sheet-overlay / .sheet classes — no extra modal CSS needed */
   .pem-input {
     width: 100%;
     background: var(--card2);
@@ -1732,28 +1743,11 @@
     font-weight: 600;
     padding: 10px 12px;
     outline: none;
+    box-sizing: border-box;
     user-select: text;
     -webkit-user-select: text;
   }
   .pem-input:focus { border-color: var(--blue); }
-  .pem-btns {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-top: 4px;
-  }
-  .pem-btns button {
-    padding: 12px;
-    border-radius: 12px;
-    border: none;
-    font-family: 'Barlow Condensed', sans-serif;
-    font-size: 16px;
-    font-weight: 800;
-    letter-spacing: 1px;
-    cursor: pointer;
-  }
-  #pem-cancel-btn { background: var(--card2); color: var(--text-muted); }
-  #pem-save-btn   { background: var(--navy); color: white; }
 
   /* ===== GAME OVER OVERLAY ===== */
   #game-over-overlay {
@@ -2223,21 +2217,32 @@
 </div>
 
 <!-- Play Edit Overlay -->
-<div id="play-edit-overlay">
-  <div id="play-edit-modal">
-    <div class="pem-header">EDIT PLAY</div>
-    <div class="pem-player" id="pem-player"></div>
-    <div>
-      <div class="pem-field-label">Result</div>
-      <input class="pem-input" id="pem-result" type="text" autocomplete="off">
+<div id="play-edit-overlay" class="sheet-overlay">
+  <div id="play-edit-modal" class="sheet">
+    <div class="sheet-header">
+      <button class="sheet-back-btn" id="pem-cancel-btn">Cancel</button>
+      <div class="sheet-title">CORRECT PLAY</div>
+      <button class="sheet-back-btn" id="pem-save-btn" style="color:var(--gold);text-align:right;">Save</button>
     </div>
-    <div>
-      <div class="pem-field-label">Description</div>
-      <input class="pem-input" id="pem-desc" type="text" autocomplete="off">
+    <div id="pem-player" style="padding:10px 16px 4px;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;"></div>
+    <div id="pem-desc-row" style="padding:2px 16px 10px;font-family:'Barlow Condensed',sans-serif;font-size:13px;color:var(--text-muted);font-style:italic;"></div>
+
+    <!-- Result type picker -->
+    <div style="padding:0 16px 8px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:8px;">CHANGE RESULT TO</div>
+      <div id="pem-result-options" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
-    <div class="pem-btns">
-      <button id="pem-cancel-btn">Cancel</button>
-      <button id="pem-save-btn">Save</button>
+
+    <!-- Error fielder picker (shown only when Error is selected) -->
+    <div id="pem-fielder-section" style="display:none;padding:0 16px 8px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:8px;">ASSIGN ERROR TO (FIELDER)</div>
+      <div id="pem-fielder-options" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+
+    <!-- Description edit -->
+    <div style="padding:0 16px 12px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:6px;">NOTES (OPTIONAL)</div>
+      <input class="pem-input" id="pem-desc" type="text" autocomplete="off" placeholder="Edit description...">
     </div>
   </div>
 </div>
@@ -2250,6 +2255,33 @@
     <button class="gom-btn" id="gom-pdf-btn">📄 Create PDF of Box Score</button>
     <button class="gom-btn" id="gom-continue-btn">↩ Continue Scoring</button>
     <button class="gom-btn" id="gom-exit-btn">Exit Game</button>
+  </div>
+</div>
+
+<!-- Half-Inning End Summary -->
+<div id="half-end-overlay" style="display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,0.88);align-items:center;justify-content:center;padding:16px;box-sizing:border-box;">
+  <div style="background:var(--card);border-radius:18px;width:100%;max-width:480px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+    <!-- Header -->
+    <div style="background:var(--navy);padding:16px 20px;text-align:center;">
+      <div id="half-end-title" style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:white;letter-spacing:1px;"></div>
+      <div id="half-end-score" style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:rgba(255,255,255,0.65);margin-top:3px;"></div>
+    </div>
+    <!-- Inning Stats -->
+    <div style="display:flex;padding:16px 20px;gap:0;border-bottom:1px solid rgba(255,255,255,0.07);">
+      <div class="half-end-stat-cell" id="hes-runs"></div>
+      <div class="half-end-stat-cell" id="hes-hits"></div>
+      <div class="half-end-stat-cell" id="hes-errors"></div>
+      <div class="half-end-stat-cell" id="hes-pitches"></div>
+    </div>
+    <!-- Next batters label -->
+    <div style="padding:12px 20px 6px;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);" id="half-end-batting-label">UP NEXT</div>
+    <!-- Next 3 batters -->
+    <div id="half-end-batters" style="padding:0 12px 8px;"></div>
+    <!-- Buttons -->
+    <div style="display:flex;gap:10px;padding:12px 16px 20px;">
+      <button id="half-end-cancel-btn" style="flex:1;background:rgba(255,255,255,0.08);color:var(--text-muted);border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;letter-spacing:1px;cursor:pointer;">CANCEL</button>
+      <button id="half-end-switch-btn" style="flex:2;background:var(--navy);color:white;border:none;border-radius:10px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:900;letter-spacing:1px;cursor:pointer;">SWITCH ›</button>
+    </div>
   </div>
 </div>
 
@@ -2285,7 +2317,7 @@
 // ===== FIREBASE =====
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
-  getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, query, where
+  getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, query, where, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -2322,6 +2354,9 @@ const G = {
   pitcher: { name: 'Pitcher', num: '--' },
   pitchers: { away: null, home: null },
   pitcherStats: { away: {}, home: {} },
+  halfInningPitches: 0,
+  halfInningHits: 0,
+  halfInningErrors: 0,
 };
 
 let gamesData = [];
@@ -2419,11 +2454,14 @@ function renderAll() {
 
 // ===== BASE PIXEL POSITIONING =====
 // Original image fractions (calibrated from 2752×1536 field photo)
+// 2B bag is near top-center of diamond (~25% from top)
+// 1B/3B bags are at the side corners (~53% from top)
+// Home plate is near the bottom (~88% from top)
 const BASE_POS_ORIG = {
-  1:    { ox: 0.777, oy: 0.527 },
-  2:    { ox: 0.500, oy: 0.313 },
-  3:    { ox: 0.224, oy: 0.527 },
-  home: { ox: 0.500, oy: 0.711 },
+  1:    { ox: 0.777, oy: 0.530 },
+  2:    { ox: 0.500, oy: 0.248 },
+  3:    { ox: 0.224, oy: 0.530 },
+  home: { ox: 0.500, oy: 0.880 },
 };
 const FIELD_IMG_ASPECT = 1536 / 2752; // imageH / imageW
 
@@ -2488,11 +2526,95 @@ function renderRunners() {
 
 function selectRunner(base) {
   if (G.selectedRunner === base) {
+    // Second tap on same runner: deselect
     G.selectedRunner = null;
-  } else {
-    G.selectedRunner = base;
+    renderRunners();
+    return;
   }
+  openRunnerActionSheet(base);
+}
+
+function openRunnerActionSheet(base) {
+  const runner = G.runners[base];
+  if (!runner) return;
+  G.selectedRunner = null;
   renderRunners();
+
+  const nm = (runner.name && runner.name !== 'Batter') ? runner.name : '#' + (runner.num || '?');
+  const baseLabel = base === 1 ? '1st' : base === 2 ? '2nd' : '3rd';
+  document.getElementById('runner-sheet-title').textContent = nm + ' — ' + baseLabel + ' Base';
+
+  const content = document.getElementById('runner-sheet-content');
+  content.innerHTML = '';
+
+  // Move Runner
+  const moveRow = document.createElement('div');
+  moveRow.className = 'sheet-row';
+  moveRow.innerHTML = `<div class="sheet-row-content"><div class="sheet-row-label">Move Runner</div><div class="sheet-row-sub">Advance, steal, or record out</div></div><div class="sheet-row-chevron">›</div>`;
+  moveRow.addEventListener('click', () => {
+    document.getElementById('runner-sheet-overlay').classList.remove('open');
+    G.selectedRunner = base;
+    renderRunners();
+  });
+  content.appendChild(moveRow);
+
+  // Courtesy / Pinch Runner
+  const subRow = document.createElement('div');
+  subRow.className = 'sheet-row';
+  subRow.innerHTML = `<div class="sheet-row-content"><div class="sheet-row-label" style="color:var(--gold)">Courtesy / Pinch Runner</div><div class="sheet-row-sub">Replace with another player</div></div><div class="sheet-row-chevron">›</div>`;
+  subRow.addEventListener('click', () => showSubRunnerPicker(base, runner));
+  content.appendChild(subRow);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'runner-sheet-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', closeRunnerSheet);
+  content.appendChild(cancelBtn);
+
+  document.getElementById('runner-sheet-overlay').classList.add('open');
+}
+
+function showSubRunnerPicker(base, originalRunner) {
+  const team = battingTeam();
+  const lineup = G.lineups[team] || [];
+  const baseLabel = base === 1 ? '1st' : base === 2 ? '2nd' : '3rd';
+
+  document.getElementById('runner-sheet-title').textContent = 'Sub on ' + baseLabel + ' Base';
+
+  const content = document.getElementById('runner-sheet-content');
+  content.innerHTML = '';
+
+  const note = document.createElement('div');
+  note.className = 'runner-sheet-question';
+  note.textContent = 'Select the replacement runner:';
+  content.appendChild(note);
+
+  lineup.forEach(player => {
+    const isOnBase = [1, 2, 3].some(b => G.runners[b] && G.runners[b].pid === player.pid);
+    const row = document.createElement('div');
+    row.className = 'sheet-row';
+    row.style.opacity = isOnBase ? '0.4' : '1';
+    const nm2 = player.name || ('Player ' + player.num);
+    row.innerHTML = `<div class="sheet-row-content"><div class="sheet-row-label">#${player.num || '?'} ${nm2}</div>${isOnBase ? '<div class="sheet-row-sub" style="color:var(--red)">Already on base</div>' : ''}</div>`;
+    if (!isOnBase) {
+      row.addEventListener('click', () => {
+        snapshotState();
+        const origName = (originalRunner.name && originalRunner.name !== 'Batter') ? originalRunner.name : '#' + originalRunner.num;
+        G.runners[base] = { name: player.name, num: player.num, pid: player.pid };
+        closeRunnerSheet();
+        logPlay('Sub', `PR — #${player.num} ${nm2} replaces ${origName} on ${baseLabel}`);
+        renderAll();
+        saveScore();
+      });
+    }
+    content.appendChild(row);
+  });
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'runner-sheet-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', closeRunnerSheet);
+  content.appendChild(cancelBtn);
 }
 
 // ===== BASE TAP ZONES =====
@@ -2518,14 +2640,16 @@ document.getElementById('undo-pitch-btn').addEventListener('click', () => undoLa
 function handlePitch(type) {
   if (type === 'bip') { openBipSheet('level1'); return; }
   snapshotState();
+  if (type !== 'bip') G.halfInningPitches++;
   if (type === 'ball') {
     G.balls++;
-    if (G.balls >= 4) { endAtBat('walk'); } else { renderAll(); }
+    if (G.balls >= 4) { endAtBat('walk'); } else { flashFeedback('BALL', 'var(--blue)'); renderAll(); }
   } else if (type === 'called-strike' || type === 'swing-miss') {
     G.strikes++;
-    if (G.strikes >= 3) { endAtBat('strikeout'); } else { renderAll(); }
+    if (G.strikes >= 3) { endAtBat('strikeout'); } else { flashFeedback('STRIKE', 'var(--red)'); renderAll(); }
   } else if (type === 'foul') {
     if (G.strikes < 2) G.strikes++;
+    flashFeedback('FOUL', 'var(--orange)');
     renderAll();
   } else if (type === 'hbp') {
     endAtBat('walk');
@@ -2596,6 +2720,7 @@ function endAtBat(result, details) {
     advanceLineup(team);
     flashFeedback('WALK', 'var(--blue)');
   } else if (result === 'single') {
+    G.halfInningHits++;
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
     const pStatsH1 = currentPitcherStats(fieldingTeam());
     if (pStatsH1) pStatsH1.h++;
@@ -2605,6 +2730,7 @@ function endAtBat(result, details) {
     showRunnerAdvanceSheet('single', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'double') {
+    G.halfInningHits++;
     if (sid) { stats.h++; stats.doubles = (stats.doubles||0)+1; }
     const pStatsH2 = currentPitcherStats(fieldingTeam());
     if (pStatsH2) pStatsH2.h++;
@@ -2614,6 +2740,7 @@ function endAtBat(result, details) {
     showRunnerAdvanceSheet('double', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'triple') {
+    G.halfInningHits++;
     if (sid) { stats.h++; stats.triples = (stats.triples||0)+1; }
     const pStatsH3 = currentPitcherStats(fieldingTeam());
     if (pStatsH3) pStatsH3.h++;
@@ -2623,6 +2750,7 @@ function endAtBat(result, details) {
     showRunnerAdvanceSheet('triple', batEntry, allRunners, team, sid, locStr);
     return;
   } else if (result === 'homerun' || result === 'itphr') {
+    G.halfInningHits++;
     if (sid) { stats.h++; stats.hr = (stats.hr||0)+1; }
     const pStatsHR = currentPitcherStats(fieldingTeam());
     if (pStatsHR) pStatsHR.h++;
@@ -2637,22 +2765,45 @@ function endAtBat(result, details) {
     showKIndicator();
     flashFeedback('K', 'var(--red)');
   } else if (result === 'error') {
+    G.halfInningErrors++;
     if (sid) stats.ab++;
     G.runners[1] = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid:null };
     logPlay('Error', `E — Reached on error${locStr}`);
     advanceLineup(team);
     flashFeedback('ERROR', 'var(--orange)');
   } else if (result === 'groundout') {
-    maybeDoublePlay('OUT', `GO — Ground out${locStr}`, team, sid);
-    return;
+    G.outs++;
+    logPlay('Out', `GO — Ground out${locStr}`);
+    const psGO = currentPitcherStats(fieldingTeam());
+    if (psGO) psGO.outs++;
+    flashFeedback('OUT', 'var(--red)');
   } else if (result === 'flyout') {
-    maybeDoublePlay('OUT', `FO — Fly out${locStr}`, team, sid);
-    return;
+    G.outs++;
+    logPlay('Out', `FO — Fly out${locStr}`);
+    const psFO = currentPitcherStats(fieldingTeam());
+    if (psFO) psFO.outs++;
+    flashFeedback('OUT', 'var(--red)');
   } else if (result === 'popout') {
-    maybeDoublePlay('OUT', `PO — Pop out`, team, sid);
-    return;
+    G.outs++;
+    logPlay('Out', 'PO — Pop out');
+    const psPO = currentPitcherStats(fieldingTeam());
+    if (psPO) psPO.outs++;
+    flashFeedback('OUT', 'var(--red)');
   } else if (result === 'bunt-out') {
-    maybeDoublePlay('OUT', `BO — Bunt out`, team, sid);
+    G.outs++;
+    logPlay('Out', 'BO — Bunt out');
+    const psBO = currentPitcherStats(fieldingTeam());
+    if (psBO) psBO.outs++;
+    flashFeedback('OUT', 'var(--red)');
+  } else if (result === 'doublePlay') {
+    const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
+    advanceLineup(team);
+    showDoublePlaySheet(batEntry, team, sid, locStr, 2);
+    return;
+  } else if (result === 'triplePlay') {
+    const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
+    advanceLineup(team);
+    showDoublePlaySheet(batEntry, team, sid, locStr, 3);
     return;
   } else if (result === 'fielderscChoice') {
     // Batter reaches 1B on FC; a runner is out — show runner sheet
@@ -2684,103 +2835,154 @@ function endAtBat(result, details) {
   }
 }
 
-// ===== DOUBLE PLAY =====
-function maybeDoublePlay(outLabel, logDesc, team, sid) {
-  const pStatsOut = currentPitcherStats(fieldingTeam());
-  if (pStatsOut) pStatsOut.outs++;
+// ===== DOUBLE / TRIPLE PLAY SHEET =====
+let _dpEntries = [];  // [{runner, from, isBatter, sel}]
+let _dpTeam = null;
+let _dpBatterSid = null;
+let _dpRequired = 2;  // 2 = double play, 3 = triple play
 
-  const hasRunners = G.runners[1] || G.runners[2] || G.runners[3];
-  if (!hasRunners) {
-    G.outs++;
-    logPlay('Out', logDesc);
-    flashFeedback('OUT', 'var(--red)');
-    G.balls = 0; G.strikes = 0;
-    if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); }
-    else { renderAll(); saveScore(); }
-    return;
-  }
+function showDoublePlaySheet(batEntry, team, sid, locStr, requiredOuts = 2) {
+  _dpRequired = requiredOuts;
+  _dpTeam = team;
+  _dpBatterSid = sid;
+  window._dpLocStr = locStr;
 
-  // Has runners — ask about double play
-  G.outs++;
-  logPlay('Out', logDesc);
-  flashFeedback('OUT', 'var(--red)');
-
-  // Show DP sheet after brief flash
-  setTimeout(() => showDpSheet(team), 400);
-}
-window.maybeDoublePlay = maybeDoublePlay;
-
-function showDpSheet(team) {
-  const runners = [];
+  // Capture current runners then clear the bases
+  const entries = [];
   [3, 2, 1].forEach(base => {
-    if (G.runners[base]) runners.push({ runner: G.runners[base], base });
+    if (G.runners[base]) {
+      entries.push({ runner: { ...G.runners[base] }, from: base, isBatter: false, sel: null });
+      G.runners[base] = null;
+    }
   });
-  if (runners.length === 0 || G.outs >= 3) {
-    G.balls = 0; G.strikes = 0;
-    if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
-    else { renderAll(); saveScore(); }
-    return;
-  }
+  entries.push({ runner: batEntry, from: 0, isBatter: true, sel: null });
 
+  // Smart defaults: most common play — runner on 1st out, batter out; TP also gets runner on 2nd out
+  let outsLeft = requiredOuts;
+  [1, 2, 3].forEach(base => {
+    entries.forEach(e => { if (e.from === base && outsLeft > 0) { e.sel = 'out'; outsLeft--; } });
+  });
+  entries.forEach(e => {
+    if (e.isBatter && outsLeft > 0) { e.sel = 'out'; outsLeft--; }
+  });
+  // Remaining runners advance
+  entries.forEach(e => {
+    if (e.sel !== null) return;
+    if (e.from === 3) e.sel = 'score';
+    else if (e.from === 2) e.sel = 3;
+    else e.sel = 2;
+  });
+
+  _dpEntries = entries;
+
+  // Point confirm button at confirmDoublePlay
+  document.getElementById('ras-confirm-btn').onclick = confirmDoublePlay;
+
+  renderDpSheet();
+  document.getElementById('runner-advance-overlay').style.display = 'flex';
+}
+
+function getDpOpts(from, isBatter) {
+  const opts = [];
+  if (!isBatter) opts.push({ label: 'Scored', val: 'score' });
+  // Base options
+  const maxBase = isBatter ? 3 : 3;
+  const minBase = isBatter ? 1 : 1;
+  for (let b = maxBase; b >= minBase; b--) {
+    if (isBatter || b >= from) {
+      opts.push({ label: b === 1 ? '1B' : b === 2 ? '2B' : '3B', val: b });
+    }
+  }
+  opts.push({ label: 'Out✕', val: 'out', cls: 'btn-out' });
+  return opts;
+}
+
+function renderDpSheet() {
+  const outCount = _dpEntries.filter(e => e.sel === 'out').length;
+  const runCount = _dpEntries.filter(e => e.sel === 'score').length;
+
+  const req = _dpRequired;
+  const playLabel = req === 3 ? 'TRIPLE PLAY' : 'DOUBLE PLAY';
+  const abbr      = req === 3 ? 'TP' : 'DP';
+  const done      = outCount === req;
+  document.getElementById('ras-title').textContent = playLabel;
+  document.getElementById('ras-sub').textContent = done ? `${req} outs selected — confirm when ready` : `Select ${req} outs (${outCount}/${req})`;
+  document.getElementById('ras-runs').textContent = runCount;
+  document.getElementById('ras-outs').textContent = outCount;
+  document.getElementById('ras-rbi').textContent = '—';
+  document.getElementById('ras-stats').style.display = '';
+  const confirmBtn = document.getElementById('ras-confirm-btn');
+  confirmBtn.style.display = '';
+  confirmBtn.textContent = done ? `CONFIRM ${abbr}` : `CONFIRM ${abbr} (${outCount}/${req} outs)`;
+  confirmBtn.style.opacity = done ? '1' : '0.55';
+
+  const fromLabel = b => b === 0 ? 'batter' : b === 1 ? '1st base' : b === 2 ? '2nd base' : '3rd base';
   const container = document.getElementById('ras-rows');
   container.innerHTML = '';
-  document.getElementById('ras-title').textContent = 'DOUBLE PLAY?';
-  document.getElementById('ras-sub').textContent = 'Tap a runner to record 2nd out, or skip';
-  document.getElementById('ras-stats').style.display = 'none';
-  document.getElementById('ras-confirm-btn').style.display = 'none';
 
-  // "No DP" option at top
-  const skipRow = document.createElement('div');
-  skipRow.className = 'ras-row';
-  skipRow.style.cursor = 'pointer';
-  skipRow.innerHTML = `<div style="flex:1;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--text-muted)">No double play</div>`;
-  skipRow.addEventListener('click', () => {
-    closeDpSheet();
-  });
-  container.appendChild(skipRow);
-
-  // Runner options
-  runners.forEach(({ runner, base }) => {
-    const baseLabel = base === 3 ? '3rd' : base === 2 ? '2nd' : '1st';
-    const name = (runner.name && runner.name !== 'Batter') ? runner.name : (runner.num ? '#' + runner.num : 'Runner');
+  _dpEntries.forEach(entry => {
     const row = document.createElement('div');
     row.className = 'ras-row';
-    row.style.cursor = 'pointer';
-    row.innerHTML = `
-      <div style="flex:1">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;color:var(--text)">${name} out at ${baseLabel}</div>
-        <div style="font-size:12px;color:var(--text-muted)">Runner on ${baseLabel}</div>
-      </div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:#f87171;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);padding:6px 12px;border-radius:8px">DP OUT</div>
-    `;
-    row.addEventListener('click', () => {
-      G.outs++;
-      const dpLogDesc = `DP — ${name} out at ${baseLabel} (double play)`;
-      G.runners[base] = null;
-      logPlay('Out', dpLogDesc);
-      const pStatsDP = currentPitcherStats(fieldingTeam());
-      if (pStatsDP) pStatsDP.outs++;
-      closeDpSheet();
+    const info = document.createElement('div');
+    info.className = 'ras-row-info';
+    const nm = (entry.runner.name && entry.runner.name !== 'Batter')
+      ? entry.runner.name : (entry.runner.num ? '#' + entry.runner.num : 'Runner');
+    info.innerHTML = `<div class="ras-runner-name">${nm}</div><div class="ras-runner-from">${fromLabel(entry.from)}</div>`;
+    const btnsDiv = document.createElement('div');
+    btnsDiv.className = 'ras-btns';
+    getDpOpts(entry.from, entry.isBatter).forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'ras-btn' + (opt.cls ? ' ' + opt.cls : '');
+      btn.textContent = opt.label;
+      if (entry.sel === opt.val) {
+        btn.classList.add(opt.val === 'score' ? 'sel-score' : opt.val === 'out' ? 'sel-out' : 'sel-base');
+      }
+      btn.addEventListener('click', () => { entry.sel = opt.val; renderDpSheet(); });
+      btnsDiv.appendChild(btn);
     });
+    row.appendChild(info);
+    row.appendChild(btnsDiv);
     container.appendChild(row);
   });
-
-  document.getElementById('runner-advance-overlay').style.display = 'flex';
-  window._dpMode = true;
 }
-window.showDpSheet = showDpSheet;
 
-function closeDpSheet() {
-  window._dpMode = false;
+function confirmDoublePlay() {
   document.getElementById('runner-advance-overlay').style.display = 'none';
-  document.getElementById('ras-stats').style.display = '';
-  document.getElementById('ras-confirm-btn').style.display = '';
-  document.getElementById('ras-sub').textContent = 'Tap to adjust runner destinations';
+  // Restore confirm button to normal
+  document.getElementById('ras-confirm-btn').onclick = confirmRunnerAdvance;
+
+  const team = _dpTeam;
+  const fTeam = team === 'away' ? 'home' : 'away';
+
+  const outNames = [];
+  _dpEntries.forEach(entry => {
+    const nm = (entry.runner.name && entry.runner.name !== 'Batter') ? entry.runner.name : '#' + entry.runner.num;
+    if (entry.sel === 'out') {
+      G.outs++;
+      const ps = currentPitcherStats(fTeam);
+      if (ps) ps.outs++;
+      outNames.push(nm + (entry.isBatter ? ' (batter)' : ` (from ${entry.from === 1 ? '1st' : entry.from === 2 ? '2nd' : '3rd'})`));
+    } else if (entry.sel === 'score') {
+      if (team === 'away') G.awayScore++; else G.homeScore++;
+      if (!entry.isBatter) markRunnerScored(entry.runner, team);
+      const ps = currentPitcherStats(fTeam);
+      if (ps) ps.r++;
+    } else {
+      G.runners[entry.sel] = entry.runner;
+    }
+  });
+
+  const locStr = window._dpLocStr || '';
+  const playName = _dpRequired === 3 ? 'Triple Play' : 'Double Play';
+  const playAbbr = _dpRequired === 3 ? 'TP' : 'DP';
+  logPlay(playName, `${playAbbr} — ${playName}${locStr}. ${outNames.join('; ')}.`);
+  flashFeedback(_dpRequired === 3 ? 'TRIPLE PLAY' : 'DOUBLE PLAY', 'var(--red)');
+
   G.balls = 0; G.strikes = 0;
-  if (G.outs >= 3) { setTimeout(() => endHalfInning(), 200); }
+  if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); }
   else { renderAll(); saveScore(); }
 }
-window.closeDpSheet = closeDpSheet;
+window.confirmDoublePlay = confirmDoublePlay;
 
 // ===== RUNNER ADVANCEMENT HELPER =====
 function resetRunnersForHit(hitType, batterEntry) {
@@ -2830,6 +3032,12 @@ function showRunnerAdvanceSheet(hitType, batEntry, allRunners, team, sid, locStr
 
   // Store locStr for confirm
   window._rasLocStr = locStr;
+
+  // Ensure confirm button points to normal handler (not DP) and has correct label
+  const _confirmBtn = document.getElementById('ras-confirm-btn');
+  _confirmBtn.onclick = confirmRunnerAdvance;
+  _confirmBtn.textContent = 'CONFIRM';
+  _confirmBtn.style.opacity = '1';
 
   renderRasSheet();
   document.getElementById('runner-advance-overlay').style.display = 'flex';
@@ -2961,10 +3169,13 @@ function logPlay(resultLabel, desc) {
   const team = battingTeam();
   const player = b ? `#${b.num} ${b.name}` : 'Batter';
   const teamShort = team === 'away' ? G.awayTeam.short : G.homeTeam.short;
+  const pid = b ? (b.pid || b.id || b.name) : null;
   G.playLog.unshift({
     inning: inningDisplay(),
     team: teamShort,
+    battingTeam: team,
     player,
+    pid,
     result: resultLabel,
     desc,
     score: `${G.awayScore}-${G.homeScore}`,
@@ -2988,10 +3199,68 @@ function advanceLineup(team) {
 
 // ===== END HALF INNING =====
 function endHalfInning() {
-  // Record linescore
+  // Snapshot BEFORE switching so CANCEL can restore
+  snapshotState();
+
+  const team = battingTeam();    // team that just batted
+  const prevScore = team === 'away' ? G._prevAwayScore : G._prevHomeScore;
+  const curScore  = team === 'away' ? G.awayScore      : G.homeScore;
+  const runsThisHalf = curScore - prevScore;
+
+  // Figure out next batting team and their next 3 batters
+  const nextTeam = team === 'away' ? 'home' : 'away';
+  const nextLineup = G.lineups[nextTeam] || [];
+  const nextIdx = G.lineupIdx[nextTeam] || 0;
+  const next3 = [0, 1, 2].map(i => nextLineup[(nextIdx + i) % nextLineup.length]).filter(Boolean);
+
+  // Inning label
+  const halfLabel = G.half === 'top' ? 'TOP' : 'BOTTOM';
+  const inningLabel = ['1ST','2ND','3RD','4TH','5TH','6TH','7TH','8TH','9TH'][G.inning - 1] || (G.inning + 'TH');
+  document.getElementById('half-end-title').textContent = `${halfLabel} ${inningLabel} — OVER`;
+  document.getElementById('half-end-score').textContent =
+    `${G.awayTeam.short} ${G.awayScore}  –  ${G.homeScore} ${G.homeTeam.short}`;
+
+  // Stats cells
+  function setCell(id, val, lbl) {
+    document.getElementById(id).innerHTML =
+      `<div class="hes-val">${val}</div><div class="hes-lbl">${lbl}</div>`;
+  }
+  setCell('hes-runs',    runsThisHalf,         'RUNS');
+  setCell('hes-hits',    G.halfInningHits,      'HITS');
+  setCell('hes-errors',  G.halfInningErrors,    'ERRORS');
+  setCell('hes-pitches', G.halfInningPitches,   'PITCHES');
+
+  // Next 3 batters
+  const nextTeamShort = nextTeam === 'away' ? G.awayTeam.short : G.homeTeam.short;
+  document.getElementById('half-end-batting-label').textContent =
+    `${nextTeamShort} UP NEXT`;
+  const bDiv = document.getElementById('half-end-batters');
+  bDiv.innerHTML = '';
+  next3.forEach((p) => {
+    const pid = p.pid || p.id || p.name;
+    const pStats = (G.playerStats[nextTeam] && G.playerStats[nextTeam][pid]) || {};
+    const h = pStats.h || 0, ab = pStats.ab || 0;
+    const row = document.createElement('div');
+    row.className = 'half-end-batter-row';
+    row.innerHTML = `
+      <div class="half-end-batter-num">#${p.num || '?'}</div>
+      <div class="half-end-batter-name">${p.name || 'Player'}</div>
+      <div class="half-end-batter-stats">${h}-${ab}</div>
+    `;
+    bDiv.appendChild(row);
+  });
+
+  // Show overlay
+  const overlay = document.getElementById('half-end-overlay');
+  overlay.style.display = 'flex';
+}
+
+function doHalfInningSwitch() {
+  document.getElementById('half-end-overlay').style.display = 'none';
+
   const team = battingTeam();
   const prevScore = team === 'away' ? G._prevAwayScore : G._prevHomeScore;
-  const curScore = team === 'away' ? G.awayScore : G.homeScore;
+  const curScore  = team === 'away' ? G.awayScore      : G.homeScore;
   const runsThisHalf = curScore - prevScore;
 
   if (team === 'away') {
@@ -3004,12 +3273,14 @@ function endHalfInning() {
     G._prevHomeScore = G.homeScore;
   }
 
-  // Switch sides
-  G.runners = { 1: null, 2: null, 3: null };
-  G.balls = 0;
-  G.strikes = 0;
-  G.outs = 0;
+  G.runners  = { 1: null, 2: null, 3: null };
+  G.balls    = 0;
+  G.strikes  = 0;
+  G.outs     = 0;
   G.selectedRunner = null;
+  G.halfInningPitches = 0;
+  G.halfInningHits    = 0;
+  G.halfInningErrors  = 0;
 
   if (G.half === 'top') {
     G.half = 'bottom';
@@ -3021,6 +3292,7 @@ function endHalfInning() {
   renderAll();
   saveScore();
 }
+window.doHalfInningSwitch = doHalfInningSwitch;
 
 // ===== TRIGGER HR =====
 function triggerHR(batter, sid, team, isItphr) {
@@ -3177,7 +3449,11 @@ function snapshotState() {
     runners: JSON.parse(JSON.stringify(G.runners)),
     lineupIdx: { ...G.lineupIdx },
     playerStats: JSON.parse(JSON.stringify(G.playerStats)),
+    pitchers: JSON.parse(JSON.stringify(G.pitchers)),
+    pitcherStats: JSON.parse(JSON.stringify(G.pitcherStats)),
+    playLog: JSON.parse(JSON.stringify(G.playLog)),
     _prevAwayScore: G._prevAwayScore, _prevHomeScore: G._prevHomeScore,
+    halfInningPitches: G.halfInningPitches, halfInningHits: G.halfInningHits, halfInningErrors: G.halfInningErrors,
   }));
   if (G.plays.length > 50) G.plays.shift();
 }
@@ -3190,7 +3466,13 @@ function undoLast() {
   G.awayScore = snap.awayScore; G.homeScore = snap.homeScore;
   G.runners = snap.runners; G.lineupIdx = snap.lineupIdx;
   G.playerStats = snap.playerStats;
+  if (snap.pitchers)     G.pitchers = snap.pitchers;
+  if (snap.pitcherStats) G.pitcherStats = snap.pitcherStats;
+  if (snap.playLog)      G.playLog = snap.playLog;
   G._prevAwayScore = snap._prevAwayScore; G._prevHomeScore = snap._prevHomeScore;
+  if (snap.halfInningPitches !== undefined) G.halfInningPitches = snap.halfInningPitches;
+  if (snap.halfInningHits    !== undefined) G.halfInningHits    = snap.halfInningHits;
+  if (snap.halfInningErrors  !== undefined) G.halfInningErrors  = snap.halfInningErrors;
   G.selectedRunner = null;
   closeAllSheets();
   renderAll();
@@ -3270,45 +3552,60 @@ function renderBipContent() {
     const typeLabel = {gb:'Ground Ball',hgb:'Hard Ground Ball',fb:'Fly Ball',ld:'Line Drive',bunt:'Bunt',pf:'Pop Fly'}[bipContactType];
     document.getElementById('bip-title').textContent = typeLabel;
 
+    // Runner/out context for conditional options
+    const runnersOnBase = [1,2,3].filter(b => G.runners[b]).length;
+    const hasRunner  = runnersOnBase >= 1;
+    const canDP      = hasRunner;                          // need ≥1 runner for DP
+    const canTP      = runnersOnBase >= 2 && G.outs === 0; // need ≥2 runners, 0 outs for TP
+
+    const dpOpt = { icon:'DP', cls:'out', label:'Double Play',  result:'doublePlay',  textCls:'out-text' };
+    const tpOpt = { icon:'TP', cls:'out', label:'Triple Play',  result:'triplePlay',  textCls:'out-text' };
+
     let options = [];
 
     if (isGroundBall) {
       options = [
         { icon:'GO', cls:'out',  label:'Out at 1st',           result:'groundout',        textCls:'out-text' },
+        ...(canDP ? [dpOpt] : []),
+        ...(canTP ? [tpOpt] : []),
         { icon:'FC', cls:'warn', label:"Fielder's Choice",     result:'fielderscChoice',  textCls:'warn-text' },
         { icon:'1B', cls:'safe', label:'Single',               result:'single',           textCls:'safe-text' },
-        { icon:'2B', cls:'safe', label:'Double',            result:'double',           textCls:'safe-text' },
-        { icon:'3B', cls:'safe', label:'Triple',            result:'triple',           textCls:'safe-text' },
-        { icon:'E',  cls:'warn', label:'Error',             result:'error',            textCls:'warn-text' },
-        { icon:'HR', cls:'safe', label:'In-the-park HR',    result:'itphr',            textCls:'safe-text' },
-        { icon:'F',  cls:'warn', label:'Foul Ball',         result:null,               textCls:'warn-text', action:'foul' },
-        { icon:'BI', cls:'out',  label:'Batter Interference', result:'batterinterference', textCls:'out-text' },
+        { icon:'2B', cls:'safe', label:'Double',               result:'double',           textCls:'safe-text' },
+        { icon:'3B', cls:'safe', label:'Triple',               result:'triple',           textCls:'safe-text' },
+        { icon:'E',  cls:'warn', label:'Error',                result:'error',            textCls:'warn-text' },
+        { icon:'HR', cls:'safe', label:'In-the-park HR',       result:'itphr',            textCls:'safe-text' },
+        { icon:'F',  cls:'warn', label:'Foul Ball',            result:null,               textCls:'warn-text', action:'foul' },
+        { icon:'BI', cls:'out',  label:'Batter Interference',  result:'batterinterference', textCls:'out-text' },
       ];
     } else if (isBunt) {
       options = [
-        { icon:'BO', cls:'out', label:'Batter Out', result:'bunt-out', textCls:'out-text' },
-        { icon:'FC', cls:'warn', label:"Fielder's Choice", result:'fielderscChoice', textCls:'warn-text' },
-        { icon:'F', cls:'warn', label:'Foul Ball', result:null, textCls:'warn-text', action:'foul' },
-        { icon:'1B', cls:'safe', label:'Single', result:'single', textCls:'safe-text' },
-        { icon:'E', cls:'warn', label:'Error', result:'error', textCls:'warn-text' },
-        { icon:'BI', cls:'out', label:'Batter Interference', result:'batterinterference', textCls:'out-text' },
-        { icon:'2B', cls:'safe', label:'Double', result:'double', textCls:'safe-text' },
-        { icon:'3B', cls:'safe', label:'Triple', result:'triple', textCls:'safe-text' },
-        { icon:'PFE', cls:'warn', label:'Pop Foul + Error', result:'error', textCls:'warn-text' },
-        { icon:'HR', cls:'safe', label:'ITPHR', result:'itphr', textCls:'safe-text' },
+        { icon:'BO', cls:'out',  label:'Batter Out',           result:'bunt-out',         textCls:'out-text' },
+        ...(canDP ? [dpOpt] : []),
+        ...(canTP ? [tpOpt] : []),
+        { icon:'FC', cls:'warn', label:"Fielder's Choice",     result:'fielderscChoice',  textCls:'warn-text' },
+        { icon:'F',  cls:'warn', label:'Foul Ball',            result:null,               textCls:'warn-text', action:'foul' },
+        { icon:'1B', cls:'safe', label:'Single',               result:'single',           textCls:'safe-text' },
+        { icon:'E',  cls:'warn', label:'Error',                result:'error',            textCls:'warn-text' },
+        { icon:'BI', cls:'out',  label:'Batter Interference',  result:'batterinterference', textCls:'out-text' },
+        { icon:'2B', cls:'safe', label:'Double',               result:'double',           textCls:'safe-text' },
+        { icon:'3B', cls:'safe', label:'Triple',               result:'triple',           textCls:'safe-text' },
+        { icon:'PFE',cls:'warn', label:'Pop Foul + Error',     result:'error',            textCls:'warn-text' },
+        { icon:'HR', cls:'safe', label:'ITPHR',                result:'itphr',            textCls:'safe-text' },
       ];
     } else if (isFlyType) {
       options = [
-        { icon:'FO', cls:'out', label:'Batter Out', result:null, textCls:'out-text', drilldown:'flyout-who' },
-        { icon:'FC', cls:'warn', label:"Fielder's Choice", result:'fielderscChoice', textCls:'warn-text' },
-        { icon:'1B', cls:'safe', label:'Single', result:'single', textCls:'safe-text' },
-        { icon:'2B', cls:'safe', label:'Double', result:'double', textCls:'safe-text' },
-        { icon:'3B', cls:'safe', label:'Triple', result:'triple', textCls:'safe-text' },
-        { icon:'HR', cls:'safe', label:'Home Run', result:'homerun', textCls:'safe-text' },
-        { icon:'HR', cls:'safe', label:'In-the-park HR', result:'itphr', textCls:'safe-text' },
-        { icon:'E', cls:'warn', label:'Error', result:'error', textCls:'warn-text' },
-        { icon:'F', cls:'warn', label:'Foul Ball', result:null, textCls:'warn-text', action:'foul' },
-        { icon:'FE', cls:'warn', label:'Foul Ball + Error', result:'error', textCls:'warn-text' },
+        { icon:'FO', cls:'out',  label:'Batter Out',           result:null,               textCls:'out-text', drilldown:'flyout-who' },
+        ...(canDP ? [dpOpt] : []),
+        ...(canTP ? [tpOpt] : []),
+        { icon:'FC', cls:'warn', label:"Fielder's Choice",     result:'fielderscChoice',  textCls:'warn-text' },
+        { icon:'1B', cls:'safe', label:'Single',               result:'single',           textCls:'safe-text' },
+        { icon:'2B', cls:'safe', label:'Double',               result:'double',           textCls:'safe-text' },
+        { icon:'3B', cls:'safe', label:'Triple',               result:'triple',           textCls:'safe-text' },
+        { icon:'HR', cls:'safe', label:'Home Run',             result:'homerun',          textCls:'safe-text' },
+        { icon:'HR', cls:'safe', label:'In-the-park HR',       result:'itphr',            textCls:'safe-text' },
+        { icon:'E',  cls:'warn', label:'Error',                result:'error',            textCls:'warn-text' },
+        { icon:'F',  cls:'warn', label:'Foul Ball',            result:null,               textCls:'warn-text', action:'foul' },
+        { icon:'FE', cls:'warn', label:'Foul Ball + Error',    result:'error',            textCls:'warn-text' },
       ];
     }
 
@@ -3321,6 +3618,7 @@ function renderBipContent() {
           closeBipSheet();
           showFielderOverlay('flyout');
         } else if (opt.action === 'foul') {
+          snapshotState();
           closeBipSheet();
           if (G.strikes < 2) G.strikes++;
           renderAll();
@@ -3330,6 +3628,8 @@ function renderBipContent() {
           closeBipSheet();
           showFielderOverlay('hit');
         } else if (opt.result) {
+          snapshotState();
+          G.halfInningPitches++;
           closeBipSheet();
           endAtBat(opt.result);
         }
@@ -3773,6 +4073,7 @@ document.querySelectorAll('.fielder-btn').forEach(btn => {
     const action = fielderAction;
     hideFielderOverlay();
     snapshotState();
+    G.halfInningPitches++;
     if (action === 'hit')     endAtBat(bipHitResult, { location: pos });
     else if (action === 'flyout') endAtBat('flyout', { location: pos });
     else if (action === 'out-go') endAtBat('groundout', { location: pos });
@@ -3782,10 +4083,7 @@ document.querySelectorAll('.fielder-btn').forEach(btn => {
   });
 });
 
-// tap backdrop to cancel
-document.getElementById('fielder-overlay').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('fielder-overlay')) hideFielderOverlay();
-});
+// Fielder overlay backdrop does nothing — user must tap a glove or use UNDO to cancel
 
 // ===== CLOSE ALL SHEETS =====
 function closeAllSheets() {
@@ -3808,12 +4106,15 @@ function openPitchSheet() {
   ];
   pitches.forEach(p => {
     const row = createSheetRow(p.icon, p.cls, p.label, p.color, p.pitch === 'bip');
-    row.addEventListener('click', () => {
+    row.addEventListener('click', (e) => {
+      e.stopPropagation(); // prevent touch bubbling to overlay background on mobile
       const stayOpen = ['ball','called-strike','swing-miss','foul'];
-      if (!stayOpen.includes(p.pitch)) {
-        document.getElementById('pitch-sheet-overlay').style.display = 'none';
-      }
       handlePitch(p.pitch);
+      if (stayOpen.includes(p.pitch)) {
+        // Re-open to refresh count display; endAtBat will close it if needed (e.g. strikeout)
+        const overlay = document.getElementById('pitch-sheet-overlay');
+        if (overlay.style.display !== 'none') openPitchSheet();
+      }
     });
     content.appendChild(row);
   });
@@ -3869,33 +4170,200 @@ function openPlayLogSheet() {
 
 // ===== PLAY EDIT =====
 let _editingPlayIdx = null;
+let _pemNewResult   = null;   // selected new result key
+let _pemNewFielder  = null;   // selected fielder pid/name (for errors)
+
+const PEM_RESULT_OPTIONS = [
+  { key: 'single',    label: '1B  Single',    cls: 'safe' },
+  { key: 'double',    label: '2B  Double',    cls: 'safe' },
+  { key: 'triple',    label: '3B  Triple',    cls: 'safe' },
+  { key: 'homerun',   label: 'HR  Home Run',  cls: 'safe' },
+  { key: 'error',     label: 'E   Error',     cls: 'warn' },
+  { key: 'out',       label: 'OUT  Out',      cls: 'out'  },
+  { key: 'strikeout', label: 'K   Strikeout', cls: 'out'  },
+  { key: 'walk',      label: 'BB  Walk',      cls: 'safe' },
+];
+
+function inferResultKey(resultLabel) {
+  const r = (resultLabel || '').toLowerCase();
+  if (r === 'single' || r === '1b') return 'single';
+  if (r === 'double' || r === '2b') return 'double';
+  if (r === 'triple' || r === '3b') return 'triple';
+  if (r === 'home run' || r === 'hr' || r === 'itphr') return 'homerun';
+  if (r === 'error' || r === 'e') return 'error';
+  if (r === 'k' || r === 'strikeout') return 'strikeout';
+  if (r === 'walk' || r === 'bb' || r === 'hbp') return 'walk';
+  if (r.includes('out') || r.includes('go') || r.includes('fo') || r.includes('po') || r.includes('bo')) return 'out';
+  if (r.includes('double play') || r.includes('dp') || r.includes('triple play') || r.includes('tp')) return 'out';
+  return 'out';
+}
+
+function statsForResult(key) {
+  switch (key) {
+    case 'single':    return { ab:1, h:1, singles:1 };
+    case 'double':    return { ab:1, h:1, doubles:1 };
+    case 'triple':    return { ab:1, h:1, triples:1 };
+    case 'homerun':   return { ab:1, h:1, hr:1 };
+    case 'error':     return { ab:1 };
+    case 'out':       return { ab:1 };
+    case 'strikeout': return { ab:1, so:1 };
+    case 'walk':      return { bb:1 };
+    default:          return {};
+  }
+}
+
+function applyStatDelta(stats, delta, sign) {
+  if (!stats) return;
+  Object.entries(delta).forEach(([k, v]) => {
+    stats[k] = (stats[k] || 0) + sign * v;
+    if (stats[k] < 0) stats[k] = 0;
+  });
+}
+
+function renderPemFielderSection(entry, selectedKey) {
+  const sec = document.getElementById('pem-fielder-section');
+  if (selectedKey !== 'error') { sec.style.display = 'none'; return; }
+
+  // Fielding team = opposite of batting team
+  const fieldingTeamKey = entry.battingTeam === 'away' ? 'home' : 'away';
+  const fieldingLineup  = G.lineups[fieldingTeamKey] || [];
+
+  const container = document.getElementById('pem-fielder-options');
+  container.innerHTML = '';
+  _pemNewFielder = null;
+
+  fieldingLineup.forEach(player => {
+    const btn = document.createElement('button');
+    btn.style.cssText = `font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;
+      padding:7px 10px;border-radius:8px;cursor:pointer;border:2px solid transparent;
+      background:var(--card2);color:var(--text-muted);`;
+    btn.textContent = `#${player.num} ${player.name || ''}`;
+    const bpid = player.pid || player.id || player.name;
+    btn.dataset.pid = bpid;
+    btn.addEventListener('click', () => {
+      _pemNewFielder = { num: player.num, name: player.name, pid: bpid };
+      container.querySelectorAll('button').forEach(b => {
+        b.style.border = '2px solid transparent';
+        b.style.color = 'var(--text-muted)';
+        b.style.background = 'var(--card2)';
+      });
+      btn.style.border = '2px solid var(--orange)';
+      btn.style.color = 'var(--text)';
+      btn.style.background = 'rgba(249,115,22,0.12)';
+    });
+    container.appendChild(btn);
+  });
+
+  sec.style.display = 'block';
+}
+
 function openPlayEdit(idx) {
   _editingPlayIdx = idx;
-  const entry = G.playLog[idx];
-  document.getElementById('pem-player').textContent = `${entry.team} · ${entry.player} · ${entry.inning}`;
-  document.getElementById('pem-result').value = entry.result || '';
+  _pemNewResult   = null;
+  _pemNewFielder  = null;
+
+  const entry      = G.playLog[idx];
+  const currentKey = inferResultKey(entry.result);
+
+  document.getElementById('pem-player').textContent =
+    `${entry.inning}  ·  ${entry.team}  ·  ${entry.player}`;
+  document.getElementById('pem-desc-row').textContent = entry.desc || '';
+
+  const optContainer = document.getElementById('pem-result-options');
+  optContainer.innerHTML = '';
+  PEM_RESULT_OPTIONS.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.style.cssText = `font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:800;
+      padding:7px 12px;border-radius:8px;cursor:pointer;border:2px solid transparent;
+      background:var(--card2);color:var(--text-muted);letter-spacing:0.5px;`;
+    if (opt.key === currentKey) {
+      btn.style.border = '2px solid rgba(255,255,255,0.3)';
+      btn.style.color  = 'var(--text)';
+    }
+    btn.textContent  = opt.label;
+    btn.dataset.key  = opt.key;
+    btn.addEventListener('click', () => {
+      _pemNewResult = opt.key;
+      optContainer.querySelectorAll('button').forEach(b => {
+        b.style.border     = '2px solid transparent';
+        b.style.color      = 'var(--text-muted)';
+        b.style.background = 'var(--card2)';
+      });
+      btn.style.border = opt.cls === 'safe' ? '2px solid var(--green)' :
+                         opt.cls === 'warn' ? '2px solid var(--orange)' : '2px solid var(--red)';
+      btn.style.color      = 'var(--text)';
+      btn.style.background = opt.cls === 'safe' ? 'rgba(34,197,94,0.12)' :
+                             opt.cls === 'warn' ? 'rgba(249,115,22,0.12)' : 'rgba(239,68,68,0.12)';
+      renderPemFielderSection(entry, opt.key);
+    });
+    optContainer.appendChild(btn);
+  });
+
+  document.getElementById('pem-fielder-section').style.display = 'none';
   document.getElementById('pem-desc').value = entry.desc || '';
   document.getElementById('play-edit-overlay').classList.add('open');
 }
+
 document.getElementById('pem-cancel-btn').addEventListener('click', () => {
   document.getElementById('play-edit-overlay').classList.remove('open');
   _editingPlayIdx = null;
+  _pemNewResult   = null;
+  _pemNewFielder  = null;
 });
+
 document.getElementById('pem-save-btn').addEventListener('click', () => {
   if (_editingPlayIdx === null) return;
-  G.playLog[_editingPlayIdx].result = document.getElementById('pem-result').value.trim();
-  G.playLog[_editingPlayIdx].desc = document.getElementById('pem-desc').value.trim();
+  const entry = G.playLog[_editingPlayIdx];
+
+  if (_pemNewResult && _pemNewResult !== inferResultKey(entry.result)) {
+    // Reverse old stat impact
+    const oldKey   = inferResultKey(entry.result);
+    const oldDelta = statsForResult(oldKey);
+    if (entry.pid && entry.battingTeam && G.playerStats[entry.battingTeam]) {
+      const stats = G.playerStats[entry.battingTeam][entry.pid];
+      if (stats) applyStatDelta(stats, oldDelta, -1);
+    }
+
+    // Apply new stat impact
+    const newDelta = statsForResult(_pemNewResult);
+    if (entry.pid && entry.battingTeam && G.playerStats[entry.battingTeam]) {
+      const stats = G.playerStats[entry.battingTeam][entry.pid];
+      if (stats) applyStatDelta(stats, newDelta, +1);
+    }
+
+    // Update result label
+    const labelMap = {
+      single:'Single', double:'Double', triple:'Triple', homerun:'Home Run',
+      error:'Error', out:'Out', strikeout:'K', walk:'Walk'
+    };
+    entry.result = labelMap[_pemNewResult] || _pemNewResult;
+
+    // Update description
+    let newDesc = document.getElementById('pem-desc').value.trim() || entry.desc;
+    if (_pemNewResult === 'error' && _pemNewFielder) {
+      newDesc = `E — Error by #${_pemNewFielder.num} ${_pemNewFielder.name}` +
+                (newDesc && !newDesc.startsWith('E —') ? `. ${newDesc}` : '');
+    }
+    entry.desc = newDesc;
+  } else {
+    // Just update description
+    entry.desc = document.getElementById('pem-desc').value.trim() || entry.desc;
+  }
+
   document.getElementById('play-edit-overlay').classList.remove('open');
   _editingPlayIdx = null;
+  _pemNewResult   = null;
+  _pemNewFielder  = null;
+
   // Re-render wherever the log is visible
-  const plSheet = document.getElementById('playlog-content');
   if (document.getElementById('playlog-sheet-overlay').classList.contains('open')) {
-    renderPlayLogEntries(plSheet);
+    renderPlayLogEntries(document.getElementById('playlog-content'));
   }
   if (document.getElementById('plays-panel').style.display !== 'none') {
     renderPlaysPanel();
   }
   saveScore();
+  saveFullState();
 });
 
 document.getElementById('playlog-close-btn').addEventListener('click', () => {
@@ -4153,14 +4621,72 @@ document.getElementById('gom-continue-btn').addEventListener('click', () => {
   document.getElementById('game-over-overlay').classList.remove('open');
 });
 
-document.getElementById('gom-exit-btn').addEventListener('click', () => {
+document.getElementById('gom-exit-btn').addEventListener('click', async () => {
   document.getElementById('game-over-overlay').classList.remove('open');
-  saveBoxScore();
-  if (G.gameId) updateDoc(doc(db, 'games', G.gameId), { done: true, live: false }).catch(() => {});
+  await saveBoxScore();
+  if (G.gameId && G.gameId !== 'practice') {
+    await updateDoc(doc(db, 'games', G.gameId), {
+      done: true, live: false,
+      away_score: G.awayScore, home_score: G.homeScore
+    }).catch(() => {});
+    deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
+    recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
+  }
   document.getElementById('app').classList.remove('visible');
   document.getElementById('bottom-nav').classList.remove('active');
   document.getElementById('setup-screen').style.display = 'flex';
 });
+
+// Recalculate standings by reading all done games from Firestore
+async function recalcStandingsFromAllGames() {
+  const { collection, getDocs, query, where, updateDoc: upd, doc: firestoreDoc } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+  const gamesSnap = await getDocs(query(collection(db, 'games'), where('done', '==', true)));
+  const teamsSnap = await getDocs(collection(db, 'teams'));
+
+  const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+  const stats = {};
+  allTeams.forEach(t => { stats[t.id] = { w:0, l:0, rs:0, ra:0, results:[] }; });
+
+  const doneGames = gamesSnap.docs.map(d => d.data()).sort((a,b) => (a.wk||0) - (b.wk||0));
+  doneGames.forEach(g => {
+    const as = g.away_score || 0, hs = g.home_score || 0;
+    if (stats[g.away]) {
+      stats[g.away].rs += as; stats[g.away].ra += hs;
+      if (as > hs) { stats[g.away].w++; stats[g.away].results.push('W'); }
+      else if (as < hs) { stats[g.away].l++; stats[g.away].results.push('L'); }
+    }
+    if (stats[g.home]) {
+      stats[g.home].rs += hs; stats[g.home].ra += as;
+      if (hs > as) { stats[g.home].w++; stats[g.home].results.push('W'); }
+      else if (hs < as) { stats[g.home].l++; stats[g.home].results.push('L'); }
+    }
+  });
+
+  let maxWinDiff = -Infinity;
+  Object.values(stats).forEach(s => {
+    s.pct = (s.w + s.l) > 0 ? (s.w / (s.w + s.l)) : 0;
+    const wd = s.w - s.l;
+    if (wd > maxWinDiff) maxWinDiff = wd;
+    const r = s.results;
+    if (r.length > 0) {
+      let last = r[r.length - 1], count = 0;
+      for (let i = r.length - 1; i >= 0 && r[i] === last; i--) count++;
+      s.streak = last + count;
+    } else { s.streak = '-'; }
+  });
+  Object.values(stats).forEach(s => {
+    const diff = maxWinDiff - (s.w - s.l);
+    s.gb = diff === 0 ? '-' : (diff / 2).toString();
+  });
+
+  for (const t of allTeams) {
+    const s = stats[t.id]; if (!s) continue;
+    await upd(firestoreDoc(db, 'teams', t.id), {
+      w: s.w, l: s.l, pct: parseFloat(s.pct.toFixed(3)),
+      rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
+    }).catch(() => {});
+  }
+}
 
 function exportBoxScorePDF() {
   const away = G.awayTeam.name || G.awayTeam.short;
@@ -4425,17 +4951,53 @@ async function loadRosters(awayTeamId, homeTeamId) {
 
 // ===== SAVE SCORE =====
 async function saveScore() {
-  if (!G.gameId) return;
+  if (!G.gameId || G.gameId === 'practice') return;
   try {
     await updateDoc(doc(db, 'games', G.gameId), {
       away_score: G.awayScore,
       home_score: G.homeScore,
       live: true,
+      liveAt: serverTimestamp(),
       inning: G.inning,
       half: G.half,
     });
+    // Also save full state so page refresh restores everything
+    saveFullState();
   } catch (err) {
     console.warn('saveScore error:', err);
+  }
+}
+
+async function saveFullState() {
+  if (!G.gameId || G.gameId === 'practice') return;
+  try {
+    await setDoc(doc(db, 'game_states', G.gameId), {
+      savedAt: serverTimestamp(),
+      inning: G.inning,
+      half: G.half,
+      outs: G.outs,
+      balls: G.balls,
+      strikes: G.strikes,
+      awayScore: G.awayScore,
+      homeScore: G.homeScore,
+      runners: G.runners,
+      lineupIdx: G.lineupIdx,
+      lineups: G.lineups,
+      linescores: G.linescores,
+      playerStats: G.playerStats,
+      pitchers: G.pitchers,
+      pitcherStats: G.pitcherStats,
+      playLog: (G.playLog || []).slice(0, 150),
+      _prevAwayScore: G._prevAwayScore,
+      _prevHomeScore: G._prevHomeScore,
+      halfInningPitches: G.halfInningPitches || 0,
+      halfInningHits: G.halfInningHits || 0,
+      halfInningErrors: G.halfInningErrors || 0,
+      awayTeam: G.awayTeam,
+      homeTeam: G.homeTeam,
+    });
+  } catch (err) {
+    console.warn('saveFullState error:', err);
   }
 }
 
@@ -4443,17 +5005,46 @@ async function saveScore() {
 async function saveBoxScore() {
   if (!G.gameId) return;
   try {
+    // Convert G.playerStats[side][pid] + G.lineups[side] into lineup arrays
+    // that index.html's stats aggregation expects: [{name, num, pos, ab, r, s, d, t, hr, rbi, bb, so}]
+    function buildLineupArray(side) {
+      const lineup = G.lineups[side] || [];
+      const stats = G.playerStats[side] || {};
+      return lineup.map(player => {
+        const pid = player.pid || player.id;
+        const ps = stats[pid] || {};
+        return {
+          name: player.name,
+          num: player.num || '?',
+          pos: player.pos || '',
+          ab:  ps.ab  || 0,
+          r:   ps.r   || 0,
+          s:   ps.singles || 0,
+          d:   ps.doubles || 0,
+          t:   ps.triples || 0,
+          hr:  ps.hr  || 0,
+          h:   (ps.singles||0) + (ps.doubles||0) + (ps.triples||0) + (ps.hr||0),
+          rbi: ps.rbi || 0,
+          bb:  ps.bb  || 0,
+          so:  ps.so  || 0,
+        };
+      }).filter(p => p.ab > 0 || p.bb > 0); // only players who batted
+    }
+
     await setDoc(doc(db, 'box_scores', G.gameId), {
-      gameId: G.gameId,
-      awayScore: G.awayScore,
-      homeScore: G.homeScore,
-      inning: G.inning,
-      linescores: G.linescores,
-      playerStats: G.playerStats,
-      pitcherStats: G.pitcherStats,
-      awayTeam: G.awayTeam,
-      homeTeam: G.homeTeam,
-      createdAt: new Date().toISOString(),
+      game_id:      G.gameId,
+      away:         G.awayTeam.id,
+      home:         G.homeTeam.id,
+      away_score:   G.awayScore,
+      home_score:   G.homeScore,
+      inning:       G.inning,
+      linescores:   G.linescores,
+      away_lineup:  buildLineupArray('away'),
+      home_lineup:  buildLineupArray('home'),
+      away_pitchers: G.pitcherStats?.away ? Object.values(G.pitcherStats.away) : [],
+      home_pitchers: G.pitcherStats?.home ? Object.values(G.pitcherStats.home) : [],
+      status:       'final',
+      created_at:   new Date().toISOString(),
     });
   } catch (err) {
     console.warn('saveBoxScore error:', err);
@@ -4497,21 +5088,65 @@ document.getElementById('start-btn').addEventListener('click', async () => {
   // Load rosters
   await loadRosters(awayId, homeId);
 
-  // Reset state
-  G.inning = 1; G.half = 'top';
-  G.outs = 0; G.balls = 0; G.strikes = 0;
-  G.awayScore = 0; G.homeScore = 0;
-  G.runners = { 1: null, 2: null, 3: null };
-  G.lineupIdx = { away: 0, home: 0 };
-  G.linescores = { away: [], home: [] };
-  G.plays = [];
-  G.selectedRunner = null;
-  G.playerStats = { away: {}, home: {} };
-  G._prevAwayScore = 0; G._prevHomeScore = 0;
+  // Check for a saved mid-game state
+  let resumed = false;
+  try {
+    const stateSnap = await getDoc(doc(db, 'game_states', gameId));
+    if (stateSnap.exists()) {
+      const s = stateSnap.data();
+      G.inning     = s.inning     ?? 1;
+      G.half       = s.half       ?? 'top';
+      G.outs       = s.outs       ?? 0;
+      G.balls      = s.balls      ?? 0;
+      G.strikes    = s.strikes    ?? 0;
+      G.awayScore  = s.awayScore  ?? 0;
+      G.homeScore  = s.homeScore  ?? 0;
+      G.runners    = s.runners    ?? { 1: null, 2: null, 3: null };
+      G.lineupIdx  = s.lineupIdx  ?? { away: 0, home: 0 };
+      if (s.lineups) G.lineups    = s.lineups;
+      G.linescores = s.linescores ?? { away: [], home: [] };
+      G.playerStats   = s.playerStats   ?? { away: {}, home: {} };
+      G.pitchers      = s.pitchers      ?? { away: null, home: null };
+      G.pitcherStats  = s.pitcherStats  ?? { away: {}, home: {} };
+      G.playLog       = s.playLog       ?? [];
+      G._prevAwayScore    = s._prevAwayScore    ?? 0;
+      G._prevHomeScore    = s._prevHomeScore    ?? 0;
+      G.halfInningPitches = s.halfInningPitches ?? 0;
+      G.halfInningHits    = s.halfInningHits    ?? 0;
+      G.halfInningErrors  = s.halfInningErrors  ?? 0;
+      G.plays = [];
+      G.selectedRunner = null;
+      resumed = true;
+    }
+  } catch (err) {
+    console.warn('Could not load saved state:', err);
+  }
 
-  // Show lineup screen before scoring starts
-  document.getElementById('setup-screen').style.display = 'none';
-  showLineupScreen();
+  if (resumed) {
+    // Jump straight back into scoring — no lineup screen needed
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    document.getElementById('bottom-nav').classList.add('active');
+    renderAll();
+    saveScore();
+    // Show a brief "Resumed" flash
+    setTimeout(() => flashFeedback('RESUMED', 'var(--gold)'), 300);
+  } else {
+    // Fresh game — reset state and show lineup screen
+    G.inning = 1; G.half = 'top';
+    G.outs = 0; G.balls = 0; G.strikes = 0;
+    G.awayScore = 0; G.homeScore = 0;
+    G.runners = { 1: null, 2: null, 3: null };
+    G.lineupIdx = { away: 0, home: 0 };
+    G.linescores = { away: [], home: [] };
+    G.plays = [];
+    G.selectedRunner = null;
+    G.playerStats = { away: {}, home: {} };
+    G._prevAwayScore = 0; G._prevHomeScore = 0;
+
+    document.getElementById('setup-screen').style.display = 'none';
+    showLineupScreen();
+  }
 });
 
 // ===== PRACTICE MODE =====
@@ -4543,8 +5178,31 @@ document.getElementById('practice-btn').addEventListener('click', () => {
   showLineupScreen();
 });
 
+// ===== HALF-INNING END OVERLAY BUTTONS =====
+document.getElementById('half-end-switch-btn').addEventListener('click', doHalfInningSwitch);
+document.getElementById('half-end-cancel-btn').addEventListener('click', () => {
+  document.getElementById('half-end-overlay').style.display = 'none';
+  undoLast();
+});
+
 // ===== INIT =====
 loadGames();
+
+// ===== CLEAR LIVE FLAG ON TAB CLOSE / HIDE =====
+function clearLiveFlag() {
+  if (G.gameId) {
+    // Use sendBeacon for reliable delivery on page unload
+    const url = `https://firestore.googleapis.com/v1/projects/dvsl-292dd/databases/(default)/documents/games/${G.gameId}?updateMask.fieldPaths=live`;
+    // Best-effort: use navigator.sendBeacon if available, fallback to sync XHR
+    try {
+      updateDoc(doc(db, 'games', G.gameId), { live: false }).catch(() => {});
+    } catch(e) {}
+  }
+}
+window.addEventListener('beforeunload', clearLiveFlag);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') clearLiveFlag();
+});
 
 </script>
 </body>

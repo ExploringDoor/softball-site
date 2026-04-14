@@ -34,6 +34,10 @@ nav { position: fixed; top: 48px; left: 0; right: 0; z-index: 400; height: 62px;
 .nav-dd-item { display: block; padding: 8px 14px; border-radius: 7px; font-size: 12px; font-weight: 600; color: var(--muted); text-decoration: none; transition: background .12s, color .12s; white-space: nowrap; }
 .nav-dd-item:hover { background: rgba(0,87,216,.07); color: #0057d8; }
 .nav-dd-arrow { width: 9px; height: 6px; margin-left: 4px; vertical-align: middle; opacity: .6; }
+.nav-right { display: flex; align-items: center; gap: 12px; }
+.nav-signup-btn { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; background: var(--gold); color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer; transition: all .2s; }
+.nav-signup-btn:hover { background: #003d99; transform: translateY(-1px); }
+body.dark .nav-signup-btn { background: #5b9aff !important; }
 .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; background: none; border: none; padding: 4px; }
 .hamburger span { display: block; width: 22px; height: 2px; background: var(--white); border-radius: 2px; transition: all .3s; }
 .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
@@ -176,6 +180,10 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
       </div>
     </li>
   </ul>
+  <div class="nav-right">
+    <button class="nav-signup-btn" onclick="window.location='notifications.html'">🔔 Alerts</button>
+    <button id="darkToggle" onclick="toggleDarkMode()" style="background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;transition:all .2s" title="Toggle dark mode">🌙</button>
+  </div>
 </nav>
 <button class="hamburger" id="hbg" style="position:fixed;top:58px;right:14px;z-index:600;display:none;background:rgba(0,0,0,.55);border-radius:7px;padding:8px 10px"><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span></button>
 <div class="mob-menu" id="mobMenu">
@@ -220,6 +228,20 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
 </footer>
 
 <script>
+function toggleDarkMode() {
+  document.body.classList.toggle('dark');
+  const isDark = document.body.classList.contains('dark');
+  localStorage.setItem('dvsl-dark', isDark ? '1' : '0');
+  document.getElementById('darkToggle').textContent = isDark ? '☀️' : '🌙';
+}
+(function() {
+  if (localStorage.getItem('dvsl-dark') === '1') {
+    document.body.classList.add('dark');
+    const btn = document.getElementById('darkToggle');
+    if (btn) btn.textContent = '☀️';
+  }
+})();
+
 // ============ FIREBASE CONFIG ============
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -406,6 +428,18 @@ function getTopPlayers(cat, limit) {
 
 function renderUI() {
   const contentEl = document.getElementById('content');
+
+  // No stats yet — season hasn't started
+  const hasStats = allPlayers.some(p => p.ab > 0);
+  if (!hasStats) {
+    contentEl.innerHTML = `
+      <div style="text-align:center;padding:80px 20px">
+        <div style="font-size:52px;margin-bottom:16px">⚾</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;text-transform:uppercase;letter-spacing:.05em;color:#1a1a1a">Season Hasn't Started Yet</div>
+        <div style="font-size:15px;color:#999;margin-top:10px">League leaders will appear here once games are played.</div>
+      </div>`;
+    return;
+  }
 
   // Build leader cards
   let cardsHtml = '<div class="leader-cards">';

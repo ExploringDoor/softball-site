@@ -2801,6 +2801,101 @@ async function loadAllData() {
   }
 }
 
+// ── Refresh volatile data (games, teams, box_scores) every 60 seconds ──────
+async function refreshVolatileData() {
+  try {
+    const db = await getDb();
+    const { collection, getDocs, query, orderBy } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    const [teamsSnap, gamesSnap, bsSnap] = await Promise.all([
+      getDocs(query(collection(db, 'teams'), orderBy('name'))),
+      getDocs(query(collection(db, 'games'), orderBy('wk'))),
+      getDocs(collection(db, 'box_scores'))
+    ]);
+
+    // Rebuild TEAMS
+    const freshTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+    TEAMS = freshTeams.map(t => ({
+      id: t.id, name: t.name, short: t.short, div: t.div, color: t.color,
+      w: t.w||0, l: t.l||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
+      streak: t.streak||'—', rs: t.rs||0, ra: t.ra||0,
+      founded: t.founded, field: t.field
+    })).sort((a,b) => b.pct - a.pct);
+    ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
+
+    // Rebuild SCHEDULE_PREVIEW
+    const freshGames = gamesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    SCHEDULE_PREVIEW = freshGames.map(g => ({
+      id: g.id,
+      wk: g.wk, date: g.date, day: g.day, time: g.time,
+      field: g.field, addr: g.addr||'',
+      away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
+      home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
+      as: g.away_score, hs: g.home_score, done: g.done||false, live: g.live||false
+    })).sort((a,b) => a.wk - b.wk || (a.time||'').localeCompare(b.time||''));
+
+    // Re-aggregate stats from box_scores
+    const freshBS = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const finalBS = freshBS.filter(bs => bs.status === 'final');
+    if (finalBS.length > 0) {
+      const batMap = {};
+      for (const bs of finalBS) {
+        const sides = [
+          { lineup: bs.away_lineup || bs.awayLineup, team: bs.away },
+          { lineup: bs.home_lineup || bs.homeLineup, team: bs.home },
+        ];
+        for (const { lineup, team: sid } of sides) {
+          if (!Array.isArray(lineup)) continue;
+          for (const p of lineup) {
+            const nm = (p.name || '').trim(); if (!nm) continue;
+            const key = nm.toLowerCase() + '||' + (sid || '');
+            if (!batMap[key]) batMap[key] = { name: nm, team: sid, gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
+            const b = batMap[key];
+            b.gp++;
+            b.ab += parseInt(p.ab)||0; b.r  += parseInt(p.r)||0;
+            b.s  += parseInt(p.s)||0;  b.d  += parseInt(p.d)||0;
+            b.tri+= parseInt(p.t)||0;  b.hr += parseInt(p.hr)||0;
+            b.rbi+= parseInt(p.rbi)||0;b.bb += parseInt(p.bb)||0;
+            b.so += parseInt(p.so)||0;
+          }
+        }
+      }
+      // Overlay aggregated stats onto PLAYERS
+      for (const [key, b] of Object.entries(batMap)) {
+        const tH = b.s + b.d + b.tri + b.hr;
+        const tAB = b.ab;
+        const avg = tAB > 0 ? Math.round((tH / tAB) * 1000) / 1000 : 0;
+        const slg = tAB > 0 ? Math.round(((tH + b.hr) / tAB) * 1000) / 1000 : 0;
+        const obp = (tAB + b.bb) > 0 ? Math.round(((tH + b.bb) / (tAB + b.bb)) * 1000) / 1000 : 0;
+        const pl = PLAYERS.find(p => {
+          if (p.team !== b.team) return false;
+          return p.name.toLowerCase() === b.name.toLowerCase();
+        });
+        if (pl) {
+          pl.ab = tAB; pl.h = tH; pl.hr = b.hr; pl.rbi = b.rbi;
+          pl.r = b.r; pl.bb = b.bb; pl.d = b.d; pl.t = b.tri;
+          pl.gp = b.gp; pl.avg = avg; pl.slg = slg;
+          pl.ops = Math.round((slg + obp) * 1000) / 1000;
+        }
+      }
+      PLAYERS.sort((a, b) => b.avg - a.avg);
+    }
+
+    // Rebuild UI components that depend on volatile data
+    try { buildTicker(); } catch(e) {}
+    try { buildTicker2(); } catch(e) {}
+    try { buildStandings(); } catch(e) {}
+    try { buildSchedule(); } catch(e) {}
+    try { buildLeaderboard(); } catch(e) {}
+    // Re-render current page if it's scores
+    const activePage = document.querySelector('.page.active');
+    if (activePage && activePage.id === 'scores-page') {
+      try { buildScoresNav(); renderScores(); } catch(e) {}
+    }
+  } catch(err) {
+    console.warn('refreshVolatileData failed:', err);
+  }
+}
+
 // Fallback hardcoded data in case Supabase is unreachable
 function loadFallbackData() {
   TEAMS = [
@@ -3471,42 +3566,51 @@ function buildSchedule(){
 
 // ════════════════════════════ LEADERBOARD ════════════════════════════════
 function buildLeaderboard(){
-  // OBP = (H+BB)/(AB+BB) approx
+  const grid = document.getElementById('ldr-grid');
+  if (!grid) return;
+
+  // Only show players who have actually batted
   PLAYERS.forEach(p=>{ p.obp = p.ab+p.bb>0 ? (p.h+p.bb)/(p.ab+p.bb) : 0; });
-  // ERA proxy: lower rbi against = better; use inverse of rbi as ERA seed
-  const eraBase = [...PLAYERS].map((p,i)=>({...p, era: parseFloat((1.8+(i*1.3)%4.5).toFixed(2))}));
+  const activePlayers = PLAYERS.filter(p => p.ab > 0);
+
+  // No stats yet — season hasn't started
+  if (!activePlayers.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px">
+      <div style="font-size:48px;margin-bottom:16px">⚾</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:#1a1a1a;letter-spacing:.05em;text-transform:uppercase">Season Hasn't Started Yet</div>
+      <div style="font-size:14px;color:rgba(0,0,0,.45);margin-top:8px">League leaders will appear here once games are played.</div>
+    </div>`;
+    return;
+  }
+
   const cats=[
-    {label:'Batting Avg',  key:'avg', fmt:p=>avg(p.avg),           players:PLAYERS},
-    {label:'Home Runs',    key:'hr',  fmt:p=>p.hr,                  players:PLAYERS},
-    {label:'RBI',          key:'rbi', fmt:p=>p.rbi,                 players:PLAYERS},
-    {label:'Runs',         key:'r',   fmt:p=>p.r,                   players:PLAYERS},
-    {label:'Hits',         key:'h',   fmt:p=>p.h,                   players:PLAYERS},
-    {label:'OBP',          key:'obp', fmt:p=>p.obp.toFixed(3).replace(/^0/,''), players:PLAYERS},
-    {label:'ERA',          key:'era', fmt:p=>p.era.toFixed(2),      players:eraBase, lowerBetter:true},
+    {label:'Batting Avg',  key:'avg', fmt:p=>avg(p.avg),                          min:p=>p.ab>0},
+    {label:'Home Runs',    key:'hr',  fmt:p=>p.hr,                                 min:p=>p.ab>0},
+    {label:'RBI',          key:'rbi', fmt:p=>p.rbi,                                min:p=>p.ab>0},
+    {label:'Runs',         key:'r',   fmt:p=>p.r,                                  min:p=>p.ab>0},
+    {label:'Hits',         key:'h',   fmt:p=>p.h,                                  min:p=>p.ab>0},
+    {label:'OBP',          key:'obp', fmt:p=>p.obp.toFixed(3).replace(/^0/,''),    min:p=>p.ab+p.bb>0},
   ];
-  document.getElementById('ldr-grid').innerHTML=cats.map((cat,ci)=>{
-    const plist = cat.players || PLAYERS;
-    const sorted=[...plist].sort((a,b)=>cat.lowerBetter?(a[cat.key]-b[cat.key]):(b[cat.key]-a[cat.key]));
-    const top=sorted[0]; const t=getTeam(top.team);
-    // Use player index as seed for stable random headshot
-    const pidx = PLAYERS.indexOf(top);
-    const seed = 200 + (pidx * 7); // baseball-ish portrait seeds
+  grid.innerHTML=cats.map((cat,ci)=>{
+    const eligible=[...activePlayers].filter(cat.min).sort((a,b)=>b[cat.key]-a[cat.key]);
+    if(!eligible.length) return '';
+    const top=eligible[0]; const t=getTeam(top.team);
     return `<div class="ldr-card ${ci===0?'gold':''}" onclick="openModal('${top.id}')">
       <div class="ldr-cat">${cat.label}</div>
       <div class="ldr-ghost">#1</div>
       <div class="ldr-headshot-wrap">
-        <img class="ldr-headshot" src="https://randomuser.me/api/portraits/men/${pidx % 70}.jpg" alt="${top.name}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(top.name)}&background=1a1a2e&color=F5C842&size=72'">
+        <div class="ldr-headshot" style="display:flex;align-items:center;justify-content:center;background:${t?.color||'#1a1a2e'};color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:28px;border-radius:50%">${top.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
         <div class="ldr-headshot-info">
           <div class="ldr-val" style="font-size:42px;line-height:1">${cat.fmt(top)}</div>
           <div class="ldr-name" style="font-size:15px">${top.name}</div>
           <div class="ldr-team">${t?.name||''}</div>
         </div>
       </div>
-      <div class="ldr-runners">${sorted.slice(1,6).map((p,j)=>{
+      <div class="ldr-runners">${eligible.slice(1,6).map((p,j)=>{
         return `<div class="rrow"><span class="rpos">${j+2}</span><span class="rname" onclick="event.stopPropagation();openModal('${p.id}')">${p.name.split(' ').pop()}</span><span class="rval">${cat.fmt(p)}</span></div>`;
       }).join('')}</div>
     </div>`;
-  }).join('');
+  }).filter(Boolean).join('');
 }
 
 // ════════════════════════════ PLAYER GRID ════════════════════════════════
@@ -4142,6 +4246,8 @@ window._dataPromise.then(() => {
   loadSiteBanner();
   setTimeout(checkActiveAlert, 800);
   setTimeout(observeAll, 100);
+  // Refresh volatile data (scores, standings, schedule) every 60 seconds
+  setInterval(refreshVolatileData, 60000);
 });
 
 async function checkActiveAlert(){
