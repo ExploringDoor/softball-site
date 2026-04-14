@@ -497,8 +497,8 @@ body.dark .bat-tbl tr.career-row td{background:rgba(91,154,255,.07)}
 .col-team-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
 .team-name-abbr{display:none}
 @media(max-width:700px){.team-name-full{display:none}.team-name-abbr{display:inline}}
-.stand-name-abbr{display:none}
-@media(max-width:900px){.stand-name-full{display:none!important}.stand-name-abbr{display:inline!important}}
+.stand-name-full{display:none}
+.stand-name-abbr{display:inline}
 .stat-hi{color:var(--gold);font-weight:700}
 .stats-table tfoot td{padding:10px 14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);font-style:italic}
 body.dark .pt-btn{color:rgba(237,237,237,.4)!important}body.dark .pt-btn.active{color:#ededed!important;border-color:#5b9aff!important}
@@ -5610,6 +5610,38 @@ async function openBox(away,home,as,hs,field,date,gameId){
     const aE = boxScore.away_errors || 0;
     const hE = boxScore.home_errors || 0;
 
+    // ── Player of the Game banner (top of box score) ──
+    if (boxScore.potg_name) {
+      const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===boxScore.potg_team||x.short===boxScore.potg_team);return t?.name||boxScore.potg_team||'';})();
+      const allLineup=[...aLineup,...hLineup];
+      const potgLower=boxScore.potg_name.toLowerCase();
+      const potgEntry=allLineup.find(p=>p.name?.toLowerCase()===potgLower)||allLineup.find(p=>{
+        if(!p.name) return false;
+        const nP=p.name.toLowerCase().split(/\s+/), pP=potgLower.split(/\s+/);
+        if(nP.length<2||pP.length<2) return false;
+        const nLast=nP.slice(1).join(' '), pLast=pP.slice(1).join(' ');
+        return nLast===pLast&&(nP[0][0]===pP[0][0]||nP[0].replace(/\./g,'')===pP[0][0]);
+      });
+      let potgStatLine='';
+      if(potgEntry){
+        const ph=potgEntry.h||((potgEntry.s||0)+(potgEntry.d||0)+(potgEntry.t||0)+(potgEntry.hr||0));
+        const sp=[];
+        if(ph) sp.push(`${ph}H`);
+        if(potgEntry.hr) sp.push(`${potgEntry.hr} HR`);
+        if(potgEntry.rbi) sp.push(`${potgEntry.rbi} RBI`);
+        if(potgEntry.r) sp.push(`${potgEntry.r} R`);
+        if(sp.length) potgStatLine=`Batting · ${sp.join(', ')}`;
+      }
+      bodyHtml += `<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+        <span style="font-size:30px;flex-shrink:0">⭐</span>
+        <div style="min-width:0">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#92400e;margin-bottom:3px">Player of the Game</div>
+          <div style="font-size:17px;font-weight:800;color:#1a1a1a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${boxScore.potg_name}</div>
+          <div style="font-size:12px;color:#555;margin-top:3px">${potgTeamName||''}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
+        </div>
+      </div>`;
+    }
+
     // Line score with innings
     const innCount = Math.max(aInnings.length, hInnings.length, 7);
     const innNums  = Array.from({length:innCount},(_,i)=>i+1);
@@ -5786,18 +5818,6 @@ async function openBox(away,home,as,hs,field,date,gameId){
     bodyHtml += `<div style="text-align:center;padding:32px 16px">
       <div style="font-size:15px;font-weight:700;color:#555;margin-bottom:6px">No stats have been entered</div>
       <div style="font-size:13px;color:#999">Player and pitching stats haven't been submitted for this game yet.</div>
-    </div>`;
-  }
-
-  // ── Player of the Game banner ──
-  if (boxScore?.potg_name) {
-    const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===boxScore.potg_team||x.short===boxScore.potg_team);return t?.name||boxScore.potg_team||'';})();
-    bodyHtml += `<div style="background:linear-gradient(135deg,#fff9e6,#fff3cc);border:1px solid #f5c842;border-radius:10px;padding:14px 18px;margin-top:18px;display:flex;align-items:center;gap:12px">
-      <span style="font-size:28px">⭐</span>
-      <div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,0,0,.5);margin-bottom:2px">Player of the Game</div>
-        <div style="font-size:16px;font-weight:700;color:#1a1a1a">${boxScore.potg_name}${potgTeamName?` <span style="font-size:13px;color:rgba(0,0,0,.5);font-weight:500">· ${potgTeamName}</span>`:''}</div>
-      </div>
     </div>`;
   }
 
