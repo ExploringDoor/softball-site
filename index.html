@@ -2892,9 +2892,24 @@ async function loadAllData() {
         const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
         let b = batMap[key];
         if (!b) {
-          // Fallback: name-only match (handles team-id mismatches between Firebase collections)
+          // Fallback 1: name-only match (handles team-id mismatches)
           const nm = pl.name.toLowerCase();
           b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
+        }
+        if (!b) {
+          // Fallback 2: "A Miller" in box score → "Adam Miller" in players DB
+          const plParts = pl.name.toLowerCase().split(/\s+/);
+          if (plParts.length >= 2) {
+            const plInitial = plParts[0][0], plLast = plParts.slice(1).join(' ');
+            const plTeam = (pl.team||'').toLowerCase();
+            b = Object.entries(batMap).find(([k]) => {
+              const [kNm, kSid] = k.split('||');
+              const kP = kNm.split(/\s+/);
+              if (kP.length < 2) return false;
+              const kF = kP[0].replace(/\./g,'');
+              return kF.length===1 && kF===plInitial && kP.slice(1).join(' ')===plLast && (!kSid||kSid===plTeam);
+            })?.[1];
+          }
         }
         if (!b) return;
         pl.gp = b.gp; pl.ab = b.ab; pl.r = b.r;
@@ -2912,14 +2927,28 @@ async function loadAllData() {
         const teamKey = (pl.team||'').toLowerCase();
         const key = pl.name.toLowerCase() + '||' + teamKey;
         if (logMap[key] && logMap[key].length) { pl.log = logMap[key]; return; }
-        // Fallback: match by name across any team (handles team-id mismatches)
+        // Fallback 1: name-only match across any team
         const nameOnly = pl.name.toLowerCase();
         const allEntries = [];
         for (const k of Object.keys(logMap)) {
           const [nm] = k.split('||');
           if (nm === nameOnly) allEntries.push(...logMap[k]);
         }
-        if (allEntries.length) pl.log = allEntries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+        if (allEntries.length) { pl.log = allEntries.sort((a,b)=>(a.date||'').localeCompare(b.date||'')); return; }
+        // Fallback 2: "A Miller" in box score → "Adam Miller" in players DB
+        const plParts = pl.name.toLowerCase().split(/\s+/);
+        if (plParts.length >= 2) {
+          const plInitial = plParts[0][0], plLast = plParts.slice(1).join(' ');
+          const plTeam = (pl.team||'').toLowerCase();
+          for (const [k, entries] of Object.entries(logMap)) {
+            const [kNm, kSid] = k.split('||');
+            const kP = kNm.split(/\s+/);
+            if (kP.length < 2) continue;
+            const kF = kP[0].replace(/\./g,'');
+            if (kF.length===1 && kF===plInitial && kP.slice(1).join(' ')===plLast && (!kSid||kSid===plTeam)) allEntries.push(...entries);
+          }
+          if (allEntries.length) pl.log = allEntries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+        }
       });
 
       // Apply pitching stats to PLAYERS (only real pitchers with recorded outs)
@@ -3053,8 +3082,8 @@ async function refreshVolatileData() {
           if (!Array.isArray(lineup)) continue;
           for (const p of lineup) {
             const nm = (p.name || '').trim(); if (!nm) continue;
-            const key = nm.toLowerCase() + '||' + (sid || '');
-            if (!batMap[key]) batMap[key] = { name: nm, team: sid, gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
+            const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
+            if (!batMap[key]) batMap[key] = { name: nm, team: (sid||'').toLowerCase(), gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
             const b = batMap[key];
             b.gp++;
             b.ab += parseInt(p.ab)||0; b.r  += parseInt(p.r)||0;
@@ -3065,24 +3094,39 @@ async function refreshVolatileData() {
           }
         }
       }
-      // Overlay aggregated stats onto PLAYERS
-      for (const [key, b] of Object.entries(batMap)) {
+      // Overlay aggregated stats onto PLAYERS (same three-fallback logic as loadAllData)
+      PLAYERS.forEach(pl => {
+        const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
+        let b = batMap[key];
+        if (!b) {
+          const nm = pl.name.toLowerCase();
+          b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
+        }
+        if (!b) {
+          const plParts = pl.name.toLowerCase().split(/\s+/);
+          if (plParts.length >= 2) {
+            const plInitial = plParts[0][0], plLast = plParts.slice(1).join(' ');
+            const plTeam = (pl.team||'').toLowerCase();
+            b = Object.entries(batMap).find(([k]) => {
+              const [kNm, kSid] = k.split('||');
+              const kP = kNm.split(/\s+/);
+              if (kP.length < 2) return false;
+              const kF = kP[0].replace(/\./g,'');
+              return kF.length===1 && kF===plInitial && kP.slice(1).join(' ')===plLast && (!kSid||kSid===plTeam);
+            })?.[1];
+          }
+        }
+        if (!b) return;
         const tH = b.s + b.d + b.tri + b.hr;
         const tAB = b.ab;
-        const avg = tAB > 0 ? Math.round((tH / tAB) * 1000) / 1000 : 0;
-        const slg = tAB > 0 ? Math.round(((tH + b.hr) / tAB) * 1000) / 1000 : 0;
-        const obp = (tAB + b.bb) > 0 ? Math.round(((tH + b.bb) / (tAB + b.bb)) * 1000) / 1000 : 0;
-        const pl = PLAYERS.find(p => {
-          if (p.team !== b.team) return false;
-          return p.name.toLowerCase() === b.name.toLowerCase();
-        });
-        if (pl) {
-          pl.ab = tAB; pl.h = tH; pl.hr = b.hr; pl.rbi = b.rbi;
-          pl.r = b.r; pl.bb = b.bb; pl.d = b.d; pl.t = b.tri;
-          pl.gp = b.gp; pl.avg = avg; pl.slg = slg;
-          pl.ops = Math.round((slg + obp) * 1000) / 1000;
-        }
-      }
+        pl.ab = tAB; pl.h = tH; pl.hr = b.hr; pl.rbi = b.rbi;
+        pl.r = b.r; pl.bb = b.bb; pl.d = b.d; pl.t = b.tri;
+        pl.gp = b.gp;
+        pl.avg = tAB > 0 ? tH / tAB : 0;
+        const obp = (tAB + b.bb) > 0 ? (tH + b.bb) / (tAB + b.bb) : 0;
+        const slg = tAB > 0 ? (b.s + 2*b.d + 3*b.tri + 4*b.hr) / tAB : 0;
+        pl.slg = slg; pl.ops = obp + slg;
+      });
       PLAYERS.sort((a, b) => b.avg - a.avg);
     }
 
