@@ -1398,6 +1398,9 @@ let bsInnings = {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
 let bsAwayErrors = 0;
 let bsHomeErrors = 0;
 let bsScoreOnlyMode = false;
+let bsGameRecap = '';
+let bsPotgName = '';
+let bsPotgTeam = '';
 let bsAwayOrderMode = false, bsHomeOrderMode = false;
 let bsAwayOrderMap = {}, bsHomeOrderMap = {};
 let bsAwayOrdered = false, bsHomeOrdered = false;
@@ -1653,6 +1656,9 @@ window.openBoxScore = async function(gameId, skipClear) {
     bsInnings = existing?.innings ? {away:[...existing.innings.away], home:[...existing.innings.home]} : {away:[0,0,0,0,0,0,0], home:[0,0,0,0,0,0,0]};
     bsAwayErrors = existing?.away_errors || 0;
     bsHomeErrors = existing?.home_errors || 0;
+    bsGameRecap = existing?.recap || '';
+    bsPotgName = existing?.potg_name || '';
+    bsPotgTeam = existing?.potg_team || '';
   }
 
   document.getElementById('sec-scores').querySelector('.main-header').style.display = 'none';
@@ -1958,6 +1964,28 @@ function renderBoxScore(awayName, homeName, g) {
           <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
         </div>`;
       })()}
+      <!-- Player of the Game + Game Recap -->
+      <div style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:14px 16px;margin-bottom:16px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,0,0,.5);margin-bottom:12px">Player of the Game & Recap</div>
+        <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:180px">
+            <label style="display:block;font-size:11px;font-weight:700;color:rgba(0,0,0,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Player of the Game</label>
+            <select id="bs-potg-name" style="width:100%;padding:8px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:13px;background:#f8f9fa" onchange="bsPotgName=this.value;bsPotgTeam=this.options[this.selectedIndex].dataset.team||''">
+              <option value="">— None —</option>
+              <optgroup label="${awayName}">
+                ${bsAwayLineup.filter(p=>p.name&&!p.dnp).map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}" data-team="${g.away}" ${bsPotgName===p.name&&bsPotgTeam===g.away?'selected':''}>${p.name}</option>`).join('')}
+              </optgroup>
+              <optgroup label="${homeName}">
+                ${bsHomeLineup.filter(p=>p.name&&!p.dnp).map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}" data-team="${g.home}" ${bsPotgName===p.name&&bsPotgTeam===g.home?'selected':''}>${p.name}</option>`).join('')}
+              </optgroup>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:rgba(0,0,0,.45);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Game Recap</label>
+          <textarea id="bs-recap-text" rows="4" placeholder="Write a brief game summary..." style="width:100%;padding:8px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;background:#f8f9fa" oninput="bsGameRecap=this.value">${bsGameRecap.replace(/</g,'&lt;')}</textarea>
+        </div>
+      </div>
       ${bsScoreOnlyMode ? '' : `
       <div style="display:flex;gap:0;margin-bottom:16px;border:2px solid #001a3e;border-radius:10px;overflow:hidden">
         <button id="bs-tab-away" onclick="bsSwitchBsTab('away')" style="flex:1;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;background:#001a3e;color:#FFD700;border:none;cursor:pointer;letter-spacing:.04em">${awayName}</button>
@@ -1982,6 +2010,11 @@ function renderBoxScore(awayName, homeName, g) {
 }
 
 function bsRerender() {
+  // Capture any in-flight edits from the recap/POTG fields before re-rendering
+  const recapEl = document.getElementById('bs-recap-text');
+  if(recapEl) bsGameRecap = recapEl.value;
+  const potgEl = document.getElementById('bs-potg-name');
+  if(potgEl){ bsPotgName = potgEl.value; bsPotgTeam = potgEl.options[potgEl.selectedIndex]?.dataset.team||bsPotgTeam; }
   const v = document.getElementById('box-score-view');
   renderBoxScore(v.dataset.awayName, v.dataset.homeName, bsGameData);
 }
@@ -2137,7 +2170,10 @@ window.saveBoxScore = async function(markFinal) {
     home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,bf:parseInt(p.bf)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
     innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
     away_errors: bsAwayErrors, home_errors: bsHomeErrors,
-    away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft'
+    away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft',
+    recap: (document.getElementById('bs-recap-text')?.value||bsGameRecap||'').trim(),
+    potg_name: (document.getElementById('bs-potg-name')?.value||bsPotgName||'').trim(),
+    potg_team: bsPotgTeam||''
   };
   try {
     const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));

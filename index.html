@@ -2098,8 +2098,17 @@ thead th.sorted-col .sarrow{opacity:1}
   <section class="sec" style="background:var(--bg2)">
     <div class="container">
       <div class="home-layout-flex" style="display:flex;gap:32px;align-items:flex-start">
-        <!-- Left: Schedule -->
+        <!-- Left: Recent Scores + Schedule -->
         <div style="flex:1;min-width:0">
+          <!-- Recent Scores -->
+          <div id="home-recent-scores-wrap" style="margin-bottom:28px;display:none">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;color:#1a1a1a">Recent Scores</div>
+              <a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('scores'),80)" style="font-size:13px;font-weight:600;color:#002D72;text-decoration:none">All Scores →</a>
+            </div>
+            <div id="home-recent-scores" class="gc-cards-grid" style="grid-template-columns:1fr;gap:8px"></div>
+          </div>
+          <!-- Upcoming Schedule -->
           <div class="sec-eyebrow">2026 Season</div>
           <div class="sec-title">Upcoming Schedule</div>
           <div class="sched-wrap" id="sched-wrap" style="margin-top:16px"></div>
@@ -3029,6 +3038,7 @@ async function refreshVolatileData() {
     try { buildTicker2(); } catch(e) {}
     try { buildStandings(); } catch(e) {}
     try { buildSchedule(); } catch(e) {}
+    try { buildHomeRecentScores(); } catch(e) {}
     try { buildLeaderboard(); } catch(e) {}
     // Re-render current page if it's scores
     const activePage = document.querySelector('.page.active');
@@ -3642,6 +3652,47 @@ function buildStandings(){
         +'</tr>';
     }).join('')}</tbody></table>
   </div>`;
+}
+
+function buildHomeRecentScores(){
+  const wrap=document.getElementById('home-recent-scores-wrap');
+  const el=document.getElementById('home-recent-scores');
+  if(!wrap||!el) return;
+  const done=SCHEDULE_PREVIEW.filter(g=>g.done).slice(-3).reverse();
+  if(!done.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  el.innerHTML=done.map(g=>{
+    const atm=TEAMS.find(t=>t.id===g.away||t.short===g.away)||HIST_TEAMS.find(t=>t.id===g.away||t.short===g.away);
+    const htm=TEAMS.find(t=>t.id===g.home||t.short===g.home)||HIST_TEAMS.find(t=>t.id===g.home||t.short===g.home);
+    const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
+    const aw=g.as>g.hs;
+    const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
+    const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
+    const aLogo=atm?.id&&LOGO_TEAMS.has(atm.id)?`<img src="logos/${atm.id}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${ac}"></span>`;
+    const hLogo=htm?.id&&LOGO_TEAMS.has(htm.id)?`<img src="logos/${htm.id}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${hc}"></span>`;
+    const _bsArgs=`'${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}'`;
+    return `<div class="gc-card" onclick="openBox(${_bsArgs})">
+      <div class="gc-card-hdr">
+        <span class="gc-card-status">FINAL</span>
+        <span class="gc-card-date">${g.date||''}</span>
+      </div>
+      <div class="gc-card-body">
+        <div class="gc-team-row">
+          <div class="gc-logo-wrap">${aLogo}</div>
+          <div class="gc-team-info"><span class="gc-team-name${aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')">${atm?.name||g.away}</span>${aRec?`<span class="gc-record">${aRec}</span>`:''}</div>
+          <div class="gc-score${aw?' gc-score-win':' gc-score-lose'}" style="${aw?`color:${ac}`:''}"> ${g.as}</div>
+        </div>
+        <div class="gc-team-row">
+          <div class="gc-logo-wrap">${hLogo}</div>
+          <div class="gc-team-info"><span class="gc-team-name${!aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')">${htm?.name||g.home}</span>${hRec?`<span class="gc-record">${hRec}</span>`:''}</div>
+          <div class="gc-score${!aw?' gc-score-win':' gc-score-lose'}" style="${!aw?`color:${hc}`:''}"> ${g.hs}</div>
+        </div>
+      </div>
+      <div class="gc-card-footer">
+        <button class="gc-btn gc-btn-primary" onclick="event.stopPropagation();openBox(${_bsArgs})">Box Score</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function buildHomeSidebar(){
@@ -4427,18 +4478,27 @@ function observeAll(){document.querySelectorAll('.div-card,.ldr-card,.game-row,.
 // ── INIT: Load from Supabase then render ──────────────────────
 window._dataPromise = loadAllData();
 window._dataPromise.then(() => {
-  // Check for cross-page player navigation first (before anything can crash)
+  // Check for cross-page player navigation: ?player=NAME URL param (from leaders.html)
+  const _urlParams = new URLSearchParams(window.location.search);
+  const _urlPlayer = _urlParams.get('player');
+  if(_urlPlayer){
+    history.replaceState(null,'',window.location.pathname);
+    const _found = PLAYERS.find(p=>p.name.toLowerCase()===_urlPlayer.toLowerCase());
+    if(_found){ goPage('home'); setTimeout(()=>openModal(_found.id),300); }
+  }
+  // Legacy sessionStorage approach
   const _pn = sessionStorage.getItem('dvsl_goPlayerName');
   if(_pn){
     sessionStorage.removeItem('dvsl_goPlayerName');
-    const _found = PLAYERS.find(p=>p.name.toLowerCase()===_pn.toLowerCase());
-    if(_found){ goPage('home'); setTimeout(()=>openModal(_found.id),300); }
+    const _found2 = PLAYERS.find(p=>p.name.toLowerCase()===_pn.toLowerCase());
+    if(_found2){ goPage('home'); setTimeout(()=>openModal(_found2.id),300); }
   }
   try{ buildTicker(); }catch(e){}
   try{ buildTicker2(); }catch(e){}
   try{ populateTeamsDropdown(); }catch(e){}
   try{ buildStandings(); }catch(e){}
   try{ buildHomeSidebar(); }catch(e){}
+  try{ buildHomeRecentScores(); }catch(e){}
   try{ buildSchedule(); }catch(e){}
   try{ initNextGame(); }catch(e){}
   try{ buildLeaderboard(); }catch(e){}
@@ -4528,7 +4588,8 @@ async function loadSiteBanner(){
     return;
   }
   const pname = sessionStorage.getItem('dvsl_goPlayerName');
-  if(pname){
+  const urlPlayerParam = new URLSearchParams(window.location.search).get('player');
+  if(pname || urlPlayerParam){
     // Skip intro — modal will be opened in _dataPromise.then()
     sessionStorage.setItem('ci_played','1');
     document.body.classList.remove('ci-active');
@@ -5216,7 +5277,6 @@ function scheduleBlock(g, isNext){
         </div>
       </div>
       <div class="gc-card-footer">
-        <button class="gc-btn" onclick="event.stopPropagation();openRecap2(${_rcArgs})">Recap</button>
         <button class="gc-btn gc-btn-primary" onclick="event.stopPropagation();openBox(${_bsArgs})">Box Score</button>
         <button class="gc-btn gc-btn-share" onclick="event.stopPropagation();shareGame('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Share</button>
       </div>
@@ -5371,9 +5431,9 @@ async function openBox(away,home,as,hs,field,date,gameId){
 
   // Team logo helper for box score header
   const mkHdrLogo=(tm,short)=>{
-    if(tm&&LOGO_TEAMS.has(tm.id)) return `<img src="logos/${tm.id}.png" style="width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.15))">`;
+    if(tm&&LOGO_TEAMS.has(tm.id)) return `<img src="logos/${tm.id}.png" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.15))">`;
     const col=tm?.color||'#9ca3af';
-    return `<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${col};margin-bottom:4px"></span>`;
+    return `<span style="display:inline-block;width:40px;height:40px;border-radius:50%;background:${col};margin-bottom:4px"></span>`;
   };
 
   // Shared header HTML with logos
@@ -5387,7 +5447,7 @@ async function openBox(away,home,as,hs,field,date,gameId){
         </div>
         <div class="pop-sc-mid">
           <div class="pop-sc">
-            <span style="color:${aW?ac:'#999'}">${as}</span><span class="pop-dash" style="color:#ccc">–</span><span style="color:${!aW?hc:'#999'}">${hs}</span>
+            <span style="color:#1a1a1a">${as}</span><span class="pop-dash" style="color:#ccc">–</span><span style="color:#1a1a1a">${hs}</span>
           </div>
           <div class="pop-badge">Final</div>
         </div>
@@ -5448,14 +5508,19 @@ async function openBox(away,home,as,hs,field,date,gameId){
       </div>`;
 
     // Batting table builder with totals row
-    const mkBatRows=lineup=>{
-      if(!lineup.length) return `<tr><td colspan="7" style="text-align:center;padding:10px;color:#999">No batting data</td></tr>`;
+    const mkBatRows=(lineup,teamShort)=>{
+      if(!lineup.length) return `<tr><td colspan="6" style="text-align:center;padding:10px;color:#999">No batting data</td></tr>`;
+      const teamObj=TEAMS.find(t=>t.short===teamShort||t.id===teamShort);
       const rows=lineup.map(p=>{
         const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
         const avg=(p.ab>0)?(h/p.ab).toFixed(3).replace(/^0/,''):'.000';
+        const player=PLAYERS.find(pl=>pl.name.toLowerCase()===p.name?.toLowerCase()&&(teamObj?pl.team===teamObj.id:true));
+        const nameEl=player
+          ? `<span onclick="closeScPop();openModal('${player.id}')" style="font-weight:600;color:#002D72;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${p.name||''}</span>`
+          : `<span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>`;
         return `<tr>
-          <td style="text-align:left"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${p.pos?` <span style="font-size:9px;color:#999">${p.pos}</span>`:''}${p.num?` <span style="font-size:9px;color:#bbb">#${p.num}</span>`:''}</td>
-          <td>${p.ab||0}</td><td>${h}</td><td>${p.r||0}</td><td>${p.hr||0}</td><td>${p.rbi||0}</td><td>${avg}</td>
+          <td style="text-align:left">${nameEl}${p.pos?` <span style="font-size:9px;color:#999">${p.pos}</span>`:''}${p.num?` <span style="font-size:9px;color:#bbb">#${p.num}</span>`:''}</td>
+          <td>${p.ab||0}</td><td>${h}</td><td>${p.r||0}</td><td>${p.rbi||0}</td><td>${avg}</td>
         </tr>`;}).join('');
       const tAB=lineup.reduce((s,p)=>s+(p.ab||0),0);
       const tH=lineup.reduce((s,p)=>s+(p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0))),0);
@@ -5463,7 +5528,7 @@ async function openBox(away,home,as,hs,field,date,gameId){
       const tRBI=lineup.reduce((s,p)=>s+(p.rbi||0),0);
       const totalsRow=`<tr style="border-top:2px solid #e5e7eb;font-weight:700;background:#f9fafb">
         <td style="text-align:left;font-size:11px;letter-spacing:.05em;color:#374151">TOTALS</td>
-        <td>${tAB}</td><td>${tH}</td><td>${tR}</td><td>—</td><td>${tRBI}</td><td></td>
+        <td>${tAB}</td><td>${tH}</td><td>${tR}</td><td>${tRBI}</td><td></td>
       </tr>`;
       return rows+totalsRow;
     };
@@ -5477,7 +5542,7 @@ async function openBox(away,home,as,hs,field,date,gameId){
       // 3B
       const trps=lineup.filter(p=>(p.t||0)>0);
       if(trps.length) notes.push(`<b>3B</b> — ${trps.map(p=>p.t>1?`${p.name} ${p.t}`:`${p.name}`).join(', ')}`);
-      // HR
+      // HR — use hr_log if available, else fall back to lineup hr counts
       const hrLog=(boxScore.hr_log||[]).filter(h=>h.team===teamKey);
       if(hrLog.length){
         const hrStrs=hrLog.map(h=>{
@@ -5491,6 +5556,10 @@ async function openBox(away,home,as,hs,field,date,gameId){
           return `${h.name}${rbi}${details?` (${details})`:''}`;
         });
         notes.push(`<b>HR</b> — ${hrStrs.join('; ')}`);
+      } else {
+        // Fallback: count HRs from lineup
+        const hrPlayers=lineup.filter(p=>(p.hr||0)>0);
+        if(hrPlayers.length) notes.push(`<b>HR</b> — ${hrPlayers.map(p=>p.hr>1?`${p.name} (${p.hr})`:`${p.name}`).join(', ')}`);
       }
       // RBI
       const rbiPlayers=lineup.filter(p=>(p.rbi||0)>0);
@@ -5515,8 +5584,12 @@ async function openBox(away,home,as,hs,field,date,gameId){
     // Pitching notes helper
     const mkPitchNotes=(pitchers,teamKey)=>{
       const notes=[];
-      // P-S per pitcher
-      const psNotes=pitchers.filter(p=>p.pitches>0).map(p=>`${p.name} ${p.pitches}-${p.strikes||0}`);
+      // P-S per pitcher (total = balls+strikes, strikes)
+      const psNotes=pitchers.filter(p=>(p.balls||0)+(p.strikes||0)>0||p.pitches>0).map(p=>{
+        const total=p.pitches||(p.balls||0)+(p.strikes||0);
+        const k=p.strikes||0;
+        return `${p.name} ${total}-${k}`;
+      });
       if(psNotes.length) notes.push(`<b>P-S</b> — ${psNotes.join(', ')}`);
       // BF
       const bfNotes=pitchers.map(p=>{
@@ -5536,12 +5609,12 @@ async function openBox(away,home,as,hs,field,date,gameId){
       <div class="pop-grid2">
         <div>
           <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away} ↗</div>
-          <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>HR</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(aLineup)}</tbody></table>
+          <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(aLineup,away)}</tbody></table>
           ${mkBatNotes(aLineup,'away')}
         </div>
         <div>
           <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home} ↗</div>
-          <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>HR</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(hLineup)}</tbody></table>
+          <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(hLineup,home)}</tbody></table>
           ${mkBatNotes(hLineup,'home')}
         </div>
       </div>`;
@@ -5582,15 +5655,26 @@ async function openBox(away,home,as,hs,field,date,gameId){
     </div>`;
   }
 
-  // ── Recap section (always shown) ──
-  bodyHtml += `<div class="pop-sec-title" style="margin-top:20px">Game Recap</div>`;
-  if (recap?.text) {
-    bodyHtml += `<div class="pop-recap" style="color:#333;font-size:14px;line-height:1.8">${recap.text}</div>`;
-    if (recap.stars?.length) {
+  // ── Player of the Game banner ──
+  if (boxScore?.potg_name) {
+    const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===boxScore.potg_team||x.short===boxScore.potg_team);return t?.name||boxScore.potg_team||'';})();
+    bodyHtml += `<div style="background:linear-gradient(135deg,#fff9e6,#fff3cc);border:1px solid #f5c842;border-radius:10px;padding:14px 18px;margin-top:18px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:28px">⭐</span>
+      <div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(0,0,0,.5);margin-bottom:2px">Player of the Game</div>
+        <div style="font-size:16px;font-weight:700;color:#1a1a1a">${boxScore.potg_name}${potgTeamName?` <span style="font-size:13px;color:rgba(0,0,0,.5);font-weight:500">· ${potgTeamName}</span>`:''}</div>
+      </div>
+    </div>`;
+  }
+
+  // ── Recap section (show only if recap exists) ──
+  const recapText = boxScore?.recap || recap?.text || '';
+  if (recapText) {
+    bodyHtml += `<div class="pop-sec-title" style="margin-top:20px">Game Recap</div>`;
+    bodyHtml += `<div class="pop-recap" style="color:#333;font-size:14px;line-height:1.8">${recapText}</div>`;
+    if (recap?.stars?.length) {
       bodyHtml += `<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:#e8a014">★</span> ${s}</div>`).join('')}</div>`;
     }
-  } else {
-    bodyHtml += `<div style="color:#999;font-size:13px;font-style:italic">Recap coming soon — check back after the game.</div>`;
   }
 
   bodyHtml += '</div>';
