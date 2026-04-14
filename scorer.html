@@ -2357,6 +2357,14 @@ const G = {
   halfInningPitches: 0,
   halfInningHits: 0,
   halfInningErrors: 0,
+  // Extra tracking for box score notes
+  hrLog: [],           // [{name, team, inning, pitcher, runnersOn, outs, count}]
+  sfLog: [],           // [{name, team, rbi}]
+  twoOutRbiLog: [],    // [{name, team, rbi}]
+  lob: { away: 0, home: 0 },
+  risp: { away: { h: 0, ab: 0 }, home: { h: 0, ab: 0 } },
+  pitchCount: { away: {}, home: {} }, // {pitcherKey: {p:0, s:0}}
+  errors: { away: [], home: [] },     // [{inning, pos}] — positional errors
 };
 
 let gamesData = [];
@@ -2393,6 +2401,15 @@ function currentPitcherStats(fTeam) {
     G.pitcherStats[fTeam][key] = { name: p.name, num: p.num, outs: 0, h: 0, r: 0, bb: 0, k: 0 };
   }
   return G.pitcherStats[fTeam][key];
+}
+
+function recordPitchForCurrentPitcher(fTeam, isStrike) {
+  const p = G.pitchers[fTeam];
+  if (!p) return;
+  const key = p.pid || p.name;
+  if (!G.pitchCount[fTeam][key]) G.pitchCount[fTeam][key] = { name: p.name, p: 0, s: 0 };
+  G.pitchCount[fTeam][key].p++;
+  if (isStrike) G.pitchCount[fTeam][key].s++;
 }
 
 // ===== CURRENT BATTER =====
@@ -2640,7 +2657,11 @@ document.getElementById('undo-pitch-btn').addEventListener('click', () => undoLa
 function handlePitch(type) {
   if (type === 'bip') { openBipSheet('level1'); return; }
   snapshotState();
-  if (type !== 'bip') G.halfInningPitches++;
+  if (type !== 'bip') {
+    G.halfInningPitches++;
+    const isStrike = (type === 'called-strike' || type === 'swing-miss' || type === 'foul');
+    recordPitchForCurrentPitcher(fieldingTeam(), isStrike);
+  }
   if (type === 'ball') {
     G.balls++;
     if (G.balls >= 4) { endAtBat('walk'); } else { flashFeedback('BALL', 'var(--blue)'); renderAll(); }
@@ -2670,6 +2691,18 @@ function endAtBat(result, details) {
     G.playerStats[team][sid] = { ab: 0, h: 0, bb: 0, so: 0, rbi: 0, r: 0, singles: 0, doubles: 0, triples: 0, hr: 0 };
   }
   const stats = sid ? G.playerStats[team][sid] : {};
+
+  // Track RISP (runner on 2nd or 3rd)
+  const haRISP = G.runners[2] || G.runners[3];
+  const isHitResult = ['single','double','triple','homerun','itphr'].includes(result);
+  if (haRISP && !['walk','hbp'].includes(result)) {
+    G.risp[team].ab++;
+    if (isHitResult) G.risp[team].h++;
+  }
+
+  // Track 2-out RBIs — store flag so confirmRunnerAdvance can log them
+  G._twoOutBatter = G.outs === 2 ? (b ? b.name : null) : null;
+  G._twoOutTeam   = team;
 
   // Count RBIs
   let rbis = 0;
@@ -2714,6 +2747,9 @@ function endAtBat(result, details) {
       G.runners[1] = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid: null };
     }
     if (sid) stats.rbi = (stats.rbi || 0) + rbis;
+    if (rbis > 0 && G._twoOutBatter && G._twoOutTeam === team) {
+      G.twoOutRbiLog.push({ name: G._twoOutBatter, team, rbi: rbis });
+    }
     const pStatsBB = currentPitcherStats(fieldingTeam());
     if (pStatsBB) pStatsBB.bb++;
     logPlay('Walk', rbis > 0 ? `BB — Walk, scores a run` : 'BB — Base on balls');
@@ -3115,11 +3151,13 @@ function confirmRunnerAdvance() {
   const sid = _rasBatterSid;
   const stats = sid && G.playerStats[team] ? G.playerStats[team][sid] : null;
 
+  let rbiFromRunners = 0;
   _rasRunners.forEach(({ runner, sel }) => {
     if (sel === 'score') {
       if (team === 'away') G.awayScore++; else G.homeScore++;
       markRunnerScored(runner, team);
       if (stats) stats.rbi = (stats.rbi || 0) + 1;
+      rbiFromRunners++;
       // Track pitcher R — pitcher is fielding team (opposite of batting team)
       const pStatsR = currentPitcherStats(team === 'away' ? 'home' : 'away');
       if (pStatsR) pStatsR.r++;
@@ -3131,6 +3169,10 @@ function confirmRunnerAdvance() {
       G.runners[sel] = runner;
     }
   });
+  // Log 2-out RBIs
+  if (rbiFromRunners > 0 && G._twoOutBatter && G._twoOutTeam === team) {
+    G.twoOutRbiLog.push({ name: G._twoOutBatter, team, rbi: rbiFromRunners });
+  }
 
   const hitLabel = _rasHitType === 'single' ? 'Single' : _rasHitType === 'double' ? 'Double' : _rasHitType === 'triple' ? 'Triple' : "Fielder's Choice";
   const abLabel  = _rasHitType === 'single' ? '1B' : _rasHitType === 'double' ? '2B' : _rasHitType === 'triple' ? '3B' : 'FC';
@@ -3273,6 +3315,11 @@ function doHalfInningSwitch() {
     G._prevHomeScore = G.homeScore;
   }
 
+  // Count LOB before clearing bases
+  const lobTeam = battingTeam();
+  const lobCount = [1,2,3].filter(b => G.runners[b]).length;
+  G.lob[lobTeam] = (G.lob[lobTeam] || 0) + lobCount;
+
   G.runners  = { 1: null, 2: null, 3: null };
   G.balls    = 0;
   G.strikes  = 0;
@@ -3404,6 +3451,20 @@ function triggerHR(batter, sid, team, isItphr) {
     // Track pitcher runs allowed for HR
     const pStatsHRr = currentPitcherStats(team === 'away' ? 'home' : 'away');
     if (pStatsHRr) { pStatsHRr.r = (pStatsHRr.r || 0) + runs; pStatsHRr.outs = (pStatsHRr.outs || 0); }
+
+    // Log HR details for box score notes
+    const runnersOnCount = [1,2,3].filter(b => runnersOnBase[b]).length;
+    G.hrLog.push({
+      name: batter ? batter.name : 'Batter',
+      team,
+      inning: G.inning,
+      half: G.half,
+      pitcher: pStatsHRr ? pStatsHRr.name : '',
+      runnersOn: runnersOnCount,
+      outs: G.outs,
+      rbi: runs,
+      itphr: isItphr,
+    });
 
     // Log the play
     const hrType = isItphr ? 'ITPHR' : 'HR';
@@ -3630,6 +3691,7 @@ function renderBipContent() {
         } else if (opt.result) {
           snapshotState();
           G.halfInningPitches++;
+          recordPitchForCurrentPitcher(fieldingTeam(), true); // BIP = strike
           closeBipSheet();
           endAtBat(opt.result);
         }
@@ -4074,6 +4136,7 @@ document.querySelectorAll('.fielder-btn').forEach(btn => {
     hideFielderOverlay();
     snapshotState();
     G.halfInningPitches++;
+    recordPitchForCurrentPitcher(fieldingTeam(), true); // BIP = strike
     if (action === 'hit')     endAtBat(bipHitResult, { location: pos });
     else if (action === 'flyout') endAtBat('flyout', { location: pos });
     else if (action === 'out-go') endAtBat('groundout', { location: pos });
@@ -4995,6 +5058,12 @@ async function saveFullState() {
       halfInningErrors: G.halfInningErrors || 0,
       awayTeam: G.awayTeam,
       homeTeam: G.homeTeam,
+      hrLog: G.hrLog || [],
+      twoOutRbiLog: G.twoOutRbiLog || [],
+      lob: G.lob || { away: 0, home: 0 },
+      risp: G.risp || { away: { h:0, ab:0 }, home: { h:0, ab:0 } },
+      pitchCount: G.pitchCount || { away: {}, home: {} },
+      errors: G.errors || { away: [], home: [] },
     });
   } catch (err) {
     console.warn('saveFullState error:', err);
@@ -5031,6 +5100,17 @@ async function saveBoxScore() {
       }).filter(p => p.ab > 0 || p.bb > 0); // only players who batted
     }
 
+    // Build pitcher arrays with pitch counts merged in
+    function buildPitcherArray(side) {
+      const pitchers = G.pitcherStats?.[side] ? Object.values(G.pitcherStats[side]) : [];
+      const pc = G.pitchCount?.[side] || {};
+      return pitchers.map(p => {
+        const key = Object.keys(pc).find(k => pc[k].name === p.name) || p.name;
+        const counts = pc[key] || { p: 0, s: 0 };
+        return { ...p, pitches: counts.p, strikes: counts.s };
+      });
+    }
+
     await setDoc(doc(db, 'box_scores', G.gameId), {
       game_id:      G.gameId,
       away:         G.awayTeam.id,
@@ -5041,8 +5121,14 @@ async function saveBoxScore() {
       linescores:   G.linescores,
       away_lineup:  buildLineupArray('away'),
       home_lineup:  buildLineupArray('home'),
-      away_pitchers: G.pitcherStats?.away ? Object.values(G.pitcherStats.away) : [],
-      home_pitchers: G.pitcherStats?.home ? Object.values(G.pitcherStats.home) : [],
+      away_pitchers: buildPitcherArray('away'),
+      home_pitchers: buildPitcherArray('home'),
+      hr_log:       G.hrLog || [],
+      two_out_rbi_log: G.twoOutRbiLog || [],
+      lob:          G.lob || { away: 0, home: 0 },
+      risp:         G.risp || { away: { h:0, ab:0 }, home: { h:0, ab:0 } },
+      away_errors:  G.errors?.away?.length || 0,
+      home_errors:  G.errors?.home?.length || 0,
       status:       'final',
       created_at:   new Date().toISOString(),
     });
@@ -5114,6 +5200,12 @@ document.getElementById('start-btn').addEventListener('click', async () => {
       G.halfInningPitches = s.halfInningPitches ?? 0;
       G.halfInningHits    = s.halfInningHits    ?? 0;
       G.halfInningErrors  = s.halfInningErrors  ?? 0;
+      G.hrLog         = s.hrLog         ?? [];
+      G.twoOutRbiLog  = s.twoOutRbiLog  ?? [];
+      G.lob           = s.lob           ?? { away: 0, home: 0 };
+      G.risp          = s.risp          ?? { away: { h:0, ab:0 }, home: { h:0, ab:0 } };
+      G.pitchCount    = s.pitchCount    ?? { away: {}, home: {} };
+      G.errors        = s.errors        ?? { away: [], home: [] };
       G.plays = [];
       G.selectedRunner = null;
       resumed = true;
@@ -5143,6 +5235,11 @@ document.getElementById('start-btn').addEventListener('click', async () => {
     G.selectedRunner = null;
     G.playerStats = { away: {}, home: {} };
     G._prevAwayScore = 0; G._prevHomeScore = 0;
+    G.hrLog = []; G.twoOutRbiLog = [];
+    G.lob = { away: 0, home: 0 };
+    G.risp = { away: { h:0, ab:0 }, home: { h:0, ab:0 } };
+    G.pitchCount = { away: {}, home: {} };
+    G.errors = { away: [], home: [] };
 
     document.getElementById('setup-screen').style.display = 'none';
     showLineupScreen();
