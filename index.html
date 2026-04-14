@@ -2795,7 +2795,7 @@ async function loadAllData() {
           if (!Array.isArray(lineup)) continue;
           for (const p of lineup) {
             const nm = (p.name || '').trim(); if (!nm) continue;
-            const key = nm.toLowerCase() + '||' + (sid || '');
+            const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
             if (!batMap[key]) batMap[key] = { name: nm, team: sid, gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
             const b = batMap[key];
             b.gp++;
@@ -2815,7 +2815,7 @@ async function loadAllData() {
           if (!Array.isArray(pitchers)) continue;
           for (const p of pitchers) {
             const nm = (p.name || '').trim(); if (!nm) continue;
-            const key = nm.toLowerCase() + '||' + (sid || '');
+            const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
             if (!pitMap[key]) pitMap[key] = { name: nm, team: sid, gs:0, wins:0, losses:0, saves:0, ipOuts:0, h:0, er:0, bb:0, k:0 };
             const pm = pitMap[key];
             pm.gs++;
@@ -2847,11 +2847,12 @@ async function loadAllData() {
           const res = `${teamR > oppR ? 'W' : 'L'} ${teamR}-${oppR}`;
           for (const p of lineup) {
             const nm = (p.name||'').trim(); if (!nm || p.dnp) continue;
-            const key = nm.toLowerCase() + '||' + (sid||'');
+            const key = nm.toLowerCase() + '||' + (sid||'').toLowerCase();
             if (!logMap[key]) logMap[key] = [];
             logMap[key].push({
               opp: oppShort, date: bs.date||'',
               ab: parseInt(p.ab)||0, r: parseInt(p.r)||0,
+              h: parseInt(p.h)||(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),
               d: parseInt(p.d)||0, t: parseInt(p.t)||0,
               hr: parseInt(p.hr)||0, rbi: parseInt(p.rbi)||0,
               bb: parseInt(p.bb)||0, res
@@ -2875,7 +2876,7 @@ async function loadAllData() {
 
       // Apply batting stats to PLAYERS
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team || '');
+        const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
         const b = batMap[key]; if (!b) return;
         pl.gp = b.gp; pl.ab = b.ab; pl.r = b.r;
         pl.s  = b.s;  pl.d  = b.d;  pl.t = b.tri; pl.hr = b.hr;
@@ -2889,13 +2890,22 @@ async function loadAllData() {
 
       // Apply game log to PLAYERS
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team||'');
-        if (logMap[key]) pl.log = logMap[key];
+        const teamKey = (pl.team||'').toLowerCase();
+        const key = pl.name.toLowerCase() + '||' + teamKey;
+        if (logMap[key] && logMap[key].length) { pl.log = logMap[key]; return; }
+        // Fallback: match by name across any team (handles team-id mismatches)
+        const nameOnly = pl.name.toLowerCase();
+        const allEntries = [];
+        for (const k of Object.keys(logMap)) {
+          const [nm] = k.split('||');
+          if (nm === nameOnly) allEntries.push(...logMap[k]);
+        }
+        if (allEntries.length) pl.log = allEntries.sort((a,b)=>(a.date||'').localeCompare(b.date||''));
       });
 
       // Apply pitching stats to PLAYERS (only real pitchers with recorded outs)
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team || '');
+        const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
         const pm = pitMap[key];
         if (!pm || pm.ipOuts === 0) { pl.ip = 0; return; }
         pl.ip         = parseFloat(`${Math.floor(pm.ipOuts/3)}.${pm.ipOuts%3}`);
@@ -4503,14 +4513,14 @@ window._dataPromise.then(() => {
   if(_urlPlayer){
     history.replaceState(null,'',window.location.pathname);
     const _found = PLAYERS.find(p=>p.name.toLowerCase()===_urlPlayer.toLowerCase());
-    if(_found){ goPage('home'); setTimeout(()=>openModal(_found.id),300); }
+    if(_found){ openModal(_found.id); }
   }
   // Legacy sessionStorage approach
   const _pn = sessionStorage.getItem('dvsl_goPlayerName');
   if(_pn){
     sessionStorage.removeItem('dvsl_goPlayerName');
     const _found2 = PLAYERS.find(p=>p.name.toLowerCase()===_pn.toLowerCase());
-    if(_found2){ goPage('home'); setTimeout(()=>openModal(_found2.id),300); }
+    if(_found2){ openModal(_found2.id); }
   }
   try{ buildTicker(); }catch(e){}
   try{ buildTicker2(); }catch(e){}
@@ -5533,7 +5543,9 @@ async function openBox(away,home,as,hs,field,date,gameId){
       const rows=lineup.map(p=>{
         const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
         const avg=(p.ab>0)?(h/p.ab).toFixed(3).replace(/^0/,''):'.000';
-        const player=PLAYERS.find(pl=>pl.name.toLowerCase()===p.name?.toLowerCase()&&(teamObj?pl.team===teamObj.id:true));
+        const _pname=p.name?.toLowerCase();
+        const player=PLAYERS.find(pl=>pl.name.toLowerCase()===_pname&&(teamObj?(pl.team===teamObj.id||pl.team===teamShort||pl.team.toLowerCase()===teamShort.toLowerCase()):true))
+          ||PLAYERS.find(pl=>pl.name.toLowerCase()===_pname);
         const nameEl=player
           ? `<span onclick="closeScPop();openModal('${player.id}')" style="font-weight:600;color:#002D72;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${p.name||''}</span>`
           : `<span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>`;
@@ -5645,9 +5657,10 @@ async function openBox(away,home,as,hs,field,date,gameId){
             const ip=p.ip!=null?p.ip:(Math.floor((p.outs||0)/3)+'.'+(p.outs||0)%3);
             const dec = p.decision;
             const decBadge = dec ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;background:${dec==='W'?'#dcfce7':dec==='L'?'#fee2e2':'#f3f4f6'};color:${dec==='W'?'#166534':dec==='L'?'#991b1b':'#374151'}">${dec}</span>` : '';
+            const pc=p.pitches||(p.balls||0)+(p.strikes||0)||null;
             return `<tr>
               <td style="text-align:left"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${decBadge}</td>
-              <td>${ip}</td><td>${p.h||0}</td><td>${p.r||0}</td><td>${p.er||p.r||0}</td><td>${p.bb||0}</td><td>${p.k||p.so||0}</td>
+              <td>${ip}</td><td>${p.h||0}</td><td>${p.r||0}</td><td>${p.er||p.r||0}</td><td>${p.bb||0}</td><td>${p.k||p.so||0}</td><td>${pc||'—'}</td>
             </tr>`;}).join('')
         : `<tr><td colspan="7" style="text-align:center;padding:10px;color:#999">—</td></tr>`;
 
@@ -5655,12 +5668,12 @@ async function openBox(away,home,as,hs,field,date,gameId){
         <div class="pop-grid2">
           <div>
             <div class="pop-team-lbl" style="color:${ac}">${away}</div>
-            <table class="ptbl"><thead><tr><th style="text-align:left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th></tr></thead><tbody>${mkPitchRows(aPitch)}</tbody></table>
+            <table class="ptbl"><thead><tr><th style="text-align:left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th>PC</th></tr></thead><tbody>${mkPitchRows(aPitch)}</tbody></table>
             ${mkPitchNotes(aPitch,'away')}
           </div>
           <div>
             <div class="pop-team-lbl" style="color:${hc}">${home}</div>
-            <table class="ptbl"><thead><tr><th style="text-align:left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th></tr></thead><tbody>${mkPitchRows(hPitch)}</tbody></table>
+            <table class="ptbl"><thead><tr><th style="text-align:left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th>PC</th></tr></thead><tbody>${mkPitchRows(hPitch)}</tbody></table>
             ${mkPitchNotes(hPitch,'home')}
           </div>
         </div>`;
@@ -6223,7 +6236,7 @@ function buildStandTable(yr, sortKey, sortDir){
     const rowCls=i<3?`rank-${i+1}`:'';
     return `<tr class="${rowCls}">
       <td class="rank-cell">${medal(i)||i+1}</td>
-      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="${r._id?`goPage('team','${r._id}')`:`goTeamByName('${r.t}')`}" title="View ${r.t} team page">${(()=>{const lid=getLogoId(r.t,r._id);return lid?`<span style="display:inline-block;width:42px;height:42px;overflow:hidden;margin-right:8px;flex-shrink:0;vertical-align:middle"><img src="logos/${lid}.png" style="width:100%;height:100%;object-fit:contain;display:block" loading="lazy"></span>`:r._color?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${r._color};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''})()}<span style="vertical-align:middle">${r.t}</span></td>
+      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="${r._id?`goPage('team','${r._id}')`:`goTeamByName('${r.t}')`}" title="View ${r.t} team page">${(()=>{const lid=getLogoId(r.t,r._id);return lid?`<span style="display:inline-block;width:42px;height:42px;overflow:hidden;margin-right:8px;flex-shrink:0;vertical-align:middle"><img src="logos/${lid}.png" style="width:100%;height:100%;object-fit:contain;display:block" loading="lazy"></span>`:r._color?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${r._color};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''})()}${r._short?`<span class="stand-name-full" style="vertical-align:middle">${r.t}</span><span class="stand-name-abbr" style="vertical-align:middle">${r._short}</span>`:`<span style="vertical-align:middle">${r.t}</span>`}</td>
       <td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num">${r.ti}</td>
       <td class="num">${pctBar}</td>
       <td class="num">${r.avg.toFixed(3).replace(/^0\./,'.')}</td>
@@ -6259,7 +6272,7 @@ function buildStand2026(){
     const gb=i===0?'—':((leader.w-leader.l-(t.w-t.l))/2).toFixed(1);
     const avg=gp>0?(t.rs||0)/gp:0;
     return {
-      t:t.name, _id:t.id, _color:t.color,
+      t:t.name, _id:t.id, _color:t.color, _short:t.short||'',
       w:t.w||0, l:t.l||0, ti:t.ti||0,
       pct:t.pct||0, avg, gb,
       pf:t.rs||0, pa:t.ra||0,
