@@ -2954,7 +2954,25 @@ async function loadAllData() {
       // Apply pitching stats to PLAYERS (only real pitchers with recorded outs)
       PLAYERS.forEach(pl => {
         const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
-        const pm = pitMap[key];
+        let pm = pitMap[key];
+        if (!pm) {
+          const nm = pl.name.toLowerCase();
+          pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1];
+        }
+        if (!pm) {
+          const plParts = pl.name.toLowerCase().split(/\s+/);
+          if (plParts.length >= 2) {
+            const plInitial = plParts[0][0], plLast = plParts.slice(1).join(' ');
+            const plTeam = (pl.team||'').toLowerCase();
+            pm = Object.entries(pitMap).find(([k]) => {
+              const [kNm, kSid] = k.split('||');
+              const kP = kNm.split(/\s+/);
+              if (kP.length < 2) return false;
+              const kF = kP[0].replace(/\./g,'');
+              return kF.length===1 && kF===plInitial && kP.slice(1).join(' ')===plLast && (!kSid||kSid===plTeam);
+            })?.[1];
+          }
+        }
         if (!pm || pm.ipOuts === 0) { pl.ip = 0; return; }
         pl.ip         = parseFloat(`${Math.floor(pm.ipOuts/3)}.${pm.ipOuts%3}`);
         pl.gs         = pm.gs;
@@ -5617,8 +5635,22 @@ async function openBox(away,home,as,hs,field,date,gameId){
         const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
         const avg=(p.ab>0)?(h/p.ab).toFixed(3).replace(/^0/,''):'.000';
         const _pname=p.name?.toLowerCase();
-        const player=PLAYERS.find(pl=>pl.name.toLowerCase()===_pname&&(teamObj?(pl.team===teamObj.id||pl.team===teamShort||pl.team.toLowerCase()===teamShort.toLowerCase()):true))
-          ||PLAYERS.find(pl=>pl.name.toLowerCase()===_pname);
+        const _teamMatch=(pl)=>!teamObj||(pl.team===teamObj.id||pl.team===teamShort||pl.team.toLowerCase()===teamShort.toLowerCase());
+        const player=PLAYERS.find(pl=>pl.name.toLowerCase()===_pname&&_teamMatch(pl))
+          ||PLAYERS.find(pl=>pl.name.toLowerCase()===_pname)
+          ||(()=>{
+            // "A Miller" → "Adam Miller" initial+last matching
+            const pP=(_pname||'').split(/\s+/);
+            if(pP.length<2) return undefined;
+            const pF=pP[0].replace(/\./g,'');
+            if(pF.length!==1) return undefined;
+            const pL=pP.slice(1).join(' ');
+            const tId=teamObj?.id?.toLowerCase();
+            return PLAYERS.find(pl=>{
+              const qP=pl.name.toLowerCase().split(/\s+/);
+              return qP.length>=2&&qP[0][0]===pF&&qP.slice(1).join(' ')===pL&&(!tId||pl.team.toLowerCase()===tId);
+            });
+          })();
         const nameEl=player
           ? `<span onclick="closeScPop();openModal('${player.id}')" style="font-weight:600;color:#002D72;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${p.name||''}</span>`
           : `<span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>`;
