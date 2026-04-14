@@ -2738,16 +2738,28 @@ let TEAM_CALENDARS_DB = {};
 async function loadAllData() {
   try {
     // Load all collections in parallel from Firebase
-    const [teams, histTeams, players, games, recaps, history, calendars, boxScores] = await Promise.all([
+    const [teams, histTeams, players, games, recaps, history, calendars, boxScoresRaw] = await Promise.all([
       fbFetch('teams', 'name'),
       fbFetch('hist_teams', 'name'),
-      fbFetch('players').catch(()=>[]),
+      fbFetch('players').catch(e=>{console.error('players load FAILED:',e);return[];}),
       fbFetch('games', 'wk'),
       fbFetch('recaps', 'wk').catch(()=>[]),
       fbFetch('league_history', 'yr').catch(()=>[]),
       fbFetch('team_calendars').catch(()=>[]),
-      fbFetch('box_scores').catch(()=>[])
+      fbFetch('box_scores').catch(e=>{console.error('box_scores fbFetch FAILED:',e);return[];})
     ]);
+
+    // If box_scores failed to load via fbFetch, try direct import (same method as openBox modal)
+    let boxScores = boxScoresRaw;
+    if (boxScores.length === 0) {
+      try {
+        const { collection: _c, getDocs: _gd } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+        const _snap = await _gd(_c(await getDb(), 'box_scores'));
+        boxScores = _snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (boxScores.length > 0) console.warn('box_scores: fbFetch returned 0 but direct import got', boxScores.length);
+      } catch(e2) { console.error('box_scores direct import ALSO failed:', e2); }
+    }
+    console.warn('[DVSL]', 'teams:', teams.length, 'players:', players.length, 'games:', games.length, 'box_scores:', boxScores.length);
 
     // Map teams — sort by pct desc
     TEAMS = teams
@@ -2928,6 +2940,16 @@ async function loadAllData() {
       });
 
       PLAYERS.sort((a, b) => b.avg - a.avg);
+
+      // ── Diagnostic (check browser console) ──
+      const _ws=PLAYERS.filter(p=>p.ab>0).length, _wl=PLAYERS.filter(p=>p.log?.length>0).length;
+      console.warn('[DVSL stats]','finalBS:',finalBS.length,'batMapKeys:',Object.keys(batMap).length,'logMapKeys:',Object.keys(logMap).length,'playersWithStats:',_ws,'playersWithLog:',_wl);
+      console.warn('[DVSL batMapKey0]',Object.keys(batMap)[0]||'(none)');
+      console.warn('[DVSL player0]',PLAYERS[0]?{name:PLAYERS[0].name,team:PLAYERS[0].team,ab:PLAYERS[0].ab,logLen:PLAYERS[0].log?.length}:'(none)');
+      window._dvslDebug={boxScoreCount:boxScores.length,finalBSCount:finalBS.length,playerCount:PLAYERS.length,playersWithStats:_ws,playersWithLog:_wl,batMapKeys:Object.keys(batMap).slice(0,10),logMapKeys:Object.keys(logMap).slice(0,10),sampleBS:finalBS[0]?{id:finalBS[0].id,status:finalBS[0].status,away:finalBS[0].away,home:finalBS[0].home,awayLen:finalBS[0].away_lineup?.length,awayP0:finalBS[0].away_lineup?.[0]?.name}:null,samplePlayer:PLAYERS[0]?{name:PLAYERS[0].name,team:PLAYERS[0].team}:null};
+    } else {
+      console.warn('[DVSL] NO box scores with lineup data — total loaded:',boxScores.length,boxScores[0]?{id:boxScores[0].id,status:boxScores[0].status,away:boxScores[0].away,awayLen:boxScores[0].away_lineup?.length}:'(array empty)');
+      window._dvslDebug={boxScoreCount:boxScores.length,finalBSCount:0,playerCount:PLAYERS.length};
     }
 
     // Map games -> SCHEDULE_PREVIEW format, sort by wk then time
