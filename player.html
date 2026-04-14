@@ -116,6 +116,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
         <option value="">— Select your name —</option>
       </select>
     </div>
+    <div id="signup-hint" style="display:none;font-size:12px;color:var(--muted);margin:-16px 0 20px;padding:10px 14px;background:var(--bg2);border-radius:8px;border-left:3px solid #f59e0b">
+      Don't see your name? <a href="registration.html" style="color:var(--navy);font-weight:600;text-decoration:underline">Register here</a> to join your team's roster — you'll appear in this list once approved.
+    </div>
 
     <div id="avail-content">
       <div class="empty-state">Select your name above to get started.</div>
@@ -218,7 +221,7 @@ async function loadData() {
   document.getElementById('avail-content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
   try {
     const [playersSnap, gamesSnap] = await Promise.all([
-      getDocs(query(collection(db,'players'), where('team_id','==',MY_TEAM.id))),
+      getDocs(query(collection(db,'players'), where('team','==',MY_TEAM.id))),
       getDocs(collection(db,'games'))
     ]);
     MY_PLAYERS = playersSnap.docs.map(d=>({id:d.id,...d.data()})).filter(p=>p.active!==false).sort((a,b)=>(a.num||0)-(b.num||0));
@@ -234,6 +237,8 @@ async function loadData() {
     });
     const saved = localStorage.getItem('player_portal_'+MY_TEAM.id);
     if (saved) sel.value = saved;
+    // Show signup hint once roster is loaded
+    document.getElementById('signup-hint').style.display = 'block';
     renderAvailability();
   } catch(e) {
     document.getElementById('avail-content').innerHTML = `<div class="empty-state">Failed to load: ${e.message}</div>`;
