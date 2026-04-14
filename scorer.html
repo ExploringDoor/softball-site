@@ -4621,17 +4621,72 @@ document.getElementById('gom-continue-btn').addEventListener('click', () => {
   document.getElementById('game-over-overlay').classList.remove('open');
 });
 
-document.getElementById('gom-exit-btn').addEventListener('click', () => {
+document.getElementById('gom-exit-btn').addEventListener('click', async () => {
   document.getElementById('game-over-overlay').classList.remove('open');
-  saveBoxScore();
+  await saveBoxScore();
   if (G.gameId && G.gameId !== 'practice') {
-    updateDoc(doc(db, 'games', G.gameId), { done: true, live: false }).catch(() => {});
-    deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {}); // game over — remove saved state
+    await updateDoc(doc(db, 'games', G.gameId), {
+      done: true, live: false,
+      away_score: G.awayScore, home_score: G.homeScore
+    }).catch(() => {});
+    deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
+    recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
   }
   document.getElementById('app').classList.remove('visible');
   document.getElementById('bottom-nav').classList.remove('active');
   document.getElementById('setup-screen').style.display = 'flex';
 });
+
+// Recalculate standings by reading all done games from Firestore
+async function recalcStandingsFromAllGames() {
+  const { collection, getDocs, query, where, updateDoc: upd, doc: firestoreDoc } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+  const gamesSnap = await getDocs(query(collection(db, 'games'), where('done', '==', true)));
+  const teamsSnap = await getDocs(collection(db, 'teams'));
+
+  const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+  const stats = {};
+  allTeams.forEach(t => { stats[t.id] = { w:0, l:0, rs:0, ra:0, results:[] }; });
+
+  const doneGames = gamesSnap.docs.map(d => d.data()).sort((a,b) => (a.wk||0) - (b.wk||0));
+  doneGames.forEach(g => {
+    const as = g.away_score || 0, hs = g.home_score || 0;
+    if (stats[g.away]) {
+      stats[g.away].rs += as; stats[g.away].ra += hs;
+      if (as > hs) { stats[g.away].w++; stats[g.away].results.push('W'); }
+      else if (as < hs) { stats[g.away].l++; stats[g.away].results.push('L'); }
+    }
+    if (stats[g.home]) {
+      stats[g.home].rs += hs; stats[g.home].ra += as;
+      if (hs > as) { stats[g.home].w++; stats[g.home].results.push('W'); }
+      else if (hs < as) { stats[g.home].l++; stats[g.home].results.push('L'); }
+    }
+  });
+
+  let maxWinDiff = -Infinity;
+  Object.values(stats).forEach(s => {
+    s.pct = (s.w + s.l) > 0 ? (s.w / (s.w + s.l)) : 0;
+    const wd = s.w - s.l;
+    if (wd > maxWinDiff) maxWinDiff = wd;
+    const r = s.results;
+    if (r.length > 0) {
+      let last = r[r.length - 1], count = 0;
+      for (let i = r.length - 1; i >= 0 && r[i] === last; i--) count++;
+      s.streak = last + count;
+    } else { s.streak = '-'; }
+  });
+  Object.values(stats).forEach(s => {
+    const diff = maxWinDiff - (s.w - s.l);
+    s.gb = diff === 0 ? '-' : (diff / 2).toString();
+  });
+
+  for (const t of allTeams) {
+    const s = stats[t.id]; if (!s) continue;
+    await upd(firestoreDoc(db, 'teams', t.id), {
+      w: s.w, l: s.l, pct: parseFloat(s.pct.toFixed(3)),
+      rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
+    }).catch(() => {});
+  }
+}
 
 function exportBoxScorePDF() {
   const away = G.awayTeam.name || G.awayTeam.short;
@@ -4950,18 +5005,46 @@ async function saveFullState() {
 async function saveBoxScore() {
   if (!G.gameId) return;
   try {
+    // Convert G.playerStats[side][pid] + G.lineups[side] into lineup arrays
+    // that index.html's stats aggregation expects: [{name, num, pos, ab, r, s, d, t, hr, rbi, bb, so}]
+    function buildLineupArray(side) {
+      const lineup = G.lineups[side] || [];
+      const stats = G.playerStats[side] || {};
+      return lineup.map(player => {
+        const pid = player.pid || player.id;
+        const ps = stats[pid] || {};
+        return {
+          name: player.name,
+          num: player.num || '?',
+          pos: player.pos || '',
+          ab:  ps.ab  || 0,
+          r:   ps.r   || 0,
+          s:   ps.singles || 0,
+          d:   ps.doubles || 0,
+          t:   ps.triples || 0,
+          hr:  ps.hr  || 0,
+          h:   (ps.singles||0) + (ps.doubles||0) + (ps.triples||0) + (ps.hr||0),
+          rbi: ps.rbi || 0,
+          bb:  ps.bb  || 0,
+          so:  ps.so  || 0,
+        };
+      }).filter(p => p.ab > 0 || p.bb > 0); // only players who batted
+    }
+
     await setDoc(doc(db, 'box_scores', G.gameId), {
-      game_id: G.gameId,
-      away_score: G.awayScore,
-      home_score: G.homeScore,
-      inning: G.inning,
-      linescores: G.linescores,
-      playerStats: G.playerStats,
-      pitcherStats: G.pitcherStats,
-      awayTeam: G.awayTeam,
-      homeTeam: G.homeTeam,
-      status: 'final',
-      createdAt: new Date().toISOString(),
+      game_id:      G.gameId,
+      away:         G.awayTeam.id,
+      home:         G.homeTeam.id,
+      away_score:   G.awayScore,
+      home_score:   G.homeScore,
+      inning:       G.inning,
+      linescores:   G.linescores,
+      away_lineup:  buildLineupArray('away'),
+      home_lineup:  buildLineupArray('home'),
+      away_pitchers: G.pitcherStats?.away ? Object.values(G.pitcherStats.away) : [],
+      home_pitchers: G.pitcherStats?.home ? Object.values(G.pitcherStats.home) : [],
+      status:       'final',
+      created_at:   new Date().toISOString(),
     });
   } catch (err) {
     console.warn('saveBoxScore error:', err);

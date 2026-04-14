@@ -317,10 +317,23 @@ select.form-input{cursor:pointer}
 
     <!-- ATTENDANCE -->
     <div class="section" id="sec-attendance">
-      <div class="section-title">Attendance</div>
-      <div class="section-sub">Games played per player based on submitted box scores</div>
+      <div class="section-title">Game Availability</div>
+      <div class="section-sub">Let your team know which games you can make.</div>
+
+      <!-- Who are you? -->
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <label style="font-weight:600;font-size:13px;white-space:nowrap">Who are you?</label>
+        <select id="avail-player-select" onchange="onAvailPlayerChange()" style="flex:1;min-width:180px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--card);color:var(--text)">
+          <option value="">— Select your name —</option>
+        </select>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button onclick="showAvailView('my')" id="avail-tab-my" class="btn btn-primary btn-sm">My Availability</button>
+          <button onclick="showAvailView('team')" id="avail-tab-team" class="btn btn-outline btn-sm">Team Summary</button>
+        </div>
+      </div>
+
       <div id="attendance-content">
-        <div class="loading"><div class="spinner"></div> Loading...</div>
+        <div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Select your name above to get started.</div>
       </div>
     </div>
 
@@ -375,7 +388,7 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -1597,54 +1610,169 @@ window.savePaymentField = async function(playerId, playerName, field, value) {
 // ═══════════════════════════════════════════════════════════════════
 // ATTENDANCE
 // ═══════════════════════════════════════════════════════════════════
-async function renderAttendance() {
+// ── Availability ────────────────────────────────────────────────────
+let _availView = 'my'; // 'my' or 'team'
+let _availRsvps = {};  // gameId → status for current player
+
+function renderAttendance() {
+  // Populate player dropdown
+  const sel = document.getElementById('avail-player-select');
+  if (sel && MY_PLAYERS.length && sel.options.length <= 1) {
+    MY_PLAYERS.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name + (p.num ? ` (#${p.num})` : '');
+      sel.appendChild(opt);
+    });
+    // Restore saved selection
+    const saved = localStorage.getItem('avail_player_' + captainData.team_id);
+    if (saved) sel.value = saved;
+  }
+  showAvailView(_availView);
+}
+
+window.onAvailPlayerChange = function() {
+  const sel = document.getElementById('avail-player-select');
+  localStorage.setItem('avail_player_' + captainData.team_id, sel.value);
+  showAvailView('my');
+};
+
+window.showAvailView = async function(view) {
+  _availView = view;
+  document.getElementById('avail-tab-my').className = view === 'my' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  document.getElementById('avail-tab-team').className = view === 'team' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  if (view === 'my') await renderMyAvailability();
+  else await renderTeamAvailability();
+};
+
+async function renderMyAvailability() {
   const el = document.getElementById('attendance-content');
-  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading box scores...</div>';
+  const sel = document.getElementById('avail-player-select');
+  const playerId = sel?.value;
+  if (!playerId) {
+    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">Select your name above to get started.</div>';
+    return;
+  }
+  const player = MY_PLAYERS.find(p => p.id === playerId);
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+
+  // Load existing RSVPs for this player
   try {
-    const snap = await getDocs(query(collection(db, 'box_scores'), where('status', '==', 'final')));
-    const boxScores = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const myId = captainData.team_id;
-    const myBoxScores = boxScores.filter(bs => bs.away === myId || bs.home === myId);
-    const gameCount = myBoxScores.length;
+    const snap = await getDocs(query(
+      collection(db, 'availability'),
+      where('player_id', '==', playerId),
+      where('team_id', '==', captainData.team_id)
+    ));
+    _availRsvps = {};
+    snap.docs.forEach(d => { _availRsvps[d.data().game_id] = d.data().status; });
+  } catch(e) { _availRsvps = {}; }
 
-    // Count appearances per player name
-    const appearances = {};
-    for (const bs of myBoxScores) {
-      const side = bs.away === myId ? (bs.away_lineup || bs.awayLineup) : (bs.home_lineup || bs.homeLineup);
-      if (!Array.isArray(side)) continue;
-      for (const p of side) {
-        const nm = (p.name || '').trim().toLowerCase();
-        if (!nm) continue;
-        appearances[nm] = (appearances[nm] || 0) + 1;
-      }
-    }
+  const upcoming = MY_GAMES.filter(g => !g.done).sort((a,b) => (a.wk||0)-(b.wk||0));
+  const past = MY_GAMES.filter(g => g.done).sort((a,b) => (b.wk||0)-(a.wk||0)).slice(0,5);
 
-    if (!MY_PLAYERS.length) { el.innerHTML = '<div class="empty">No players on roster.</div>'; return; }
+  const gameBlock = (games, label) => {
+    if (!games.length) return '';
+    return `<div style="margin-bottom:24px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">${label}</div>
+      ${games.map(g => {
+        const opp = g.away === captainData.team_id ? g.home : g.away;
+        const oppTeam = ALL_TEAMS.find(t => t.id === opp);
+        const oppName = oppTeam?.name || opp?.toUpperCase() || 'TBD';
+        const homeAway = g.home === captainData.team_id ? 'vs' : '@';
+        const status = _availRsvps[g.id] || '';
+        return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:14px">Wk ${g.wk} · ${homeAway} <span style="color:${oppTeam?.color||'var(--navy)'}">${oppName}</span></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${g.date||''} ${g.day?'·'+g.day:''} ${g.time?'· '+g.time:''} ${g.field?'· '+g.field:''}</div>
+          </div>
+          ${g.done ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Game played</span>` : `
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button onclick="setAvail('${g.id}','yes')" style="padding:8px 16px;border-radius:8px;border:2px solid ${status==='yes'?'var(--green)':'var(--border)'};background:${status==='yes'?'rgba(34,197,94,.12)':'transparent'};color:${status==='yes'?'var(--green)':'var(--muted)'};font-weight:700;font-size:13px;cursor:pointer;transition:all .15s">✓ Yes</button>
+            <button onclick="setAvail('${g.id}','maybe')" style="padding:8px 16px;border-radius:8px;border:2px solid ${status==='maybe'?'#f59e0b':'var(--border)'};background:${status==='maybe'?'rgba(245,158,11,.12)':'transparent'};color:${status==='maybe'?'#f59e0b':'var(--muted)'};font-weight:700;font-size:13px;cursor:pointer;transition:all .15s">? Maybe</button>
+            <button onclick="setAvail('${g.id}','no')" style="padding:8px 16px;border-radius:8px;border:2px solid ${status==='no'?'var(--red)':'var(--border)'};background:${status==='no'?'rgba(200,16,46,.1)':'transparent'};color:${status==='no'?'var(--red)':'var(--muted)'};font-weight:700;font-size:13px;cursor:pointer;transition:all .15s">✕ No</button>
+          </div>`}
+        </div>`;
+      }).join('')}
+    </div>`;
+  };
 
-    el.innerHTML = `
-      <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${gameCount} final game(s) with box scores recorded</div>
-      <div class="tbl-wrap"><table class="tbl">
-        <thead><tr><th>Player</th><th>#</th><th style="text-align:center">GP</th><th>Attendance</th></tr></thead>
-        <tbody>${MY_PLAYERS.map(p => {
-          const gp = appearances[p.name.toLowerCase()] || 0;
-          const pct = gameCount > 0 ? Math.round(gp / gameCount * 100) : 0;
-          const barColor = pct >= 75 ? 'var(--green)' : pct >= 50 ? 'var(--yellow)' : 'var(--red)';
-          return `<tr>
-            <td><strong>${esc(p.name)}</strong></td>
-            <td>${p.num || '-'}</td>
-            <td style="text-align:center;font-weight:700">${gp}${gameCount ? `<span style="color:var(--muted);font-weight:400">/${gameCount}</span>` : ''}</td>
-            <td style="min-width:120px">
-              <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
-                <div style="height:100%;width:${pct}%;background:${barColor};transition:width .3s"></div>
-              </div>
-              <div style="font-size:11px;color:var(--muted2);margin-top:2px">${pct}%</div>
-            </td>
-          </tr>`;
-        }).join('')}
-        </tbody>
-      </table></div>`;
+  el.innerHTML = `
+    <div style="font-size:13px;font-weight:600;margin-bottom:16px">Marking availability as: <span style="color:var(--navy)">${player?.name || ''}</span></div>
+    ${upcoming.length ? gameBlock(upcoming, 'Upcoming Games') : '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">No upcoming games scheduled.</div>'}
+    ${past.length ? gameBlock(past, 'Recent Games') : ''}`;
+}
+
+window.setAvail = async function(gameId, status) {
+  const sel = document.getElementById('avail-player-select');
+  const playerId = sel?.value;
+  if (!playerId) return;
+  const player = MY_PLAYERS.find(p => p.id === playerId);
+  try {
+    const docId = captainData.team_id + '_' + gameId + '_' + playerId;
+    await setDoc(doc(db, 'availability', docId), {
+      game_id: gameId,
+      player_id: playerId,
+      player_name: player?.name || '',
+      team_id: captainData.team_id,
+      status: status,
+      updated_at: new Date().toISOString()
+    });
+    _availRsvps[gameId] = status;
+    await renderMyAvailability(); // re-render to update button highlights
   } catch(e) {
-    el.innerHTML = `<div class="empty">Could not load box scores: ${e.message}</div>`;
+    toast('Could not save: ' + e.message, 'error');
+  }
+};
+
+async function renderTeamAvailability() {
+  const el = document.getElementById('attendance-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading team RSVPs...</div>';
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'availability'),
+      where('team_id', '==', captainData.team_id)
+    ));
+    // Build map: gameId → {yes:[names], maybe:[names], no:[names]}
+    const byGame = {};
+    snap.docs.forEach(d => {
+      const r = d.data();
+      if (!byGame[r.game_id]) byGame[r.game_id] = { yes:[], maybe:[], no:[] };
+      if (r.status === 'yes' || r.status === 'maybe' || r.status === 'no') {
+        byGame[r.game_id][r.status].push(r.player_name);
+      }
+    });
+
+    const upcoming = MY_GAMES.filter(g => !g.done).sort((a,b) => (a.wk||0)-(b.wk||0));
+    if (!upcoming.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">No upcoming games.</div>'; return; }
+
+    el.innerHTML = upcoming.map(g => {
+      const opp = g.away === captainData.team_id ? g.home : g.away;
+      const oppTeam = ALL_TEAMS.find(t => t.id === opp);
+      const oppName = oppTeam?.name || opp?.toUpperCase() || 'TBD';
+      const homeAway = g.home === captainData.team_id ? 'vs' : '@';
+      const rsvp = byGame[g.id] || { yes:[], maybe:[], no:[] };
+      const responded = rsvp.yes.length + rsvp.maybe.length + rsvp.no.length;
+      const total = MY_PLAYERS.length;
+      const namePills = (names, color) => names.length
+        ? names.map(n => `<span style="display:inline-block;background:${color}18;color:${color};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin:2px">${esc(n)}</span>`).join('')
+        : `<span style="font-size:11px;color:var(--muted);font-style:italic">None yet</span>`;
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-weight:700;font-size:15px">Wk ${g.wk} · ${homeAway} <span style="color:${oppTeam?.color||'var(--navy)'}">${oppName}</span></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${g.date||''} ${g.time?'· '+g.time:''} ${g.field?'· '+g.field:''}</div>
+          </div>
+          <span style="font-size:12px;color:var(--muted)">${responded}/${total} responded</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <div><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--green);margin-bottom:4px">✓ Yes (${rsvp.yes.length})</div>${namePills(rsvp.yes,'var(--green)')}</div>
+          <div><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#f59e0b;margin-bottom:4px">? Maybe (${rsvp.maybe.length})</div>${namePills(rsvp.maybe,'#f59e0b')}</div>
+          <div><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--red);margin-bottom:4px">✕ No (${rsvp.no.length})</div>${namePills(rsvp.no,'var(--red)')}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Could not load availability: ${e.message}</div>`;
   }
 }
 
