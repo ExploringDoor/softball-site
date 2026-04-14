@@ -398,10 +398,38 @@ body.dark .nav-team-item:hover{background:rgba(255,255,255,.07)}
 .modal-close{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;background:rgba(0,0,0,.04);border:1px solid var(--border2);color:var(--white);border-radius:8px;padding:10px 20px;cursor:pointer;transition:all .2s;min-height:44px;min-width:80px}
 .modal-close:hover{border-color:var(--gold);color:var(--gold)}
 .modal-inner{padding:28px 32px 36px}
-.modal-hero{display:flex;gap:22px;align-items:flex-start;margin-bottom:26px}
+.modal-hero{display:flex;gap:22px;align-items:flex-start;margin-bottom:20px}
 .modal-av{width:100px;height:100px;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-family:'Oswald',sans-serif;font-weight:700;font-size:30px;flex-shrink:0;position:relative;overflow:hidden}
 .modal-av img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;border-radius:50%}
 .modal-pname{font-family:'Oswald',sans-serif;font-weight:700;font-size:52px;text-transform:uppercase;line-height:.92;margin-bottom:10px;letter-spacing:-.01em}
+/* Compact stat pill next to player name */
+.modal-stat-pill{display:inline-flex;align-items:center;gap:0;background:rgba(0,45,114,.06);border:1px solid rgba(0,45,114,.12);border-radius:10px;padding:10px 16px;margin-top:12px}
+.msp-item{text-align:center;padding:0 14px}
+.msp-item:first-child{padding-left:0}
+.msp-item:last-child{padding-right:0}
+.msp-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;color:var(--gold);line-height:1}
+.msp-lbl{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.msp-sep{width:1px;height:32px;background:rgba(0,45,114,.15)}
+body.dark .modal-stat-pill{background:rgba(91,154,255,.08);border-color:rgba(91,154,255,.15)}
+body.dark .msp-sep{background:rgba(255,255,255,.1)}
+/* Batting / stats section */
+.modal-batting-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.modal-batting-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:var(--gold)}
+.modal-see-all{font-size:12px;font-weight:600;color:var(--gold);cursor:pointer;background:none;border:none;padding:0;text-decoration:underline;text-underline-offset:2px}
+.modal-see-all:hover{opacity:.75}
+.bat-tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:10px;margin-bottom:20px}
+.bat-tbl{width:100%;border-collapse:collapse;min-width:480px;font-size:13px}
+.bat-tbl thead th{background:var(--bg2);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:10px 12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+.bat-tbl thead th:first-child{text-align:left}
+.bat-tbl tbody td{padding:10px 12px;text-align:right;border-bottom:1px solid rgba(0,0,0,.05)}
+.bat-tbl tbody td:first-child{text-align:left;font-weight:600;color:var(--white)}
+.bat-tbl tbody tr:last-child td{border-bottom:none}
+.bat-tbl tbody tr:hover td{background:rgba(0,45,114,.03)}
+.bat-tbl tr.career-row td{background:rgba(0,45,114,.04);font-style:italic;border-top:1px solid var(--border)}
+.bat-tbl tr.proj-row td{color:var(--muted);font-style:italic}
+.bat-tbl tr.proj-row td:first-child{color:var(--muted);font-weight:600}
+body.dark .bat-tbl thead th{background:var(--bg2)}
+body.dark .bat-tbl tr.career-row td{background:rgba(91,154,255,.07)}
 .modal-pmeta{font-size:15px;font-family:'Inter',sans-serif;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
 .modal-pmeta span{color:var(--white);font-weight:600;font-family:'Inter',sans-serif}
 .modal-stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:26px}
@@ -4004,6 +4032,18 @@ function openModal(playerId){
   const t=getTeam(p.team);
   history.pushState({page:'modal',playerId:playerId},'','#modal/'+playerId);
   const inner=document.getElementById('modal-inner');
+
+  // Compute rate stats
+  const _fmt=v=>v>=1?v.toFixed(3):(v>0?v.toFixed(3).replace(/^0/,''):'.000');
+  const _calcR=s=>{
+    const avgV=s.ab>0?s.h/s.ab:0;
+    const obpV=(s.ab+s.bb)>0?(s.h+s.bb)/(s.ab+s.bb):0;
+    const sing=(s.h||0)-(s.hr||0)-(s.d||0)-(s.t||0);
+    const slgV=s.ab>0?(sing+2*(s.d||0)+3*(s.t||0)+4*(s.hr||0))/s.ab:0;
+    return{avg:_fmt(avgV),obp:_fmt(obpV),slg:_fmt(slgV),ops:_fmt(obpV+slgV)};
+  };
+  const rates=_calcR({ab:p.ab,h:p.h,d:p.d||0,t:p.t||0,hr:p.hr,bb:p.bb});
+
   inner.innerHTML=`
     <div class="modal-hero">
       <div class="modal-av" style="border-color:${t?.color||'#ddd'};background:${t?.id&&LOGO_TEAMS.has(t.id)?'#f8f8f8':'#f0f0f0'};color:${t?.color||'#888'}">${t?.id&&LOGO_TEAMS.has(t.id)?`<img src="logos/${t.id}.png" style="width:80%;height:80%;object-fit:contain;position:absolute;inset:10%">`:p.name.split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
@@ -4016,76 +4056,122 @@ function openModal(playerId){
           <span style="color:var(--muted)">·</span>
           <span style="cursor:pointer;color:${t?.color}" onclick="closeModal();goPage('team','${t?.id}')">${t?.name||''}</span>
         </div>
-        <div style="margin-top:10px">
+        <div style="margin-top:8px">
           <span class="tag" style="background:${t?.color||'var(--gold)'}18;color:${t?.color||'var(--gold)'};font-size:10px">${t?.short} · Division ${t?.div}</span>
           <span class="tag" style="background:rgba(34,197,94,.12);color:var(--green);margin-left:6px;font-size:10px">2026 Season</span>
         </div>
+        <div class="modal-stat-pill">
+          <div class="msp-item"><div class="msp-val">${rates.avg}</div><div class="msp-lbl">AVG</div></div>
+          <div class="msp-sep"></div>
+          <div class="msp-item"><div class="msp-val">${p.hr}</div><div class="msp-lbl">HR</div></div>
+          <div class="msp-sep"></div>
+          <div class="msp-item"><div class="msp-val">${p.rbi}</div><div class="msp-lbl">RBI</div></div>
+          <div class="msp-sep"></div>
+          <div class="msp-item"><div class="msp-val">${rates.ops}</div><div class="msp-lbl">OPS</div></div>
+        </div>
       </div>
-    </div>
-    <div class="modal-stat-row">
-      <div class="mstat"><div class="mstat-v">${avg(p.avg)}</div><div class="mstat-l">AVG</div></div>
-      <div class="mstat"><div class="mstat-v">${p.hr}</div><div class="mstat-l">HR</div></div>
-      <div class="mstat"><div class="mstat-v">${p.rbi}</div><div class="mstat-l">RBI</div></div>
-      <div class="mstat"><div class="mstat-v">${p.h}</div><div class="mstat-l">Hits</div></div>
-      <div class="mstat"><div class="mstat-v">${p.ab}</div><div class="mstat-l">AB</div></div>
-      <div class="mstat"><div class="mstat-v">${p.r}</div><div class="mstat-l">Runs</div></div>
-      <div class="mstat"><div class="mstat-v">${p.bb}</div><div class="mstat-l">BB</div></div>
-      <div class="mstat"><div class="mstat-v">${slg(p.slg)}</div><div class="mstat-l">SLG</div></div>
-    </div>
-    <div class="modal-sec">Game Log</div>
-    <table class="glog-tbl"><thead><tr><th>Opponent</th><th>AB</th><th>H</th><th>HR</th><th>RBI</th><th>BB</th><th>R</th><th>Result</th></tr></thead>
-    <tbody>${p.log.map(g=>`<tr>
-      <td style="font-weight:500">${g.opp}</td>
-      <td>${g.ab}</td><td>${g.h}</td><td>${g.hr||'—'}</td><td>${g.rbi}</td><td>${g.bb||0}</td><td>${g.r}</td>
-      <td><span class="${g.res[0]==='W'?'badge-w':'badge-l'}">${g.res}</span></td>
-    </tr>`).join('')}</tbody></table>`;
-  // ── Year-by-year stats (all players) ──────────────────────
-  const _fmt=v=>v>0?(v<1?v.toFixed(3).replace(/^0/,''):v.toFixed(3)):'.000';
-  const _calcR=s=>{
-    const avg=s.ab>0?s.h/s.ab:0;
-    const obp=(s.ab+s.bb)>0?(s.h+s.bb)/(s.ab+s.bb):0;
-    const sing=(s.h||0)-(s.hr||0)-(s.d||0)-(s.t||0);
-    const slg=s.ab>0?(sing+2*(s.d||0)+3*(s.t||0)+4*(s.hr||0))/s.ab:0;
-    return{avg:_fmt(avg),obp:_fmt(obp),slg:_fmt(slg),ops:_fmt(obp+slg)};
-  };
-  // Build 2026 season row from current player data
-  const _s26={year:'2026',teamName:t?.name||'',gp:p.gp||p.log?.length||0,ab:p.ab,h:p.h,d:p.d||0,t:p.t||0,hr:p.hr,rbi:p.rbi,r:p.r,bb:p.bb};
-  _s26.rates=_calcR(_s26);
-  // Historical seasons (TBIR only)
+    </div>`;
+
+  // ── 2026 Batting stats table ─────────────────────────────
+  const SEASON_GAMES=15; // total games in a DVSL season
   const _career=getCareerStats(p.name);
   const _histSeasons=_career?_career.seasons:[];
-  // Combine: historical first, then 2026
+  const _s26={year:'2026',teamName:t?.name||'',gp:p.gp||p.log?.length||0,ab:p.ab,h:p.h,d:p.d||0,t:p.t||0,hr:p.hr,rbi:p.rbi,r:p.r,bb:p.bb};
+  _s26.rates=_calcR(_s26);
   const _allSeasons=[..._histSeasons, _s26];
-  // Only show if they have some actual data (either history or current stats)
-  const _hasStats=_histSeasons.length>0||(p.ab>0);
-  if(_hasStats){
-    // Compute career totals
-    const _tot={gp:0,ab:0,h:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0};
-    _allSeasons.forEach(s=>{for(const k of Object.keys(_tot))_tot[k]+=(s[k]||0);});
-    _tot.rates=_calcR(_tot);
-    const _nSeas=_allSeasons.length;
-    const _tRow=row=>`<tr>
-      <td style="text-align:left;font-weight:600;color:#1a1a1a">${row.year}</td>
-      <td style="text-align:left;color:var(--muted);font-size:11px">${row.teamName||''}</td>
-      <td>${row.gp||0}</td><td>${row.ab}</td><td>${row.h}</td><td>${row.d||0}</td><td>${row.t||0}</td><td>${row.hr}</td><td>${row.rbi}</td><td>${row.r}</td><td>${row.bb}</td>
-      <td>${row.rates.avg}</td><td>${row.rates.obp}</td><td>${row.rates.slg}</td><td>${row.rates.ops}</td>
-    </tr>`;
-    inner.innerHTML += `
-    <div class="modal-sec" style="margin-top:24px">Year-by-Year Stats</div>
-    <div class="career-wrap"><table class="career-tbl">
-      <thead><tr><th style="text-align:left">Season</th><th style="text-align:left">Team</th><th>GP</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead>
-      <tbody>
-      ${_allSeasons.map(_tRow).join('')}
-      ${_nSeas>1?`<tr class="career-total">
-        <td style="text-align:left">Career</td><td></td>
-        <td>${_tot.gp}</td><td>${_tot.ab}</td><td>${_tot.h}</td><td>${_tot.d}</td><td>${_tot.t}</td><td>${_tot.hr}</td><td>${_tot.rbi}</td><td>${_tot.r}</td><td>${_tot.bb}</td>
-        <td>${_tot.rates.avg}</td><td>${_tot.rates.obp}</td><td>${_tot.rates.slg}</td><td>${_tot.rates.ops}</td>
-      </tr>`:''}
-      </tbody>
+  const _tot={gp:0,ab:0,h:0,d:0,t:0,hr:0,rbi:0,r:0,bb:0};
+  _allSeasons.forEach(s=>{for(const k of Object.keys(_tot))_tot[k]+=(s[k]||0);});
+  _tot.rates=_calcR(_tot);
+  const _nSeas=_allSeasons.length;
+  // Projected row: scale 2026 stats to full season
+  const _proj=_s26.gp>0?{year:'Projected',teamName:'',
+    gp:SEASON_GAMES,
+    ab:  Math.round(_s26.ab  /_s26.gp*SEASON_GAMES),
+    r:   Math.round(_s26.r   /_s26.gp*SEASON_GAMES),
+    h:   Math.round(_s26.h   /_s26.gp*SEASON_GAMES),
+    d:   Math.round((_s26.d||0)/_s26.gp*SEASON_GAMES),
+    t:   Math.round((_s26.t||0)/_s26.gp*SEASON_GAMES),
+    hr:  Math.round(_s26.hr  /_s26.gp*SEASON_GAMES),
+    rbi: Math.round(_s26.rbi /_s26.gp*SEASON_GAMES),
+    bb:  Math.round(_s26.bb  /_s26.gp*SEASON_GAMES),
+  }:null;
+  if(_proj) _proj.rates=_calcR(_proj);
+  const _tRow=(row,cls='')=>`<tr class="${cls}">
+    <td>${row.year}${row.teamName?`<span style="font-weight:400;color:var(--muted);font-size:11px;margin-left:6px">${row.teamName}</span>`:''}</td>
+    <td>${row.gp||0}</td><td>${row.ab}</td><td>${row.r}</td><td>${row.h}</td>
+    <td>${row.d||0}</td><td>${row.t||0}</td><td>${row.hr}</td><td>${row.rbi}</td><td>${row.bb}</td>
+    <td>${row.rates.avg}</td><td>${row.rates.obp}</td><td>${row.rates.slg}</td><td>${row.rates.ops}</td>
+  </tr>`;
+  // Cap visible seasons at 5, See All to expand
+  const INIT_ROWS=5;
+  const showAll=_allSeasons.length<=INIT_ROWS;
+  const visibleSeasons=showAll?_allSeasons:_allSeasons.slice(-INIT_ROWS);
+  inner.innerHTML+=`
+  <div class="modal-batting-hdr">
+    <div class="modal-batting-title">2026 Batting</div>
+    ${!showAll?`<button class="modal-see-all" onclick="expandModalStats('${playerId}')">See All</button>`:''}
+  </div>
+  <div class="bat-tbl-wrap" id="bat-tbl-wrap-${playerId}"><table class="bat-tbl">
+    <thead><tr><th>Season</th><th>GP</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead>
+    <tbody id="bat-tbl-body-${playerId}">
+    ${visibleSeasons.map(r=>_tRow(r)).join('')}
+    ${_proj?_tRow(_proj,'proj-row'):''}
+    ${_nSeas>1?_tRow({..._tot,year:'Career',teamName:''},'career-row'):''}
+    </tbody>
+  </table></div>`;
+  window._modalAllSeasons=_allSeasons;
+  window._modalCareerTot=_tot;
+  window._modalProj=_proj;
+  window._modalNSeas=_nSeas;
+  window._modalTRow=_tRow;
+
+  // ── Recent Games ─────────────────────────────────────────
+  const _log=p.log||[];
+  const INIT_GAMES=5;
+  const showAllGames=_log.length<=INIT_GAMES;
+  const visibleGames=_log.slice(-INIT_GAMES);
+  const logRows=(games)=>games.length?games.map(g=>`<tr>
+    <td style="font-weight:500">${g.opp||'—'}</td>
+    <td>${g.ab}</td><td>${g.h}</td><td>${g.d||0}</td><td>${g.t||0}</td><td>${g.hr||0}</td><td>${g.rbi}</td><td>${g.r}</td><td>${g.bb||0}</td>
+    <td><span class="${g.res&&g.res[0]==='W'?'badge-w':'badge-l'}">${g.res||'—'}</span></td>
+  </tr>`).join(''):`<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted);font-size:13px">No games played yet — check back once the season starts.</td></tr>`;
+  inner.innerHTML+=`
+  <div class="modal-batting-hdr" style="margin-top:4px">
+    <div class="modal-batting-title">Recent Games</div>
+    ${!showAllGames?`<button class="modal-see-all" onclick="expandModalGames('${playerId}')">See All</button>`:''}
+  </div>
+  <div class="bat-tbl-wrap"><table class="bat-tbl">
+    <thead><tr><th style="text-align:left">Opponent</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>Result</th></tr></thead>
+    <tbody id="glog-body-${playerId}">${logRows(visibleGames)}</tbody>
     </table></div>`;
+    window._modalLog=p.log;
+    window._modalLogRows=logRows;
   }
+
   document.getElementById('modal-bg').classList.add('open');
   document.body.style.overflow='hidden';
+}
+
+function expandModalStats(playerId){
+  const body=document.getElementById('bat-tbl-body-'+playerId);
+  if(!body||!window._modalAllSeasons)return;
+  const _tRow=window._modalTRow;
+  const _nSeas=window._modalNSeas;
+  const _tot=window._modalCareerTot;
+  const _proj=window._modalProj;
+  body.innerHTML=window._modalAllSeasons.map(r=>_tRow(r)).join('')
+    +(_proj?_tRow(_proj,'proj-row'):'')
+    +(_nSeas>1?_tRow({..._tot,year:'Career',teamName:''},'career-row'):'');
+  const btn=document.querySelector(`[onclick="expandModalStats('${playerId}')"]`);
+  if(btn)btn.style.display='none';
+}
+
+function expandModalGames(playerId){
+  const body=document.getElementById('glog-body-'+playerId);
+  if(!body||!window._modalLog)return;
+  body.innerHTML=window._modalLogRows(window._modalLog);
+  const btn=document.querySelector(`[onclick="expandModalGames('${playerId}')"]`);
+  if(btn)btn.style.display='none';
 }
 function closeModal(e){
   if(e&&e.target.closest('.modal-box'))return;
