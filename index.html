@@ -3555,7 +3555,7 @@ function openBsm(gameIdx){
             <div class="pop-role-lbl">Away ${awayWon?'✓':''}</div>
           </div>
           <div class="pop-sc-mid">
-            <div class="pop-sc"><span style="color:${awayWon?atColor:'rgba(0,0,0,.3)'}">${g.as}</span><span class="pop-dash">–</span><span style="color:${!awayWon?htColor:'rgba(0,0,0,.3)'}">${g.hs}</span></div>
+            <div class="pop-sc"><span style="color:${awayWon?'#1a1a1a':'rgba(0,0,0,.28)'}">${g.as}</span><span class="pop-dash">–</span><span style="color:${!awayWon?'#1a1a1a':'rgba(0,0,0,.28)'}">${g.hs}</span></div>
             <div class="pop-badge">Final</div>
           </div>
           <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goPage('team','${htTeam?.id||''}')">
@@ -5428,7 +5428,7 @@ function openRecap(away,home,as,hs,field,date){
       <div class="pop-matchup">
         <div class="pop-team" style="cursor:pointer" onclick="goTeam('${away}')"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
         <div class="pop-sc-mid">
-          <div class="pop-sc"><span style="color:${aW?ac:'rgba(239,239,239,.3)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!aW?hc:'rgba(239,239,239,.3)'}">${hs}</span></div>
+          <div class="pop-sc"><span style="color:${aW?'#1a1a1a':'rgba(0,0,0,.28)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!aW?'#1a1a1a':'rgba(0,0,0,.28)'}">${hs}</span></div>
           <div class="pop-badge">Final</div>
         </div>
         <div class="pop-team" style="cursor:pointer" onclick="goTeam('${home}')"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
@@ -5948,9 +5948,9 @@ function renderStats(){
   document.getElementById('statsHead').innerHTML = `<tr>${cols.map(c=>{
     if(!c.sortable) return `<th class="${c.cls||''}">${c.label}</th>`;
     const isSorted = c.key===sk;
-    const arrow = isSorted?(sortDir==='desc'?'↓':'↑'):'↕';
+    const arrow = isSorted?(sortDir==='desc'?'↓':'↑'):'';
     const nextDir = isSorted&&sortDir==='desc'?'asc':'desc';
-    return `<th class="${c.cls||''} ${isSorted?'sorted':''}" onclick="doSort('${c.key}','${nextDir}')">${c.label}<span class="sarr">${arrow}</span></th>`;
+    return `<th class="${c.cls||''} ${isSorted?'sorted':''}" onclick="doSort('${c.key}','${nextDir}')">${c.label}${arrow?`<span class="sarr">${arrow}</span>`:''}</th>`;
   }).join('')}</tr>`;
 
   // BODY
@@ -6206,9 +6206,9 @@ function buildStandTable(yr, sortKey, sortDir){
   const thead = document.querySelector(`#yr-${yr} thead tr`);
   thead.innerHTML = `<th>#</th><th>Team</th>` + cols.map(col=>{
     const isSorted = col.key===sortKey;
-    const arrow = isSorted ? (sortDir==='desc'?'↓':'↑') : '↕';
+    const arrow = isSorted ? (sortDir==='desc'?'↓':'↑') : '';
     const nextDir = isSorted&&sortDir==='desc'?'asc':'desc';
-    return `<th class="${col.cls}${isSorted?' sorted-col':''}" onclick="buildStandTable(${yr},'${col.key}','${nextDir}')">${col.label}<span class="sarrow">${arrow}</span></th>`;
+    return `<th class="${col.cls}${isSorted?' sorted-col':''}" onclick="buildStandTable(${yr},'${col.key}','${nextDir}')">${col.label}${arrow?`<span class="sarrow">${arrow}</span>`:''}</th>`;
   }).join('');
 
   // Build body
