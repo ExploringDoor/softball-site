@@ -5624,36 +5624,48 @@ async function openBox(away,home,as,hs,field,date,gameId){
     const aE = boxScore.away_errors || 0;
     const hE = boxScore.home_errors || 0;
 
-    // ── Player of the Game banner (top of box score) ──
-    if (boxScore.potg_name) {
-      const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===boxScore.potg_team||x.short===boxScore.potg_team);return t?.name||boxScore.potg_team||'';})();
-      const allLineup=[...aLineup,...hLineup];
-      const potgLower=boxScore.potg_name.toLowerCase();
-      const potgEntry=allLineup.find(p=>p.name?.toLowerCase()===potgLower)||allLineup.find(p=>{
-        if(!p.name) return false;
-        const nP=p.name.toLowerCase().split(/\s+/), pP=potgLower.split(/\s+/);
-        if(nP.length<2||pP.length<2) return false;
-        const nLast=nP.slice(1).join(' '), pLast=pP.slice(1).join(' ');
-        return nLast===pLast&&(nP[0][0]===pP[0][0]||nP[0].replace(/\./g,'')===pP[0][0]);
-      });
-      let potgStatLine='';
+    // ── Player of the Game banner — manual override or auto-select best stats ──
+    {
+      const allLineup=[...aLineup.map(p=>({...p,_team:away})),...hLineup.map(p=>({...p,_team:home}))];
+      // Scoring: HR×4, 3B×3, 2B×2, H×1, RBI×2, R×1
+      const potgScore=p=>{
+        const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
+        return (p.hr||0)*4+(p.t||0)*3+(p.d||0)*2+h+(p.rbi||0)*2+(p.r||0);
+      };
+      // Use manually set name OR pick the highest-scoring player
+      let potgEntry=null;
+      if(boxScore.potg_name){
+        const potgLower=boxScore.potg_name.toLowerCase();
+        potgEntry=allLineup.find(p=>p.name?.toLowerCase()===potgLower)||allLineup.find(p=>{
+          if(!p.name) return false;
+          const nP=p.name.toLowerCase().split(/\s+/), pP=potgLower.split(/\s+/);
+          if(nP.length<2||pP.length<2) return false;
+          const nLast=nP.slice(1).join(' '), pLast=pP.slice(1).join(' ');
+          return nLast===pLast&&(nP[0][0]===pP[0][0]||nP[0].replace(/\./g,'')===pP[0][0]);
+        });
+        if(!potgEntry) potgEntry={name:boxScore.potg_name,_team:boxScore.potg_team||''};
+      } else if(allLineup.length){
+        potgEntry=allLineup.reduce((best,p)=>potgScore(p)>potgScore(best)?p:best, allLineup[0]);
+        if(potgScore(potgEntry)===0) potgEntry=null; // no stats at all, skip
+      }
       if(potgEntry){
+        const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===potgEntry._team||x.short===potgEntry._team);return t?.name||potgEntry._team||'';})();
         const ph=potgEntry.h||((potgEntry.s||0)+(potgEntry.d||0)+(potgEntry.t||0)+(potgEntry.hr||0));
         const sp=[];
         if(ph) sp.push(`${ph}H`);
         if(potgEntry.hr) sp.push(`${potgEntry.hr} HR`);
         if(potgEntry.rbi) sp.push(`${potgEntry.rbi} RBI`);
         if(potgEntry.r) sp.push(`${potgEntry.r} R`);
-        if(sp.length) potgStatLine=`Batting · ${sp.join(', ')}`;
+        const potgStatLine=sp.length?`Batting · ${sp.join(', ')}`:''
+        bodyHtml += `<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+          <span style="font-size:30px;flex-shrink:0">⭐</span>
+          <div style="min-width:0">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#92400e;margin-bottom:3px">Player of the Game</div>
+            <div style="font-size:17px;font-weight:800;color:#1a1a1a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${potgEntry.name}</div>
+            <div style="font-size:12px;color:#555;margin-top:3px">${potgTeamName||''}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
+          </div>
+        </div>`;
       }
-      bodyHtml += `<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
-        <span style="font-size:30px;flex-shrink:0">⭐</span>
-        <div style="min-width:0">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#92400e;margin-bottom:3px">Player of the Game</div>
-          <div style="font-size:17px;font-weight:800;color:#1a1a1a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${boxScore.potg_name}</div>
-          <div style="font-size:12px;color:#555;margin-top:3px">${potgTeamName||''}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
-        </div>
-      </div>`;
     }
 
     // Line score with innings
