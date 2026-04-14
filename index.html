@@ -3805,7 +3805,8 @@ function buildHomeRecentScores(){
         </div>
       </div>
       <div class="gc-card-footer">
-        <button class="gc-btn gc-btn-primary" onclick="event.stopPropagation();openBox(${_bsArgs})">Box Score</button>
+        <button class="gc-btn" onclick="event.stopPropagation();openBox(${_bsArgs},'recap')">Recap</button>
+        <button class="gc-btn gc-btn-primary gc-btn-share" onclick="event.stopPropagation();openBox(${_bsArgs})">Box Score</button>
       </div>
     </div>`;
   }).join('');
@@ -5398,8 +5399,8 @@ function scheduleBlock(g, isNext){
         </div>
       </div>
       <div class="gc-card-footer">
-        <button class="gc-btn gc-btn-primary" onclick="event.stopPropagation();openBox(${_bsArgs})">Box Score</button>
-        <button class="gc-btn gc-btn-share" onclick="event.stopPropagation();shareGame('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Share</button>
+        <button class="gc-btn" onclick="event.stopPropagation();openBox(${_bsArgs},'recap')">Recap</button>
+        <button class="gc-btn gc-btn-primary gc-btn-share" onclick="event.stopPropagation();openBox(${_bsArgs})">Box Score</button>
       </div>
     </div>`;
   } else {
@@ -5545,7 +5546,7 @@ function openRecap(away,home,as,hs,field,date){
   openScPop();
 }
 
-async function openBox(away,home,as,hs,field,date,gameId){
+async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
   const ac=tc(away),hc=tc(home),aW=as>hs;
   const atm=TEAMS.find(t=>t.short===away)||HIST_TEAMS.find(t=>t.short===away);
   const htm=TEAMS.find(t=>t.short===home)||HIST_TEAMS.find(t=>t.short===home);
@@ -5866,6 +5867,7 @@ async function openBox(away,home,as,hs,field,date,gameId){
 
   bodyHtml += '</div>';
   document.getElementById('scPopContent').innerHTML = hdrHtml + bodyHtml;
+  if(defaultTab==='recap') switchBoxTab('recap');
 }
 
 function switchBoxTab(tab){
