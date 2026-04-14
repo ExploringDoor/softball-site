@@ -2820,6 +2820,36 @@ async function loadAllData() {
         }
       }
 
+      // Build per-game log entries for Recent Games tab
+      const logMap = {}; // "name||team" → [{opp,date,ab,r,d,t,hr,rbi,bb,res}]
+      for (const bs of finalBS) {
+        const awayLu = bs.away_lineup || bs.awayLineup || [];
+        const homeLu = bs.home_lineup || bs.homeLineup || [];
+        const awayTR = awayLu.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+        const homeTR = homeLu.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+        const bsSides = [
+          { lineup: awayLu, sid: bs.away, opp: bs.home, teamR: awayTR, oppR: homeTR },
+          { lineup: homeLu, sid: bs.home, opp: bs.away, teamR: homeTR, oppR: awayTR },
+        ];
+        for (const { lineup, sid, opp, teamR, oppR } of bsSides) {
+          const oppTeam = TEAMS.find(t => t.id === opp);
+          const oppShort = oppTeam?.short || (opp||'').toUpperCase();
+          const res = `${teamR > oppR ? 'W' : 'L'} ${teamR}-${oppR}`;
+          for (const p of lineup) {
+            const nm = (p.name||'').trim(); if (!nm || p.dnp) continue;
+            const key = nm.toLowerCase() + '||' + (sid||'');
+            if (!logMap[key]) logMap[key] = [];
+            logMap[key].push({
+              opp: oppShort, date: bs.date||'',
+              ab: parseInt(p.ab)||0, r: parseInt(p.r)||0,
+              d: parseInt(p.d)||0, t: parseInt(p.t)||0,
+              hr: parseInt(p.hr)||0, rbi: parseInt(p.rbi)||0,
+              bb: parseInt(p.bb)||0, res
+            });
+          }
+        }
+      }
+
       // Apply batting stats to PLAYERS
       PLAYERS.forEach(pl => {
         const key = pl.name.toLowerCase() + '||' + (pl.team || '');
@@ -2832,6 +2862,12 @@ async function loadAllData() {
         const obp = (pl.ab + pl.bb) > 0 ? (pl.h + pl.bb) / (pl.ab + pl.bb) : 0;
         const slg = pl.ab > 0 ? (b.s + 2*b.d + 3*b.tri + 4*b.hr) / pl.ab : 0;
         pl.slg = slg; pl.ops = obp + slg;
+      });
+
+      // Apply game log to PLAYERS
+      PLAYERS.forEach(pl => {
+        const key = pl.name.toLowerCase() + '||' + (pl.team||'');
+        if (logMap[key]) pl.log = logMap[key];
       });
 
       // Apply pitching stats to PLAYERS (only real pitchers with recorded outs)
