@@ -38,6 +38,13 @@
 
 <pre id="log" style="background:#0d0d11;color:#ededed;padding:20px;border-radius:8px;max-height:600px;overflow:auto;font-size:13px;line-height:1.6"></pre>
 
+<div style="margin-top:16px;padding:16px;background:#fffbeb;border:1px solid #fbbf24;border-radius:8px">
+  <strong style="font-size:13px">One-time: Save April 2026 calendar links to Firebase</strong><br>
+  <span style="font-size:12px;color:rgba(0,0,0,.5)">Run this once to make the "Add to Calendar" buttons live on all team pages.</span><br><br>
+  <button onclick="seedFirebase()" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer">Save Links to Firebase Now</button>
+  <span id="seed-status" style="margin-left:12px;font-size:13px"></span>
+</div>
+
 <div id="links-out" style="display:none;margin-top:24px">
   <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;margin-bottom:12px">📅 Subscribe Links (send to captains)</h3>
   <div id="links-table"></div>
@@ -45,7 +52,7 @@
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, query, orderBy, doc, setDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const app = initializeApp({
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -105,6 +112,38 @@ window.loadGames = async function() {
   } catch(e) {
     out('❌ Error: ' + e.message);
   }
+};
+
+// One-time seed of the 15 calendars created April 2026
+window.seedFirebase = async function() {
+  const status = document.getElementById('seed-status');
+  status.textContent = 'Saving...';
+  const links = [
+    { id: 'ba',    calId: 'a765038540b16fcd4f715e737d1574377744cbdb954ec61e2aa5de379acd3add@group.calendar.google.com' },
+    { id: 'bob',   calId: 'ed7dc54c3741e71f6bdbbc19aa237f5ae2de7b75078701efe2777b1009e03ce1@group.calendar.google.com' },
+    { id: 'bor',   calId: 'd12d5f233ea38ad889daa47ed1d311fd6a6b7b0910971c1921e823e1a824bcfd@group.calendar.google.com' },
+    { id: 'bsmc',  calId: 'b7afdcebd524c1ff9e38187d4054fe0990cfa08d505c791ff2fe1305800bfe5f@group.calendar.google.com' },
+    { id: 'btbj',  calId: 'ecba33a73a02ef23a04997fb09d93b2d8e98ada688bbd52ff9394d7014387597@group.calendar.google.com' },
+    { id: 'cha',   calId: '614f395ce999042074a27010fce81abc81afbc14d8d39a7a1a603a41eef43a96@group.calendar.google.com' },
+    { id: 'dn',    calId: '51542bdee952b784f81422f11caa6c9cedb8baef5f2f2e699bfdb293333a22f3@group.calendar.google.com' },
+    { id: 'gjc',   calId: 'aba153f84a328ec4985589a4d57b03ebbcbb1a911606981eb2d1c82a6213b106@group.calendar.google.com' },
+    { id: 'gold',  calId: 'f04e67c778b8b39db84a58292a518b69a14f25ee3ab6ce817b9820872df2fba9@group.calendar.google.com' },
+    { id: 'ki',    calId: '325b5338073abc5a6c96b13c2a49e505074790f9004760ec021f52ec49900c5a@group.calendar.google.com' },
+    { id: 'oa',    calId: 'e7fe074c261c3fc5b23d12e122649017c41c43e724f48c151d2b92dad35e448b@group.calendar.google.com' },
+    { id: 'sa',    calId: '2f54032eac82f59186a33da8aa404c027fd176a45629209547bc8b8e0d5acba2@group.calendar.google.com' },
+    { id: 'tsmc',  calId: '3b750324fef1d9e2773cc0919930facfa895a4465fc3c14bedf73896913f87d5@group.calendar.google.com' },
+    { id: 'tbimc', calId: 'e5334c77e9205a9ce3901aec16e57718b8ac2bed57ef40163e5adfbb04f58017@group.calendar.google.com' },
+    { id: 'tbir',  calId: '80f56388645c679732185e7521c60e3b7fcec366b9e43baf3fad24bd33339259@group.calendar.google.com' },
+  ];
+  let saved = 0;
+  for (const { id, calId } of links) {
+    const icalUrl = `https://calendar.google.com/calendar/ical/${encodeURIComponent(calId)}/public/basic.ics`;
+    try {
+      await setDoc(doc(db, 'team_calendars', id), { id, calendar_url: icalUrl, updated: new Date().toISOString() });
+      saved++;
+    } catch(e) { console.error(id, e); }
+  }
+  status.textContent = `✅ Saved ${saved}/15 to Firebase! Team pages will now show "Add to Calendar" buttons.`;
 };
 
 window.selectAll = function(val) {
@@ -246,7 +285,21 @@ async function syncTeamCalendars(token) {
     }
 
     const subscribeLink = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calId)}`;
+    const icalUrl = `https://calendar.google.com/calendar/ical/${encodeURIComponent(calId)}/public/basic.ics`;
     out(`  📅 Subscribe: ${subscribeLink}`);
+
+    // Save ical URL to Firebase team_calendars collection
+    try {
+      await setDoc(doc(db, 'team_calendars', short.toLowerCase()), {
+        id: short.toLowerCase(),
+        calendar_url: icalUrl,
+        updated: new Date().toISOString()
+      });
+      out(`  ✅ Saved to Firebase`);
+    } catch(e) {
+      out(`  ⚠️  Firebase save failed: ${e.message}`);
+    }
+
     links.push({ name: team.name, short, link: subscribeLink, added });
   }
 
