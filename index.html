@@ -2780,7 +2780,8 @@ async function loadAllData() {
       .sort((a,b) => b.avg - a.avg);
 
     // ── Aggregate real stats from box_scores ──────────────────────────
-    const finalBS = boxScores.filter(bs => bs.status === 'final');
+    // Include final + any draft that has actual lineup data entered
+    const finalBS = boxScores.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup) && bs.away_lineup.length > 0));
     if (finalBS.length > 0) {
       const batMap = {};   // "name||team" → batting totals
       const pitMap = {};   // "name||team" → pitching totals
@@ -2877,7 +2878,13 @@ async function loadAllData() {
       // Apply batting stats to PLAYERS
       PLAYERS.forEach(pl => {
         const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
-        const b = batMap[key]; if (!b) return;
+        let b = batMap[key];
+        if (!b) {
+          // Fallback: name-only match (handles team-id mismatches between Firebase collections)
+          const nm = pl.name.toLowerCase();
+          b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
+        }
+        if (!b) return;
         pl.gp = b.gp; pl.ab = b.ab; pl.r = b.r;
         pl.s  = b.s;  pl.d  = b.d;  pl.t = b.tri; pl.hr = b.hr;
         pl.rbi = b.rbi; pl.bb = b.bb; pl.so = b.so;
@@ -3012,7 +3019,7 @@ async function refreshVolatileData() {
 
     // Re-aggregate stats from box_scores
     const freshBS = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const finalBS = freshBS.filter(bs => bs.status === 'final');
+    const finalBS = freshBS.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup) && bs.away_lineup.length > 0));
     if (finalBS.length > 0) {
       const batMap = {};
       for (const bs of finalBS) {
@@ -6234,9 +6241,14 @@ function buildStandTable(yr, sortKey, sortDir){
     const gb=r.gb==='—'?'<span style="color:var(--muted)">—</span>':`<span>${r.gb}</span>`;
     const pctBar=r.pct.toFixed(3).replace(/^0\./,'.');
     const rowCls=i<3?`rank-${i+1}`:'';
+    // Look up missing fields from team lists (historical rows lack _short/_id/_color)
+    const _atm=(!r._short||!r._id)?ALL_TEAMS.find(t=>t.name===r.t)||null:null;
+    const _tShort=r._short||_atm?.short||'';
+    const _tId=r._id||_atm?.id||'';
+    const _tColor=r._color||_atm?.color||'';
     return `<tr class="${rowCls}">
       <td class="rank-cell">${medal(i)||i+1}</td>
-      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="${r._id?`goPage('team','${r._id}')`:`goTeamByName('${r.t}')`}" title="View ${r.t} team page">${(()=>{const lid=getLogoId(r.t,r._id);return lid?`<span style="display:inline-block;width:42px;height:42px;overflow:hidden;margin-right:8px;flex-shrink:0;vertical-align:middle"><img src="logos/${lid}.png" style="width:100%;height:100%;object-fit:contain;display:block" loading="lazy"></span>`:r._color?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${r._color};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''})()}${r._short?`<span class="stand-name-full" style="vertical-align:middle">${r.t}</span><span class="stand-name-abbr" style="vertical-align:middle">${r._short}</span>`:`<span style="vertical-align:middle">${r.t}</span>`}</td>
+      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="${_tId?`goPage('team','${_tId}')`:`goTeamByName('${r.t}')`}" title="View ${r.t} team page">${(()=>{const lid=getLogoId(r.t,_tId);return lid?`<span style="display:inline-block;width:42px;height:42px;overflow:hidden;margin-right:8px;flex-shrink:0;vertical-align:middle"><img src="logos/${lid}.png" style="width:100%;height:100%;object-fit:contain;display:block" loading="lazy"></span>`:_tColor?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${_tColor};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''})()}${_tShort?`<span class="stand-name-full" style="vertical-align:middle">${r.t}</span><span class="stand-name-abbr" style="vertical-align:middle">${_tShort}</span>`:`<span style="vertical-align:middle">${r.t}</span>`}</td>
       <td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num">${r.ti}</td>
       <td class="num">${pctBar}</td>
       <td class="num">${r.avg.toFixed(3).replace(/^0\./,'.')}</td>
