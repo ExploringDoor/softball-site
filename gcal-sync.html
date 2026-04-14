@@ -1,19 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head><title>DVSL — Sync Schedule to Google Calendar</title></head>
-<body style="font-family:'Inter',sans-serif;background:#fff;color:#1a1a1a;padding:40px;max-width:800px;margin:0 auto">
+<body style="font-family:'Inter',sans-serif;background:#fff;color:#1a1a1a;padding:40px;max-width:900px;margin:0 auto">
 <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;text-transform:uppercase">DVSL → Google Calendar Sync</h1>
-<p style="color:rgba(0,0,0,.5);margin-bottom:24px">Reads games from Firebase and creates events in your Google Calendar. Run this whenever the schedule changes.</p>
+<p style="color:rgba(0,0,0,.5);margin-bottom:24px">Creates one calendar per team, populated with only that team's games. Share the subscribe link with each captain.</p>
 
 <div style="background:#f5f5f5;border-radius:8px;padding:20px;margin-bottom:20px">
   <h3 style="margin-bottom:8px">Setup (one time)</h3>
   <ol style="line-height:2;color:rgba(0,0,0,.7);font-size:14px">
     <li>Go to <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console → Credentials</a></li>
-    <li>Select your Firebase project (dvsl-292dd)</li>
+    <li>Select your Firebase project (<strong>dvsl-292dd</strong>)</li>
     <li>Create an <strong>OAuth 2.0 Client ID</strong> (Web application type)</li>
     <li>Add <code>http://localhost</code> and your Vercel URL to Authorized JavaScript origins</li>
     <li>Copy the Client ID and paste it below</li>
-    <li>Also enable the <strong>Google Calendar API</strong> in <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank">API Library</a></li>
+    <li>Enable the <strong>Google Calendar API</strong> in <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank">API Library</a></li>
   </ol>
 </div>
 
@@ -22,17 +22,26 @@
   <input type="text" id="clientId" style="width:100%;padding:10px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:14px;margin-top:4px" placeholder="xxxx.apps.googleusercontent.com" value="">
 </div>
 
-<div style="margin-bottom:20px">
-  <label style="font-size:12px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4)">Calendar Name</label>
-  <input type="text" id="calName" style="width:100%;padding:10px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:14px;margin-top:4px" value="DVSL 2026 Schedule">
-</div>
-
-<div style="display:flex;gap:12px;margin-bottom:24px">
+<div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap">
   <button onclick="loadGames()" style="background:#002D72;color:#fff;border:none;border-radius:6px;padding:12px 24px;font-weight:700;font-size:14px;cursor:pointer">1. Load Games from Firebase</button>
-  <button onclick="authAndSync()" id="syncBtn" disabled style="background:#22c55e;color:#fff;border:none;border-radius:6px;padding:12px 24px;font-weight:700;font-size:14px;cursor:pointer;opacity:.5">2. Sign In & Sync to Google Calendar</button>
+  <button onclick="authAndSync()" id="syncBtn" disabled style="background:#22c55e;color:#fff;border:none;border-radius:6px;padding:12px 24px;font-weight:700;font-size:14px;cursor:pointer;opacity:.5">2. Sign In & Create Team Calendars</button>
 </div>
 
-<pre id="log" style="background:#0d0d11;color:#ededed;padding:20px;border-radius:8px;max-height:500px;overflow:auto;font-size:13px;line-height:1.6"></pre>
+<div id="team-list" style="display:none;margin-bottom:24px">
+  <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;margin-bottom:12px">Teams to sync</h3>
+  <div id="team-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px"></div>
+  <div style="margin-top:12px;display:flex;gap:8px">
+    <button onclick="selectAll(true)" style="font-size:12px;padding:6px 12px;border:1px solid rgba(0,0,0,.2);border-radius:4px;cursor:pointer;background:#fff">Select All</button>
+    <button onclick="selectAll(false)" style="font-size:12px;padding:6px 12px;border:1px solid rgba(0,0,0,.2);border-radius:4px;cursor:pointer;background:#fff">Deselect All</button>
+  </div>
+</div>
+
+<pre id="log" style="background:#0d0d11;color:#ededed;padding:20px;border-radius:8px;max-height:600px;overflow:auto;font-size:13px;line-height:1.6"></pre>
+
+<div id="links-out" style="display:none;margin-top:24px">
+  <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;margin-bottom:12px">📅 Subscribe Links (send to captains)</h3>
+  <div id="links-table"></div>
+</div>
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
@@ -51,40 +60,46 @@ const db = getFirestore(app);
 const logEl = document.getElementById('log');
 function out(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
 
-// Team name lookup
-let TEAMS = {};
+let TEAMS = {}; // short → team object
+let TEAMS_BY_ID = {}; // id → team object
 let GAMES = [];
+let TEAM_LIST = []; // array of {id, name, short}
 
 window.loadGames = async function() {
   logEl.textContent = '';
   out('Loading teams and games from Firebase...\n');
   try {
-    // Load teams
     const tSnap = await getDocs(collection(db, 'teams'));
+    TEAMS = {}; TEAMS_BY_ID = {}; TEAM_LIST = [];
     tSnap.docs.forEach(d => {
-      const t = d.data();
-      TEAMS[t.id || d.id] = t;
+      const t = { id: d.id, ...d.data() };
+      TEAMS_BY_ID[d.id] = t;
       if (t.short) TEAMS[t.short] = t;
+      if (t.short && t.name) TEAM_LIST.push({ id: d.id, name: t.name, short: t.short });
     });
+    TEAM_LIST.sort((a,b) => a.name.localeCompare(b.name));
     out(`Loaded ${tSnap.docs.length} teams`);
 
-    // Load games
     const gSnap = await getDocs(query(collection(db, 'games'), orderBy('wk')));
     GAMES = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     out(`Loaded ${GAMES.length} games\n`);
 
-    // Group by week
-    const wkMap = {};
-    GAMES.forEach(g => {
-      if (!wkMap[g.wk]) wkMap[g.wk] = [];
-      wkMap[g.wk].push(g);
-    });
-    Object.keys(wkMap).sort((a,b) => a-b).forEach(wk => {
-      out(`Week ${wk}: ${wkMap[wk].length} games`);
+    // Show team checkboxes
+    const cbWrap = document.getElementById('team-checkboxes');
+    cbWrap.innerHTML = TEAM_LIST.map(t => `
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 10px;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer">
+        <input type="checkbox" value="${t.short}" checked style="width:14px;height:14px">
+        <span><strong>${t.short}</strong> — ${t.name}</span>
+      </label>`).join('');
+    document.getElementById('team-list').style.display = 'block';
+
+    // Count games per team
+    TEAM_LIST.forEach(t => {
+      const count = GAMES.filter(g => g.away === t.short || g.home === t.short).length;
+      out(`  ${t.short}: ${count} games`);
     });
 
-    out(`\n✅ ${GAMES.length} games ready to sync.`);
-    out('Click "Sign In & Sync" to create calendar events.\n');
+    out(`\n✅ Ready. Select teams above then click "Sign In & Create Team Calendars".`);
     document.getElementById('syncBtn').disabled = false;
     document.getElementById('syncBtn').style.opacity = '1';
   } catch(e) {
@@ -92,156 +107,175 @@ window.loadGames = async function() {
   }
 };
 
-// Google Calendar API via OAuth
+window.selectAll = function(val) {
+  document.querySelectorAll('#team-checkboxes input[type=checkbox]').forEach(cb => cb.checked = val);
+};
+
 window.authAndSync = async function() {
   const clientId = document.getElementById('clientId').value.trim();
   if (!clientId) { out('❌ Please enter your Google OAuth Client ID'); return; }
-
   out('\nOpening Google Sign-In...');
-
-  // Use Google Identity Services
   const tokenClient = google.accounts.oauth2.initTokenClient({
     client_id: clientId,
     scope: 'https://www.googleapis.com/auth/calendar',
     callback: async (response) => {
-      if (response.error) {
-        out('❌ Auth failed: ' + response.error);
-        return;
-      }
+      if (response.error) { out('❌ Auth failed: ' + response.error); return; }
       out('✅ Signed in to Google\n');
-      await syncToCalendar(response.access_token);
+      await syncTeamCalendars(response.access_token);
     }
   });
   tokenClient.requestAccessToken();
 };
 
-async function syncToCalendar(token) {
-  const calName = document.getElementById('calName').value.trim() || 'DVSL 2026 Schedule';
+async function syncTeamCalendars(token) {
+  const selected = Array.from(document.querySelectorAll('#team-checkboxes input:checked')).map(cb => cb.value);
+  if (!selected.length) { out('❌ No teams selected'); return; }
 
-  // Check if calendar already exists
-  out('Checking for existing calendar...');
-  let calId = null;
-  try {
-    const listRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    const listData = await listRes.json();
-    const existing = listData.items?.find(c => c.summary === calName);
-    if (existing) {
-      calId = existing.id;
-      out(`Found existing calendar: ${calName}`);
-      // Clear existing events
-      out('Clearing old events...');
-      const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`, {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      const evData = await evRes.json();
-      let cleared = 0;
-      for (const ev of (evData.items || [])) {
-        await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${ev.id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': 'Bearer ' + token }
-        });
-        cleared++;
-      }
-      out(`Cleared ${cleared} old events`);
-    }
-  } catch(e) {
-    out('Note: Could not check existing calendars: ' + e.message);
-  }
-
-  // Create calendar if it doesn't exist
-  if (!calId) {
-    out(`Creating calendar: ${calName}...`);
-    try {
-      const createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ summary: calName, timeZone: 'America/New_York' })
-      });
-      const created = await createRes.json();
-      calId = created.id;
-      out(`✅ Calendar created: ${calId}`);
-    } catch(e) {
-      out('❌ Failed to create calendar: ' + e.message);
-      return;
-    }
-  }
-
-  // Make calendar public so anyone can subscribe
-  out('Making calendar public...');
-  try {
-    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/acl`, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'reader', scope: { type: 'default' } })
-    });
-    out('✅ Calendar is now public');
-  } catch(e) {
-    out('Note: Could not make public (may already be): ' + e.message);
-  }
-
-  // Add all games
-  out(`\nAdding ${GAMES.length} games...\n`);
+  out(`Syncing ${selected.length} team calendars...\n`);
 
   const monthMap = { 'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12 };
 
-  let added = 0, failed = 0;
-  for (const g of GAMES) {
-    // Parse date: "Apr 14" + "7:00 PM" → 2026-04-14T19:00:00
-    const parts = (g.date || '').split(' ');
-    const mon = monthMap[parts[0]] || 4;
-    const day = parseInt(parts[1]) || 1;
-    let hour = 19, min = 0;
-    if (g.time) {
-      const tp = g.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
-      if (tp) {
-        hour = parseInt(tp[1]);
-        min = parseInt(tp[2]);
-        if (tp[3].toUpperCase() === 'PM' && hour !== 12) hour += 12;
-        if (tp[3].toUpperCase() === 'AM' && hour === 12) hour = 0;
-      }
+  // Get existing calendars to avoid duplicates
+  let existingCals = {};
+  try {
+    const listRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const listData = await listRes.json();
+    (listData.items || []).forEach(c => { existingCals[c.summary] = c.id; });
+  } catch(e) { out('Note: could not load existing calendars'); }
+
+  const links = [];
+
+  for (const short of selected) {
+    const team = TEAMS[short];
+    if (!team) { out(`⚠️  Skipping ${short} — not found in Firebase`); continue; }
+    const calName = `DVSL 2026 — ${team.name}`;
+    const teamGames = GAMES.filter(g => g.away === short || g.home === short);
+    out(`\n── ${team.name} (${teamGames.length} games) ──`);
+
+    let calId = existingCals[calName] || null;
+
+    // Clear old events if calendar exists
+    if (calId) {
+      out(`  Found existing calendar, clearing events...`);
+      try {
+        const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const evData = await evRes.json();
+        for (const ev of (evData.items || [])) {
+          await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${ev.id}`, {
+            method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
+          });
+        }
+        out(`  Cleared ${(evData.items||[]).length} old events`);
+      } catch(e) { out(`  Note: ${e.message}`); }
+    } else {
+      // Create calendar
+      try {
+        const createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary: calName, timeZone: 'America/New_York' })
+        });
+        const created = await createRes.json();
+        calId = created.id;
+        out(`  ✅ Calendar created`);
+      } catch(e) { out(`  ❌ Failed to create calendar: ${e.message}`); continue; }
     }
-    const dateStr = `2026-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(hour).padStart(2,'0')}:${String(min).padStart(2,'0')}:00`;
-    const endHour = hour + 1;
-    const endMin = min + 30;
-    const endDateStr = `2026-${String(mon).padStart(2,'0')}-${String(day).padStart(2,'0')}T${String(endHour + Math.floor(endMin/60)).padStart(2,'0')}:${String(endMin%60).padStart(2,'0')}:00`;
 
-    const awayName = TEAMS[g.away]?.name || TEAMS[g.away?.toLowerCase?.()]?.name || g.away || '?';
-    const homeName = TEAMS[g.home]?.name || TEAMS[g.home?.toLowerCase?.()]?.name || g.home || '?';
-    const awayShort = TEAMS[g.away]?.short || g.away || '?';
-    const homeShort = TEAMS[g.home]?.short || g.home || '?';
-    const field = g.field || 'TBD';
-    const addr = g.addr || '';
-
-    const event = {
-      summary: `⚾ ${awayShort} @ ${homeShort}`,
-      description: `DVSL Softball 2026 — Week ${g.wk}\n${awayName} at ${homeName}\n\nField: ${field}${addr ? '\n' + addr : ''}`,
-      location: field + (addr ? ', ' + addr : ''),
-      start: { dateTime: dateStr, timeZone: 'America/New_York' },
-      end: { dateTime: endDateStr, timeZone: 'America/New_York' }
-    };
-
+    // Make public
     try {
-      await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`, {
+      await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/acl`, {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify(event)
+        body: JSON.stringify({ role: 'reader', scope: { type: 'default' } })
       });
-      added++;
-      out(`  ✅ Wk${g.wk}: ${awayShort} @ ${homeShort} — ${g.date} ${g.time}`);
-    } catch(e) {
-      failed++;
-      out(`  ❌ Wk${g.wk}: ${awayShort} @ ${homeShort} — ${e.message}`);
+    } catch(e) {}
+
+    // Add games
+    let added = 0;
+    for (const g of teamGames) {
+      const parts = (g.date || '').split(' ');
+      const mon = monthMap[parts[0]] || 4;
+      const day = parseInt(parts[1]) || 1;
+      let hour = 19, min = 0;
+      if (g.time) {
+        const tp = g.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+        if (tp) {
+          hour = parseInt(tp[1]);
+          min = parseInt(tp[2]);
+          if (tp[3].toUpperCase() === 'PM' && hour !== 12) hour += 12;
+          if (tp[3].toUpperCase() === 'AM' && hour === 12) hour = 0;
+        }
+      }
+      const pad = n => String(n).padStart(2,'0');
+      const dateStr = `2026-${pad(mon)}-${pad(day)}T${pad(hour)}:${pad(min)}:00`;
+      const endTotalMin = hour * 60 + min + 90;
+      const endStr = `2026-${pad(mon)}-${pad(day)}T${pad(Math.floor(endTotalMin/60))}:${pad(endTotalMin%60)}:00`;
+
+      const awayName = TEAMS[g.away]?.name || g.away || '?';
+      const homeName = TEAMS[g.home]?.name || g.home || '?';
+      const isHome = g.home === short;
+      const opponent = isHome ? awayName : homeName;
+      const oppShort = isHome ? (TEAMS[g.away]?.short || g.away) : (TEAMS[g.home]?.short || g.home);
+      const vsAt = isHome ? 'vs' : '@';
+      const field = g.field || 'TBD';
+      const addr = g.addr || '';
+
+      const event = {
+        summary: `⚾ ${team.name} ${vsAt} ${opponent}`,
+        description: `DVSL Softball 2026 — Week ${g.wk}\n${awayName} at ${homeName}\nField: ${field}${addr ? '\n'+addr : ''}\n\nFull schedule: https://dvsl.vercel.app`,
+        location: field + (addr ? ', ' + addr : ''),
+        start: { dateTime: dateStr, timeZone: 'America/New_York' },
+        end: { dateTime: endStr, timeZone: 'America/New_York' }
+      };
+
+      try {
+        await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(event)
+        });
+        out(`  ✅ Wk${g.wk}: ${vsAt === '@' ? 'away' : 'home'} vs ${oppShort} — ${g.date} ${g.time}`);
+        added++;
+      } catch(e) {
+        out(`  ❌ ${e.message}`);
+      }
     }
+
+    const subscribeLink = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calId)}`;
+    out(`  📅 Subscribe: ${subscribeLink}`);
+    links.push({ name: team.name, short, link: subscribeLink, added });
   }
 
-  out(`\n════════════════════════`);
-  out(`Done! Added ${added} events, ${failed} failed.`);
-  out(`\nCalendar ID: ${calId}`);
-  out(`\nSubscribe link for users:`);
-  out(`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calId)}`);
-  out(`\nPut this link on your site — when users click it, it adds the calendar to their Google Calendar. Any changes you make (rain dates, time changes) will automatically sync to everyone.`);
+  out('\n════════════════════════');
+  out(`Done! Created/updated ${links.length} team calendars.`);
+
+  // Show links table
+  if (links.length) {
+    document.getElementById('links-out').style.display = 'block';
+    document.getElementById('links-table').innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="text-align:left;padding:10px 14px;border:1px solid rgba(0,0,0,.1)">Team</th>
+            <th style="text-align:center;padding:10px 14px;border:1px solid rgba(0,0,0,.1)">Games</th>
+            <th style="text-align:left;padding:10px 14px;border:1px solid rgba(0,0,0,.1)">Subscribe Link (send to captain)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${links.map(l => `
+          <tr>
+            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08);font-weight:600">${l.name}<br><span style="font-size:11px;color:rgba(0,0,0,.4)">${l.short}</span></td>
+            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08);text-align:center">${l.added}</td>
+            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08)"><a href="${l.link}" target="_blank" style="color:#002D72;word-break:break-all">${l.link}</a></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <p style="font-size:12px;color:rgba(0,0,0,.45);margin-top:12px">When a captain clicks their link, it adds the calendar to their Google Calendar. Any future re-sync will update their events automatically.</p>`;
+  }
 }
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
