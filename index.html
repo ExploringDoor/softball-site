@@ -5601,9 +5601,9 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
 
   let bodyHtml = '<div class="pop-body" style="padding:20px 24px">';
 
-  // Pre-compute recap so we know whether to show tabs
+  // Pre-compute recap; always show tabs when there's a box score
   const recapText = boxScore?.recap || recap?.text || '';
-  const showTabs = !!boxScore && !!recapText;
+  const showTabs = !!boxScore;
   if (showTabs) {
     bodyHtml += `<div class="bstabs">
       <button id="bstab-btn-box" class="bstab-btn active" onclick="switchBoxTab('box')">📊 Box Score</button>
@@ -5851,18 +5851,19 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
   if (showTabs) {
     // Close box score tab pane, open recap tab pane
     bodyHtml += `</div><div id="bstab-recap" style="display:none;padding-top:4px">`;
-    bodyHtml += `<div class="pop-recap">${recapText}</div>`;
-    if (recap?.stars?.length) {
-      bodyHtml += `<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:#e8a014">★</span> ${s}</div>`).join('')}</div>`;
+    if (recapText) {
+      bodyHtml += `<div class="pop-recap">${recapText}</div>`;
+      if (recap?.stars?.length) {
+        bodyHtml += `<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:#e8a014">★</span> ${s}</div>`).join('')}</div>`;
+      }
+    } else {
+      bodyHtml += `<div style="text-align:center;padding:40px 16px">
+        <div style="font-size:28px;margin-bottom:10px">📰</div>
+        <div style="font-size:15px;font-weight:700;color:#555;margin-bottom:6px">No recap yet</div>
+        <div style="font-size:13px;color:#999">A write-up for this game hasn't been posted yet.</div>
+      </div>`;
     }
     bodyHtml += `</div>`;
-  } else if (recapText) {
-    // No tabs — show recap inline below box score
-    bodyHtml += `<div class="pop-sec-title" style="margin-top:20px">Game Recap</div>`;
-    bodyHtml += `<div class="pop-recap">${recapText}</div>`;
-    if (recap?.stars?.length) {
-      bodyHtml += `<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:#e8a014">★</span> ${s}</div>`).join('')}</div>`;
-    }
   }
 
   bodyHtml += '</div>';
