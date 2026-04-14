@@ -2297,7 +2297,7 @@ function renderStandings() {
   if (!TEAMS.length) { el.innerHTML = '<div class="empty">No teams found</div>'; return; }
   const sorted = [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Actions</th></tr></thead>
+    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Player Password</th><th>Actions</th></tr></thead>
     <tbody>${sorted.map((t, i) => `<tr id="standing-row-${t.id}">
       <td>${i+1}</td>
       <td><strong>${esc(t.name)}</strong></td>
@@ -2309,6 +2309,7 @@ function renderStandings() {
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.rs||0}" id="st-rs-${t.id}" min="0"></td>
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.ra||0}" id="st-ra-${t.id}" min="0"></td>
       <td>${t.streak||'-'}</td>
+      <td><input type="text" class="form-input" style="width:110px;padding:5px" placeholder="set password" value="${esc(t.player_password||'')}" id="st-pw-${t.id}"></td>
       <td><button class="btn btn-outline btn-sm" onclick="saveOneStanding('${t.id}')">Save</button></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
@@ -2321,10 +2322,13 @@ window.saveOneStanding = async function(teamId) {
   const rs = parseInt(document.getElementById('st-rs-' + teamId).value) || 0;
   const ra = parseInt(document.getElementById('st-ra-' + teamId).value) || 0;
   const pct = (w + l + ties) > 0 ? parseFloat(((w + ties * 0.5) / (w + l + ties)).toFixed(3)) : 0;
+  const pw = (document.getElementById('st-pw-' + teamId)?.value || '').trim();
   try {
-    await updateDoc(doc(db, 'teams', teamId), { w, l, t: ties, pct, rs, ra });
+    const update = { w, l, t: ties, pct, rs, ra };
+    if (pw !== undefined) update.player_password = pw;
+    await updateDoc(doc(db, 'teams', teamId), update);
     const tm = TEAMS.find(x => x.id === teamId);
-    if (tm) { tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra; }
+    if (tm) { tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra; tm.player_password = pw; }
     toast('Saved standings for ' + getTeamName(teamId));
     await logActivity('Standings', `Updated ${getTeamFull(teamId)}: ${w}-${l}-${ties}`);
   } catch(e) {
