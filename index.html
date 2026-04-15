@@ -5832,11 +5832,10 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
         bodyHtml += `<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:#e8a014">★</span> ${s}</div>`).join('')}</div>`;
       }
     } else {
-      bodyHtml += `<div style="text-align:center;padding:40px 16px">
-        <div style="font-size:28px;margin-bottom:10px">📰</div>
-        <div style="font-size:15px;font-weight:700;color:#555;margin-bottom:6px">No recap yet</div>
-        <div style="font-size:13px;color:#999">A write-up for this game hasn't been posted yet.</div>
-      </div>`;
+      // Auto-generate recap from box score stats
+      const _al=boxScore.away_lineup||[], _hl=boxScore.home_lineup||[];
+      const autoRecap=generateAutoRecap(away,home,as,hs,date,field,atm,htm,_al,_hl);
+      bodyHtml += `<div class="pop-recap">${autoRecap}</div>`;
     }
     bodyHtml += `</div>`;
   }
@@ -5844,6 +5843,88 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
   bodyHtml += '</div>';
   document.getElementById('scPopContent').innerHTML = hdrHtml + bodyHtml;
   if(defaultTab==='recap') switchBoxTab('recap');
+}
+
+function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup){
+  const aw=as>hs;
+  const winTeam=aw?atm:htm, loseTeam=aw?htm:atm;
+  const winScore=aw?as:hs, loseScore=aw?hs:as;
+  const winLineup=aw?aLineup:hLineup, loseLineup=aw?hLineup:aLineup;
+  const winName=winTeam?.name||(aw?away:home).toUpperCase();
+  const loseName=loseTeam?.name||(aw?home:away).toUpperCase();
+  const winAbbr=winTeam?.short||(aw?away:home).toUpperCase();
+  const loseAbbr=loseTeam?.short||(aw?home:away).toUpperCase();
+  const diff=winScore-loseScore;
+  const verb=diff===1?'edged':diff<=2?'defeated':diff>=8?'rolled past':'topped';
+
+  // POTG: highest scorer by HR×4 + H + RBI×2 + R
+  const allL=[...aLineup.map(p=>({...p,_t:away})),...hLineup.map(p=>({...p,_t:home}))];
+  const ps=p=>{const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));return (p.hr||0)*4+h+(p.rbi||0)*2+(p.r||0);};
+  const star=allL.length?allL.reduce((b,p)=>ps(p)>ps(b)?p:b,allL[0]):null;
+  const hasStats=star&&ps(star)>0;
+
+  const statLine=p=>{
+    const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
+    const sp=[];
+    if(h&&p.ab) sp.push(`${h}-for-${p.ab}`);
+    if(p.hr) sp.push(`${p.hr} HR`);
+    if(p.rbi) sp.push(`${p.rbi} RBI`);
+    if(p.r&&!p.rbi) sp.push(`${p.r} R`);
+    return sp.join(', ');
+  };
+  const score2=p=>{const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));return h+(p.rbi||0)*1.5;};
+
+  const parts=[];
+
+  // S1: Result
+  const loc=field?` at ${field}`:'';
+  const dt=date?` on ${date}`:'';
+  parts.push(`${winName} ${verb} ${loseName} ${winScore}–${loseScore}${dt}${loc}.`);
+
+  // S2: Top performer
+  if(hasStats){
+    const sl=statLine(star);
+    if(sl) parts.push(`${star.name} led all hitters, going ${sl}.`);
+  }
+
+  // S3: Other notable win-side contributors
+  const winNotable=winLineup
+    .filter(p=>p.name!==star?.name)
+    .filter(p=>{const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));return h>=2||(p.rbi||0)>=2;})
+    .sort((a,b)=>score2(b)-score2(a)).slice(0,2);
+  if(winNotable.length){
+    const desc=winNotable.map(p=>{const sl=statLine(p);return sl?`${p.name} (${sl})`:p.name;});
+    parts.push(`${desc.join(' and ')} also contributed for ${winAbbr}.`);
+  }
+
+  // S4: Notable losing-side contributor
+  const loseNotable=loseLineup
+    .filter(p=>p.name!==star?.name)
+    .filter(p=>{const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));return h>=2||(p.rbi||0)>=2;})
+    .sort((a,b)=>score2(b)-score2(a)).slice(0,1);
+  if(loseNotable.length){
+    const p=loseNotable[0], sl=statLine(p);
+    if(sl) parts.push(`${p.name} went ${sl} for ${loseAbbr}.`);
+  }
+
+  // S5: Extra HRs not by star
+  const extraHR=[...aLineup,...hLineup].filter(p=>(p.hr||0)>0&&p.name!==star?.name);
+  if(extraHR.length){
+    const names=extraHR.map(p=>p.hr>1?`${p.name} (${p.hr})`:p.name).join(', ');
+    parts.push(`${names} also ${extraHR.length===1?'went deep':'homered'}.`);
+  }
+
+  // S6: Records
+  const wRec=winTeam?.w!=null?`${winTeam.w}-${winTeam.l}`:null;
+  const lRec=loseTeam?.w!=null?`${loseTeam.w}-${loseTeam.l}`:null;
+  if(wRec||lRec){
+    const rp=[];
+    if(wRec) rp.push(`${winAbbr} improves to ${wRec}`);
+    if(lRec) rp.push(`${loseAbbr} falls to ${lRec}`);
+    parts.push(rp.join(', while ')+'.');
+  }
+
+  return parts.join(' ');
 }
 
 function switchBoxTab(tab){
