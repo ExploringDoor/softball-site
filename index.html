@@ -2808,16 +2808,16 @@ async function loadAllData() {
 
     // ── Aggregate real stats from box_scores ──────────────────────────
     // Include final + any draft that has actual lineup data entered
-    const finalBS = boxScores.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup) && bs.away_lineup.length > 0));
+    const finalBS = boxScores.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup || bs.awayLineup || bs.awayBatters) && (bs.away_lineup || bs.awayLineup || bs.awayBatters).length > 0));
     if (finalBS.length > 0) {
       const batMap = {};   // "name||team" → batting totals
       const pitMap = {};   // "name||team" → pitching totals
 
       for (const bs of finalBS) {
-        // Batting — support both snake_case (admin) and camelCase (live-scorer)
+        // Batting — support snake_case (admin), camelCase (live-scorer), awayBatters (captain portal)
         const batSides = [
-          { lineup: bs.away_lineup || bs.awayLineup, team: bs.away },
-          { lineup: bs.home_lineup || bs.homeLineup, team: bs.home },
+          { lineup: bs.away_lineup || bs.awayLineup || bs.awayBatters, team: bs.away },
+          { lineup: bs.home_lineup || bs.homeLineup || bs.homeBatters, team: bs.home },
         ];
         for (const { lineup, team: sid } of batSides) {
           if (!Array.isArray(lineup)) continue;
@@ -2827,11 +2827,16 @@ async function loadAllData() {
             if (!batMap[key]) batMap[key] = { name: nm, team: sid, gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
             const b = batMap[key];
             b.gp++;
-            b.ab  += parseInt(p.ab)||0; b.r   += parseInt(p.r)||0;
-            b.s   += parseInt(p.s)||0;  b.d   += parseInt(p.d)||0;
-            b.tri += parseInt(p.t)||0;  b.hr  += parseInt(p.hr)||0;
-            b.rbi += parseInt(p.rbi)||0;b.bb  += parseInt(p.bb)||0;
-            b.so  += parseInt(p.so)||0;
+            b.ab  += parseInt(p.ab)||0;                b.r   += parseInt(p.r)||0;
+            const _d   = parseInt(p.d   || p['2b'])||0;  // captain: '2b', admin: 'd'
+            const _t   = parseInt(p.t   || p['3b'])||0;  // captain: '3b', admin: 't'
+            const _hr  = parseInt(p.hr)||0;
+            const _h   = parseInt(p.h)||0;               // captain stores total H
+            // Singles: use stored 's' if present; otherwise derive from total H
+            const _s   = p.s !== undefined ? (parseInt(p.s)||0) : Math.max(0, _h - _d - _t - _hr);
+            b.s   += _s;  b.d  += _d;  b.tri += _t;  b.hr  += _hr;
+            b.rbi += parseInt(p.rbi)||0;               b.bb  += parseInt(p.bb)||0;
+            b.so  += parseInt(p.so ?? p.k)||0;         // captain: 'k', admin: 'so'
           }
         }
         // Pitching
@@ -3107,13 +3112,13 @@ async function refreshVolatileData() {
 
     // Re-aggregate stats from box_scores
     const freshBS = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const finalBS = freshBS.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup) && bs.away_lineup.length > 0));
+    const finalBS = freshBS.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup || bs.awayLineup || bs.awayBatters) && (bs.away_lineup || bs.awayLineup || bs.awayBatters).length > 0));
     if (finalBS.length > 0) {
       const batMap = {};
       for (const bs of finalBS) {
         const sides = [
-          { lineup: bs.away_lineup || bs.awayLineup, team: bs.away },
-          { lineup: bs.home_lineup || bs.homeLineup, team: bs.home },
+          { lineup: bs.away_lineup || bs.awayLineup || bs.awayBatters, team: bs.away },
+          { lineup: bs.home_lineup || bs.homeLineup || bs.homeBatters, team: bs.home },
         ];
         for (const { lineup, team: sid } of sides) {
           if (!Array.isArray(lineup)) continue;
@@ -3123,11 +3128,15 @@ async function refreshVolatileData() {
             if (!batMap[key]) batMap[key] = { name: nm, team: (sid||'').toLowerCase(), gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
             const b = batMap[key];
             b.gp++;
-            b.ab += parseInt(p.ab)||0; b.r  += parseInt(p.r)||0;
-            b.s  += parseInt(p.s)||0;  b.d  += parseInt(p.d)||0;
-            b.tri+= parseInt(p.t)||0;  b.hr += parseInt(p.hr)||0;
-            b.rbi+= parseInt(p.rbi)||0;b.bb += parseInt(p.bb)||0;
-            b.so += parseInt(p.so)||0;
+            b.ab += parseInt(p.ab)||0;                b.r  += parseInt(p.r)||0;
+            const _d2  = parseInt(p.d   || p['2b'])||0;
+            const _t2  = parseInt(p.t   || p['3b'])||0;
+            const _hr2 = parseInt(p.hr)||0;
+            const _h2  = parseInt(p.h)||0;
+            const _s2  = p.s !== undefined ? (parseInt(p.s)||0) : Math.max(0, _h2 - _d2 - _t2 - _hr2);
+            b.s  += _s2;  b.d += _d2;  b.tri += _t2;  b.hr += _hr2;
+            b.rbi+= parseInt(p.rbi)||0;               b.bb += parseInt(p.bb)||0;
+            b.so += parseInt(p.so ?? p.k)||0;
           }
         }
       }
@@ -5728,9 +5737,9 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const hLineup  = boxScore.home_lineup  || boxScore.homeBatters  || [];
     const aPitch   = boxScore.away_pitchers || boxScore.away_pitching || [];
     const hPitch   = boxScore.home_pitchers || boxScore.home_pitching || [];
-    // Support both linescores (new) and innings (old) field names
-    const aInnings = boxScore.linescores?.away || boxScore.innings?.away || [];
-    const hInnings = boxScore.linescores?.home || boxScore.innings?.home || [];
+    // Support linescores (admin/scorer), innings (old admin), and away_linescore (captain portal) field names
+    const aInnings = boxScore.linescores?.away || boxScore.innings?.away || boxScore.away_linescore || [];
+    const hInnings = boxScore.linescores?.home || boxScore.innings?.home || boxScore.home_linescore || [];
     const aH = aLineup.reduce((s,p)=>s+(p.h||0),0);
     const hH = hLineup.reduce((s,p)=>s+(p.h||0),0);
     const aE = boxScore.away_errors || 0;
@@ -5969,7 +5978,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       }
     } else {
       // Auto-generate recap from box score stats
-      const _al=boxScore.away_lineup||[], _hl=boxScore.home_lineup||[];
+      const _al=boxScore.away_lineup||boxScore.awayLineup||boxScore.awayBatters||[], _hl=boxScore.home_lineup||boxScore.homeLineup||boxScore.homeBatters||[];
       const autoRecap=generateAutoRecap(away,home,as,hs,date,field,atm,htm,_al,_hl);
       bodyHtml += `<div class="pop-recap">${autoRecap}</div>`;
     }

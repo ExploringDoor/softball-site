@@ -150,7 +150,7 @@ export default async function handler(req, res) {
     }));
 
     for (const batter of allBatters) {
-      const { name, teamId, ab = 0, r = 0, h = 0, hr = 0, rbi = 0, bb = 0, so = 0, errors = 0 } = batter;
+      const { name, teamId, ab = 0, r = 0, h = 0, hr = 0, rbi = 0, bb = 0, so = 0, d = 0, t = 0, errors = 0 } = batter;
       if (!name || ab === 0) continue;
 
       // Try to match player by name (first 6 chars of last name) on same team
@@ -173,25 +173,33 @@ export default async function handler(req, res) {
         const tH = (matched.h || 0) + h;
         const tAB = (matched.ab || 0) + ab;
         const tHR = (matched.hr || 0) + hr;
+        const tD  = (matched.d  || 0) + d;
+        const tT  = (matched.t  || 0) + t;
         const tRBI = (matched.rbi || 0) + rbi;
         const tR = (matched.r || 0) + r;
         const tBB = (matched.bb || 0) + bb;
         const avg = tAB > 0 ? Math.round((tH / tAB) * 1000) / 1000 : 0;
-        const slg = tAB > 0 ? Math.round(((tH + tHR) / tAB) * 1000) / 1000 : 0;
+        // SLG = (1B + 2×2B + 3×3B + 4×HR) / AB = (H + D + 2T + 3HR) / AB
+        const tTB = tH + tD + 2 * tT + 3 * tHR;
+        const slg = tAB > 0 ? Math.round((tTB / tAB) * 1000) / 1000 : 0;
         const obp = (tAB + tBB) > 0 ? Math.round(((tH + tBB) / (tAB + tBB)) * 1000) / 1000 : 0;
         await fsPatch(`players/${matched.id}`, {
-          h: tH, ab: tAB, hr: tHR, rbi: tRBI, r: tR, bb: tBB,
+          h: tH, ab: tAB, hr: tHR, d: tD, t: tT, rbi: tRBI, r: tR, bb: tBB,
           avg, slg, ops: Math.round((slg + obp) * 1000) / 1000
         });
         log(`✓ ${matched.name}: .${String(Math.round(avg * 1000)).padStart(3, '0')} · ${tHR}HR · ${tRBI}RBI`);
       } else {
         // New player — add and flag for review
+        // SLG = (H + D + 2T + 3HR) / AB
+        const newTB = h + d + 2 * t + 3 * hr;
+        const newSlg = ab > 0 ? Math.round((newTB / ab) * 1000) / 1000 : 0;
+        const newAvg = ab > 0 ? Math.round((h / ab) * 1000) / 1000 : 0;
+        const newObp = (ab + bb) > 0 ? Math.round(((h + bb) / (ab + bb)) * 1000) / 1000 : 0;
         await fsCreate('players', {
           name, num: batter.num || '??', team: teamId, pos: batter.pos || '??',
-          avg: ab > 0 ? Math.round((h / ab) * 1000) / 1000 : 0,
-          hr, rbi, h, ab, r, bb,
-          slg: ab > 0 ? Math.round(((h + hr) / ab) * 1000) / 1000 : 0,
-          ops: 0,
+          avg: newAvg, hr, rbi, h, ab, r, bb, d, t,
+          slg: newSlg,
+          ops: Math.round((newSlg + newObp) * 1000) / 1000,
           needs_review: true,
           added_from: 'box_score_api'
         });

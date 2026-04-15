@@ -2193,6 +2193,12 @@
           <div class="sheet-row-label out-text">Game Over</div>
         </div>
       </div>
+      <div class="sheet-row" id="menu-reset-game" style="border-top:1px solid rgba(255,255,255,0.08)">
+        <div class="sheet-row-content">
+          <div class="sheet-row-label" style="color:#ef4444">Reset Game to 0–0</div>
+          <div class="menu-row-sub">Clears all scores &amp; stats, returns to game select</div>
+        </div>
+      </div>
       <div class="sheet-row" id="menu-exit">
         <div class="sheet-row-content">
           <div class="sheet-row-label normal-text">Exit Game</div>
@@ -2784,7 +2790,7 @@ function handlePitch(type) {
     flashFeedback('FOUL', 'var(--orange)');
     renderAll();
   } else if (type === 'hbp') {
-    endAtBat('walk');
+    endAtBat('hbp');
   } else if (type === 'iw') {
     endAtBat('walk');
   } else if (type === 'ci') {
@@ -2830,9 +2836,9 @@ function endAtBat(result, details) {
   const location = details?.location || null;
   const locStr = location ? ` to ${location.toUpperCase()}` : '';
 
-  if (result === 'walk') {
-    if (sid) { stats.bb++; }
-    // Force runners
+  if (result === 'walk' || result === 'hbp') {
+    if (sid) { if (result === 'hbp') stats.hbp = (stats.hbp||0)+1; else stats.bb++; }
+    // Force runners — batter takes 1B, each runner advances only if forced
     if (G.runners[1]) {
       if (G.runners[2]) {
         if (G.runners[3]) {
@@ -2862,10 +2868,14 @@ function endAtBat(result, details) {
       G.twoOutRbiLog.push({ name: G._twoOutBatter, team, rbi: rbis });
     }
     const pStatsBB = currentPitcherStats(fieldingTeam());
-    if (pStatsBB) pStatsBB.bb++;
-    logPlay('Walk', rbis > 0 ? `BB — Walk, scores a run` : 'BB — Base on balls');
+    if (pStatsBB) { if (result === 'hbp') pStatsBB.hbp = (pStatsBB.hbp||0)+1; else pStatsBB.bb++; }
+    if (result === 'hbp') {
+      logPlay('HBP', rbis > 0 ? 'HBP — Hit by pitch, scores a run' : 'HBP — Hit by pitch');
+    } else {
+      logPlay('Walk', rbis > 0 ? `BB — Walk, scores a run` : 'BB — Base on balls');
+    }
     advanceLineup(team);
-    flashFeedback('WALK', 'var(--blue)');
+    flashFeedback(result === 'hbp' ? 'HBP' : 'WALK', 'var(--blue)');
   } else if (result === 'single') {
     G.halfInningHits++;
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
@@ -2970,6 +2980,10 @@ function endAtBat(result, details) {
     logPlay('Out', 'Out');
     flashFeedback('OUT', 'var(--red)');
   }
+
+  // Advance batting order for simple outs — hits/walks/FC/DP all return early above;
+  // error already calls advanceLineup() in its branch; walk calls it too.
+  if (!['walk', 'error'].includes(result)) advanceLineup(team);
 
   G.balls = 0;
   G.strikes = 0;
@@ -3403,12 +3417,26 @@ function endHalfInning() {
     bDiv.appendChild(row);
   });
 
+  // Lock pitch buttons so nothing can be tapped while 3-out overlay is up
+  const pitchBtns = document.getElementById('pitch-buttons');
+  const undoBtn   = document.getElementById('undo-pitch-btn');
+  if (pitchBtns) { pitchBtns.style.pointerEvents = 'none'; pitchBtns.style.opacity = '0.25'; }
+  if (undoBtn)   { undoBtn.disabled = true; undoBtn.style.opacity = '0.3'; }
+
   // Show overlay
   const overlay = document.getElementById('half-end-overlay');
   overlay.style.display = 'flex';
 }
 
+function _reenablePitchButtons() {
+  const pitchBtns = document.getElementById('pitch-buttons');
+  const undoBtn   = document.getElementById('undo-pitch-btn');
+  if (pitchBtns) { pitchBtns.style.pointerEvents = ''; pitchBtns.style.opacity = ''; }
+  if (undoBtn)   { undoBtn.disabled = false; undoBtn.style.opacity = ''; }
+}
+
 function doHalfInningSwitch() {
+  _reenablePitchButtons();
   document.getElementById('half-end-overlay').style.display = 'none';
 
   const team = battingTeam();
@@ -3647,6 +3675,7 @@ function undoLast() {
   if (snap.halfInningErrors  !== undefined) G.halfInningErrors  = snap.halfInningErrors;
   G.selectedRunner = null;
   closeAllSheets();
+  _reenablePitchButtons(); // re-enable if undo happened after 3rd-out lock
   renderAll();
 }
 
@@ -4065,6 +4094,44 @@ document.getElementById('menu-swap').addEventListener('click', () => {
 document.getElementById('menu-game-over').addEventListener('click', () => {
   closeMenuSheet();
   showGameOverOverlay();
+});
+
+document.getElementById('menu-reset-game').addEventListener('click', () => {
+  closeMenuSheet();
+  if (!confirm('Reset this game back to 0–0 and return to game select? All scores and stats will be cleared.')) return;
+  // Wipe live score in Firebase if we have a gameId
+  if (G.gameId) {
+    try {
+      deleteDoc(doc(db, 'live_scores', G.gameId)).catch(() => {});
+      deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {}); // also clear saved mid-game state
+    } catch(e) {}
+  }
+  // Reset all G state
+  Object.assign(G, {
+    gameId: null, inning: 1, half: 'top',
+    outs: 0, balls: 0, strikes: 0,
+    awayScore: 0, homeScore: 0,
+    runners: { 1: null, 2: null, 3: null },
+    lineups: { away: [], home: [] }, rosters: { away: [], home: [] },
+    lineupIdx: { away: 0, home: 0 },
+    linescores: { away: [], home: [] },
+    plays: [], playLog: [], selectedRunner: null, bipContact: null,
+    playerStats: { away: {}, home: {} },
+    _prevAwayScore: 0, _prevHomeScore: 0,
+    pitchers: { away: null, home: null },
+    pitcherStats: { away: {}, home: {} },
+    pitchCount: { away: {}, home: {} },
+    halfInningPitches: 0, halfInningHits: 0, halfInningErrors: 0,
+    hrLog: [], sfLog: [], twoOutRbiLog: [],
+    lob: { away: 0, home: 0 },
+    risp: { away: { h: 0, ab: 0 }, home: { h: 0, ab: 0 } },
+    errors: { away: [], home: [] },
+  });
+  // Return to setup screen
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('bottom-nav').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+  _reenablePitchButtons();
 });
 
 document.getElementById('menu-exit').addEventListener('click', () => {
@@ -5072,6 +5139,10 @@ function renderStatsPanel() {
   lsWrap.appendChild(tbl);
   panel.appendChild(lsWrap);
 
+  // Who is currently batting / pitching (for row highlights)
+  const battingSide = battingTeam();
+  const currentBatterIdx = G.lineupIdx[battingSide] % Math.max(G.lineups[battingSide]?.length || 1, 1);
+
   // Batting stats per team
   ['away','home'].forEach(side => {
     const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
@@ -5095,13 +5166,16 @@ function renderStatsPanel() {
       ? lineup
       : Object.keys(stats).map(pid => ({ pid, name: pid, num: '?' }));
     let tot = { ab:0,h:0,doubles:0,triples:0,hr:0,rbi:0,r:0,bb:0,so:0 };
-    players.forEach(p => {
+    players.forEach((p, playerIdx) => {
       const pid = p.pid || p.id || p.name;
       const s = stats[pid] || {};
       const ab=s.ab||0, h=s.h||0, d=s.doubles||0, tri=s.triples||0, hr=s.hr||0, rbi=s.rbi||0, r=s.r||0, bb=s.bb||0, so=s.so||0;
       tot.ab+=ab; tot.h+=h; tot.doubles+=d; tot.triples+=tri; tot.hr+=hr; tot.rbi+=rbi; tot.r+=r; tot.bb+=bb; tot.so+=so;
-      btbody.innerHTML += `<tr>
-        <td class="bs-name-td"><span class="bs-player-num">#${p.num}</span>${p.name}</td>
+      const isAtBat = side === battingSide && playerIdx === currentBatterIdx;
+      const rowStyle = isAtBat ? ' style="background:rgba(245,200,66,.13);box-shadow:inset 2px 0 0 #F5C842;"' : '';
+      const namePrefix = isAtBat ? '<span style="color:#F5C842;margin-right:4px;font-size:11px;">▶</span>' : '';
+      btbody.innerHTML += `<tr${rowStyle}>
+        <td class="bs-name-td">${namePrefix}<span class="bs-player-num">#${p.num}</span>${p.name}</td>
         <td>${ab}</td><td>${h}</td><td>${d}</td><td>${tri}</td><td>${hr}</td>
         <td>${rbi}</td><td>${r}</td><td>${bb}</td><td>${so}</td>
       </tr>`;
@@ -5114,6 +5188,55 @@ function renderStatsPanel() {
     bt.appendChild(btbody);
     bsWrap.appendChild(bt);
     panel.appendChild(bsWrap);
+  });
+
+  // Pitching stats per team
+  ['away','home'].forEach(side => {
+    const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
+    const pStats = G.pitcherStats[side] || {};
+    const pitcherKeys = Object.keys(pStats);
+    if (pitcherKeys.length === 0) return;
+    const pCount = G.pitchCount[side] || {};
+    const currentPitcherKey = G.pitchers[side] ? (G.pitchers[side].pid || G.pitchers[side].name) : null;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'bs-section-hdr';
+    hdr.textContent = `${(teamObj.name || teamObj.short).toUpperCase()} PITCHING`;
+    panel.appendChild(hdr);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'bs-batting-wrap';
+    const pt = document.createElement('table');
+    pt.className = 'bs-batting-table';
+    pt.innerHTML = `<thead><tr>
+      <th class="bs-name-th">PITCHER</th>
+      <th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th><th>P</th>
+    </tr></thead>`;
+    const ptbody = document.createElement('tbody');
+    let totIP = 0, totH = 0, totR = 0, totBB = 0, totK = 0, totP = 0;
+    pitcherKeys.forEach(key => {
+      const s = pStats[key];
+      const ip = Math.floor(s.outs / 3) + '.' + (s.outs % 3);
+      const pitches = pCount[key]?.p || 0;
+      totIP += s.outs; totH += s.h||0; totR += s.r||0; totBB += s.bb||0; totK += s.k||0; totP += pitches;
+      const isCurrent = key === currentPitcherKey;
+      const rowStyle = isCurrent ? ' style="background:rgba(245,200,66,.13);box-shadow:inset 2px 0 0 #F5C842;"' : '';
+      const namePrefix = isCurrent ? '<span style="color:#F5C842;margin-right:4px;font-size:11px;">⚾</span>' : '';
+      const ipStr = Math.floor(s.outs/3) + '.' + (s.outs%3);
+      ptbody.innerHTML += `<tr${rowStyle}>
+        <td class="bs-name-td">${namePrefix}<span class="bs-player-num">#${s.num||'?'}</span>${s.name}</td>
+        <td>${ipStr}</td><td>${s.h||0}</td><td>${s.r||0}</td><td>${s.bb||0}</td><td>${s.k||0}</td><td>${pitches}</td>
+      </tr>`;
+    });
+    if (pitcherKeys.length > 1) {
+      ptbody.innerHTML += `<tr style="border-top:1px solid rgba(255,255,255,0.15);font-weight:900;">
+        <td class="bs-name-td" style="color:var(--text-muted);font-size:12px;letter-spacing:1px;">TOTALS</td>
+        <td>${Math.floor(totIP/3)}.${totIP%3}</td><td>${totH}</td><td>${totR}</td><td>${totBB}</td><td>${totK}</td><td>${totP}</td>
+      </tr>`;
+    }
+    pt.appendChild(ptbody);
+    wrap.appendChild(pt);
+    panel.appendChild(wrap);
   });
 }
 
@@ -5213,7 +5336,14 @@ async function loadRosters(awayTeamId, homeTeamId) {
 }
 
 // ===== SAVE SCORE =====
-async function saveScore() {
+let _saveScoreTimer = null;
+function saveScore() {
+  // Debounce: collapse rapid calls (e.g., multiple pitches in quick succession)
+  // into a single Firestore write 400 ms after the last call.
+  clearTimeout(_saveScoreTimer);
+  _saveScoreTimer = setTimeout(_doSaveScore, 400);
+}
+async function _doSaveScore() {
   if (!G.gameId || G.gameId === 'practice') return;
   try {
     await updateDoc(doc(db, 'games', G.gameId), {
@@ -5478,6 +5608,7 @@ document.getElementById('practice-btn').addEventListener('click', () => {
 // ===== HALF-INNING END OVERLAY BUTTONS =====
 document.getElementById('half-end-switch-btn').addEventListener('click', doHalfInningSwitch);
 document.getElementById('half-end-cancel-btn').addEventListener('click', () => {
+  _reenablePitchButtons();
   document.getElementById('half-end-overlay').style.display = 'none';
   undoLast();
 });

@@ -341,10 +341,10 @@ async function loadLeaders() {
     const playerMap = {}; // key: normalized name + team
 
     for (const bs of boxScores) {
-      // Support both camelCase (live-scorer) and snake_case (legacy) field names
+      // Support camelCase (live-scorer), snake_case (admin), and awayBatters (captain portal) field names
       const sides = [
-        { lineup: bs.awayLineup || bs.away_lineup, teamId: bs.away },
-        { lineup: bs.homeLineup || bs.home_lineup, teamId: bs.home },
+        { lineup: bs.awayLineup || bs.away_lineup || bs.awayBatters, teamId: bs.away },
+        { lineup: bs.homeLineup || bs.home_lineup || bs.homeBatters, teamId: bs.home },
       ];
 
       for (const { lineup, teamId } of sides) {
@@ -370,13 +370,15 @@ async function loadLeaders() {
           s.gp += 1;
           s.ab  += parseInt(p.ab) || 0;
           s.r   += parseInt(p.r) || 0;
-          // hits: live-scorer stores s/d/t/hr separately; legacy stores aggregate h
-          const hits = (parseInt(p.s)||0) + (parseInt(p.d)||0) + (parseInt(p.t)||0) + (parseInt(p.hr)||0);
-          s.h   += hits || parseInt(p.h) || 0;
+          // hits: live-scorer/admin use s/d/t/hr; captain uses h (total) + 2b/3b/hr; legacy uses h only
+          const _ld = parseInt(p.d || p['2b'])||0, _lt = parseInt(p.t || p['3b'])||0, _lhr = parseInt(p.hr)||0;
+          const hitsSplit = (parseInt(p.s)||0) + _ld + _lt + _lhr;  // admin/scorer: s+d+t+hr
+          const hitsTotal = parseInt(p.h)||0;                         // captain/legacy: total H
+          s.h   += p.s !== undefined ? hitsSplit : (hitsTotal || hitsSplit);
           s.hr  += parseInt(p.hr) || 0;
           s.rbi += parseInt(p.rbi) || 0;
           s.bb  += parseInt(p.bb) || 0;
-          s.so  += parseInt(p.so) || 0;
+          s.so  += parseInt(p.so ?? p.k) || 0;  // captain uses 'k', admin uses 'so'
         }
       }
     }
@@ -532,17 +534,18 @@ function switchCat(cat) {
 loadLeaders();
 </script>
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
-const app = initializeApp({
+const FIREBASE_CONFIG_L = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
   authDomain: "dvsl-292dd.firebaseapp.com",
   projectId: "dvsl-292dd",
   storageBucket: "dvsl-292dd.firebasestorage.app",
   messagingSenderId: "145862305559",
   appId: "1:145862305559:web:153ec455bad57e17517952"
-});
+};
+const app = getApps().length ? getApp() : initializeApp(FIREBASE_CONFIG_L);
 const db = getFirestore(app);
 
 async function loadTicker() {

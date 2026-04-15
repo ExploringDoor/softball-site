@@ -802,16 +802,24 @@ const LINEUP = [
   {name:'Pete Shapiro',   pos:'DH',avg:'.334',hr:6,rbi:22},
 ];
 
-const CURRENT_WK_IDX = 9; // weeks index treated as "current"
+// Dynamically compute which week is "current" based on today's date
+// so the page stays correct throughout the season without code changes.
+function computeCurrentWkIdx() {
+  const today = new Date();
+  const yr = today.getFullYear();
+  const MON = {January:0,February:1,March:2,April:3,May:4,June:5,July:6,August:7,September:8,October:9,November:10,December:11};
+  let idx = 0;
+  for (let i = 0; i < weeks.length; i++) {
+    const parts = (weeks[i].date || '').split(' ');
+    const mon = MON[parts[0]], day = parseInt(parts[1]);
+    if (mon !== undefined && !isNaN(day) && new Date(yr, mon, day) <= today) idx = i;
+    else if (mon !== undefined && !isNaN(day)) break;
+  }
+  return idx;
+}
+var CURRENT_WK_IDX = computeCurrentWkIdx(); // var so module script can update via window.CURRENT_WK_IDX
 let weekOffset = 0;
 let view = 'scores';
-
-function fakeScore(away,home,seed){
-  const s=(away.charCodeAt(0)+home.charCodeAt(0)+seed*7)%15;
-  let a=4+(s%8), h=3+((s*3+5)%7);
-  if(a===h)h++;
-  return{a,h};
-}
 
 function buildNav(){
   const center=CURRENT_WK_IDX+weekOffset;
@@ -859,11 +867,31 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
   const htm=TEAMS.find(t=>t.short===g.home)||HIST_TEAMS.find(t=>t.short===g.home);
   const aRec=atm?`(${atm.w}-${atm.l})`:''; const hRec=htm?`(${htm.w}-${htm.l})`:'';
   if(isPast){
-    const{a:as,h:hs}=fakeScore(g.away,g.home,wkIdx*10+gi);
+    // Prefer real Firebase scores; fall back to "pending" if not yet reported
+    const hasScore = g.done && g.away_score != null && g.home_score != null;
+    if (!hasScore) {
+      return `<div class="game-block">
+        <div class="gb-left">
+          <div class="gb-rhe-hdr-row"><span style="flex:1"></span><span class="gb-rhe-lbl">R</span></div>
+          <div class="gb-team-row">
+            <div class="gb-logo" style="color:${ac};border-color:${ac}55;background:${ac}11">${g.away}</div>
+            <span class="gb-name loser" style="cursor:pointer" onclick="event.stopPropagation();goTeam('${g.away}')">${g.away}<span style="font-size:11px;opacity:.55;display:block">${aRec}</span></span>
+            <span class="gb-score" style="opacity:.3">—</span>
+          </div>
+          <div class="gb-team-row">
+            <div class="gb-logo" style="color:${hc};border-color:${hc}55;background:${hc}11">${g.home}</div>
+            <span class="gb-name loser" style="cursor:pointer" onclick="event.stopPropagation();goTeam('${g.home}')">${g.home}<span style="font-size:11px;opacity:.55;display:block">${hRec}</span></span>
+            <span class="gb-score" style="opacity:.3">—</span>
+          </div>
+          <div class="gb-status-lbl" style="opacity:.5">NOT REPORTED</div>
+        </div>
+        <div class="gb-mid"><div class="gb-field">${field}</div></div>
+      </div>`;
+    }
+    const as=g.away_score, hs=g.home_score;
     const aW=as>hs;
-    const seed1=(g.away.charCodeAt(0)*31+g.home.charCodeAt(0)*17+as*7+hs*13);
-    const aH=as+Math.floor(seed1%3)+2, hH=hs+Math.floor((seed1+97)%3)+2;
-    const aE=seed1%4===0?1:0, hE=(seed1+97)%4===0?1:0;
+    const aH=g.away_hits??'—', hH=g.home_hits??'—';
+    const aE=g.away_errors??'—', hE=g.home_errors??'—';
     const wTeam=aW?g.away:g.home, lTeam=aW?g.home:g.away;
     const wStar=starName(wTeam,0), lStar=starName(lTeam,0);
     const wc=aW?ac:hc, lc=aW?hc:ac;
@@ -1110,6 +1138,87 @@ if(urlParams.get('tab') === 'schedule'){
   buildNav();
   render();
 }
+</script>
+
+<script type="module">
+// ── SCHEDULE PAGE: Firebase score overlay ─────────────────────────────────────
+// Loads real game scores and overlays them onto the weeks[] games array,
+// then refreshes CURRENT_WK_IDX and re-renders.
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const FB_CFG = {
+  apiKey:"AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain:"dvsl-292dd.firebaseapp.com",
+  projectId:"dvsl-292dd",
+  storageBucket:"dvsl-292dd.firebasestorage.app",
+  messagingSenderId:"145862305559",
+  appId:"1:145862305559:web:153ec455bad57e17517952"
+};
+const app = getApps().length ? getApp() : initializeApp(FB_CFG);
+const db  = getFirestore(app);
+
+(async () => {
+  try {
+    const [gamesSnap, teamsSnap] = await Promise.all([
+      getDocs(collection(db, 'games')),
+      getDocs(collection(db, 'teams')),
+    ]);
+
+    // Build id→short lookup from Firebase teams (e.g. 'gold'→'GOLD')
+    const idToShort = {};
+    teamsSnap.docs.forEach(d => {
+      const t = d.data();
+      idToShort[d.id] = (t.short || d.id).toUpperCase();
+    });
+
+    // Index weeks[] games by "wk-AWAY-HOME" for fast lookup
+    const weekGameMap = {};
+    for (let wi = 0; wi < weeks.length; wi++) {
+      const w = weeks[wi];
+      (w.games || []).forEach((g, gi) => {
+        const key = `${w.wk}-${g.away.toUpperCase()}-${g.home.toUpperCase()}`;
+        weekGameMap[key] = { wi, gi };
+      });
+    }
+
+    // Overlay Firebase scores onto weeks[] games
+    let anyDone = false;
+    gamesSnap.docs.forEach(d => {
+      const fb = d.data();
+      const awayShort = (idToShort[fb.away] || (fb.away||'').toUpperCase());
+      const homeShort = (idToShort[fb.home] || (fb.home||'').toUpperCase());
+      const key = `${fb.wk}-${awayShort}-${homeShort}`;
+      const loc = weekGameMap[key];
+      if (!loc) return;
+      const game = weeks[loc.wi].games[loc.gi];
+      game.fbId       = d.id;
+      game.done       = fb.done || false;
+      game.away_score = fb.away_score ?? null;
+      game.home_score = fb.home_score ?? null;
+      game.away_hits  = fb.away_hits  ?? null;
+      game.home_hits  = fb.home_hits  ?? null;
+      game.away_errors = fb.away_errors ?? null;
+      game.home_errors = fb.home_errors ?? null;
+      if (fb.done) anyDone = true;
+    });
+
+    // Recompute current week index now that done flags are set
+    // "current" = first week with any undone game (or last week if all done)
+    let newCurIdx = weeks.length - 1;
+    for (let i = 0; i < weeks.length; i++) {
+      const hasUndone = (weeks[i].games||[]).some(g => !g.done);
+      if (hasUndone) { newCurIdx = i; break; }
+    }
+    window.CURRENT_WK_IDX = newCurIdx;
+
+    // Re-render with real data
+    window.buildNav();
+    window.render();
+  } catch (err) {
+    console.error('[Schedule] Firebase load failed:', err);
+  }
+})();
 </script>
 </body>
 </html>
