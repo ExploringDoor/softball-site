@@ -1262,73 +1262,139 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  .lu-row {
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    min-height: 62px;
-    gap: 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+  /* ── Roster picker cards (dark theme) ── */
+  .lu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+    gap: 8px;
+    padding: 12px;
   }
-
-  .lu-order {
-    font-size: 20px;
-    font-weight: 900;
-    color: var(--text-muted);
-    min-width: 26px;
+  .lu-card {
+    position: relative;
+    border: 2px solid rgba(255,255,255,.1);
+    border-radius: 10px;
+    padding: 12px 6px 10px;
     text-align: center;
-    line-height: 1;
+    cursor: pointer;
+    background: var(--card2);
+    transition: border-color .12s, background .12s;
   }
-
-  .lu-num-badge {
-    width: 38px;
-    height: 38px;
-    border-radius: 8px;
-    background: var(--navy);
-    color: white;
+  .lu-card:active { opacity: .75; }
+  .lu-card.lu-sel {
+    border-color: var(--gold);
+    background: rgba(255,215,0,.1);
+  }
+  .lu-badge {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gold);
+    color: #111;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 13px;
+    min-width: 24px;
+    height: 24px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
-    font-weight: 900;
-    flex-shrink: 0;
-    letter-spacing: 0;
+    padding: 0 6px;
+    border: 2px solid var(--bg);
   }
-
-  .lu-name {
-    flex: 1;
-    font-size: 18px;
+  .lu-cj {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+  }
+  .lu-card.lu-sel .lu-cj { color: rgba(255,215,0,.7); }
+  .lu-cn {
+    font-size: 12px;
     font-weight: 700;
     color: var(--text);
-    letter-spacing: 0.3px;
+    line-height: 1.25;
   }
-
-  .lu-arrows {
+  .lu-strip {
+    padding: 10px 12px;
     display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-
-  .lu-arrow-btn {
-    width: 32px;
-    height: 26px;
-    background: var(--card2);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 6px;
-    color: var(--text-muted);
-    font-size: 13px;
-    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    min-height: 38px;
+    border-top: 1px solid rgba(255,255,255,.06);
+    background: rgba(0,0,0,.2);
     align-items: center;
-    justify-content: center;
-    cursor: pointer;
+  }
+  .lu-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--card);
+    border: 1.5px solid rgba(255,255,255,.1);
+    border-radius: 12px;
+    padding: 3px 8px 3px 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .lu-chip-n {
     font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 13px;
+    color: var(--gold);
+    min-width: 16px;
+    text-align: center;
   }
-
-  .lu-arrow-btn:active {
-    background: var(--navy);
-    color: white;
-    border-color: var(--navy);
+  .lu-toolbar {
+    padding: 8px 12px;
+    border-top: 1px solid rgba(255,255,255,.06);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    background: var(--card);
+    flex-shrink: 0;
   }
+  .lu-addrow {
+    display: none;
+    padding: 8px 12px;
+    gap: 8px;
+    align-items: center;
+    border-top: 1px solid rgba(255,255,255,.06);
+    background: var(--card);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .lu-input {
+    background: var(--card2);
+    border: 1px solid rgba(255,255,255,.15);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    padding: 7px 10px;
+    outline: none;
+  }
+  .lu-input:focus { border-color: var(--gold); }
+  .lu-btn {
+    background: none;
+    border: 1.5px solid rgba(255,255,255,.2);
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: .08em;
+    padding: 7px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .lu-btn:active { opacity: .7; }
+  .lu-btn-gold { border-color: var(--gold); color: var(--gold); }
+  .lu-btn-sm { font-size: 11px; padding: 5px 10px; }
 
   .lineup-footer {
     padding: 12px 16px;
@@ -1835,19 +1901,63 @@
 
 <!-- Lineup Screen -->
 <div id="lineup-screen">
-  <div class="lineup-header-top">
-    <button onclick="backFromLineup()" style="position:absolute;top:max(14px,env(safe-area-inset-top));left:12px;background:rgba(255,255,255,0.15);border:none;color:white;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;z-index:2;">‹ Back</button>
-    <div id="lineup-matchup-label">AWY vs HME</div>
-    <div class="lineup-title">SET LINEUP</div>
-    <div class="lineup-hint">Tap ▲ ▼ to set batting order</div>
+  <!-- Step 1: Away team -->
+  <div id="lus-away" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+    <div class="lineup-header-top">
+      <button onclick="backFromLineup()" style="position:absolute;top:max(14px,env(safe-area-inset-top));left:12px;background:rgba(255,255,255,0.15);border:none;color:white;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;z-index:2;">‹ Back</button>
+      <div id="lineup-matchup-label">AWY vs HME</div>
+      <div class="lineup-title" id="lus-away-title">AWAY LINEUP</div>
+      <div class="lineup-hint">Tap players to set batting order (1, 2, 3…)</div>
+    </div>
+    <div id="lineup-list" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+    <div id="lus-away-strip" class="lu-strip">
+      <span style="font-size:11px;color:var(--text-muted);font-style:italic">Tap players above to build batting order</span>
+    </div>
+    <div class="lu-toolbar">
+      <button class="lu-btn lu-btn-sm" onclick="luToggleAddRow('away')">+ Add Player</button>
+      <div style="display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 10px">
+        <span style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.04em;text-transform:uppercase">Dummy</span>
+        <input type="number" id="lus-away-dct" value="9" min="1" max="20" class="lu-input" style="width:44px;text-align:center;padding:4px 6px;font-size:14px">
+        <button class="lu-btn lu-btn-sm" onclick="luApplyDummy('away')">Apply</button>
+      </div>
+    </div>
+    <div class="lu-addrow" id="lus-away-addrow">
+      <input type="text" id="lus-away-cname" placeholder="Player name" class="lu-input" style="flex:1;min-width:130px">
+      <input type="text" id="lus-away-cnum" placeholder="#" class="lu-input" style="width:48px;text-align:center">
+      <button class="lu-btn lu-btn-gold" onclick="luAddCustom('away')">Add</button>
+    </div>
+    <div class="lineup-footer">
+      <button class="btn-primary" onclick="luNextStep()">NEXT: HOME LINEUP ›</button>
+    </div>
   </div>
-  <div class="lineup-tabs">
-    <button class="ltab active" data-team="away" onclick="showLineupTeam('away')">AWAY</button>
-    <button class="ltab" data-team="home" onclick="showLineupTeam('home')">HOME</button>
-  </div>
-  <div id="lineup-list"></div>
-  <div class="lineup-footer">
-    <button class="btn-primary" onclick="startScoring()">START SCORING ›</button>
+  <!-- Step 2: Home team -->
+  <div id="lus-home" style="display:none;flex-direction:column;height:100%;overflow:hidden">
+    <div class="lineup-header-top">
+      <button onclick="luPrevStep()" style="position:absolute;top:max(14px,env(safe-area-inset-top));left:12px;background:rgba(255,255,255,0.15);border:none;color:white;font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;z-index:2;">‹ Back</button>
+      <div id="lineup-matchup-label-h">AWY vs HME</div>
+      <div class="lineup-title" id="lus-home-title">HOME LINEUP</div>
+      <div class="lineup-hint">Tap players to set batting order (1, 2, 3…)</div>
+    </div>
+    <div id="lineup-list-home" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch"></div>
+    <div id="lus-home-strip" class="lu-strip">
+      <span style="font-size:11px;color:var(--text-muted);font-style:italic">Tap players above to build batting order</span>
+    </div>
+    <div class="lu-toolbar">
+      <button class="lu-btn lu-btn-sm" onclick="luToggleAddRow('home')">+ Add Player</button>
+      <div style="display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 10px">
+        <span style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.04em;text-transform:uppercase">Dummy</span>
+        <input type="number" id="lus-home-dct" value="9" min="1" max="20" class="lu-input" style="width:44px;text-align:center;padding:4px 6px;font-size:14px">
+        <button class="lu-btn lu-btn-sm" onclick="luApplyDummy('home')">Apply</button>
+      </div>
+    </div>
+    <div class="lu-addrow" id="lus-home-addrow">
+      <input type="text" id="lus-home-cname" placeholder="Player name" class="lu-input" style="flex:1;min-width:130px">
+      <input type="text" id="lus-home-cnum" placeholder="#" class="lu-input" style="width:48px;text-align:center">
+      <button class="lu-btn lu-btn-gold" onclick="luAddCustom('home')">Add</button>
+    </div>
+    <div class="lineup-footer">
+      <button class="btn-primary" onclick="startScoring()">START SCORING ›</button>
+    </div>
   </div>
 </div>
 
@@ -2343,6 +2453,7 @@ const G = {
   homeTeam: { id:'', name:'Home', short:'HME', color:'#002D72' },
   runners: { 1: null, 2: null, 3: null },
   lineups: { away: [], home: [] },
+  rosters: { away: [], home: [] },
   lineupIdx: { away: 0, home: 0 },
   linescores: { away: [], home: [] },
   plays: [],
@@ -4592,60 +4703,143 @@ document.getElementById('boxscore-sheet-overlay').addEventListener('click', (e) 
 });
 
 // ===== LINEUP SCREEN =====
-let lineupActiveTeam = 'away';
 
 function showLineupScreen() {
-  document.getElementById('lineup-matchup-label').textContent =
-    `${G.awayTeam.short} vs ${G.homeTeam.short}`;
-  lineupActiveTeam = 'away';
-  document.querySelectorAll('.ltab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.team === 'away');
-  });
-  renderLineupList();
+  const matchup = `${G.awayTeam.short} vs ${G.homeTeam.short}`;
+  document.getElementById('lineup-matchup-label').textContent = matchup;
+  document.getElementById('lineup-matchup-label-h').textContent = matchup;
+  document.getElementById('lus-away-title').textContent = `${G.awayTeam.short} LINEUP`;
+  document.getElementById('lus-home-title').textContent = `${G.homeTeam.short} LINEUP`;
+  // Show step 1 (away), hide step 2 (home)
+  document.getElementById('lus-away').style.display = 'flex';
+  document.getElementById('lus-home').style.display = 'none';
   document.getElementById('lineup-screen').classList.add('visible');
+  luRenderGrid('away');
 }
 
-function showLineupTeam(team) {
-  lineupActiveTeam = team;
-  document.querySelectorAll('.ltab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.team === team);
-  });
-  renderLineupList();
-}
+function luRenderGrid(team) {
+  const listId = team === 'away' ? 'lineup-list' : 'lineup-list-home';
+  const list = document.getElementById(listId);
+  const roster = G.rosters[team] || [];
+  if (!list) return;
 
-function renderLineupList() {
-  const list = document.getElementById('lineup-list');
-  const lineup = G.lineups[lineupActiveTeam];
-  list.innerHTML = '';
-  if (!lineup || lineup.length === 0) {
-    list.innerHTML = '<div class="lineup-empty">No players loaded for this team.</div>';
-    return;
+  if (roster.length === 0) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:14px">No players found — use Add Player or Dummy below.</div>';
+  } else {
+    list.innerHTML = `<div class="lu-grid" id="lu-grid-${team}"></div>`;
+    const grid = document.getElementById(`lu-grid-${team}`);
+    roster.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'lu-card';
+      card.dataset.name = p.name;
+      card.dataset.num = p.num || '';
+      card.innerHTML = `<div class="lu-cj">${p.num && p.num !== '?' ? '#' + p.num : ''}</div><div class="lu-cn">${p.name}</div>`;
+      card.addEventListener('click', () => luTogglePlayer(team, p.name, p.num || ''));
+      grid.appendChild(card);
+    });
   }
-  lineup.forEach((player, idx) => {
-    const row = document.createElement('div');
-    row.className = 'lu-row';
-    row.innerHTML = `
-      <div class="lu-order">${idx + 1}</div>
-      <div class="lu-num-badge">#${player.num}</div>
-      <div class="lu-name">${player.name}</div>
-      <div class="lu-arrows">
-        <button class="lu-arrow-btn" onclick="moveInLineup(${idx}, -1)">▲</button>
-        <button class="lu-arrow-btn" onclick="moveInLineup(${idx},  1)">▼</button>
-      </div>
-    `;
-    list.appendChild(row);
-  });
+  luRefreshUI(team);
 }
 
-function moveInLineup(idx, dir) {
-  const lineup = G.lineups[lineupActiveTeam];
-  const newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= lineup.length) return;
-  [lineup[idx], lineup[newIdx]] = [lineup[newIdx], lineup[idx]];
-  renderLineupList();
+function luRefreshUI(team) {
+  const lineup = G.lineups[team];
+  // Update card badges
+  const grid = document.getElementById(`lu-grid-${team}`);
+  if (grid) {
+    grid.querySelectorAll('.lu-card').forEach(card => {
+      const idx = lineup.findIndex(p => p.name === card.dataset.name && (p.num || '') === (card.dataset.num || ''));
+      card.classList.toggle('lu-sel', idx >= 0);
+      let b = card.querySelector('.lu-badge');
+      if (idx >= 0) {
+        if (!b) { b = document.createElement('div'); b.className = 'lu-badge'; card.prepend(b); }
+        b.textContent = idx + 1;
+      } else { if (b) b.remove(); }
+    });
+  }
+  // Update order strip
+  const stripId = team === 'away' ? 'lus-away-strip' : 'lus-home-strip';
+  const strip = document.getElementById(stripId);
+  if (strip) {
+    strip.innerHTML = lineup.length
+      ? lineup.map((p, i) => `<div class="lu-chip"><span class="lu-chip-n">${i+1}</span>${p.num && p.num !== '?' ? `<span style="font-size:10px;color:var(--text-muted)">#${p.num}</span> ` : ''}<span>${p.name}</span></div>`).join('')
+      : '<span style="font-size:11px;color:var(--text-muted);font-style:italic">Tap players to build batting order</span>';
+  }
 }
+
+function luTogglePlayer(team, name, num) {
+  const lineup = G.lineups[team];
+  const idx = lineup.findIndex(p => p.name === name && (p.num || '') === (num || ''));
+  if (idx >= 0) lineup.splice(idx, 1);
+  else lineup.push({ name, num: num || '', pos: '' });
+  luRefreshUI(team);
+}
+
+window.luToggleAddRow = function(team) {
+  const row = document.getElementById(`lus-${team}-addrow`);
+  if (!row) return;
+  const open = row.style.display === 'flex';
+  row.style.display = open ? 'none' : 'flex';
+  if (!open) document.getElementById(`lus-${team}-cname`)?.focus();
+};
+
+window.luAddCustom = function(team) {
+  const nameEl = document.getElementById(`lus-${team}-cname`);
+  const numEl = document.getElementById(`lus-${team}-cnum`);
+  const name = (nameEl?.value || '').trim(); if (!name) { nameEl?.focus(); return; }
+  const num = (numEl?.value || '').trim();
+  const player = { name, num, pos: '' };
+  // Add to roster grid
+  const grid = document.getElementById(`lu-grid-${team}`);
+  if (grid) {
+    const card = document.createElement('div');
+    card.className = 'lu-card'; card.dataset.name = name; card.dataset.num = num;
+    card.innerHTML = `<div class="lu-cj">${num ? '#' + num : ''}</div><div class="lu-cn">${name}</div>`;
+    card.addEventListener('click', () => luTogglePlayer(team, name, num));
+    grid.appendChild(card);
+  }
+  G.rosters[team].push(player);
+  G.lineups[team].push(player);
+  if (nameEl) nameEl.value = '';
+  if (numEl) numEl.value = '';
+  luRefreshUI(team);
+};
+
+window.luApplyDummy = function(team) {
+  const ct = Math.max(1, Math.min(20, parseInt(document.getElementById(`lus-${team}-dct`)?.value) || 9));
+  G.lineups[team] = Array.from({ length: ct }, (_, i) => ({ name: `Batter ${i+1}`, num: '', pos: '' }));
+  // Clear real roster cards and re-render with dummies
+  const grid = document.getElementById(`lu-grid-${team}`);
+  if (grid) {
+    grid.querySelectorAll('.lu-card').forEach(c => { c.classList.remove('lu-sel'); c.querySelector('.lu-badge')?.remove(); });
+    G.lineups[team].forEach((p, i) => {
+      const card = document.createElement('div');
+      card.className = 'lu-card lu-sel'; card.dataset.name = p.name; card.dataset.num = '';
+      const b = document.createElement('div'); b.className = 'lu-badge'; b.textContent = i + 1;
+      card.innerHTML = `<div class="lu-cj"></div><div class="lu-cn">${p.name}</div>`;
+      card.prepend(b);
+      card.addEventListener('click', () => luTogglePlayer(team, p.name, ''));
+      grid.appendChild(card);
+    });
+  }
+  luRefreshUI(team);
+};
+
+window.luNextStep = function() {
+  document.getElementById('lus-away').style.display = 'none';
+  const homeStep = document.getElementById('lus-home');
+  homeStep.style.display = 'flex';
+  luRenderGrid('home');
+};
+
+window.luPrevStep = function() {
+  document.getElementById('lus-home').style.display = 'none';
+  document.getElementById('lus-away').style.display = 'flex';
+};
 
 function startScoring() {
+  // If a team's lineup is empty, fall back to full roster order
+  if (!G.lineups.away.length) G.lineups.away = G.rosters.away.slice();
+  if (!G.lineups.home.length) G.lineups.home = G.rosters.home.slice();
   document.getElementById('lineup-screen').classList.remove('visible');
   document.getElementById('app').classList.add('visible');
   document.getElementById('bottom-nav').classList.add('active');
@@ -4663,9 +4857,6 @@ function backFromLineup() {
   document.getElementById('setup-screen').style.display = 'flex';
 }
 
-// Expose lineup functions to global scope (required for inline onclick in module scripts)
-window.showLineupTeam = showLineupTeam;
-window.moveInLineup = moveInLineup;
 window.startScoring = startScoring;
 window.backFromLineup = backFromLineup;
 
@@ -5007,9 +5198,14 @@ async function loadRosters(awayTeamId, homeTeamId) {
       }
     });
 
-    // Sort by number if possible
+    // Sort by jersey number, then store as the selectable roster
     G.lineups.away.sort((a, b) => (parseInt(a.num) || 99) - (parseInt(b.num) || 99));
     G.lineups.home.sort((a, b) => (parseInt(a.num) || 99) - (parseInt(b.num) || 99));
+    // Rosters = full player list for the picker; lineups = batting order chosen by user
+    G.rosters.away = G.lineups.away.slice();
+    G.rosters.home = G.lineups.home.slice();
+    G.lineups.away = [];
+    G.lineups.home = [];
 
   } catch (err) {
     console.error('Error loading rosters:', err);
