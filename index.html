@@ -5983,14 +5983,15 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
 function generateGamePreview(atm,htm,g){
   const aShort=atm?.short||g.away;
   const hShort=htm?.short||g.home;
+  const field=g?.field||'';
   const hasRecs=atm?.w!=null&&htm?.w!=null;
 
-  // Head-to-head from schedule
+  // Head-to-head
   const h2h=SCHEDULE_PREVIEW.filter(p=>p.done&&((p.away===g.away&&p.home===g.home)||(p.away===g.home&&p.home===g.away)));
   const aWins=h2h.filter(p=>(p.away===g.away&&p.as>p.hs)||(p.home===g.away&&p.hs>p.as)).length;
   const hWins=h2h.filter(p=>(p.away===g.home&&p.as>p.hs)||(p.home===g.home&&p.hs>p.as)).length;
 
-  // Parse streaks like "W3", "L2"
+  // Streaks
   const pStrk=s=>{if(!s||s==='—')return null;const m=s.match(/^([WL])(\d+)$/);return m?{type:m[1],n:+m[2]}:null;};
   const aStrk=pStrk(atm?.streak), hStrk=pStrk(htm?.streak);
 
@@ -5998,49 +5999,76 @@ function generateGamePreview(atm,htm,g){
   const sorted=[...TEAMS].filter(t=>t.w!=null).sort((a,b)=>(b.w/(b.w+b.l+.001))-(a.w/(a.w+a.l+.001)));
   const aRank=atm?sorted.findIndex(t=>t.id===atm.id)+1:0;
   const hRank=htm?sorted.findIndex(t=>t.id===htm.id)+1:0;
+  const nTeams=sorted.length;
+
+  // Runs per game
+  const aGp=hasRecs?atm.w+atm.l:0, hGp=hasRecs?htm.w+htm.l:0;
+  const aRpg=aGp>0&&atm.rs?+(atm.rs/aGp).toFixed(1):null;
+  const hRpg=hGp>0&&htm.rs?+(htm.rs/hGp).toFixed(1):null;
 
   const parts=[];
 
-  // Intro: who's playing, records
+  // ── Sentence 1: lede — travel, field, records ──
+  const fieldStr=field?` to ${field}`:'';
   if(hasRecs){
-    const aR=`(${atm.w}-${atm.l})`, hR=`(${htm.w}-${htm.l})`;
-    if(aRank===1){
-      parts.push(`First-place ${aShort} ${aR} travels to take on ${hShort} ${hR}.`);
+    const aR=`${atm.w}-${atm.l}`, hR=`${htm.w}-${htm.l}`;
+    if(aRank===1&&hRank===1){
+      parts.push(`Two of the league's best meet as ${aShort} (${aR}) makes the trip${fieldStr} to take on ${hShort} (${hR}) in what could be a playoff preview.`);
+    } else if(aRank===1){
+      parts.push(`First-place ${aShort} (${aR}) travels${fieldStr} looking to extend their lead over ${hShort} (${hR}).`);
     } else if(hRank===1){
-      parts.push(`${aShort} ${aR} takes on first-place ${hShort} ${hR}.`);
+      parts.push(`${aShort} (${aR}) makes the trip${fieldStr} with a chance to hand first-place ${hShort} (${hR}) a rare loss.`);
+    } else if(aRank<=Math.ceil(nTeams/2)&&hRank>Math.ceil(nTeams/2)){
+      parts.push(`${aShort} (${aR}) heads${fieldStr} on the road against a ${hShort} (${hR}) squad hungry to climb the standings.`);
+    } else if(hRank<=Math.ceil(nTeams/2)&&aRank>Math.ceil(nTeams/2)){
+      parts.push(`${aShort} (${aR}) makes the trek${fieldStr} hoping to pull off an upset against a solid ${hShort} (${hR}) squad.`);
     } else {
-      parts.push(`${aShort} ${aR} travels to face ${hShort} ${hR}.`);
+      parts.push(`${aShort} (${aR}) travels${fieldStr} to square off against ${hShort} (${hR}) in a pivotal mid-season matchup.`);
     }
   } else {
-    parts.push(`${aShort} travels to face ${hShort}.`);
+    parts.push(`${aShort} heads${fieldStr} to take on ${hShort}${field?' at '+field:''} in what should be a great game.`);
   }
 
-  // Streaks
+  // ── Sentence 2: streaks for both teams ──
+  const streakParts=[];
   if(aStrk){
-    if(aStrk.type==='W'&&aStrk.n>=2) parts.push(`${aShort} is riding a ${aStrk.n}-game winning streak.`);
-    else if(aStrk.type==='L'&&aStrk.n>=2) parts.push(`${aShort} is looking to bounce back from a ${aStrk.n}-game skid.`);
+    if(aStrk.type==='W'&&aStrk.n>=2) streakParts.push(`${aShort} is rolling on a ${aStrk.n}-game winning streak`);
+    else if(aStrk.type==='W'&&aStrk.n===1) streakParts.push(`${aShort} comes in on a win`);
+    else if(aStrk.type==='L'&&aStrk.n>=3) streakParts.push(`${aShort} is desperate to stop a ${aStrk.n}-game skid`);
+    else if(aStrk.type==='L'&&aStrk.n>=2) streakParts.push(`${aShort} is looking to bounce back after dropping ${aStrk.n} straight`);
   }
   if(hStrk){
-    if(hStrk.type==='W'&&hStrk.n>=2) parts.push(`${hShort} has won ${hStrk.n} straight.`);
-    else if(hStrk.type==='L'&&hStrk.n>=2) parts.push(`${hShort} is hoping to snap a ${hStrk.n}-game losing streak.`);
+    if(hStrk.type==='W'&&hStrk.n>=2) streakParts.push(`${hShort} has won ${hStrk.n} in a row at home`);
+    else if(hStrk.type==='W'&&hStrk.n===1) streakParts.push(`${hShort} is coming off a win`);
+    else if(hStrk.type==='L'&&hStrk.n>=3) streakParts.push(`${hShort} desperately needs a win after ${hStrk.n} straight losses`);
+    else if(hStrk.type==='L'&&hStrk.n>=2) streakParts.push(`${hShort} is trying to snap a ${hStrk.n}-game losing streak`);
   }
+  if(streakParts.length===2) parts.push(`${streakParts[0]}, while ${streakParts[1]}.`);
+  else if(streakParts.length===1) parts.push(`${streakParts[0]}.`);
 
-  // Head to head
+  // ── Sentence 3: head-to-head + offense ──
+  const misc=[];
   if(h2h.length>0){
-    if(aWins>hWins) parts.push(`${aShort} leads the season series ${aWins}-${hWins}.`);
-    else if(hWins>aWins) parts.push(`${hShort} holds a ${hWins}-${aWins} edge in the season series.`);
-    else if(aWins>0) parts.push(`The season series is dead even at ${aWins}-${aWins}.`);
+    if(aWins>hWins) misc.push(`${aShort} owns a ${aWins}-${hWins} edge in the season series`);
+    else if(hWins>aWins) misc.push(`${hShort} holds a ${hWins}-${aWins} advantage in the series this year`);
+    else if(aWins>0) misc.push(`the season series is knotted at ${aWins}-${aWins}`);
   }
+  if(aRpg&&hRpg){
+    if(aRpg>hRpg+1.5) misc.push(`${aShort}'s offense leads the way at ${aRpg} runs per game`);
+    else if(hRpg>aRpg+1.5) misc.push(`${hShort}'s bats are clicking at ${hRpg} runs per game`);
+  }
+  if(misc.length===2) parts.push(`Notably, ${misc[0]} and ${misc[1]}.`);
+  else if(misc.length===1) parts.push(`Worth noting: ${misc[0]}.`);
 
-  // Runs per game context
-  if(hasRecs){
-    const aGp=atm.w+atm.l, hGp=htm.w+htm.l;
-    if(aGp>0&&hGp>0&&atm.rs&&htm.rs){
-      const aRpg=(atm.rs/aGp).toFixed(1), hRpg=(htm.rs/hGp).toFixed(1);
-      if(+aRpg>+hRpg+1.5) parts.push(`${aShort} brings the league's hottest offense, averaging ${aRpg} runs per game.`);
-      else if(+hRpg>+aRpg+1.5) parts.push(`${hShort} leads the offense at ${hRpg} runs per game.`);
-    }
-  }
+  // ── Closing tension line ──
+  const closers=[
+    `Expect a competitive battle between two squads that know each other well.`,
+    `First pitch can't come soon enough.`,
+    `Should be a great one under the lights.`,
+    `Don't miss this one.`,
+  ];
+  const closeIdx=(aShort.charCodeAt(0)+hShort.charCodeAt(0))%closers.length;
+  if(parts.length>=2) parts.push(closers[closeIdx]);
 
   return parts.join(' ');
 }
