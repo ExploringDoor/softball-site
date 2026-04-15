@@ -2256,7 +2256,6 @@ thead th.sorted-col .sarrow{opacity:1}
     <button class="ttab on" data-tab="roster">Roster</button>
     <button class="ttab" data-tab="schedule">Schedule</button>
     <button class="ttab" data-tab="gamelog">Game Log</button>
-    <button class="ttab" data-tab="stats">Stats</button>
   </div>
   <div class="team-body" id="team-body"></div>
   <footer class="ft">
@@ -4203,8 +4202,6 @@ function renderTeamTab(tab){
 
   } else if(tab==='career' && TBIR_SEASONS){
     renderCareerTab('_avg','desc');
-  } else {
-    renderTeamStats(t, players, 'avg', 'desc');
   }
 }
 
@@ -5697,14 +5694,20 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
 
   // Fetch box score from Firestore
   let boxScore = null;
-  if (gameId) {
-    try {
-      const db2 = await getDb();
-      const { collection: col2, getDocs: gd2, query: q2, where: wh2 } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+  try {
+    const db2 = await getDb();
+    const { collection: col2, getDocs: gd2, query: q2, where: wh2, limit: lim2 } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    // Primary: match by game_id (fastest, most precise)
+    if (gameId) {
       const snap = await gd2(q2(col2(db2,'box_scores'), wh2('game_id','==',gameId)));
       if (!snap.empty) boxScore = { id: snap.docs[0].id, ...snap.docs[0].data() };
-    } catch(e) { console.warn('Box score fetch:',e); }
-  }
+    }
+    // Fallback: match by away + home teams
+    if (!boxScore) {
+      const snap2 = await gd2(q2(col2(db2,'box_scores'), wh2('away','==',away), wh2('home','==',home), lim2(1)));
+      if (!snap2.empty) boxScore = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
+    }
+  } catch(e) { console.warn('Box score fetch:',e); }
 
   // Recap data
   const recap=RECAPS.find(r=>r.away===away&&r.home===home);
@@ -5723,10 +5726,10 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
 
   if (boxScore) {
     // ── Real box score stats ──
-    const aLineup  = boxScore.away_lineup   || [];
-    const hLineup  = boxScore.home_lineup   || [];
-    const aPitch   = boxScore.away_pitchers || [];
-    const hPitch   = boxScore.home_pitchers || [];
+    const aLineup  = boxScore.away_lineup  || boxScore.awayBatters  || [];
+    const hLineup  = boxScore.home_lineup  || boxScore.homeBatters  || [];
+    const aPitch   = boxScore.away_pitchers || boxScore.away_pitching || [];
+    const hPitch   = boxScore.home_pitchers || boxScore.home_pitching || [];
     // Support both linescores (new) and innings (old) field names
     const aInnings = boxScore.linescores?.away || boxScore.innings?.away || [];
     const hInnings = boxScore.linescores?.home || boxScore.innings?.home || [];
