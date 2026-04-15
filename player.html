@@ -492,8 +492,9 @@ async function loadMedia() {
   if (!el || !MY_TEAM) return;
   el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
   try {
-    const snap = await getDocs(query(collection(db,'team_media'), where('team_id','==',MY_TEAM.id), orderBy('created_at','desc')));
-    renderMediaGrid(el, snap.docs.map(d=>({id:d.id,...d.data()})));
+    const snap = await getDocs(query(collection(db,'team_media'), where('team_id','==',MY_TEAM.id)));
+    const items = snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+    renderMediaGrid(el, items);
   } catch(e) {
     el.innerHTML = `<div class="empty-state">Could not load media: ${e.message}</div>`;
   }
