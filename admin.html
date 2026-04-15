@@ -1834,9 +1834,9 @@ function renderBoxScore(awayName, homeName, g) {
     const activeLineup = lineup.filter(p => !p.dnp);
     return `
       <div class="bs-panel" data-side="${side}" style="background:#fff;border-radius:8px;border:1px solid var(--border);overflow:hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--navy-light);border-bottom:2px solid var(--navy-mid)">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;color:var(--navy)">${teamName}
-            <span style="font-weight:400;font-size:13px;color:var(--muted)">&nbsp;(${totals.r} R &middot; ${totals.s+totals.d+totals.t+totals.hr} H)</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--navy);color:#fff">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;color:#fff">${teamName}
+            <span style="font-weight:400;font-size:13px;color:rgba(255,255,255,.6)">&nbsp;(${totals.r} R &middot; ${totals.s+totals.d+totals.t+totals.hr} H)</span>
           </div>
         </div>
         <div style="overflow-x:auto;padding:8px 10px 4px">
@@ -1935,27 +1935,52 @@ function renderBoxScore(awayName, homeName, g) {
           ${bsScoreOnlyMode ? '📊 Full Stats Mode' : '🎯 Score Only Mode'}
         </button>
       </div>
-      <!-- Dark navy game banner -->
-      <div style="background:#001a3e;border-radius:12px;padding:16px 24px;margin-bottom:18px;text-align:center;color:#fff">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.45);margin-bottom:10px">${g.date||''} · ${g.time||''} · ${g.field||''}</div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:16px">
-          <span>${awayName}</span>
-          <span style="font-size:48px;color:#FFD700;min-width:56px;text-align:center" id="bs-away-total">${awayR}</span>
-          <span style="color:rgba(255,255,255,.2);font-size:22px;font-weight:300">—</span>
-          <span style="font-size:48px;color:#FFD700;min-width:56px;text-align:center" id="bs-home-total">${homeR}</span>
-          <span>${homeName}</span>
+      <!-- Card: BOX SCORE header + scoreboard + tabs + panels -->
+      <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px">
+        <div style="background:var(--navy);color:#fff;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;display:flex;align-items:center;justify-content:space-between"><span>📊 BOX SCORE — Wk ${g.wk||'?'}: ${awayName} @ ${homeName}</span></div>
+        <!-- Scoreboard header -->
+        <div style="background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)">
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:12px 16px 10px;border-bottom:1px solid var(--border)">
+            <div>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;color:var(--navy);line-height:1">${awayName}</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:2px">AWAY</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span id="bs-away-total" style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:52px;color:var(--navy);line-height:1;min-width:38px;text-align:center">${awayR}</span>
+              <span style="font-family:'Barlow Condensed',sans-serif;font-size:30px;color:var(--muted2);font-weight:700">—</span>
+              <span id="bs-home-total" style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:52px;color:var(--navy);line-height:1;min-width:38px;text-align:center">${homeR}</span>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;color:var(--navy);line-height:1">${homeName}</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:2px">HOME</div>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);padding:6px 16px 8px;text-align:center">${g.date||''} · ${g.time||''} · ${g.field||''}</div>
+          ${bsScoreOnlyMode ? `
+          <div style="display:flex;gap:20px;justify-content:center;padding:8px 16px 14px">
+            <div style="text-align:center">
+              <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px">${awayName} Score</div>
+              <input type="number" min="0" style="width:80px;padding:8px;text-align:center;font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:900;border:2px solid var(--border);border-radius:6px;background:#fff;color:var(--navy)" value="${awayR}" id="score-only-away" oninput="bsSetScoreOnly('away',this.value)">
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;margin-bottom:4px">${homeName} Score</div>
+              <input type="number" min="0" style="width:80px;padding:8px;text-align:center;font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:900;border:2px solid var(--border);border-radius:6px;background:#fff;color:var(--navy)" value="${homeR}" id="score-only-home" oninput="bsSetScoreOnly('home',this.value)">
+            </div>
+          </div>` : ''}
         </div>
-        ${bsScoreOnlyMode ? `
-        <div style="display:flex;gap:20px;justify-content:center;margin-top:12px">
-          <div style="text-align:center">
-            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;margin-bottom:4px">${awayName} Score</div>
-            <input type="number" min="0" style="width:80px;padding:8px;text-align:center;font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:900;border:2px solid rgba(255,255,255,.2);border-radius:6px;background:rgba(255,255,255,.08);color:#FFD700" value="${awayR}" id="score-only-away" oninput="bsSetScoreOnly('away',this.value)">
+        ${bsScoreOnlyMode ? '' : `
+        <div style="display:flex;border-bottom:2px solid var(--border)">
+          <button id="bs-tab-away" onclick="bsSwitchBsTab('away')" style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:var(--navy);color:#fff;border-right:1px solid rgba(255,255,255,.2)">▲ ${awayName}</button>
+          <button id="bs-tab-home" onclick="bsSwitchBsTab('home')" style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:#f3f4f6;color:var(--muted)">▼ ${homeName}</button>
+        </div>
+        <div style="padding:8px">
+          <div id="bs-panel-away-wrap">
+            ${renderPanel(bsAwayLineup, awayName, 'away')}
           </div>
-          <div style="text-align:center">
-            <div style="font-size:10px;color:rgba(255,255,255,.45);font-weight:700;text-transform:uppercase;margin-bottom:4px">${homeName} Score</div>
-            <input type="number" min="0" style="width:80px;padding:8px;text-align:center;font-size:22px;font-family:'Barlow Condensed',sans-serif;font-weight:900;border:2px solid rgba(255,255,255,.2);border-radius:6px;background:rgba(255,255,255,.08);color:#FFD700" value="${homeR}" id="score-only-home" oninput="bsSetScoreOnly('home',this.value)">
+          <div id="bs-panel-home-wrap" style="display:none">
+            ${renderPanel(bsHomeLineup, homeName, 'home')}
           </div>
-        </div>` : ''}
+        </div>`}
       </div>
       ${(() => {
         const awayInningR = bsInnings.away.reduce((s,v)=>s+(parseInt(v)||0),0);
@@ -2022,17 +2047,6 @@ function renderBoxScore(awayName, homeName, g) {
           <textarea id="bs-recap-text" rows="4" placeholder="Write a brief game summary..." style="width:100%;padding:8px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;background:#f8f9fa" oninput="bsGameRecap=this.value">${bsGameRecap.replace(/</g,'&lt;')}</textarea>
         </div>
       </div>
-      ${bsScoreOnlyMode ? '' : `
-      <div style="display:flex;gap:0;margin-bottom:16px;border:2px solid #001a3e;border-radius:10px;overflow:hidden">
-        <button id="bs-tab-away" onclick="bsSwitchBsTab('away')" style="flex:1;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;background:#001a3e;color:#FFD700;border:none;cursor:pointer;letter-spacing:.04em">${awayName}</button>
-        <button id="bs-tab-home" onclick="bsSwitchBsTab('home')" style="flex:1;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;background:#f4f6f9;color:#001a3e;border:none;cursor:pointer;letter-spacing:.04em">${homeName}</button>
-      </div>
-      <div id="bs-panel-away-wrap">
-        ${renderPanel(bsAwayLineup, awayName, 'away')}
-      </div>
-      <div id="bs-panel-home-wrap" style="display:none">
-        ${renderPanel(bsHomeLineup, homeName, 'home')}
-      </div>`}
       <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1);flex-wrap:wrap">
         <button class="btn btn-success" onclick="saveBoxScore(true)">Save & Mark Final</button>
         <button class="btn btn-outline" onclick="saveBoxScore(false)">Save Draft</button>
@@ -2060,8 +2074,8 @@ window.bsSwitchBsTab = function(tab) {
   document.getElementById('bs-panel-home-wrap').style.display = tab === 'home' ? 'block' : 'none';
   const awayBtn = document.getElementById('bs-tab-away');
   const homeBtn = document.getElementById('bs-tab-home');
-  if (awayBtn) { awayBtn.style.background = tab==='away'?'#001a3e':'#f4f6f9'; awayBtn.style.color = tab==='away'?'#FFD700':'#001a3e'; }
-  if (homeBtn) { homeBtn.style.background = tab==='home'?'#001a3e':'#f4f6f9'; homeBtn.style.color = tab==='home'?'#FFD700':'#001a3e'; }
+  if (awayBtn) { awayBtn.style.background = tab==='away'?'var(--navy)':'#f3f4f6'; awayBtn.style.color = tab==='away'?'#fff':'#6b7280'; }
+  if (homeBtn) { homeBtn.style.background = tab==='home'?'var(--navy)':'#f3f4f6'; homeBtn.style.color = tab==='home'?'#fff':'#6b7280'; }
 };
 
 let bsDragIdx = null, bsDragSide = null;
@@ -2611,13 +2625,28 @@ window.openImportCsv = function() {
   el.style.display = 'block';
   el.innerHTML = `<div class="inline-form" style="margin-bottom:20px">
     <div class="panel-title">Import Schedule from CSV</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
-      <strong>Format (one game per line):</strong> Week, Date (YYYY-MM-DD), Time (HH:MM 24hr), Away Team ID, Home Team ID, Field, Address<br>
-      <span style="font-family:monospace;font-size:11px;color:var(--text)">Example: 1, 2026-06-05, 19:00, dn, tbir, Mondauk 4, 1451 Dillon Rd Ambler PA</span>
+
+    <!-- Drop zone -->
+    <div id="csv-drop-zone" style="border:2px dashed var(--navy);border-radius:10px;padding:32px 24px;text-align:center;background:rgba(0,45,114,.03);cursor:pointer;transition:all .2s;margin-bottom:14px;position:relative"
+      ondragover="event.preventDefault();document.getElementById('csv-drop-zone').style.background='rgba(0,45,114,.08)'"
+      ondragleave="document.getElementById('csv-drop-zone').style.background='rgba(0,45,114,.03)'"
+      ondrop="event.preventDefault();document.getElementById('csv-drop-zone').style.background='rgba(0,45,114,.03)';csvHandleFileDrop(event.dataTransfer.files[0])">
+      <input type="file" accept=".csv,text/csv,text/plain" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="csvHandleFileDrop(this.files[0])">
+      <div style="font-size:36px;margin-bottom:8px">📄</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;color:var(--navy);margin-bottom:4px">Drop CSV File Here</div>
+      <div style="font-size:12px;color:var(--muted)">Or click to browse — AI will read any format</div>
     </div>
+
+    <div id="csv-ai-status" style="display:none;text-align:center;padding:20px">
+      <div style="font-size:28px;margin-bottom:8px">🤖</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;color:var(--navy)">AI is reading your schedule...</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">This takes a few seconds</div>
+    </div>
+
+    <div style="margin:10px 0 6px;text-align:center;font-size:11px;color:var(--muted);font-style:italic">— or paste raw CSV below —</div>
+
     <div class="form-group">
-      <label class="form-label">Paste CSV Data</label>
-      <textarea class="form-input" id="csv-input" rows="8" placeholder="1, 2026-06-05, 19:00, dn, tbir, Mondauk 4, 1451 Dillon Rd Ambler PA&#10;1, 2026-06-05, 20:15, team1, team2, Mondauk 5, ..."></textarea>
+      <textarea class="form-input" id="csv-input" rows="5" placeholder="1, 2026-06-05, 19:00, dn, tbir, Mondauk 4, 1451 Dillon Rd Ambler PA&#10;1, 2026-06-05, 20:15, team1, team2, Mondauk 5, ..."></textarea>
     </div>
     <div class="form-row">
       <button class="btn btn-primary" onclick="previewCsvGames()">Preview</button>
@@ -2625,6 +2654,71 @@ window.openImportCsv = function() {
     </div>
     <div id="csv-preview" style="margin-top:16px;display:none"></div>
   </div>`;
+};
+
+window.csvHandleFileDrop = async function(file) {
+  if (!file) return;
+  const dropZone = document.getElementById('csv-drop-zone');
+  const aiStatus = document.getElementById('csv-ai-status');
+  const previewEl = document.getElementById('csv-preview');
+  if (dropZone) dropZone.style.display = 'none';
+  if (aiStatus) aiStatus.style.display = 'block';
+  if (previewEl) previewEl.style.display = 'none';
+
+  try {
+    const text = await file.text();
+    // Try client-side parse first (fast path for known format)
+    document.getElementById('csv-input').value = text;
+
+    // Call AI parse endpoint
+    const teamList = TEAMS.map(t => ({ id: t.id, name: t.name }));
+    const resp = await fetch('/api/parse-schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csvText: text, teams: teamList })
+    });
+    if (!resp.ok) throw new Error('API error ' + resp.status);
+    const data = await resp.json();
+    if (!data.games || !data.games.length) throw new Error('No games found in CSV');
+
+    if (aiStatus) aiStatus.style.display = 'none';
+    if (dropZone) dropZone.style.display = 'block';
+
+    // Convert AI result to preview-compatible format
+    const parsed = data.games.map(g => {
+      let dateDisplay = '', dayDisplay = '', timeDisplay = '';
+      try {
+        const d = new Date((g.date_iso || '') + 'T12:00:00');
+        if (!isNaN(d)) {
+          dateDisplay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          dayDisplay  = d.toLocaleDateString('en-US', { weekday: 'short' });
+        }
+      } catch(e) {}
+      if (g.time_24) {
+        try {
+          const [hh, mm] = g.time_24.split(':').map(Number);
+          timeDisplay = `${hh % 12 || 12}:${String(mm).padStart(2,'0')} ${hh >= 12 ? 'PM' : 'AM'}`;
+        } catch(e) {}
+      }
+      return { wk: parseInt(g.wk)||0, date: dateDisplay, day: dayDisplay, time: timeDisplay, date_iso: g.date_iso||'', time_24: g.time_24||'', away: g.away||'', home: g.home||'', field: g.field||'', addr: g.addr||'', done: false, away_score: null, home_score: null };
+    });
+
+    window._csvParsed = parsed;
+    let html = `<div style="font-weight:700;font-size:13px;margin-bottom:10px">🤖 AI found <strong>${parsed.length}</strong> game(s) — review before importing:</div>`;
+    html += `<div class="tbl-wrap" style="margin-bottom:12px"><table class="tbl"><thead><tr><th>Wk</th><th>Date</th><th>Time</th><th>Away</th><th>Home</th><th>Field</th></tr></thead><tbody>`;
+    parsed.forEach(g => {
+      html += `<tr><td>${g.wk}</td><td>${esc(g.date)} ${esc(g.day)}</td><td>${esc(g.time)}</td><td>${esc(g.away)}</td><td>${esc(g.home)}</td><td>${esc(g.field)}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+    html += `<div style="display:flex;gap:8px"><button class="btn btn-success" onclick="importCsvGames()">Import ${parsed.length} Game${parsed.length !== 1 ? 's' : ''}</button><button class="btn btn-outline" onclick="document.getElementById('csv-preview').style.display='none'">Back</button></div>`;
+    if (previewEl) { previewEl.style.display = 'block'; previewEl.innerHTML = html; }
+  } catch(e) {
+    if (aiStatus) aiStatus.style.display = 'none';
+    if (dropZone) dropZone.style.display = 'block';
+    toast('Could not read CSV: ' + e.message + ' — try pasting manually below', 'error');
+    // Fall back to paste mode
+    previewCsvGames();
+  }
 };
 
 window.previewCsvGames = function() {
