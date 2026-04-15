@@ -2111,7 +2111,7 @@ thead th.sorted-col .sarrow{opacity:1}
               <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;color:#1a1a1a">Recent Scores</div>
               <a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('scores'),80)" style="font-size:13px;font-weight:600;color:#002D72;text-decoration:none">All Scores →</a>
             </div>
-            <div id="home-recent-scores" class="gc-cards-grid" style="grid-template-columns:1fr;gap:8px"></div>
+            <div id="home-recent-scores" class="gc-cards-grid"></div>
           </div>
           <!-- Upcoming Schedule -->
           <div class="sec-eyebrow">2026 Season</div>
@@ -3018,11 +3018,18 @@ async function loadAllData() {
       .sort((a,b) => a.wk - b.wk || (a.time||'').localeCompare(b.time||''));
 
     // Map recaps — sort by wk desc
+    // Normalize recap away/home to lowercase short codes (admin saves full names, games use short codes)
+    const _allTeams=[...TEAMS,...HIST_TEAMS];
+    const _toShort=raw=>{
+      const s=(raw||'').trim();
+      const t=_allTeams.find(t=>t.name===s||t.name?.toLowerCase()===s.toLowerCase()||t.short===s||t.short?.toLowerCase()===s.toLowerCase());
+      return (t?.short||s).toLowerCase();
+    };
     RECAPS = recaps
       .map(r => ({
         date: r.date, wk: r.wk,
-        away: (r.away||'').toUpperCase(),
-        home: (r.home||'').toUpperCase(),
+        away: _toShort(r.away),
+        home: _toShort(r.home),
         as: r.away_score, hs: r.home_score, field: r.field||'',
         text: r.text||'', stars: Array.isArray(r.stars) ? r.stars : [],
         headline: r.headline||''
@@ -3777,39 +3784,7 @@ function buildHomeRecentScores(){
   const done=SCHEDULE_PREVIEW.filter(g=>g.done).slice(-3).reverse();
   if(!done.length){ wrap.style.display='none'; return; }
   wrap.style.display='block';
-  el.innerHTML=done.map(g=>{
-    const atm=TEAMS.find(t=>t.id===g.away||t.short===g.away)||HIST_TEAMS.find(t=>t.id===g.away||t.short===g.away);
-    const htm=TEAMS.find(t=>t.id===g.home||t.short===g.home)||HIST_TEAMS.find(t=>t.id===g.home||t.short===g.home);
-    const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
-    const aw=g.as>g.hs;
-    const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
-    const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
-    const aLogo=atm?.id&&LOGO_TEAMS.has(atm.id)?`<img src="logos/${atm.id}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${ac}"></span>`;
-    const hLogo=htm?.id&&LOGO_TEAMS.has(htm.id)?`<img src="logos/${htm.id}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${hc}"></span>`;
-    const _bsArgs=`'${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}'`;
-    return `<div class="gc-card" onclick="openBox(${_bsArgs})">
-      <div class="gc-card-hdr">
-        <span class="gc-card-status">FINAL</span>
-        <span class="gc-card-date">${g.date||''}</span>
-      </div>
-      <div class="gc-card-body">
-        <div class="gc-team-row">
-          <div class="gc-logo-wrap">${aLogo}</div>
-          <div class="gc-team-info"><span class="gc-team-name${aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')">${atm?.name||g.away}</span>${aRec?`<span class="gc-record">${aRec}</span>`:''}</div>
-          <div class="gc-score${aw?' gc-score-win':' gc-score-lose'}"> ${g.as}</div>
-        </div>
-        <div class="gc-team-row">
-          <div class="gc-logo-wrap">${hLogo}</div>
-          <div class="gc-team-info"><span class="gc-team-name${!aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')">${htm?.name||g.home}</span>${hRec?`<span class="gc-record">${hRec}</span>`:''}</div>
-          <div class="gc-score${!aw?' gc-score-win':' gc-score-lose'}"> ${g.hs}</div>
-        </div>
-      </div>
-      <div class="gc-card-footer">
-        <button class="gc-btn" onclick="event.stopPropagation();openBox(${_bsArgs},'recap')">Recap</button>
-        <button class="gc-btn gc-btn-primary gc-btn-share" onclick="event.stopPropagation();openBox(${_bsArgs})">Box Score</button>
-      </div>
-    </div>`;
-  }).join('');
+  el.innerHTML=done.map(g=>scheduleBlock(g,false)).join('');
 }
 
 function buildHomeSidebar(){
@@ -3821,7 +3796,7 @@ function buildHomeSidebar(){
   el.innerHTML=top8.map((t,i)=>`<div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:12px" onclick="goPage('team','${t.id}')">
     <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;color:rgba(0,0,0,.35);width:18px">${i+1}</span>
     ${LOGO_TEAMS.has(t.id)?`<img src="logos/${t.id}.png" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" loading="lazy">`:`<span style="width:8px;height:8px;border-radius:50%;background:${t.color};flex-shrink:0"></span>`}
-    <span style="font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:#1a1a1a;flex:1">${t.name}<span style="font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;color:rgba(0,0,0,.35);margin-left:6px;letter-spacing:.04em">${t.short}</span></span>
+    <span style="font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:#1a1a1a;flex:1">${t.short||t.name}</span>
     <span style="font-family:'Oswald',sans-serif;font-weight:700;font-size:16px;color:#1a1a1a">${t.w}-${t.l}</span>
   </div>`).join('');
 }
