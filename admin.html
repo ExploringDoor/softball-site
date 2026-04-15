@@ -265,6 +265,14 @@ select.form-input{cursor:pointer}
 .bs-player-row.dragging{opacity:0.4;background:rgba(0,45,114,.05)}
 .bs-player-row.drag-over-top{border-top:2px solid var(--blue)}
 .bs-player-row.drag-over-bottom{border-bottom:2px solid var(--blue)}
+.lp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;padding:14px 16px}
+.lp-card{position:relative;border:2px solid var(--border);border-radius:10px;padding:12px 8px 10px;text-align:center;cursor:pointer;transition:border-color .12s,background .12s;background:#fff;user-select:none}
+.lp-card:hover{border-color:var(--navy);background:var(--navy-light)}
+.lp-card.lp-sel{border-color:var(--navy);background:var(--navy)}
+.lp-card.lp-sel .lp-cj,.lp-card.lp-sel .lp-cn{color:rgba(255,255,255,.85)}
+.lp-cj{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:var(--muted);margin-bottom:3px}
+.lp-cn{font-size:12px;font-weight:600;color:var(--text);line-height:1.2}
+.lp-strip{padding:10px 16px;display:flex;flex-wrap:wrap;gap:5px;min-height:38px;border-top:1px solid var(--border);background:rgba(0,0,0,.02);align-items:center}
 .bs-player-row.dnp{opacity:0.4;background:rgba(0,0,0,.02)}
 .bs-player-row.dnp .bs-input{background:#f0f0f0;color:#aaa}
 .bs-player-row.guest{background:rgba(37,99,235,.03)}
@@ -1722,6 +1730,182 @@ function applyParsedToBoxScore(parsed) {
   bsScoreOnlyMode = false;
 }
 
+// ── Lineup picker state (mirrors captain.html) ──────────────────────────────
+let _adminBsState = {};
+function _adminBsGet(gid){ if(!_adminBsState[gid]) _adminBsState[gid]={away:[],home:[]}; return _adminBsState[gid]; }
+
+function _adminBsRefreshUI(gameId, team){
+  const lineup = _adminBsGet(gameId)[team];
+  const grid = document.getElementById('adm-lp-grid-'+gameId+'-'+team);
+  if(grid) grid.querySelectorAll('.lp-card').forEach(card=>{
+    const idx = lineup.findIndex(p=>p.name===card.dataset.name && p.num===(card.dataset.num||''));
+    card.classList.toggle('lp-sel', idx>=0);
+    let badge = card.querySelector('.lp-badge');
+    if(idx>=0){
+      if(!badge){ badge=document.createElement('div'); badge.className='lp-badge'; badge.style.cssText='position:absolute;top:3px;right:4px;font-size:9px;font-weight:800;color:rgba(255,255,255,.75);font-family:Barlow Condensed,sans-serif'; card.appendChild(badge); }
+      badge.textContent = idx+1;
+    } else if(badge) badge.remove();
+  });
+  const strip = document.getElementById('adm-lp-strip-'+gameId+'-'+team);
+  if(!strip) return;
+  if(!lineup.length){ strip.innerHTML='<span style="font-size:11px;color:var(--muted);font-style:italic">Tap players above to build batting order</span>'; return; }
+  strip.innerHTML = lineup.map((p,i)=>`<div style="display:inline-flex;align-items:center;gap:3px;background:var(--navy);color:#fff;border-radius:14px;padding:3px 8px 3px 5px;font-size:11px;font-weight:700;font-family:'Barlow Condensed',sans-serif;cursor:pointer" onclick="admBsTogglePlayer('${gameId}','${team}','${p.name.replace(/'/g,"\\'")}','${(p.num||'').replace(/'/g,"\\'")}')"><span style="opacity:.65">${i+1}.</span> ${esc(p.name)}</div>`).join('');
+}
+
+window.admBsTogglePlayer = function(gameId, team, name, num){
+  const lineup = _adminBsGet(gameId)[team];
+  const idx = lineup.findIndex(p=>p.name===name);
+  if(idx>=0) lineup.splice(idx,1); else lineup.push({name, num:num||''});
+  _adminBsRefreshUI(gameId, team);
+};
+
+window.admBsAddCustomPlayer = function(gameId, team){
+  const nameEl = document.getElementById('adm-lp-cname-'+gameId+'-'+team);
+  const numEl  = document.getElementById('adm-lp-cnum-'+gameId+'-'+team);
+  const name = (nameEl?.value||'').trim();
+  if(!name){ toast('Enter a player name','error'); return; }
+  const num = (numEl?.value||'').trim();
+  const grid = document.getElementById('adm-lp-grid-'+gameId+'-'+team);
+  if(grid){
+    const card = document.createElement('div');
+    card.className='lp-card'; card.dataset.name=name; card.dataset.num=num;
+    card.innerHTML=`<div class="lp-cj">${num?'#'+num:''}</div><div class="lp-cn">${esc(name)}</div>`;
+    card.onclick=()=>admBsTogglePlayer(gameId,team,name,num);
+    grid.appendChild(card);
+  }
+  _adminBsGet(gameId)[team].push({name,num});
+  _adminBsRefreshUI(gameId, team);
+  if(nameEl) nameEl.value='';
+  if(numEl) numEl.value='';
+};
+
+window.admBsApplyDummy = function(gameId, team){
+  const ct = Math.max(1, Math.min(20, parseInt(document.getElementById('adm-lp-dct-'+gameId+'-'+team)?.value)||9));
+  const grid = document.getElementById('adm-lp-grid-'+gameId+'-'+team);
+  if(!grid) return;
+  grid.querySelectorAll('.lp-card').forEach(c=>{ c.classList.remove('lp-sel'); c.querySelector('.lp-badge')?.remove(); });
+  _adminBsGet(gameId)[team] = [];
+  for(let i=0;i<ct;i++){
+    const p={name:`Player ${i+1}`,num:''};
+    const card=document.createElement('div');
+    card.className='lp-card lp-sel'; card.dataset.name=p.name; card.dataset.num='';
+    card.innerHTML=`<div class="lp-cj"></div><div class="lp-cn">${p.name}</div>`;
+    card.onclick=()=>admBsTogglePlayer(gameId,team,p.name,'');
+    grid.appendChild(card);
+    _adminBsGet(gameId)[team].push(p);
+  }
+  _adminBsRefreshUI(gameId, team);
+};
+
+window.admBsLpNext = function(gameId){
+  if(!_adminBsGet(gameId).away.length){ toast('Add at least one player to the away lineup first.','error'); return; }
+  document.getElementById('adm-bs-step-away-'+gameId).style.display='none';
+  document.getElementById('adm-bs-step-home-'+gameId).style.display='block';
+};
+window.admBsLpBack = function(gameId){
+  document.getElementById('adm-bs-step-home-'+gameId).style.display='none';
+  document.getElementById('adm-bs-step-away-'+gameId).style.display='block';
+};
+
+window.admBsToStats = function(gameId){
+  const g = GAMES.find(x=>x.id===gameId); if(!g) return;
+  const st = _adminBsGet(gameId);
+  if(!st.away.length){ toast('Add at least one player to the away lineup first.','error'); return; }
+  if(!st.home.length){ toast('Add at least one player to the home lineup first.','error'); return; }
+  // Build lineups from selected players
+  bsAwayLineup = st.away.map(p=>({name:p.name,num:p.num||'',pos:'',ab:0,r:0,s:0,d:0,t:0,hr:0,rbi:0,bb:0,so:0,dnp:false}));
+  bsHomeLineup = st.home.map(p=>({name:p.name,num:p.num||'',pos:'',ab:0,r:0,s:0,d:0,t:0,hr:0,rbi:0,bb:0,so:0,dnp:false}));
+  bsAwayOrdered = true; bsHomeOrdered = true;
+  const awayTeam = TEAMS.find(t=>t.id===g.away||t.short===g.away);
+  const homeTeam = TEAMS.find(t=>t.id===g.home||t.short===g.home);
+  renderBoxScore(awayTeam?.name||g.away, homeTeam?.name||g.home, g);
+};
+
+function showAdminLineupPicker(gameId, g, awayName, homeName, awayPlayers, homePlayers) {
+  const view = document.getElementById('box-score-view');
+  _adminBsState[gameId] = { away: [], home: [] };
+
+  // If existing lineup data, pre-select those players
+  if (bsAwayLineup && bsAwayLineup.length) {
+    _adminBsState[gameId].away = bsAwayLineup.filter(p=>!p.dnp).map(p=>({name:p.name,num:p.num||''}));
+  }
+  if (bsHomeLineup && bsHomeLineup.length) {
+    _adminBsState[gameId].home = bsHomeLineup.filter(p=>!p.dnp).map(p=>({name:p.name,num:p.num||''}));
+  }
+
+  function makeGrid(team, players) {
+    return players.map(p => {
+      const rawName = p.name||'', rawNum = p.num?String(p.num):'';
+      const attrName = rawName.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      const attrNum  = rawNum.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      const n = esc(rawName), u = rawNum;
+      return `<div class="lp-card" data-name="${attrName}" data-num="${attrNum}" onclick="admBsTogglePlayer('${gameId}','${team}',this.dataset.name,this.dataset.num)">
+        <div class="lp-cj">${u?'#'+u:''}</div>
+        <div class="lp-cn">${n}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function makeStep(team, teamName, players) {
+    const isAway = team==='away';
+    return `
+      <div style="background:var(--navy);color:#fff;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center">
+        <span>${isAway?'▲ AWAY':'▼ HOME'}: ${teamName.toUpperCase()}</span>
+        <span style="font-size:11px;font-weight:400;opacity:.65">Tap to set batting order</span>
+      </div>
+      <div class="lp-grid" id="adm-lp-grid-${gameId}-${team}">${makeGrid(team, players)}</div>
+      <div class="lp-strip" id="adm-lp-strip-${gameId}-${team}">
+        <span style="font-size:11px;color:var(--muted);font-style:italic">Tap players above to build batting order</span>
+      </div>
+      <div style="padding:10px 16px;border-top:1px solid var(--border);background:rgba(0,0,0,.02);display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <button class="btn btn-outline btn-sm" onclick="
+          var r=document.getElementById('adm-lp-addrow-${gameId}-${team}');
+          r.style.display=r.style.display==='none'?'flex':'none';
+          document.getElementById('adm-lp-cname-${gameId}-${team}').focus();">+ Add Player</button>
+        <div style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 10px">
+          <span style="font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap">Dummy:</span>
+          <input type="number" id="adm-lp-dct-${gameId}-${team}" value="9" min="1" max="20"
+            style="width:42px;text-align:center;font-size:13px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit">
+          <button class="btn btn-outline btn-sm" onclick="admBsApplyDummy('${gameId}','${team}')">Apply</button>
+        </div>
+      </div>
+      <div id="adm-lp-addrow-${gameId}-${team}" style="display:none;padding:8px 16px;gap:8px;align-items:center;border-top:1px solid var(--border);flex-wrap:wrap">
+        <input type="text" id="adm-lp-cname-${gameId}-${team}" placeholder="Player name"
+          style="flex:1;min-width:140px;font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-family:inherit">
+        <input type="text" id="adm-lp-cnum-${gameId}-${team}" placeholder="#"
+          style="width:52px;font-size:13px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;text-align:center">
+        <button class="btn btn-primary btn-sm" onclick="admBsAddCustomPlayer('${gameId}','${team}')">Add to Order</button>
+      </div>`;
+  }
+
+  view.innerHTML = `
+    <div style="padding:20px 0">
+      <a href="#" onclick="closeBoxScore();return false" style="color:var(--navy);font-size:13px;font-weight:600;text-decoration:none;display:inline-block;margin-bottom:16px">← Back to Scores</a>
+      <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden">
+        <div id="adm-bs-step-away-${gameId}">
+          ${makeStep('away', awayName, awayPlayers)}
+          <div style="padding:12px 16px;border-top:2px solid var(--border);background:#f8f9fa;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="closeBoxScore()">Cancel</button>
+            <button class="btn btn-primary" onclick="admBsLpNext('${gameId}')">Next: ${homeName} Lineup →</button>
+          </div>
+        </div>
+        <div id="adm-bs-step-home-${gameId}" style="display:none">
+          ${makeStep('home', homeName, homePlayers)}
+          <div style="padding:12px 16px;border-top:2px solid var(--border);background:#f8f9fa;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="admBsLpBack('${gameId}')">← Back</button>
+            <button class="btn btn-success" onclick="admBsToStats('${gameId}')">Enter Box Score →</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  // Pre-select existing players
+  setTimeout(() => {
+    _adminBsRefreshUI(gameId, 'away');
+    _adminBsRefreshUI(gameId, 'home');
+  }, 0);
+}
+
 window.openBoxScore = async function(gameId, skipClear) {
   const g = GAMES.find(x => x.id === gameId);
   if (!g) return;
@@ -1798,10 +1982,16 @@ window.openBoxScore = async function(gameId, skipClear) {
     bsPotgTeam = existing?.potg_team || '';
   }
 
+  const awayPlayersForPicker = PLAYERS.filter(p=>p.team===awayId).sort((a,b)=>(+(a.num||99))-(+(b.num||99)));
+  const homePlayersForPicker = PLAYERS.filter(p=>p.team===homeId).sort((a,b)=>(+(a.num||99))-(+(b.num||99)));
   document.getElementById('sec-scores').querySelector('.main-header').style.display = 'none';
   document.getElementById('scores-content').style.display = 'none';
   document.getElementById('box-score-view').style.display = 'block';
-  renderBoxScore(awayName, homeName, g);
+  if (skipClear) {
+    renderBoxScore(awayName, homeName, g);
+  } else {
+    showAdminLineupPicker(gameId, g, awayName, homeName, awayPlayersForPicker, homePlayersForPicker);
+  }
 };
 
 function renderBoxScore(awayName, homeName, g) {
