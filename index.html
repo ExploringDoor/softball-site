@@ -493,10 +493,11 @@ body.dark .bat-tbl tr.career-row td{background:rgba(91,154,255,.07)}
 .col-rank.r1{color:#e6ac00}.col-rank.r2{color:#888}.col-rank.r3{color:#a05a2c}
 .col-player{font-weight:600;color:#1a1a1a;white-space:nowrap}
 .col-player .p-pos{font-size:10px;color:var(--muted);font-weight:400;margin-left:5px}
-.col-team{white-space:nowrap}
-.col-team-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
-.team-name-abbr{display:none}
-@media(max-width:700px){.team-name-full{display:none}.team-name-abbr{display:inline}}
+.col-team{white-space:nowrap;width:56px;padding-left:4px!important;padding-right:10px!important}
+.col-player{padding-right:0!important}
+.col-team-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.team-name-full{display:none}
+.team-name-abbr{display:inline;font-size:11px;font-weight:700;letter-spacing:.04em;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase}
 .stand-name-full{display:none}
 .stand-name-abbr{display:inline}
 .stat-hi{color:var(--gold);font-weight:700}
@@ -944,6 +945,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .preview-date{font-size:11px;color:rgba(0,0,0,.35);margin-bottom:6px}
 .preview-link{display:inline-block;font-size:12px;font-weight:600;color:#002D72;cursor:pointer;text-decoration:none;padding-top:4px}
 .preview-link:hover{text-decoration:underline}
+.preview-analysis{font-size:11.5px;line-height:1.55;color:rgba(0,0,0,.55);margin:6px 0 2px;padding-top:6px;border-top:1px solid rgba(0,0,0,.07)}
 
 /* ── SCORES PAGE: team name colors come from inline style, not winner/loser class ── */
 #pg-scores .gb-name.winner,
@@ -5341,7 +5343,7 @@ function scheduleBlock(g, isNext){
     const recap=RECAPS.find(r=>r.away===g.away&&r.home===g.home);
     const headline=recap?.headline||(()=>{
       // Auto-generate a simple headline from the score
-      const winner=aw?(atm?.name||aShort):(htm?.name||hShort);
+      const winner=aw?aShort:hShort;
       const diff=Math.abs(g.as-g.hs);
       return diff>=10?`${winner} wins big, ${g.as>g.hs?g.as:g.hs}–${g.as>g.hs?g.hs:g.as}`:
              diff<=1?`${winner} edges out ${diff===0?'tie':`close one`}`:
@@ -5359,7 +5361,7 @@ function scheduleBlock(g, isNext){
         <div class="gc-team-row">
           <div class="gc-logo-wrap">${aLogo}</div>
           <div class="gc-team-info">
-            <span class="gc-team-name${aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')">${atm?.name||aShort}</span>
+            <span class="gc-team-name${aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')">${aShort}</span>
             ${aRec?`<span class="gc-record">${aRec}</span>`:''}
           </div>
           <div class="gc-score${aw?' gc-score-win':' gc-score-lose'}"> ${g.as}</div>
@@ -5367,7 +5369,7 @@ function scheduleBlock(g, isNext){
         <div class="gc-team-row">
           <div class="gc-logo-wrap">${hLogo}</div>
           <div class="gc-team-info">
-            <span class="gc-team-name${!aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')">${htm?.name||hShort}</span>
+            <span class="gc-team-name${!aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')">${hShort}</span>
             ${hRec?`<span class="gc-record">${hRec}</span>`:''}
           </div>
           <div class="gc-score${!aw?' gc-score-win':' gc-score-lose'}"> ${g.hs}</div>
@@ -5381,18 +5383,20 @@ function scheduleBlock(g, isNext){
   } else {
     const timeStr=g.time||'TBD';
     const timeField=timeStr+(g.field?` · ${g.field}`:'');
+    const _prevText=generateGamePreview(atm,htm,g);
     return `<div class="preview-card${isNext?' next':''}">
       <div class="preview-time">${timeField}${g.live?' <span class="live-badge">🔴 LIVE</span>':''}</div>
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,aShort)}</div>
-          <div><span class="preview-name" onclick="goTeam('${atm?.id||g.away}')">${atm?.name||g.away}</span><span class="preview-name-mob" onclick="goTeam('${atm?.id||g.away}')">${getMobileAbbr(g.away)}</span><span class="preview-rec">${aRec}</span></div>
+          <div><span class="preview-name" onclick="goTeam('${atm?.id||g.away}')">${aShort}</span><span class="preview-name-mob" onclick="goTeam('${atm?.id||g.away}')">${getMobileAbbr(g.away)}</span><span class="preview-rec">${aRec}</span></div>
         </div>
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(htm?.id,hShort)}</div>
-          <div><span class="preview-name" onclick="goTeam('${htm?.id||g.home}')">${htm?.name||g.home}</span><span class="preview-name-mob" onclick="goTeam('${htm?.id||g.home}')">${getMobileAbbr(g.home)}</span><span class="preview-rec">${hRec}</span></div>
+          <div><span class="preview-name" onclick="goTeam('${htm?.id||g.home}')">${hShort}</span><span class="preview-name-mob" onclick="goTeam('${htm?.id||g.home}')">${getMobileAbbr(g.home)}</span><span class="preview-rec">${hRec}</span></div>
         </div>
       </div>
+      ${_prevText?`<div class="preview-analysis">${_prevText}</div>`:''}
       <a class="preview-link" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${timeStr}')">Preview</a>
     </div>`;
   }
@@ -5845,15 +5849,80 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
   if(defaultTab==='recap') switchBoxTab('recap');
 }
 
+function generateGamePreview(atm,htm,g){
+  const aShort=atm?.short||g.away;
+  const hShort=htm?.short||g.home;
+  const hasRecs=atm?.w!=null&&htm?.w!=null;
+
+  // Head-to-head from schedule
+  const h2h=SCHEDULE_PREVIEW.filter(p=>p.done&&((p.away===g.away&&p.home===g.home)||(p.away===g.home&&p.home===g.away)));
+  const aWins=h2h.filter(p=>(p.away===g.away&&p.as>p.hs)||(p.home===g.away&&p.hs>p.as)).length;
+  const hWins=h2h.filter(p=>(p.away===g.home&&p.as>p.hs)||(p.home===g.home&&p.hs>p.as)).length;
+
+  // Parse streaks like "W3", "L2"
+  const pStrk=s=>{if(!s||s==='—')return null;const m=s.match(/^([WL])(\d+)$/);return m?{type:m[1],n:+m[2]}:null;};
+  const aStrk=pStrk(atm?.streak), hStrk=pStrk(htm?.streak);
+
+  // Standings rank
+  const sorted=[...TEAMS].filter(t=>t.w!=null).sort((a,b)=>(b.w/(b.w+b.l+.001))-(a.w/(a.w+a.l+.001)));
+  const aRank=atm?sorted.findIndex(t=>t.id===atm.id)+1:0;
+  const hRank=htm?sorted.findIndex(t=>t.id===htm.id)+1:0;
+
+  const parts=[];
+
+  // Intro: who's playing, records
+  if(hasRecs){
+    const aR=`(${atm.w}-${atm.l})`, hR=`(${htm.w}-${htm.l})`;
+    if(aRank===1){
+      parts.push(`First-place ${aShort} ${aR} travels to take on ${hShort} ${hR}.`);
+    } else if(hRank===1){
+      parts.push(`${aShort} ${aR} takes on first-place ${hShort} ${hR}.`);
+    } else {
+      parts.push(`${aShort} ${aR} travels to face ${hShort} ${hR}.`);
+    }
+  } else {
+    parts.push(`${aShort} travels to face ${hShort}.`);
+  }
+
+  // Streaks
+  if(aStrk){
+    if(aStrk.type==='W'&&aStrk.n>=2) parts.push(`${aShort} is riding a ${aStrk.n}-game winning streak.`);
+    else if(aStrk.type==='L'&&aStrk.n>=2) parts.push(`${aShort} is looking to bounce back from a ${aStrk.n}-game skid.`);
+  }
+  if(hStrk){
+    if(hStrk.type==='W'&&hStrk.n>=2) parts.push(`${hShort} has won ${hStrk.n} straight.`);
+    else if(hStrk.type==='L'&&hStrk.n>=2) parts.push(`${hShort} is hoping to snap a ${hStrk.n}-game losing streak.`);
+  }
+
+  // Head to head
+  if(h2h.length>0){
+    if(aWins>hWins) parts.push(`${aShort} leads the season series ${aWins}-${hWins}.`);
+    else if(hWins>aWins) parts.push(`${hShort} holds a ${hWins}-${aWins} edge in the season series.`);
+    else if(aWins>0) parts.push(`The season series is dead even at ${aWins}-${aWins}.`);
+  }
+
+  // Runs per game context
+  if(hasRecs){
+    const aGp=atm.w+atm.l, hGp=htm.w+htm.l;
+    if(aGp>0&&hGp>0&&atm.rs&&htm.rs){
+      const aRpg=(atm.rs/aGp).toFixed(1), hRpg=(htm.rs/hGp).toFixed(1);
+      if(+aRpg>+hRpg+1.5) parts.push(`${aShort} brings the league's hottest offense, averaging ${aRpg} runs per game.`);
+      else if(+hRpg>+aRpg+1.5) parts.push(`${hShort} leads the offense at ${hRpg} runs per game.`);
+    }
+  }
+
+  return parts.join(' ');
+}
+
 function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup){
   const aw=as>hs;
   const winTeam=aw?atm:htm, loseTeam=aw?htm:atm;
   const winScore=aw?as:hs, loseScore=aw?hs:as;
   const winLineup=aw?aLineup:hLineup, loseLineup=aw?hLineup:aLineup;
-  const winName=winTeam?.name||(aw?away:home).toUpperCase();
-  const loseName=loseTeam?.name||(aw?home:away).toUpperCase();
   const winAbbr=winTeam?.short||(aw?away:home).toUpperCase();
   const loseAbbr=loseTeam?.short||(aw?home:away).toUpperCase();
+  const winName=winAbbr;
+  const loseName=loseAbbr;
   const diff=winScore-loseScore;
   const verb=diff===1?'edged':diff<=2?'defeated':diff>=8?'rolled past':'topped';
 
