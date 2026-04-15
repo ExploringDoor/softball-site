@@ -5516,7 +5516,6 @@ function scheduleBlock(g, isNext){
   } else {
     const timeStr=g.time||'TBD';
     const timeField=timeStr+(g.field?` · ${g.field}`:'');
-    const _prevText=generateGamePreview(atm,htm,g);
     return `<div class="preview-card${isNext?' next':''}">
       <div class="preview-time">${timeField}${g.live?' <span class="live-badge">🔴 LIVE</span>':''}</div>
       <div class="preview-teams">
@@ -5529,7 +5528,6 @@ function scheduleBlock(g, isNext){
           <div><span class="preview-name" onclick="goTeam('${htm?.id||g.home}')">${hShort}</span><span class="preview-name-mob" onclick="goTeam('${htm?.id||g.home}')">${getMobileAbbr(g.home)}</span><span class="preview-rec">${hRec}</span></div>
         </div>
       </div>
-      ${_prevText?`<div class="preview-analysis">${_prevText}</div>`:''}
       <a class="preview-link" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${timeStr}')">Preview</a>
     </div>`;
   }
@@ -6142,6 +6140,8 @@ function openGameday(away,home,field,time){
   const ac=tc(away),hc=tc(home);
   const at=TEAMS.find(t=>t.short===away);
   const ht=TEAMS.find(t=>t.short===home);
+  const g=SCHEDULE_PREVIEW.find(x=>x.away===away&&x.home===home&&!x.done)||SCHEDULE_PREVIEW.find(x=>x.away===away&&x.home===home);
+  const prevText=generateGamePreview(at,ht,g||{away,home});
   // Get real roster from PLAYERS array
   const getRoster=(teamId)=>{
     return PLAYERS.filter(p=>p.team===teamId).map(p=>({
@@ -6171,6 +6171,7 @@ function openGameday(away,home,field,time){
       <div class="pop-meta"><span>📍 ${field}</span></div>
     </div>
     <div class="pop-body">
+      ${prevText?`<div style="font-size:13px;line-height:1.6;color:rgba(0,0,0,.6);padding:14px 24px 0;border-bottom:1px solid rgba(0,0,0,.07);padding-bottom:14px;margin-bottom:4px">${prevText}</div>`:''}
       <div class="pop-sec-title">Rosters</div>
       <div class="pop-grid2">
         <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${away}')">${at?.name||away}</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(awayRoster)}</tbody></table></div>
