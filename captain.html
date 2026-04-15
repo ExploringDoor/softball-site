@@ -1637,15 +1637,26 @@ window.bsAutoLinescore = function(gameId, team, col) {
   if (col === 'R') _bsUpdateSB(gameId, team, sum);
 };
 
-// Global delegated listener: catches R and H column inputs in any box score form
+// Global delegated listener: catches R, H, and XBH column inputs in any box score form
 document.addEventListener('input', function(e) {
   const id = e.target?.id || '';
   // bs-GAMEID-TEAM-R0..N  (not HR, not RBI)
   const rM = id.match(/^bs-(.+)-(away|home)-R(\d+)$/);
   // bs-GAMEID-TEAM-H0..N  (not HR, not HBP)
   const hM = id.match(/^bs-(.+)-(away|home)-H(\d+)$/);
+  // bs-GAMEID-TEAM-2B/3B/HR N  — bump H to at least sum of XBH, then recalc linescore
+  const xbhM = id.match(/^bs-(.+)-(away|home)-(2B|3B|HR)(\d+)$/);
   if (rM) bsAutoLinescore(rM[1], rM[2], 'R');
   else if (hM) bsAutoLinescore(hM[1], hM[2], 'H');
+  else if (xbhM) {
+    const [, gid, team, , rowIdx] = xbhM;
+    const d2 = parseInt(document.getElementById(`bs-${gid}-${team}-2B${rowIdx}`)?.value)||0;
+    const t3 = parseInt(document.getElementById(`bs-${gid}-${team}-3B${rowIdx}`)?.value)||0;
+    const hr = parseInt(document.getElementById(`bs-${gid}-${team}-HR${rowIdx}`)?.value)||0;
+    const hEl = document.getElementById(`bs-${gid}-${team}-H${rowIdx}`);
+    if (hEl && (parseInt(hEl.value)||0) < d2+t3+hr) hEl.value = d2+t3+hr;
+    bsAutoLinescore(gid, team, 'H');
+  }
 });
 
 window.bsAddInning = function(gameId) {

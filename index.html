@@ -528,7 +528,7 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 .team-body{padding:40px 48px;max-width:1200px;margin:0 auto}
 .trs-right{display:none}
 @media(min-width:900px){
-  .team-roster-split{display:grid;grid-template-columns:1fr 340px;gap:28px;align-items:start}
+  .team-roster-split{display:grid;grid-template-columns:1fr 340px;gap:56px;align-items:start}
   .trs-right{display:block}
 }
 .team-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:32px}
@@ -650,7 +650,7 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   /* Mobile: reduce page header padding */
   .page-header-pad{padding:120px 18px 20px!important}
   /* Mobile: preview cards 3-column grid */
-  .preview-grid{grid-template-columns:1fr 1fr 1fr!important;gap:6px!important;padding:8px 0!important;}
+  .preview-grid{grid-template-columns:1fr 1fr!important;gap:6px!important;padding:8px 0!important;}
   .preview-card{padding:7px 8px!important;}
   .preview-logo{width:26px!important;height:26px!important;flex-shrink:0!important;}
   .preview-name{display:none!important;}
@@ -2168,6 +2168,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Schedule</a>
       <a href="javascript:void(0)" onclick="goPage('standings')">Standings</a>
       <a href="javascript:void(0)" onclick="goPage('stats')">Stats</a>
+      <a href="javascript:void(0)" onclick="goPage('leaders')">Leaders</a>
       <span onclick="goPage('players')">Teams</span>
       <a href="playoffs.html">Brackets</a>
       <a href="rules.html">Field Guide</a>
@@ -2199,6 +2200,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Schedule</a>
       <a href="javascript:void(0)" onclick="goPage('standings')">Standings</a>
       <a href="javascript:void(0)" onclick="goPage('stats')">Stats</a>
+      <a href="javascript:void(0)" onclick="goPage('leaders')">Leaders</a>
       <span onclick="goPage('players')">Teams</span>
       <a href="playoffs.html">Brackets</a>
       <a href="rules.html">Field Guide</a>
@@ -2224,6 +2226,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Schedule</a>
       <a href="javascript:void(0)" onclick="goPage('standings')">Standings</a>
       <a href="javascript:void(0)" onclick="goPage('stats')">Stats</a>
+      <a href="javascript:void(0)" onclick="goPage('leaders')">Leaders</a>
       <span onclick="goPage('players')">Teams</span>
       <a href="playoffs.html">Brackets</a>
       <a href="rules.html">Field Guide</a>
@@ -2266,6 +2269,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Schedule</a>
       <a href="javascript:void(0)" onclick="goPage('standings')">Standings</a>
       <a href="javascript:void(0)" onclick="goPage('stats')">Stats</a>
+      <a href="javascript:void(0)" onclick="goPage('leaders')">Leaders</a>
       <span onclick="goPage('players')">Teams</span>
       <a href="playoffs.html">Brackets</a>
       <a href="rules.html">Field Guide</a>
@@ -2293,6 +2297,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Schedule</a>
       <a href="javascript:void(0)" onclick="goPage('standings')">Standings</a>
       <a href="javascript:void(0)" onclick="goPage('stats')">Stats</a>
+      <a href="javascript:void(0)" onclick="goPage('leaders')">Leaders</a>
       <span onclick="goPage('players')">Teams</span>
       <a href="playoffs.html">Brackets</a>
       <a href="rules.html">Field Guide</a>
@@ -2319,6 +2324,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)">Schedule</a>
       <a href="javascript:void(0)" onclick="goPage('standings')">Standings</a>
       <a href="javascript:void(0)" onclick="goPage('stats')">Stats</a>
+      <a href="javascript:void(0)" onclick="goPage('leaders')">Leaders</a>
       <span onclick="goPage('players')">Teams</span>
       <a href="playoffs.html">Brackets</a>
       <a href="rules.html">Field Guide</a>
@@ -5635,12 +5641,12 @@ function renderScores(){
 }
 
 // ── POPUPS ──────────────────────────────────────────────────────────────────
-function openRecap(away,home,as,hs,field,date){
+async function openRecap(away,home,as,hs,field,date){
   const ac=tc(away),hc=tc(home),aW=as>hs;
   const recap=RECAPS.find(r=>r.away===away&&r.home===home);
   const starsHtml=recap&&recap.stars
     ?`<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:var(--gold)">★</span>${s}</div>`).join('')}</div>`:'';
-  document.getElementById('scPopContent').innerHTML=`
+  const hdrHtml=`
     <div class="pop-hd">
       <div class="pop-matchup">
         <div class="pop-team" style="cursor:pointer" onclick="goTeam('${away}')"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
@@ -5651,13 +5657,79 @@ function openRecap(away,home,as,hs,field,date){
         <div class="pop-team" style="cursor:pointer" onclick="goTeam('${home}')"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
       </div>
       <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${field}</span></div>
-    </div>
+    </div>`;
+  document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999"><div style="font-size:20px;margin-bottom:8px">⏳</div>Loading…</div>`;
+  openScPop();
+
+  // Fetch box score for POTG computation
+  let boxScore=null;
+  try {
+    const gEntry=SCHEDULE_PREVIEW.find(x=>x.away===away&&x.home===home&&x.done);
+    const gameId=gEntry?.id||'';
+    const db2=await getDb();
+    const {collection:col2,getDocs:gd2,query:q2,where:wh2,limit:lim2}=await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    if(gameId){
+      const snap=await gd2(q2(col2(db2,'box_scores'),wh2('game_id','==',gameId)));
+      if(!snap.empty) boxScore={id:snap.docs[0].id,...snap.docs[0].data()};
+    }
+    if(!boxScore){
+      const snap2=await gd2(q2(col2(db2,'box_scores'),wh2('away','==',away),wh2('home','==',home),lim2(1)));
+      if(!snap2.empty) boxScore={id:snap2.docs[0].id,...snap2.docs[0].data()};
+    }
+  } catch(e){console.warn('Recap box score fetch:',e);}
+
+  // Compute Player of the Game banner
+  let potgHtml='';
+  if(boxScore){
+    const aLineup=boxScore.away_lineup||boxScore.awayBatters||[];
+    const hLineup=boxScore.home_lineup||boxScore.homeBatters||[];
+    const allLineup=[...aLineup.map(p=>({...p,_team:away})),...hLineup.map(p=>({...p,_team:home}))];
+    const potgScore=p=>{
+      const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
+      return (p.hr||0)*4+(p.t||0)*3+(p.d||0)*2+h+(p.rbi||0)*2+(p.r||0);
+    };
+    let potgEntry=null;
+    if(boxScore.potg_name){
+      const potgLower=boxScore.potg_name.toLowerCase();
+      potgEntry=allLineup.find(p=>p.name?.toLowerCase()===potgLower)||allLineup.find(p=>{
+        if(!p.name) return false;
+        const nP=p.name.toLowerCase().split(/\s+/),pP=potgLower.split(/\s+/);
+        if(nP.length<2||pP.length<2) return false;
+        const nLast=nP.slice(1).join(' '),pLast=pP.slice(1).join(' ');
+        return nLast===pLast&&(nP[0][0]===pP[0][0]||nP[0].replace(/\./g,'')===pP[0][0]);
+      });
+      if(!potgEntry) potgEntry={name:boxScore.potg_name,_team:boxScore.potg_team||''};
+    } else if(allLineup.length){
+      potgEntry=allLineup.reduce((best,p)=>potgScore(p)>potgScore(best)?p:best,allLineup[0]);
+      if(potgScore(potgEntry)===0) potgEntry=null;
+    }
+    if(potgEntry){
+      const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===potgEntry._team||x.short===potgEntry._team);return t?.name||potgEntry._team||'';})();
+      const ph=potgEntry.h||((potgEntry.s||0)+(potgEntry.d||0)+(potgEntry.t||0)+(potgEntry.hr||0));
+      const sp=[];
+      if(ph) sp.push(`${ph}H`);
+      if(potgEntry.hr) sp.push(`${potgEntry.hr} HR`);
+      if(potgEntry.rbi) sp.push(`${potgEntry.rbi} RBI`);
+      if(potgEntry.r) sp.push(`${potgEntry.r} R`);
+      const potgStatLine=sp.length?`Batting · ${sp.join(', ')}`:'';
+      potgHtml=`<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
+        <span style="font-size:30px;flex-shrink:0">⭐</span>
+        <div style="min-width:0">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#92400e;margin-bottom:3px">Player of the Game</div>
+          <div style="font-size:17px;font-weight:800;color:#1a1a1a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${potgEntry.name}</div>
+          <div style="font-size:12px;color:#555;margin-top:3px">${potgTeamName||''}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
+        </div>
+      </div>`;
+    }
+  }
+
+  document.getElementById('scPopContent').innerHTML=hdrHtml+`
     <div class="pop-body">
+      ${potgHtml}
       <div class="pop-sec-title">Game Recap</div>
-      <div class="pop-recap">${recap?.text||'Recap coming soon — check back after the game.'}</div>
+      <div class="pop-recap">${recap?.text||boxScore?.recap||'Recap coming soon — check back after the game.'}</div>
       ${starsHtml}
     </div>`;
-  openScPop();
 }
 
 async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
@@ -5744,50 +5816,6 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const hH = hLineup.reduce((s,p)=>s+(p.h||0),0);
     const aE = boxScore.away_errors || 0;
     const hE = boxScore.home_errors || 0;
-
-    // ── Player of the Game banner — manual override or auto-select best stats ──
-    {
-      const allLineup=[...aLineup.map(p=>({...p,_team:away})),...hLineup.map(p=>({...p,_team:home}))];
-      // Scoring: HR×4, 3B×3, 2B×2, H×1, RBI×2, R×1
-      const potgScore=p=>{
-        const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
-        return (p.hr||0)*4+(p.t||0)*3+(p.d||0)*2+h+(p.rbi||0)*2+(p.r||0);
-      };
-      // Use manually set name OR pick the highest-scoring player
-      let potgEntry=null;
-      if(boxScore.potg_name){
-        const potgLower=boxScore.potg_name.toLowerCase();
-        potgEntry=allLineup.find(p=>p.name?.toLowerCase()===potgLower)||allLineup.find(p=>{
-          if(!p.name) return false;
-          const nP=p.name.toLowerCase().split(/\s+/), pP=potgLower.split(/\s+/);
-          if(nP.length<2||pP.length<2) return false;
-          const nLast=nP.slice(1).join(' '), pLast=pP.slice(1).join(' ');
-          return nLast===pLast&&(nP[0][0]===pP[0][0]||nP[0].replace(/\./g,'')===pP[0][0]);
-        });
-        if(!potgEntry) potgEntry={name:boxScore.potg_name,_team:boxScore.potg_team||''};
-      } else if(allLineup.length){
-        potgEntry=allLineup.reduce((best,p)=>potgScore(p)>potgScore(best)?p:best, allLineup[0]);
-        if(potgScore(potgEntry)===0) potgEntry=null; // no stats at all, skip
-      }
-      if(potgEntry){
-        const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===potgEntry._team||x.short===potgEntry._team);return t?.name||potgEntry._team||'';})();
-        const ph=potgEntry.h||((potgEntry.s||0)+(potgEntry.d||0)+(potgEntry.t||0)+(potgEntry.hr||0));
-        const sp=[];
-        if(ph) sp.push(`${ph}H`);
-        if(potgEntry.hr) sp.push(`${potgEntry.hr} HR`);
-        if(potgEntry.rbi) sp.push(`${potgEntry.rbi} RBI`);
-        if(potgEntry.r) sp.push(`${potgEntry.r} R`);
-        const potgStatLine=sp.length?`Batting · ${sp.join(', ')}`:''
-        bodyHtml += `<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
-          <span style="font-size:30px;flex-shrink:0">⭐</span>
-          <div style="min-width:0">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#92400e;margin-bottom:3px">Player of the Game</div>
-            <div style="font-size:17px;font-weight:800;color:#1a1a1a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${potgEntry.name}</div>
-            <div style="font-size:12px;color:#555;margin-top:3px">${potgTeamName||''}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
-          </div>
-        </div>`;
-      }
-    }
 
     // Line score with innings
     const innCount = Math.max(aInnings.length, hInnings.length, 7);
@@ -6074,7 +6102,7 @@ function generateGamePreview(atm,htm,g){
   const closers=[
     `Expect a competitive battle between two squads that know each other well.`,
     `First pitch can't come soon enough.`,
-    `Should be a great one under the lights.`,
+    `Should be a great afternoon matchup.`,
     `Don't miss this one.`,
   ];
   const closeIdx=(aShort.charCodeAt(0)+hShort.charCodeAt(0))%closers.length;
@@ -6183,14 +6211,17 @@ function openGameday(away,home,field,time){
   // Get real roster from PLAYERS array
   const getRoster=(teamId)=>{
     return PLAYERS.filter(p=>p.team===teamId).map(p=>({
-      id:p.id, name:p.name, num:p.num||'', pos:p.pos||''
+      id:p.id, name:p.name, num:p.num||'', pos:p.pos||'', avg:p.avg||0
     }));
   };
   const awayRoster=at?getRoster(at.id):[];
   const homeRoster=ht?getRoster(ht.id):[];
   const mkRows=(roster)=>{
     if(!roster.length) return '<tr><td colspan="2" style="color:var(--muted);font-style:italic;padding:12px">No roster available</td></tr>';
-    return roster.map(p=>`<tr style="cursor:pointer" onclick="closeScPop();openModal('${p.id}')"><td><span style="color:var(--white);font-weight:600">${p.name}</span>${p.num?' <span style="font-size:10px;color:var(--muted2)">#'+p.num+'</span>':''}</td><td style="color:var(--muted2)">${p.pos||'—'}</td></tr>`).join('');
+    return roster.map(p=>{
+      const avgStr=p.avg>0?('.'+String(Math.round(p.avg*1000)).padStart(3,'0')):'—';
+      return `<tr style="cursor:pointer" onclick="closeScPop();openModal('${p.id}')"><td><span style="color:var(--white);font-weight:600">${p.name}</span>${p.num?' <span style="font-size:10px;color:var(--muted2)">#'+p.num+'</span>':''}</td><td style="color:var(--muted2)">${avgStr}</td></tr>`;
+    }).join('');
   };
   document.getElementById('scPopContent').innerHTML=`
     <div class="pop-hd">
@@ -6212,8 +6243,8 @@ function openGameday(away,home,field,time){
       ${prevText?`<div style="font-size:13px;line-height:1.6;color:rgba(0,0,0,.6);padding:14px 24px 0;border-bottom:1px solid rgba(0,0,0,.07);padding-bottom:14px;margin-bottom:4px">${prevText}</div>`:''}
       <div class="pop-sec-title">Rosters</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${away}')">${at?.name||away}</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(awayRoster)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${home}')">${ht?.name||home}</div><table class="ptbl"><thead><tr><th>Player</th><th>Pos</th></tr></thead><tbody>${mkRows(homeRoster)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${away}')">${at?.name||away}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th></tr></thead><tbody>${mkRows(awayRoster)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${home}')">${ht?.name||home}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th></tr></thead><tbody>${mkRows(homeRoster)}</tbody></table></div>
       </div>
     </div>`;
   openScPop();
