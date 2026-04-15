@@ -522,6 +522,11 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 .ttab:hover{color:var(--white)}
 .ttab.on{color:var(--gold);border-bottom-color:var(--gold)}
 .team-body{padding:40px 48px;max-width:1200px;margin:0 auto}
+.trs-right{display:none}
+@media(min-width:900px){
+  .team-roster-split{display:grid;grid-template-columns:1fr 340px;gap:28px;align-items:start}
+  .trs-right{display:block}
+}
 .team-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:32px}
 .tsg-cell{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
 .tsg-v{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--gold)}
@@ -2246,6 +2251,7 @@ thead th.sorted-col .sarrow{opacity:1}
   <div class="ttabs" id="ttabs">
     <button class="ttab on" data-tab="roster">Roster</button>
     <button class="ttab" data-tab="schedule">Schedule</button>
+    <button class="ttab" data-tab="gamelog">Game Log</button>
     <button class="ttab" data-tab="stats">Stats</button>
   </div>
   <div class="team-body" id="team-body"></div>
@@ -4001,6 +4007,44 @@ function loadTeam(teamId){
   renderTeamTab('roster');
 }
 
+// ── Shared schedule-rows builder (used by roster split + schedule tab) ──
+function buildSchedRows(t, tgames){
+  return tgames.map((g,i)=>{
+    const isH=g.home===t.short;
+    const opp=isH?g.away:g.home;
+    const myS=isH?g.hs:g.as, oppS=isH?g.as:g.hs;
+    const won=g.done&&myS>oppS;
+    const oppTeam=getTeamByShort(opp);
+    const oppColor=oppTeam?.color||'#9ca3af';
+    const logo=oppTeam?.id&&LOGO_TEAMS.has(oppTeam.id)
+      ?`<img src="logos/${oppTeam.id}.png" style="width:46px;height:46px;object-fit:contain" loading="lazy">`
+      :`<div style="width:46px;height:46px;border-radius:50%;background:${oppColor};display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;color:#fff;flex-shrink:0">${(oppTeam?.short||opp).slice(0,3).toUpperCase()}</div>`;
+    const badge=isH
+      ?`<span style="display:inline-block;padding:3px 9px;background:#002D72;color:#fff;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">HOME</span>`
+      :`<span style="display:inline-block;padding:3px 9px;background:#fff;color:#666;border:1.5px solid #d1d5db;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">AWAY</span>`;
+    const oppLabel=`${isH?'VS':'@'} ${oppTeam?.short||opp}`.toUpperCase();
+    const scoreCol=g.done
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${myS}–${oppS}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${won?'#22c55e':'#ef4444'};margin-top:2px">${won?'WIN':'LOSS'}</div></div>`
+      :'';
+    const rowClick=g.done?`onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')"`:'' ;
+    const rowBg=i%2===0?'#fff':'#fafafa';
+    const borderB=i<tgames.length-1?'border-bottom:1px solid rgba(0,0,0,.07);':'';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:${rowBg};${borderB}cursor:${g.done?'pointer':'default'}" ${rowClick}>
+      <div style="width:54px;flex-shrink:0">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;line-height:1.2;white-space:nowrap">${g.date||''}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap">${g.time||''}</div>
+      </div>
+      <div style="width:50px;flex-shrink:0;text-align:center">${badge}</div>
+      <div style="flex-shrink:0">${logo}</div>
+      <div style="flex:1;min-width:0;padding-left:2px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15px;color:#1a1a1a;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${oppLabel}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.field||''}</div>
+      </div>
+      ${scoreCol}
+    </div>`;
+  }).join('');
+}
+
 // Roster sort state — persists while on team page
 let _rSort={key:'num',dir:'asc'};
 function doRosterSort(key){
@@ -4081,6 +4125,17 @@ function renderTeamTab(tab){
         <td style="${tdS};font-weight:700">${ops}</td>
       </tr>`;}).join('')}</tbody>
     </table></div>`;
+    // ── Desktop split: append schedule panel on the right ──
+    const _sg=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short);
+    const _sw=_sg.filter(g=>g.done&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
+    const _sl=_sg.filter(g=>g.done&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
+    body.innerHTML=`<div class="team-roster-split"><div class="trs-left">${body.innerHTML}</div><div class="trs-right">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">2026 Schedule</div>
+        <span style="font-size:12px;font-weight:600;color:var(--muted)">${_sg.length} games${_sw||_sl?' · '+_sw+'-'+_sl:''}</span>
+      </div>
+      <div style="border:1px solid rgba(0,0,0,.1);border-radius:12px;overflow:hidden">${buildSchedRows(t,_sg)}</div>
+    </div></div>`;
   } else if(tab==='schedule'){
     const tgames=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short);
     const wins=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
@@ -4088,47 +4143,60 @@ function renderTeamTab(tab){
     body.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">2026 Schedule</div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <span style="font-size:13px;font-weight:600;color:var(--muted)">${tgames.length} Games${wins||losses?' · '+wins+'-'+losses:''}</span>
-        <button onclick="downloadCalendar('${t.short}')" style="display:flex;align-items:center;gap:6px;background:${t.color};color:#fff;border:none;border-radius:7px;padding:7px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.07em;text-transform:uppercase;cursor:pointer;white-space:nowrap">📅 Calendar</button>
-      </div>
+      <span style="font-size:13px;font-weight:600;color:var(--muted)">${tgames.length} Games${wins||losses?' · '+wins+'-'+losses:''}</span>
     </div>
     <div style="border:1px solid rgba(0,0,0,.1);border-radius:12px;overflow:hidden">
-    ${tgames.map((g,i)=>{
+    ${buildSchedRows(t,tgames)}</div>`;
+
+  } else if(tab==='gamelog'){
+    const tgames=SCHEDULE_PREVIEW.filter(g=>(g.away===t.short||g.home===t.short)&&g.done);
+    let w=0,l=0;
+    const rows=tgames.map((g,i)=>{
       const isH=g.home===t.short;
       const opp=isH?g.away:g.home;
       const myS=isH?g.hs:g.as, oppS=isH?g.as:g.hs;
-      const won=g.done&&myS>oppS;
+      const won=myS>oppS;
+      if(won)w++;else l++;
       const oppTeam=getTeamByShort(opp);
-      const oppColor=oppTeam?.color||'#9ca3af';
       const logo=oppTeam?.id&&LOGO_TEAMS.has(oppTeam.id)
-        ?`<img src="logos/${oppTeam.id}.png" style="width:46px;height:46px;object-fit:contain" loading="lazy">`
-        :`<div style="width:46px;height:46px;border-radius:50%;background:${oppColor};display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;color:#fff;flex-shrink:0">${(oppTeam?.short||opp).slice(0,3).toUpperCase()}</div>`;
-      const badge=isH
-        ?`<span style="display:inline-block;padding:3px 9px;background:#002D72;color:#fff;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">HOME</span>`
-        :`<span style="display:inline-block;padding:3px 9px;background:#fff;color:#666;border:1.5px solid #d1d5db;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">AWAY</span>`;
-      const oppLabel=`${isH?'VS':'@'} ${oppTeam?.short||opp}`.toUpperCase();
-      const scoreCol=g.done
-        ?`<div style="text-align:right;flex-shrink:0;min-width:58px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;line-height:1;color:#1a1a1a">${myS}–${oppS}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${won?'#22c55e':'#ef4444'};margin-top:2px">${won?'WIN':'LOSS'}</div></div>`
-        :'';
-      const rowClick=g.done?`onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')"`:'' ;
-      const rowBg=i%2===0?'#fff':'#fafafa';
-      const borderB=i<tgames.length-1?'border-bottom:1px solid rgba(0,0,0,.07);':'';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:${rowBg};${borderB}cursor:${g.done?'pointer':'default'}" ${rowClick}>
-        <div style="width:58px;flex-shrink:0">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;color:#1a1a1a;line-height:1.2;white-space:nowrap">${g.date||''}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap">${g.time||''}</div>
-        </div>
-        <div style="width:50px;flex-shrink:0;text-align:center">${badge}</div>
-        <div style="flex-shrink:0">${logo}</div>
-        <div style="flex:1;min-width:0;padding-left:2px">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;color:#1a1a1a;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${oppLabel}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.field||''}</div>
-        </div>
-        ${scoreCol}
-      </div>`;
-    }).join('')}
-    </div>`;
+        ?`<img src="logos/${oppTeam.id}.png" style="width:28px;height:28px;object-fit:contain;vertical-align:middle;margin-right:6px" loading="lazy">`
+        :`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${oppTeam?.color||'#9ca3af'};margin-right:6px;vertical-align:middle;flex-shrink:0"></span>`;
+      const haLabel=isH
+        ?`<span style="display:inline-block;padding:2px 7px;background:#002D72;color:#fff;border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.07em">HOME</span>`
+        :`<span style="display:inline-block;padding:2px 7px;background:#fff;color:#666;border:1.5px solid #d1d5db;border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.07em">AWAY</span>`;
+      const bg=i%2===0?'#fff':'#fafafa';
+      const border=i<tgames.length-1?'border-bottom:1px solid rgba(0,0,0,.06)':'';
+      return `<tr style="background:${bg};${border};cursor:pointer" onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')" onmouseenter="this.style.background='rgba(0,45,114,.04)'" onmouseleave="this.style.background='${bg}'">
+        <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;white-space:nowrap">${g.date||''}</td>
+        <td style="padding:10px 8px">${haLabel}</td>
+        <td style="padding:10px 8px;white-space:nowrap">${logo}<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;text-transform:uppercase">${oppTeam?.short||opp}</span></td>
+        <td style="padding:10px 12px;text-align:center"><span style="display:inline-block;padding:3px 10px;border-radius:5px;background:${won?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)'};color:${won?'#16a34a':'#dc2626'};font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.06em">${won?'W':'L'}</span></td>
+        <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#1a1a1a;white-space:nowrap">${myS}–${oppS}</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap">${w}-${l}</td>
+        <td style="padding:10px 12px;font-size:11px;color:var(--muted);white-space:nowrap">${g.field||''}</td>
+      </tr>`;
+    });
+    const thS='padding:9px 12px;text-align:left;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid rgba(0,0,0,.1);white-space:nowrap;background:#f8f9fa';
+    body.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">Game Log</div>
+      <span style="font-size:13px;font-weight:600;color:var(--muted)">${tgames.length} games · ${w}-${l}</span>
+    </div>
+    ${tgames.length?`<div style="overflow-x:auto;border:1px solid rgba(0,0,0,.1);border-radius:12px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;min-width:520px">
+      <thead><tr>
+        <th style="${thS}">Date</th>
+        <th style="${thS}">H/A</th>
+        <th style="${thS}">Opponent</th>
+        <th style="${thS};text-align:center">Result</th>
+        <th style="${thS}">Score</th>
+        <th style="${thS}">Record</th>
+        <th style="${thS}">Field</th>
+      </tr></thead>
+      <tbody>${rows.join('')}</tbody>
+    </table></div>`
+    :`<div style="padding:40px 20px;text-align:center;color:var(--muted);font-size:14px">No games played yet.</div>`}`;
+
   } else if(tab==='career' && TBIR_SEASONS){
     renderCareerTab('_avg','desc');
   } else {
