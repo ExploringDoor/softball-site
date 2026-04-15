@@ -1772,8 +1772,8 @@ window.openBoxScore = async function(gameId, skipClear) {
       name: p.name, num: p.num || '', pos: p.pos || '', ab: 0, r: 0, s: 0, d: 0, t: 0, hr: 0, rbi: 0, bb: 0, so: 0, dnp: false
     }))).map(migrateP);
     bsAwayOrdered = !!existing; bsHomeOrdered = !!existing;
-    bsAwayOrderMode = !bsAwayOrdered;
-    bsHomeOrderMode = !bsHomeOrdered;
+    bsAwayOrderMode = false;
+    bsHomeOrderMode = false;
     bsAwayOrderMap = {}; bsHomeOrderMap = {};
     bsScoreOnlyMode = false;
     bsAwayScoreOverride = null; bsHomeScoreOverride = null;
@@ -1825,57 +1825,7 @@ function renderBoxScore(awayName, homeName, g) {
     const assignedCount = Object.keys(orderMap).length;
     const isMobile = window.innerWidth < 768;
 
-    // ── ORDER MODE: big card grid ──────────────────────────────────
-    if (orderMode) {
-      return `
-      <div class="bs-panel" data-side="${side}" style="border-radius:12px;overflow:hidden;border:2px solid #001a3e">
-        <div style="background:#001a3e;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em">${teamName}</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.55);margin-top:2px">Tap players in batting order (1 → 2 → 3…)</div>
-          </div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;color:#FFD700">${assignedCount}<span style="font-size:16px;font-weight:400;color:rgba(255,255,255,.4)">/${active.length}</span></div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;padding:14px">
-          ${lineup.map((p, i) => {
-            if (p.dnp) return '';
-            const assigned = orderMap[i];
-            const isAssigned = assigned !== undefined;
-            return `
-            <div onclick="bsTapOrder('${side}',${i})" style="
-              background:${isAssigned ? '#001a3e' : '#f4f6f9'};
-              color:${isAssigned ? '#fff' : '#1a1a1a'};
-              border:2px solid ${isAssigned ? '#001a3e' : 'rgba(0,0,0,.1)'};
-              border-radius:10px;padding:14px 8px 12px;text-align:center;cursor:pointer;
-              user-select:none;-webkit-tap-highlight-color:transparent;
-              transition:transform .1s,box-shadow .1s;active:transform:scale(.95);
-              display:flex;flex-direction:column;align-items:center;gap:4px;min-height:90px;justify-content:center">
-              <div style="font-family:'Barlow Condensed',sans-serif;font-size:36px;font-weight:900;line-height:1;color:${isAssigned ? '#FFD700' : 'rgba(0,0,0,.12)'}">
-                ${isAssigned ? assigned : '—'}
-              </div>
-              <div style="font-size:13px;font-weight:700;line-height:1.2;word-break:break-word">${p.name.split(' ').slice(-1)[0]}</div>
-              <div style="font-size:10px;opacity:.55">#${p.num||'?'}${p.pos?' · '+p.pos:''}</div>
-            </div>`;
-          }).join('')}
-        </div>
-        <!-- DNP section -->
-        ${lineup.some(p=>p.dnp) ? `
-        <div style="padding:4px 14px 12px;border-top:1px solid rgba(0,0,0,.07)">
-          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.35);margin-bottom:8px;letter-spacing:.08em">Did Not Play</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px">
-            ${lineup.filter(p=>p.dnp).map((p,i) => `<span style="padding:4px 10px;background:rgba(0,0,0,.05);border-radius:20px;font-size:12px;color:rgba(0,0,0,.4)">${p.name.split(' ').slice(-1)[0]}</span>`).join('')}
-          </div>
-        </div>` : ''}
-        <div style="padding:12px 14px 14px;display:flex;gap:8px;border-top:1px solid rgba(0,0,0,.08)">
-          <button class="btn btn-outline btn-sm" onclick="bsResetOrder('${side}')" style="padding:8px 14px;font-size:13px;color:#c62828;border-color:#e57373">↺ Reset</button>
-          <button onclick="bsFinalizeOrder('${side}')" style="flex:1;padding:12px;font-size:16px;font-weight:700;background:${assignedCount===active.length?'#1b5e20':'#001a3e'};color:${assignedCount===active.length?'#a5d6a7':'#FFD700'};border:none;border-radius:8px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em">
-            ${assignedCount === active.length ? '✓ DONE — SET LINEUP' : `SET ORDER (${assignedCount}/${active.length} tapped)`}
-          </button>
-        </div>
-      </div>`;
-    }
-
-    // ── STATS MODE (captain-style text inputs) ──────────────────────────────────
+    // ── STATS TABLE ──────────────────────────────────
     const thS='padding:5px 4px;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);text-align:center;width:46px';
     const tdS='padding:3px 2px;text-align:center';
     function numInp(id, val) {
@@ -1888,7 +1838,6 @@ function renderBoxScore(awayName, homeName, g) {
           <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;color:var(--navy)">${teamName}
             <span style="font-weight:400;font-size:13px;color:var(--muted)">&nbsp;(${totals.r} R &middot; ${totals.s+totals.d+totals.t+totals.hr} H)</span>
           </div>
-          <button class="btn btn-outline btn-sm" onclick="bsToggleOrderMode('${side}')" style="font-size:11px;padding:5px 12px;border-color:var(--navy);color:var(--navy)">↕ Edit Order</button>
         </div>
         <div style="overflow-x:auto;padding:8px 10px 4px">
           <table style="width:100%;border-collapse:collapse;min-width:560px">
@@ -1975,10 +1924,6 @@ function renderBoxScore(awayName, homeName, g) {
   const awayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
   const homeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
 
-  const _awayNeedsOrder = bsAwayOrderMode;
-  const _homeNeedsOrder = bsHomeOrderMode;
-  const _inOrderStep = _awayNeedsOrder || _homeNeedsOrder;
-
   view.innerHTML = `
     <div style="padding:20px 0">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -1990,14 +1935,6 @@ function renderBoxScore(awayName, homeName, g) {
           ${bsScoreOnlyMode ? '📊 Full Stats Mode' : '🎯 Score Only Mode'}
         </button>
       </div>
-      ${_inOrderStep && !bsScoreOnlyMode ? `
-      <div style="display:flex;align-items:center;gap:10px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:14px">
-        <div style="font-size:20px">📋</div>
-        <div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase;color:#856404">Step 1 of 2 — Set Batting Order</div>
-          <div style="font-size:12px;color:#856404;margin-top:1px">Tap players in batting order (1→2→3…) for each team, then enter stats</div>
-        </div>
-      </div>` : ''}
       <!-- Dark navy game banner -->
       <div style="background:#001a3e;border-radius:12px;padding:16px 24px;margin-bottom:18px;text-align:center;color:#fff">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.45);margin-bottom:10px">${g.date||''} · ${g.time||''} · ${g.field||''}</div>
