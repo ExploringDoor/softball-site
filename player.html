@@ -516,9 +516,19 @@ window.uploadMedia = async function() {
   try {
     if (fileInput.files.length > 0) {
       const file = fileInput.files[0];
-      const storageRef = ref(storage, `team-media/${MY_TEAM.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`);
-      const snap = await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(snap.ref);
+      // Size check: warn if over 5MB
+      if (file.size > 5 * 1024 * 1024) { toast('Photo too large — please use a photo under 5MB', 'error'); btn.disabled=false; btn.textContent='Share'; return; }
+      btn.textContent = 'Uploading photo…';
+      // Wrap with timeout so it never hangs forever
+      const uploadWithTimeout = Promise.race([
+        (async () => {
+          const storageRef = ref(storage, `team-media/${MY_TEAM.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`);
+          const snap = await uploadBytes(storageRef, file);
+          return await getDownloadURL(snap.ref);
+        })(),
+        new Promise((_,rej) => setTimeout(() => rej(new Error('Upload timed out — check Firebase Storage rules allow public writes to team-media/')), 20000))
+      ]);
+      const url = await uploadWithTimeout;
       await addDoc(collection(db,'team_media'), {
         type:'image', url, team_id:MY_TEAM.id, team_name:MY_TEAM.name||'',
         player_id:pid, player_name:player?.name||'',
@@ -540,7 +550,12 @@ window.uploadMedia = async function() {
     document.getElementById('media-caption').value = '';
     await loadMedia();
   } catch(e) {
-    toast('Upload failed: '+e.message, 'error');
+    const msg = e.message || String(e);
+    const hint = msg.includes('unauthorized') || msg.includes('permission') || msg.includes('rules')
+      ? ' — Go to Firebase Console → Storage → Rules and allow writes to team-media/'
+      : msg.includes('timed out') ? ' — Check Storage rules' : '';
+    toast('Upload failed: ' + msg + hint, 'error');
+    console.error('uploadMedia error:', e);
   } finally {
     btn.disabled = false; btn.textContent = 'Share';
   }
