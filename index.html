@@ -263,7 +263,7 @@ body.dark .nav-team-item:hover{background:rgba(255,255,255,.07)}
 .div-card-head{display:flex;align-items:center;gap:10px;padding:14px 22px;border-bottom:1px solid var(--border)}
 .div-card-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .s-tbl{width:100%;border-collapse:collapse}
-.s-tbl th{padding:11px 8px;font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);background:rgba(0,0,0,.02);border-bottom:1px solid var(--border);text-align:left;font-family:'Inter',sans-serif}
+.s-tbl th{padding:11px 8px;font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border);text-align:left;font-family:'Barlow Condensed',sans-serif}
 .s-tbl th:first-child{padding-left:20px;padding-right:4px}
 .s-tbl th:nth-child(2){padding-left:6px;padding-right:16px}
 .s-tbl th:not(:first-child){text-align:center}
@@ -3770,18 +3770,16 @@ function buildStandings(){
   const isActive=t=>TEAMS.find(x=>x.id===t.id);
   wrap.innerHTML=`<div class="div-card" style="grid-column:1/-1">
     <div class="div-card-head"><div style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></div><div class="div-card-label">2026 Standings — All Teams</div></div>
-    <table class="s-tbl"><thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Str</th></tr></thead><tbody>
+    <table class="s-tbl"><thead><tr><th>#</th><th>Team</th><th>PCT</th><th>GB</th><th>Str</th></tr></thead><tbody>
     ${sorted.map((t,i)=>{
       const active=isActive(t);
       const streak=t.streak&&t.streak!=='—'?'<span class="'+(t.streak[0]==='W'?'badge-w':'badge-l')+'">'+t.streak+'</span>':'<span style="color:var(--muted)">—</span>';
+      const record='<div style="font-size:12px;font-weight:700;color:var(--muted);margin-top:2px;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:.04em">'+t.w+'-'+t.l+'</div>';
       return '<tr class="'+(i===0?'leader':'')+'" style="'+(active?'cursor:pointer':'opacity:.55')+'" onclick="'+(active?'goPage(\'team\',\''+t.id+'\')':'')+'">'
-        +'<td style="color:var(--muted);font-size:12px">'+(i+1)+'</td>'
-        +'<td><span style="display:inline-flex;align-items:center;gap:10px">'+(LOGO_TEAMS.has(t.id)?'<img src="logos/'+t.id+'.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0" loading="lazy">':'<span style="width:10px;height:10px;border-radius:50%;background:'+t.color+';flex-shrink:0;display:inline-block"></span>')+'<span class="tname" style="color:#1a1a1a;font-weight:600'+(active?';cursor:pointer':'')+'" onclick="'+(active?'event.stopPropagation();goPage(\'team\',\''+t.id+'\')':'')+'">'+(active?'<span style="text-decoration:underline dotted;text-underline-offset:3px"><span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span></span>':'<span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span>')+'</span></span>'+(!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':'')+'</td>'
-        +'<td>'+t.w+'</td><td>'+t.l+'</td>'
+        +'<td style="color:var(--muted);font-size:12px;width:32px">'+(i+1)+'</td>'
+        +'<td style="padding-left:4px"><span style="display:inline-flex;align-items:center;gap:12px">'+(LOGO_TEAMS.has(t.id)?'<img src="logos/'+t.id+'.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0" loading="lazy">':'<span style="width:10px;height:10px;border-radius:50%;background:'+t.color+';flex-shrink:0;display:inline-block"></span>')+'<span style="display:flex;flex-direction:column;justify-content:center"><span class="tname" style="color:#1a1a1a;font-weight:600'+(active?';cursor:pointer':'')+'" onclick="'+(active?'event.stopPropagation();goPage(\'team\',\''+t.id+'\')':'')+'">'+(active?'<span style="text-decoration:underline dotted;text-underline-offset:3px"><span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span></span>':'<span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span>')+'</span>'+record+'</span></span>'+(!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':'')+'</td>'
         +'<td style="font-weight:600">'+t.pct.toFixed(3).replace(/^0\./,'.')+'</td>'
         +'<td>'+(t.gb==='—'?'<span style="color:var(--muted)">—</span>':'<span style="color:#1a1a1a;font-weight:600">'+t.gb+'</span>')+'</td>'
-        +'<td style="color:var(--muted)">'+t.rs+'</td>'
-        +'<td style="color:var(--muted)">'+t.ra+'</td>'
         +'<td>'+streak+'</td>'
         +'</tr>';
     }).join('')}</tbody></table>
