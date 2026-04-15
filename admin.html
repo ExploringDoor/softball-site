@@ -3035,6 +3035,10 @@ window.openRecapEditor = function(gameId) {
         <textarea class="form-input" id="recap-text" rows="8" placeholder="Write the game recap...">${esc(recap?.text || '')}</textarea>
       </div>
     </div>
+    <div class="panel-title" style="margin-top:16px">Player of the Game</div>
+    <div class="form-row">
+      <div class="form-col"><label class="form-label">Player of the Game</label><input type="text" class="form-input" id="recap-potg" value="${esc(recap?.potg_name || '')}" placeholder="Player name (shows gold banner in recap)"></div>
+    </div>
     <div class="panel-title" style="margin-top:16px">Stars of the Game</div>
     <div class="form-row">
       <div class="form-col"><label class="form-label">Star 1</label><input type="text" class="form-input" id="recap-star1" value="${esc(recap?.stars?.[0] || '')}" placeholder="Player name"></div>
@@ -3059,11 +3063,12 @@ window.saveRecap = async function(gameId, existingRecapId) {
     document.getElementById('recap-star3').value.trim()
   ].filter(Boolean);
 
+  const potg_name = (document.getElementById('recap-potg')?.value || '').trim();
   const data = {
     date: g.date || '', wk: g.wk || 0,
     away: getTeamName(g.away), home: getTeamName(g.home),
     away_score: g.away_score, home_score: g.home_score,
-    field: g.field || '', text, stars
+    field: g.field || '', text, stars, potg_name
   };
 
   try {
