@@ -4001,6 +4001,14 @@ function loadTeam(teamId){
   renderTeamTab('roster');
 }
 
+// Roster sort state — persists while on team page
+let _rSort={key:'num',dir:'asc'};
+function doRosterSort(key){
+  if(_rSort.key===key){ _rSort.dir=_rSort.dir==='asc'?'desc':'asc'; }
+  else { _rSort.key=key; _rSort.dir=['num','name'].includes(key)?'asc':'desc'; }
+  renderTeamTab('roster');
+}
+
 function renderTeamTab(tab){
   currentTeamTab=tab;
   const t=getTeam(currentTeamId); if(!t) return;
@@ -4009,10 +4017,36 @@ function renderTeamTab(tab){
   const players=PLAYERS.filter(p=>p.team===t.id);
   const body=document.getElementById('team-body');
   if(tab==='roster'){
-    const rPlayers=players.filter(p=>p.name).sort((a,b)=>(+(a.num||99))-(+(b.num||99)));
+    const fmtStat=v=>v!=null&&v>0?(v>=1?v.toFixed(3):v.toFixed(3).replace(/^0\./,'.')):((v===0||v==='0')?'.000':'—');
     const fmtO=p=>{const d=(p.ab||0)+(p.bb||0);if(!d)return'—';return(((p.h||0)+(p.bb||0))/d).toFixed(3).replace(/^0\./,'.');};
-    const thS='padding:8px 8px 8px 0;text-align:right;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap;border-bottom:2px solid rgba(0,0,0,.1)';
-    const tdS='padding:9px 8px 9px 0;text-align:right;color:#1a1a1a;font-size:13px';
+    const getV=(p,k)=>{
+      if(k==='num') return +(p.num||99);
+      if(k==='name') return (p.name||'').toLowerCase();
+      if(k==='obp'){const d=(p.ab||0)+(p.bb||0);return d?((p.h||0)+(p.bb||0))/d:0;}
+      return +(p[k]||0);
+    };
+    const rPlayers=players.filter(p=>p.name).sort((a,b)=>{
+      const av=getV(a,_rSort.key), bv=getV(b,_rSort.key);
+      if(typeof av==='string') return _rSort.dir==='asc'?av.localeCompare(bv):bv.localeCompare(av);
+      return _rSort.dir==='asc'?av-bv:bv-av;
+    });
+    const COLS=[
+      {key:'ab',label:'AB'},{key:'r',label:'R'},{key:'h',label:'H'},
+      {key:'d',label:'2B'},{key:'t',label:'3B'},{key:'hr',label:'HR'},
+      {key:'rbi',label:'RBI'},{key:'bb',label:'BB'},
+      {key:'avg',label:'AVG'},{key:'obp',label:'OBP'},{key:'slg',label:'SLG'},{key:'ops',label:'OPS'}
+    ];
+    const thBase='padding:9px 8px 9px 0;text-align:right;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;border-bottom:2px solid';
+    const tdS='padding:10px 8px 10px 0;text-align:right;color:#1a1a1a;font-size:13px';
+    const thLeft='padding:9px 8px 9px 0;text-align:left;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;border-bottom:2px solid';
+    const colHdr=(key,label,align='right')=>{
+      const on=_rSort.key===key;
+      const arr=on?(_rSort.dir==='asc'?' ↑':' ↓'):'';
+      const borderC=on?'#002D72':'rgba(0,0,0,.1)';
+      const color=on?'color:#002D72':'color:var(--muted)';
+      const base=align==='left'?thLeft:thBase;
+      return `<th style="${base} ${borderC};${color}" onclick="doRosterSort('${key}')">${label}${arr}</th>`;
+    };
     body.innerHTML=`<div style="margin-bottom:22px"><div style="display:flex;gap:12px;flex-wrap:wrap">
       <div class="tsg-cell"><div class="tsg-v">${t.w}</div><div class="tsg-l">Wins</div></div>
       <div class="tsg-cell"><div class="tsg-v">${t.l}</div><div class="tsg-l">Losses</div></div>
@@ -4020,15 +4054,19 @@ function renderTeamTab(tab){
       <div class="tsg-cell"><div class="tsg-v">${t.ra}</div><div class="tsg-l">RA</div></div>
     </div></div>
     <div style="overflow-x:auto;margin:0 -4px">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px">
+    <table style="width:100%;border-collapse:collapse;min-width:680px">
       <thead><tr>
-        <th style="padding:8px 6px 8px 0;text-align:left;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);white-space:nowrap;border-bottom:2px solid rgba(0,0,0,.1)">#</th>
-        <th style="padding:8px 16px 8px 0;text-align:left;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid rgba(0,0,0,.1)">Name</th>
-        ${['AB','R','H','2B','3B','HR','RBI','BB','AVG','OBP'].map(h=>`<th style="${thS}">${h}</th>`).join('')}
+        ${colHdr('num','#','left')}
+        ${colHdr('name','Name','left')}
+        ${COLS.map(c=>colHdr(c.key,c.label)).join('')}
       </tr></thead>
-      <tbody>${rPlayers.map(p=>`<tr onclick="openModal('${p.id}')" style="border-bottom:1px solid rgba(0,0,0,.05);cursor:pointer" onmouseenter="this.style.background='rgba(0,45,114,.04)'" onmouseleave="this.style.background=''">
-        <td style="padding:9px 6px 9px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:var(--muted);white-space:nowrap">#${p.num||'—'}</td>
-        <td style="padding:9px 16px 9px 0;font-weight:600;white-space:nowrap;color:#1a1a1a">${p.name}${p.pos?`<span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:5px">${p.pos}</span>`:''}</td>
+      <tbody>${rPlayers.map(p=>{
+        const obp=fmtO(p);
+        const slg=fmtStat(p.slg);
+        const ops=fmtStat(p.ops);
+        return `<tr onclick="openModal('${p.id}')" style="border-bottom:1px solid rgba(0,0,0,.05);cursor:pointer" onmouseenter="this.style.background='rgba(0,45,114,.04)'" onmouseleave="this.style.background=''">
+        <td style="padding:10px 8px 10px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:var(--muted);white-space:nowrap">#${p.num||'—'}</td>
+        <td style="padding:10px 8px 10px 0;font-size:15px;font-weight:700;white-space:nowrap;color:#1a1a1a">${p.name}${p.pos?`<span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:5px">${p.pos}</span>`:''}</td>
         <td style="${tdS}">${p.ab||0}</td>
         <td style="${tdS}">${p.r||0}</td>
         <td style="${tdS}">${p.h||0}</td>
@@ -4038,8 +4076,10 @@ function renderTeamTab(tab){
         <td style="${tdS}">${p.rbi||0}</td>
         <td style="${tdS}">${p.bb||0}</td>
         <td style="${tdS};font-weight:700">${avg(p.avg)}</td>
-        <td style="${tdS}">${fmtO(p)}</td>
-      </tr>`).join('')}</tbody>
+        <td style="${tdS}">${obp}</td>
+        <td style="${tdS}">${slg}</td>
+        <td style="${tdS};font-weight:700">${ops}</td>
+      </tr>`;}).join('')}</tbody>
     </table></div>`;
   } else if(tab==='schedule'){
     const tgames=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short);
