@@ -373,6 +373,7 @@ select.form-input{cursor:pointer}
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
       <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
       <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')" style="display:none"><span class="icon">&#9989;</span> Score Reviews</div>
+      <div class="nav-item" data-section="media" data-sec="media" onclick="showSection('media')"><span class="icon">📸</span> Player Media</div>
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-user" id="sidebar-user"></div>
@@ -881,6 +882,17 @@ select.form-input{cursor:pointer}
       </div>
     </div>
 
+    <!-- PLAYER MEDIA -->
+    <div class="section" id="sec-media">
+      <div class="main-header">
+        <div class="main-title">Player Media</div>
+        <div class="main-subtitle">Photos &amp; videos posted by players via the Player Portal</div>
+      </div>
+      <div id="admin-media-content">
+        <div class="loading"><div class="spinner"></div> Loading…</div>
+      </div>
+    </div>
+
     <div class="section" id="sec-score-reviews">
       <div class="main-header">
         <div class="main-title">Submitted Scores</div>
@@ -1132,6 +1144,7 @@ window.showSection = function(name) {
   if (name === 'emailblast') loadMailerLiteStats();
   if (name === 'pages') loadPageEditor();
   if (name === 'waivers') initWaiversSection();
+  if (name === 'media') loadAdminMedia();
 };
 
 window.toggleSidebar = function() {
@@ -4430,6 +4443,53 @@ window.peRevert = async function() {
 };
 
 window.loadPageEditor = function() { peBuildList(); };
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER MEDIA MANAGER
+// ═══════════════════════════════════════════════════════════════════
+async function loadAdminMedia() {
+  const el = document.getElementById('admin-media-content');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+  try {
+    const snap = await getDocs(collection(db, 'team_media'));
+    const items = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    if (!items.length) {
+      el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">No player media yet.</div>';
+      return;
+    }
+    function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function ytId(url){ const m=(url||'').match(/[?&]v=([^&#]+)/)||url.match(/youtu\.be\/([^?&/]+)/)||url.match(/embed\/([^?&]+)/); return m?m[1]:''; }
+    el.innerHTML = `<div style="margin-bottom:12px;font-size:13px;color:var(--muted)">${items.length} item${items.length!==1?'s':''} total</div>`
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px">'
+      + items.map(item => {
+          const thumb = item.type === 'image'
+            ? `<img src="${esc(item.url)}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy">`
+            : (()=>{ const id=ytId(item.url||''); return id ? `<img src="https://img.youtube.com/vi/${id}/mqdefault.jpg" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block">` : `<div style="width:100%;aspect-ratio:16/9;background:#111;display:flex;align-items:center;justify-content:center;color:#fff;font-size:24px">▶</div>`; })();
+          return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+            ${thumb}
+            <div style="padding:8px 10px">
+              ${item.caption ? `<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:2px">${esc(item.caption)}</div>` : ''}
+              <div style="font-size:11px;color:var(--muted)">${esc(item.player_name||'Unknown')} · ${esc(item.team_name||item.team_id||'')}</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:1px">${(item.created_at||'').slice(0,10)}</div>
+              <button onclick="window.adminDeleteMedia('${item.id}')" style="margin-top:8px;width:100%;padding:6px;background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">🗑 Delete</button>
+            </div>
+          </div>`;
+        }).join('')
+      + '</div>';
+  } catch(e) {
+    el.innerHTML = `<div style="padding:40px;text-align:center;color:#dc2626;font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+window.adminDeleteMedia = async function(docId) {
+  if (!confirm('Permanently delete this photo/video?')) return;
+  try {
+    await deleteDoc(doc(db, 'team_media', docId));
+    toast('Deleted');
+    loadAdminMedia();
+  } catch(e) { toast('Delete failed: ' + e.message, 'error'); }
+};
 
 window.previewBlast = function() {
   const subject = document.getElementById('blast-subject').value.trim() || '(no subject)';
