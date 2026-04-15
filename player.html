@@ -219,7 +219,6 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getFirestore, collection, getDocs, addDoc, setDoc, deleteDoc, doc, query, orderBy, where } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-storage.js';
 
 const app = initializeApp({
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -230,7 +229,6 @@ const app = initializeApp({
   appId: "1:145862305559:web:153ec455bad57e17517952"
 });
 const db = getFirestore(app);
-const storage = getStorage(app);
 
 let ALL_TEAMS = [], MY_TEAM = null, MY_PLAYERS = [], MY_GAMES = [], _rsvps = {};
 
@@ -500,6 +498,38 @@ async function loadMedia() {
   }
 }
 
+// Compress an image file to a base64 data URL small enough for Firestore
+async function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not load image'));
+      img.onload = () => {
+        const MAX_DIM = 1200;
+        let {width, height} = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width >= height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
+          else { width = Math.round(width * MAX_DIM / height); height = MAX_DIM; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        let dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        if (dataUrl.length > 750 * 1024) dataUrl = canvas.toDataURL('image/jpeg', 0.48);
+        if (dataUrl.length > 950 * 1024) {
+          reject(new Error('Photo is still too large after compression. Try a lower-resolution image.'));
+          return;
+        }
+        resolve(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 window.uploadMedia = async function() {
   const pid = document.getElementById('player-select').value;
   if (!pid) { toast('Select your name first', 'error'); return; }
@@ -511,30 +541,20 @@ window.uploadMedia = async function() {
   if (!fileInput.files.length && !ytUrl) { toast('Add a photo or YouTube link', 'error'); return; }
 
   const btn = document.getElementById('media-submit');
-  btn.disabled = true; btn.textContent = 'Uploading…';
+  btn.disabled = true; btn.textContent = 'Working…';
 
   try {
     if (fileInput.files.length > 0) {
       const file = fileInput.files[0];
-      // Size check: warn if over 5MB
-      if (file.size > 5 * 1024 * 1024) { toast('Photo too large — please use a photo under 5MB', 'error'); btn.disabled=false; btn.textContent='Share'; return; }
-      btn.textContent = 'Uploading photo…';
-      // Wrap with timeout so it never hangs forever
-      const uploadWithTimeout = Promise.race([
-        (async () => {
-          const storageRef = ref(storage, `team-media/${MY_TEAM.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`);
-          const snap = await uploadBytes(storageRef, file);
-          return await getDownloadURL(snap.ref);
-        })(),
-        new Promise((_,rej) => setTimeout(() => rej(new Error('Upload timed out — check Firebase Storage rules allow public writes to team-media/')), 20000))
-      ]);
-      const url = await uploadWithTimeout;
+      btn.textContent = 'Compressing…';
+      const dataUrl = await compressImage(file);
+      btn.textContent = 'Saving…';
       await addDoc(collection(db,'team_media'), {
-        type:'image', url, team_id:MY_TEAM.id, team_name:MY_TEAM.name||'',
+        type:'image', url:dataUrl, team_id:MY_TEAM.id, team_name:MY_TEAM.name||'',
         player_id:pid, player_name:player?.name||'',
         caption, created_at:new Date().toISOString()
       });
-      toast('Photo uploaded! ⚾');
+      toast('Photo shared! ⚾');
     }
     if (ytUrl) {
       const ytId = extractYouTubeId(ytUrl);
@@ -550,11 +570,7 @@ window.uploadMedia = async function() {
     document.getElementById('media-caption').value = '';
     await loadMedia();
   } catch(e) {
-    const msg = e.message || String(e);
-    const hint = msg.includes('unauthorized') || msg.includes('permission') || msg.includes('rules')
-      ? ' — Go to Firebase Console → Storage → Rules and allow writes to team-media/'
-      : msg.includes('timed out') ? ' — Check Storage rules' : '';
-    toast('Upload failed: ' + msg + hint, 'error');
+    toast('Could not share: ' + (e.message || String(e)), 'error');
     console.error('uploadMedia error:', e);
   } finally {
     btn.disabled = false; btn.textContent = 'Share';
