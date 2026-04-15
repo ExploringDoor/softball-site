@@ -1067,74 +1067,129 @@ window.showManualEntry = function(gameId) {
   document.getElementById('upload-zone-' + gameId).style.display = 'none';
 };
 
-window.showBoxScoreEntry = function(gameId) {
-  const el = document.getElementById('boxscore-entry-' + gameId);
-  if (!el) return;
-  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
-  const g = MY_GAMES.find(x => x.id === gameId);
-  if (!g) return;
-  // Hide other entry zones
-  document.getElementById('upload-zone-' + gameId).style.display = 'none';
-  document.getElementById('manual-entry-' + gameId).style.display = 'none';
+// ── Lineup phase helpers ──────────────────────────────────────────────
+function _lpMakeTr(name, num) {
+  const tr = document.createElement('tr');
+  const n = esc(name||''), u = num?`#${esc(num)}`:'';
+  tr.innerHTML = `
+    <td class="lp-num" style="padding:4px 6px;color:var(--muted);font-size:11px;font-weight:700;font-family:'Barlow Condensed',sans-serif;width:24px;text-align:right"></td>
+    <td style="padding:4px 4px 4px 0;font-size:11px;color:var(--muted);width:32px;white-space:nowrap">${u}</td>
+    <td style="padding:4px 6px;min-width:130px"><input type="text" value="${n}" placeholder="Player name" style="width:100%;font-size:13px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-family:inherit"></td>
+    <td style="padding:4px 2px;white-space:nowrap">
+      <button onclick="bsLpMove(this,-1)" style="background:none;border:1px solid var(--border);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:10px;line-height:1.4">▲</button>
+      <button onclick="bsLpMove(this,1)"  style="background:none;border:1px solid var(--border);border-radius:3px;padding:1px 5px;cursor:pointer;font-size:10px;line-height:1.4">▼</button>
+    </td>
+    <td style="padding:4px 2px"><button onclick="this.closest('tr').remove();_lpRenum(this.closest('tbody'))" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
+  return tr;
+}
+function _lpRenum(tbody) {
+  if(!tbody) return;
+  Array.from(tbody.querySelectorAll('tr')).forEach((r,i)=>{const c=r.querySelector('.lp-num');if(c)c.textContent=(i+1)+'.';});
+}
+window.bsLpMove = function(btn, dir) {
+  const tr=btn.closest('tr'); const tb=tr.parentNode;
+  if(dir<0){const p=tr.previousElementSibling;if(p)tb.insertBefore(tr,p);}
+  else{const n=tr.nextElementSibling;if(n)tb.insertBefore(n,tr);}
+  _lpRenum(tb);
+};
+window.bsLpAddRow = function(tbodyId) {
+  const tb=document.getElementById(tbodyId); if(!tb) return;
+  tb.appendChild(_lpMakeTr('',''));
+  _lpRenum(tb);
+};
+window.bsLpAddDummy = function(tbodyId, countId) {
+  const ct=Math.max(1,Math.min(20,parseInt(document.getElementById(countId)?.value)||9));
+  const tb=document.getElementById(tbodyId); if(!tb) return;
+  tb.innerHTML='';
+  for(let i=0;i<ct;i++) tb.appendChild(_lpMakeTr(`Batter ${i+1}`,''));
+  _lpRenum(tb);
+};
+window.bsLpSwitch = function(gameId, team) {
+  ['away','home'].forEach(t=>{
+    const active=t===team;
+    const btn=document.getElementById(`bs-ltab-${t}-${gameId}`);
+    const pnl=document.getElementById(`bs-lpp-${t}-${gameId}`);
+    if(btn){btn.style.background=active?'var(--navy)':'#f3f4f6';btn.style.color=active?'#fff':'var(--muted)';}
+    if(pnl) pnl.style.display=active?'block':'none';
+  });
+};
+window.bsToStats = function(gameId) {
+  const g=MY_GAMES.find(x=>x.id===gameId); if(!g) return;
+  const readLp=team=>{
+    const tb=document.getElementById(`bs-lptb-${team}-${gameId}`); if(!tb) return [];
+    return Array.from(tb.querySelectorAll('tr')).map(tr=>tr.querySelector('input[type="text"]')?.value.trim()||'').filter(Boolean);
+  };
+  const awayNames=readLp('away'), homeNames=readLp('home');
+  const awayTeamName=esc(getTeamName(g.away)), homeTeamName=esc(getTeamName(g.home));
+  const isHome=g.home===captainData.team_id;
+  _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamName);
+};
 
-  const isHome = g.home === captainData.team_id;
-  const myTeamId = captainData.team_id;
-  const oppTeamId = isHome ? g.away : g.home;
-  const myTeamName = esc(getTeamName(myTeamId));
-  const oppTeamName = esc(getTeamName(oppTeamId));
-  const awayTeamName = esc(getTeamName(g.away));
-  const homeTeamName = esc(getTeamName(g.home));
+function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamName) {
+  const el=document.getElementById('boxscore-entry-'+gameId); if(!el) return;
+  const batCols=['AB','R','H','2B','3B','HR','RBI','BB','K'];
+  const pitCols=['IP','H','R','ER','BB','K'];
+  const thS='text-align:center;padding:5px 2px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);width:38px';
+  const tdInp=(id,w,ph,isText)=>isText
+    ?`<input type="text" placeholder="${ph||''}" style="width:${w};font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="${id}">`
+    :`<input type="number" min="0" value="0" style="width:${w};text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="${id}">`;
 
-  // My team's players pre-populated
-  const myPlayers = MY_PLAYERS.slice().sort((a,b) => (a.num||99)-(b.num||99));
-  const statCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
-
-  function buildBatterRows(players, teamPrefix) {
-    let rows = players.map((p,i) => `
-      <tr>
-        <td style="padding:4px 6px;white-space:nowrap"><input type="text" value="${esc(p.name)}" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
-        ${statCols.map(col => `<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/[^a-z0-9]/gi,'')}${i}"></td>`).join('')}
-        <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
-      </tr>`).join('');
-    return rows;
-  }
-
-  function emptyRow(teamPrefix, i) {
-    return `<tr>
-      <td style="padding:4px 6px"><input type="text" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
-      ${statCols.map(col => `<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/[^a-z0-9]/gi,'')}${i}"></td>`).join('')}
+  function batTable(team, names) {
+    const rows=names.map((nm,i)=>`<tr>
+      <td style="padding:4px 6px;white-space:nowrap">${tdInp(`bs-${gameId}-${team}-name-${i}`,'100%','Player name',true).replace('value=""','').replace('placeholder=""',`value="${esc(nm)}"`)}</td>
+      ${batCols.map(col=>`<td style="padding:4px 3px">${tdInp(`bs-${gameId}-${team}-${col.replace(/\W/g,'')}${i}`,'40px','',false)}</td>`).join('')}
+      <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
+    </tr>`).join('');
+    const emptyR=`<tr>
+      <td style="padding:4px 6px">${tdInp(`bs-${gameId}-${team}-name-${names.length}`,'100%','Player name',true)}</td>
+      ${batCols.map((col,ci)=>`<td style="padding:4px 3px">${tdInp(`bs-${gameId}-${team}-${col.replace(/\W/g,'')}${names.length}`,'40px','',false)}</td>`).join('')}
       <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
     </tr>`;
-  }
-
-  const awayPrefix = 'away';
-  const homePrefix = 'home';
-  const awayIsMyTeam = !isHome;
-  const awayRows = awayIsMyTeam ? buildBatterRows(myPlayers, awayPrefix) : emptyRow(awayPrefix, 0);
-  const homeRows = !awayIsMyTeam ? buildBatterRows(myPlayers, homePrefix) : emptyRow(homePrefix, 0);
-  const awayRowCount = awayIsMyTeam ? myPlayers.length : 1;
-  const homeRowCount = !awayIsMyTeam ? myPlayers.length : 1;
-
-  function bsTable(tbodyId, rows) {
     return `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <table style="width:100%;border-collapse:collapse;min-width:460px">
+      <table style="width:100%;border-collapse:collapse;min-width:480px">
         <thead><tr style="background:rgba(0,0,0,.03)">
-          <th style="text-align:left;padding:5px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:110px">Player</th>
-          ${statCols.map(c=>`<th style="text-align:center;padding:5px 2px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);width:38px">${c}</th>`).join('')}
+          <th style="text-align:left;padding:5px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:120px">Player</th>
+          ${batCols.map(c=>`<th style="${thS}">${c}</th>`).join('')}
           <th style="width:24px"></th>
         </tr></thead>
-        <tbody id="${tbodyId}">${rows}</tbody>
-      </table>
+        <tbody id="bs-${gameId}-${team}-tbody">${rows}${names.length===0?emptyR:''}</tbody>
+      </table></div>
+    <div style="padding:6px 16px 6px">
+      <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${team}',${names.length})">+ Add Batter</button>
     </div>`;
   }
 
-  el.style.display = 'block';
+  function pitTable(team) {
+    return `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);margin-bottom:6px;padding-left:16px">⚾ Pitching</div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 16px 10px">
+        <table style="width:100%;border-collapse:collapse;min-width:340px">
+          <thead><tr style="background:rgba(0,0,0,.03)">
+            <th style="text-align:left;padding:5px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:120px">Pitcher</th>
+            ${pitCols.map(c=>`<th style="${thS}">${c}</th>`).join('')}
+            <th style="width:24px"></th>
+          </tr></thead>
+          <tbody id="bs-${gameId}-${team}-pitch-tbody">
+            <tr>
+              <td style="padding:4px 6px"><input type="text" placeholder="Pitcher name" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-name-0"></td>
+              <td style="padding:4px 3px"><input type="text" placeholder="7" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-IP0"></td>
+              ${['H','R','ER','BB','K'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-${c}0"></td>`).join('')}
+              <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:0 16px 8px">
+        <button class="btn btn-outline btn-sm" onclick="addBsPitchRow('${gameId}','${team}')">+ Add Pitcher</button>
+      </div>
+    </div>`;
+  }
+
   el.innerHTML = `<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
-    <!-- Header -->
-    <div style="background:var(--navy);color:#fff;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em">
-      📊 BOX SCORE — Wk ${g.wk||'?'}: ${awayTeamName} @ ${homeTeamName}
+    <div style="background:var(--navy);color:#fff;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;display:flex;align-items:center;justify-content:space-between">
+      <span>📊 BOX SCORE — Wk ${g.wk||'?'}: ${awayTeamName} @ ${homeTeamName}</span>
+      <button onclick="showBoxScoreEntry('${gameId}')" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:700">← Lineup</button>
     </div>
-    <!-- Final Score row -->
     <div style="padding:10px 16px;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:6px">
         <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">${awayTeamName}</span>
@@ -1146,70 +1201,127 @@ window.showBoxScoreEntry = function(gameId) {
         <span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted)">${homeTeamName}</span>
       </div>
     </div>
-    <!-- Team tabs -->
     <div style="display:flex;border-bottom:2px solid var(--border)">
-      <button id="bs-tab-away-${gameId}" onclick="bsSwitchTab('${gameId}','away')"
-        style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:var(--navy);color:#fff;border-right:1px solid rgba(255,255,255,.2)">
-        ▲ ${awayTeamName}
-      </button>
-      <button id="bs-tab-home-${gameId}" onclick="bsSwitchTab('${gameId}','home')"
-        style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:#f3f4f6;color:var(--muted)">
-        ▼ ${homeTeamName}
-      </button>
+      <button id="bs-tab-away-${gameId}" onclick="bsSwitchTab('${gameId}','away')" style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:var(--navy);color:#fff;border-right:1px solid rgba(255,255,255,.2)">▲ ${awayTeamName}</button>
+      <button id="bs-tab-home-${gameId}" onclick="bsSwitchTab('${gameId}','home')" style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:#f3f4f6;color:var(--muted)">▼ ${homeTeamName}</button>
     </div>
-    <!-- Away panel -->
-    <div id="bs-panel-away-${gameId}">
-      ${bsTable(`bs-${gameId}-away-tbody`, awayRows)}
-      <div style="padding:6px 16px 10px">
-        <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${awayPrefix}',${awayRowCount})">+ Add Batter</button>
-      </div>
-    </div>
-    <!-- Home panel -->
-    <div id="bs-panel-home-${gameId}" style="display:none">
-      ${bsTable(`bs-${gameId}-home-tbody`, homeRows)}
-      <div style="padding:6px 16px 10px">
-        <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${homePrefix}',${homeRowCount})">+ Add Batter</button>
-      </div>
-    </div>
+    <div id="bs-panel-away-${gameId}">${batTable('away',awayNames)}${pitTable('away')}</div>
+    <div id="bs-panel-home-${gameId}" style="display:none">${batTable('home',homeNames)}${pitTable('home')}</div>
     <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-success btn-sm" onclick="submitBoxScore('${gameId}')">✓ Submit Box Score</button>
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('boxscore-entry-${gameId}').style.display='none'">Cancel</button>
     </div>
   </div>`;
-  // Store row counts on the element for addBsRow
-  el.dataset.awayRows = awayRowCount;
-  el.dataset.homeRows = homeRowCount;
+}
+
+window.showBoxScoreEntry = function(gameId) {
+  const el = document.getElementById('boxscore-entry-' + gameId);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  document.getElementById('upload-zone-' + gameId).style.display = 'none';
+  document.getElementById('manual-entry-' + gameId).style.display = 'none';
+
+  const isHome = g.home === captainData.team_id;
+  const myPlayers = MY_PLAYERS.slice().sort((a,b) => (+(a.num||99))-(+(b.num||99)));
+  const awayTeamName = esc(getTeamName(g.away));
+  const homeTeamName = esc(getTeamName(g.home));
+
+  // Build initial lineup: captain's team pre-populated, opponent empty
+  function buildLpTbody(tbodyId, players) {
+    const tb = document.createElement('tbody');
+    tb.id = tbodyId;
+    players.forEach(p => tb.appendChild(_lpMakeTr(p.name, p.num||'')));
+    _lpRenum(tb);
+    return tb.outerHTML;
+  }
+
+  const awayPlayers = isHome ? [] : myPlayers;
+  const homePlayers = isHome ? myPlayers : [];
+  const activeTeam = isHome ? 'home' : 'away';
+
+  el.style.display = 'block';
+  el.innerHTML = `<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <div style="background:var(--navy);color:#fff;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em">
+      📋 SET LINEUPS — Wk ${g.wk||'?'}: ${awayTeamName} @ ${homeTeamName}
+    </div>
+    <div style="display:flex;border-bottom:2px solid var(--border)">
+      <button id="bs-ltab-away-${gameId}" onclick="bsLpSwitch('${gameId}','away')"
+        style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:${activeTeam==='away'?'var(--navy)':'#f3f4f6'};color:${activeTeam==='away'?'#fff':'var(--muted)'};border-right:1px solid rgba(0,0,0,.1)">
+        ▲ ${awayTeamName} (Away)
+      </button>
+      <button id="bs-ltab-home-${gameId}" onclick="bsLpSwitch('${gameId}','home')"
+        style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:${activeTeam==='home'?'var(--navy)':'#f3f4f6'};color:${activeTeam==='home'?'#fff':'var(--muted)'}">
+        ▼ ${homeTeamName} (Home)
+      </button>
+    </div>
+    <div id="bs-lpp-away-${gameId}" style="display:${activeTeam==='away'?'block':'none'};padding:12px 16px">
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse"><${buildLpTbody(`bs-lptb-away-${gameId}`, awayPlayers)}/table>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="bsLpAddRow('bs-lptb-away-${gameId}')">+ Add Player</button>
+        <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.03);border:1px solid var(--border);border-radius:6px;padding:4px 10px">
+          <span style="font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap">Dummy lineup:</span>
+          <input type="number" id="bs-dc-away-${gameId}" value="9" min="1" max="20" style="width:42px;text-align:center;font-size:13px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit">
+          <button class="btn btn-outline btn-sm" onclick="bsLpAddDummy('bs-lptb-away-${gameId}','bs-dc-away-${gameId}')">Add</button>
+        </div>
+      </div>
+    </div>
+    <div id="bs-lpp-home-${gameId}" style="display:${activeTeam==='home'?'block':'none'};padding:12px 16px">
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse"><${buildLpTbody(`bs-lptb-home-${gameId}`, homePlayers)}/table>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="bsLpAddRow('bs-lptb-home-${gameId}')">+ Add Player</button>
+        <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.03);border:1px solid var(--border);border-radius:6px;padding:4px 10px">
+          <span style="font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap">Dummy lineup:</span>
+          <input type="number" id="bs-dc-home-${gameId}" value="9" min="1" max="20" style="width:42px;text-align:center;font-size:13px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit">
+          <button class="btn btn-outline btn-sm" onclick="bsLpAddDummy('bs-lptb-home-${gameId}','bs-dc-home-${gameId}')">Add</button>
+        </div>
+      </div>
+    </div>
+    <div style="padding:12px 16px;border-top:1px solid var(--border);background:rgba(0,0,0,.01);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-success" onclick="bsToStats('${gameId}')">Enter Stats →</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('boxscore-entry-${gameId}').style.display='none'">Cancel</button>
+      <span style="font-size:11px;color:var(--muted)">Set both lineups, then click Enter Stats</span>
+    </div>
+  </div>`;
 };
 
 window.bsSwitchTab = function(gameId, tab) {
-  const awayPanel = document.getElementById('bs-panel-away-' + gameId);
-  const homePanel = document.getElementById('bs-panel-home-' + gameId);
-  const awayBtn   = document.getElementById('bs-tab-away-' + gameId);
-  const homeBtn   = document.getElementById('bs-tab-home-' + gameId);
-  if (tab === 'away') {
-    awayPanel.style.display = ''; homePanel.style.display = 'none';
-    awayBtn.style.background = 'var(--navy)'; awayBtn.style.color = '#fff';
-    homeBtn.style.background = '#f3f4f6';     homeBtn.style.color = 'var(--muted)';
-  } else {
-    homePanel.style.display = ''; awayPanel.style.display = 'none';
-    homeBtn.style.background = 'var(--navy)'; homeBtn.style.color = '#fff';
-    awayBtn.style.background = '#f3f4f6';     awayBtn.style.color = 'var(--muted)';
-  }
+  ['away','home'].forEach(t=>{
+    const active=t===tab;
+    const btn=document.getElementById(`bs-tab-${t}-${gameId}`);
+    const pnl=document.getElementById(`bs-panel-${t}-${gameId}`);
+    if(btn){btn.style.background=active?'var(--navy)':'#f3f4f6';btn.style.color=active?'#fff':'var(--muted)';}
+    if(pnl) pnl.style.display=active?'':'none';
+  });
 };
 
-window.removeBsRow = function(btn) {
-  btn.closest('tr').remove();
-};
+window.removeBsRow = function(btn) { btn.closest('tr').remove(); };
 
 window.addBsRow = function(gameId, teamPrefix, startIdx) {
-  const el = document.getElementById('boxscore-entry-' + gameId);
   const tbody = document.getElementById('bs-' + gameId + '-' + teamPrefix + '-tbody');
   if (!tbody) return;
   const i = tbody.querySelectorAll('tr').length;
-  const statCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
+  const batCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
   const tr = document.createElement('tr');
   tr.innerHTML = `<td style="padding:4px 6px"><input type="text" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
-    ${statCols.map(col => `<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/[^a-z0-9]/gi,'')}${i}"></td>`).join('')}
+    ${batCols.map(col=>`<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/\W/g,'')}${i}"></td>`).join('')}
+    <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
+  tbody.appendChild(tr);
+};
+
+window.addBsPitchRow = function(gameId, team) {
+  const tbody = document.getElementById(`bs-${gameId}-${team}-pitch-tbody`);
+  if (!tbody) return;
+  const i = tbody.querySelectorAll('tr').length;
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td style="padding:4px 6px"><input type="text" placeholder="Pitcher name" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-name-${i}"></td>
+    <td style="padding:4px 3px"><input type="text" placeholder="7" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-IP${i}"></td>
+    ${['H','R','ER','BB','K'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-${c}${i}"></td>`).join('')}
     <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
   tbody.appendChild(tr);
 };
@@ -1238,8 +1350,30 @@ window.submitBoxScore = async function(gameId) {
     }).filter(Boolean);
   }
 
+  function readPitchers(teamPrefix) {
+    const tbody = document.getElementById('bs-' + gameId + '-' + teamPrefix + '-pitch-tbody');
+    if (!tbody) return [];
+    return Array.from(tbody.querySelectorAll('tr')).map(tr => {
+      const inputs = tr.querySelectorAll('input');
+      if (inputs.length < 7) return null;
+      const name = inputs[0].value.trim();
+      if (!name) return null;
+      return {
+        name,
+        ip: inputs[1].value.trim() || '0',
+        h:  parseInt(inputs[2].value) || 0,
+        r:  parseInt(inputs[3].value) || 0,
+        er: parseInt(inputs[4].value) || 0,
+        bb: parseInt(inputs[5].value) || 0,
+        k:  parseInt(inputs[6].value) || 0,
+      };
+    }).filter(Boolean);
+  }
+
   const awayBatters = readBatters('away');
   const homeBatters = readBatters('home');
+  const awayPitchers = readPitchers('away');
+  const homePitchers = readPitchers('home');
   const awayTeam = ALL_TEAMS.find(t => t.id === g.away || t.short === g.away);
   const homeTeam = ALL_TEAMS.find(t => t.id === g.home || t.short === g.home);
 
@@ -1251,6 +1385,8 @@ window.submitBoxScore = async function(gameId) {
     away: g.away, home: g.home,
     away_score: awayFinal, home_score: homeFinal,
     awayBatters, homeBatters,
+    away_pitching: awayPitchers,
+    home_pitching: homePitchers,
     submitted_by: captainData.team_name,
     submitted_by_id: captainData.team_id,
     status: 'approved',
