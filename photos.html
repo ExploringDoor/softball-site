@@ -231,6 +231,7 @@ body.dark [style*="border:1px solid rgba(0,0,0"]{border-color:rgba(255,255,255,.
   <button class="f-btn" onclick="filterSections('champs',this)">Champions</button>
   <button class="f-btn" onclick="filterSections('logos',this)">League Identity</button>
   <button class="f-btn" onclick="filterSections('fields',this)">Fields</button>
+  <button class="f-btn" onclick="filterSections('player',this)">📸 Player Photos</button>
 </div>
 
 <!-- CHAMPIONS -->
@@ -297,6 +298,15 @@ body.dark [style*="border:1px solid rgba(0,0,0"]{border-color:rgba(255,255,255,.
   <div style="padding:24px 0;text-align:center;color:var(--muted);font-size:13px;">Field photos coming soon.</div>
 </div>
 
+<!-- PLAYER PHOTOS -->
+<div class="section" data-cat="player" id="sec-player">
+  <div class="section-header">
+    <div class="section-title">Player <span>Photos</span></div>
+    <div class="section-meta" id="player-photos-meta">Shared by teammates via the Player Portal</div>
+  </div>
+  <div id="player-photos-grid" style="min-height:80px"><div style="padding:40px 0;text-align:center;color:var(--muted);font-size:13px">Loading…</div></div>
+</div>
+
 <!-- LIGHTBOX -->
 <div class="lightbox" id="lightbox" onclick="closeLb()">
   <div class="lb-close" onclick="closeLb()">✕</div>
@@ -358,7 +368,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeLb()});
 </script>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, query, orderBy } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, query, orderBy, where } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const app = initializeApp({
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -410,6 +420,61 @@ async function loadTicker() {
   } catch(e) {  }
 }
 loadTicker();
+
+async function loadPlayerPhotos() {
+  const grid = document.getElementById('player-photos-grid');
+  const meta = document.getElementById('player-photos-meta');
+  try {
+    const snap = await getDocs(collection(db, 'team_media'));
+    const items = snap.docs.map(d => ({id: d.id, ...d.data()}))
+      .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+
+    if (!items.length) {
+      grid.innerHTML = '<div style="padding:48px 0;text-align:center;color:var(--muted);font-size:13px">No player photos yet — players can share photos via the <a href="player.html" style="color:var(--gold);font-weight:600">Player Portal</a>.</div>';
+      return;
+    }
+
+    meta.textContent = items.length + ' photo' + (items.length !== 1 ? 's' : '') + ' shared by teammates';
+
+    function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function extractYtId(url){ const m=(url||'').match(/[?&]v=([^&#]+)/)||url.match(/youtu\.be\/([^?&/]+)/)||url.match(/embed\/([^?&]+)/); return m?m[1]:''; }
+
+    grid.innerHTML = '<div class="photo-grid">' + items.map(item => {
+      const caption = item.caption || '';
+      const by = item.player_name ? 'by ' + item.player_name + (item.team_name ? ' · ' + item.team_name : '') : (item.team_name || '');
+      if (item.type === 'image') {
+        return `<div class="photo-card" onclick="openLb('${esc(item.url)}','${esc(caption + (by ? ' — ' + by : ''))}')">
+          <img src="${esc(item.url)}" alt="${esc(caption||'Player photo')}" loading="lazy">
+          <div class="photo-card-glass"></div>
+          <div class="photo-card-info">
+            ${caption ? `<div class="photo-card-title">${esc(caption)}</div>` : ''}
+            ${by ? `<div class="photo-card-sub">${esc(by)}</div>` : ''}
+          </div>
+        </div>`;
+      } else if (item.type === 'youtube') {
+        const ytId = item.youtube_id || extractYtId(item.url || '');
+        const thumb = ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '';
+        return `<div class="photo-card" onclick="window.open('${esc(item.url)}','_blank')">
+          ${thumb ? `<img src="${thumb}" alt="video" loading="lazy">` : '<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:32px">▶</span></div>'}
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+            <div style="width:44px;height:44px;background:rgba(255,0,0,.88);border-radius:10px;display:flex;align-items:center;justify-content:center">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21"/></svg>
+            </div>
+          </div>
+          <div class="photo-card-glass"></div>
+          <div class="photo-card-info">
+            ${caption ? `<div class="photo-card-title">${esc(caption)}</div>` : '<div class="photo-card-title">YouTube Video</div>'}
+            ${by ? `<div class="photo-card-sub">${esc(by)}</div>` : ''}
+          </div>
+        </div>`;
+      }
+      return '';
+    }).join('') + '</div>';
+  } catch(e) {
+    grid.innerHTML = `<div style="padding:40px 0;text-align:center;color:#dc2626;font-size:13px">Could not load photos: ${e.message}</div>`;
+  }
+}
+loadPlayerPhotos();
 </script>
 </body>
 </html>
