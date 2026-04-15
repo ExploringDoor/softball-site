@@ -9,7 +9,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#ffffff;--dark:#f5f5f5;--card:#ffffff;--card2:#f8f8f8;--border:rgba(0,0,0,0.1);--gold:#002D72;--gold-dim:rgba(0,45,114,0.08);--white:#1a1a1a;--muted:rgba(0,0,0,0.45);--red:#c8102e;--green:#22c55e;--blue:#002D72}
-html{scroll-behavior:smooth}
+html{scroll-behavior:smooth;overflow-x:hidden}
 body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;overflow-x:hidden}
 
 /* NAV */
@@ -25,7 +25,7 @@ nav{position:fixed;top:48px;left:0;right:0;z-index:300;height:62px;display:flex;
 .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
 .hamburger.open span:nth-child(2){opacity:0}
 .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-.mob-menu{display:none;position:fixed;top:110px;left:0;right:0;bottom:0;z-index:350;background:#ffffff;backdrop-filter:blur(24px);border-bottom:1px solid var(--border);flex-direction:column;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.mob-menu{display:none;position:fixed;top:110px;left:0;right:0;bottom:0;z-index:350;background:#ffffff;backdrop-filter:blur(24px);border-bottom:1px solid var(--border);flex-direction:column;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .mob-menu.open{display:flex;padding-top:14px}
 .mob-menu a{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:var(--white);text-decoration:none;padding:12px 0;border-bottom:1px solid var(--border)}
 
@@ -268,18 +268,6 @@ body.dark [style*="border:1px solid rgba(0,0,0"]{border-color:rgba(255,255,255,.
     </div>
   </div>
 
-  <div class="photo-grid" style="margin-top:6px">
-    <div class="upload-card">
-      <div class="upload-icon">📷</div>
-      <div class="upload-label">Add Champion Photo</div>
-      <div class="upload-sub">Drop or share an image</div>
-    </div>
-    <div class="upload-card">
-      <div class="upload-icon">🏆</div>
-      <div class="upload-label">Add Trophy Shot</div>
-      <div class="upload-sub">Drop or share an image</div>
-    </div>
-  </div>
 </div>
 
 <!-- LEAGUE IDENTITY -->
@@ -306,16 +294,7 @@ body.dark [style*="border:1px solid rgba(0,0,0"]{border-color:rgba(255,255,255,.
     <div class="section-title">Field <span>Photos</span></div>
     <div class="section-meta">8 Venues Across Montgomery &amp; Bucks County</div>
   </div>
-  <div class="photo-grid">
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Mondauk Park</div><div class="upload-sub">Ambler, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Schaefer Park</div><div class="upload-sub">Southampton, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Carpenter Park</div><div class="upload-sub">Horsham, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Lukens Field</div><div class="upload-sub">Horsham, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Plymouth Field</div><div class="upload-sub">Plymouth Meeting, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Ogontz Field</div><div class="upload-sub">Elkins Park, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">⚾</div><div class="upload-label">Sunnybrook</div><div class="upload-sub">Lansdale, PA</div></div>
-    <div class="upload-card"><div class="upload-icon">➕</div><div class="upload-label">Add Game Photos</div><div class="upload-sub">Any field</div></div>
-  </div>
+  <div style="padding:24px 0;text-align:center;color:var(--muted);font-size:13px;">Field photos coming soon.</div>
 </div>
 
 <!-- LIGHTBOX -->
@@ -334,21 +313,8 @@ body.dark [style*="border:1px solid rgba(0,0,0"]{border-color:rgba(255,255,255,.
 <script>
 // Hamburger
 const hbg=document.getElementById('hbg'),mob=document.getElementById('mobMenu');
-let _mobScrollY=0;
-hbg.addEventListener('click',()=>{
-  hbg.classList.toggle('open');mob.classList.toggle('open');
-  if(mob.classList.contains('open')){
-    _mobScrollY=window.scrollY||0;
-    document.body.style.overflow='hidden';
-    document.body.style.position='fixed';
-    document.body.style.top='-'+_mobScrollY+'px';
-    document.body.style.width='100%';
-  } else {
-    document.body.style.overflow='';document.body.style.position='';
-    document.body.style.top='';document.body.style.width='';
-    window.scrollTo(0,_mobScrollY);
-  }
-});
+hbg.addEventListener('click',()=>{ hbg.classList.toggle('open');mob.classList.toggle('open'); });
+mob.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{hbg.classList.remove('open');mob.classList.remove('open');}));
 
 // Parallax logo on scroll (if element exists)
 window.addEventListener('scroll',()=>{

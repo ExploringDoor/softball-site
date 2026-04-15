@@ -86,6 +86,18 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 .media-meta{padding:8px 10px}
 .media-caption-text{font-size:12px;font-weight:600;color:var(--text)}
 .media-by{font-size:11px;color:var(--muted);margin-top:2px}
+
+/* Hamburger + mobile menu */
+.hbg-btn{display:none;flex-direction:column;gap:5px;cursor:pointer;background:none;border:none;padding:6px;z-index:999}
+.hbg-btn span{display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s}
+.hbg-btn.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hbg-btn.open span:nth-child(2){opacity:0}
+.hbg-btn.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+.p-mob-menu{display:none;position:fixed;top:50px;left:0;right:0;bottom:0;z-index:350;background:#ffffff;flex-direction:column;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.p-mob-menu.open{display:flex;padding-top:14px}
+.p-mob-menu a{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:#1a1a1a;text-decoration:none;padding:12px 0;border-bottom:1px solid rgba(0,0,0,.08)}
+.p-mob-menu a:last-child{border-bottom:none}
+@media(max-width:768px){.hbg-btn{display:flex}.topbar-sub{display:none}}
 </style>
 </head>
 <body>
@@ -93,6 +105,26 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 <div class="topbar">
   <a href="index.html" style="color:#fff;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;text-decoration:none">← Back to DVSL</a>
   <span class="topbar-sub">Player Portal</span>
+  <button class="hbg-btn" id="plyr-hbg" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</div>
+
+<div class="p-mob-menu" id="plyrMobMenu">
+  <a href="index.html">Home</a>
+  <a href="index.html#scores">Scores</a>
+  <a href="index.html#scores">Schedule</a>
+  <a href="index.html#standings">Standings</a>
+  <a href="index.html#stats">Stats</a>
+  <a href="leaders.html">Leaders</a>
+  <a href="index.html#players">Teams</a>
+  <a href="captain.html">⚾ Captain Dashboard</a>
+  <a href="player.html">🙋 Player Portal</a>
+  <a href="playoffs.html">🏆 Brackets</a>
+  <a href="rules.html">📋 Field Guide</a>
+  <a href="photos.html">📷 Gallery</a>
+  <a href="registration.html">📝 Player Sign Up</a>
+  <a href="admin.html" style="color:rgba(0,45,114,.6)">⚙ Admin</a>
 </div>
 
 <!-- TEAM PICKER -->
@@ -510,6 +542,15 @@ window.uploadMedia = async function() {
 };
 
 initTeamPicker();
+</script>
+<script>
+// Hamburger menu
+(function(){
+  var hbg = document.getElementById('plyr-hbg');
+  var mob = document.getElementById('plyrMobMenu');
+  if (hbg) hbg.addEventListener('click', function(){ hbg.classList.toggle('open'); mob.classList.toggle('open'); });
+  if (mob) mob.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', function(){ hbg.classList.remove('open'); mob.classList.remove('open'); }); });
+})();
 </script>
 </body>
 </html>

@@ -24,7 +24,7 @@ nav{position:fixed;top:48px;left:0;right:0;z-index:100;display:flex;align-items:
 .hamburger.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
 .hamburger.open span:nth-child(2){opacity:0}
 .hamburger.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-.mob-menu{display:none;position:fixed;top:110px;left:0;right:0;bottom:0;z-index:350;background:#ffffff;backdrop-filter:blur(20px);border-bottom:1px solid var(--border);flex-direction:column;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.mob-menu{display:none;position:fixed;top:110px;left:0;right:0;bottom:0;z-index:350;background:#ffffff;backdrop-filter:blur(20px);border-bottom:1px solid var(--border);flex-direction:column;padding:20px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .mob-menu.open{display:flex;padding-top:14px}
 .mob-menu a{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:var(--white);text-decoration:none;padding:12px 0;border-bottom:1px solid var(--border)}
 .mob-menu a:last-child{border-bottom:none}
@@ -1059,21 +1059,8 @@ body.dark [style*="background:#ffffff"]{background:#1a1a1f!important}
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 const hbg=document.getElementById('hbg');
 const mob=document.getElementById('mobMenu');
-let _mobScrollY=0;
-hbg.addEventListener('click',()=>{
-  hbg.classList.toggle('open');mob.classList.toggle('open');
-  if(mob.classList.contains('open')){
-    _mobScrollY=window.scrollY||0;
-    document.body.style.overflow='hidden';
-    document.body.style.position='fixed';
-    document.body.style.top='-'+_mobScrollY+'px';
-    document.body.style.width='100%';
-  } else {
-    document.body.style.overflow='';document.body.style.position='';
-    document.body.style.top='';document.body.style.width='';
-    window.scrollTo(0,_mobScrollY);
-  }
-});
+hbg.addEventListener('click',()=>{ hbg.classList.toggle('open');mob.classList.toggle('open'); });
+mob.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{hbg.classList.remove('open');mob.classList.remove('open');}));
 
 function showPanel(name,btn){
   // Tab activation

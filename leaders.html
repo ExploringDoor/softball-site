@@ -43,7 +43,7 @@ body.dark .nav-signup-btn { background: #5b9aff !important; }
 .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
 .hamburger.open span:nth-child(2) { opacity: 0; }
 .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-.mob-menu { display: none; position: fixed; top: 110px; left: 0; right: 0; bottom: 0; z-index: 199; background: rgba(255,255,255,.97); backdrop-filter: blur(24px); border-bottom: 1px solid var(--border); flex-direction: column; padding: 16px 20px 24px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.mob-menu { display: none; position: fixed; top: 110px; left: 0; right: 0; bottom: 0; z-index: 199; background: rgba(255,255,255,.97); backdrop-filter: blur(24px); border-bottom: 1px solid var(--border); flex-direction: column; padding: 16px 20px 24px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .mob-menu.open { display: flex; }
 .mob-menu a { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 26px; text-transform: uppercase; color: var(--white); text-decoration: none; padding: 12px 0; border-bottom: 1px solid rgba(0,0,0,.06); }
 .mob-menu a:last-child { border-bottom: none; }
@@ -94,8 +94,6 @@ body.dark .nav-signup-btn { background: #5b9aff !important; }
 .leaders-table td { padding: 12px 18px; }
 .leaders-table .col-rank { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 14px; color: var(--muted2); width: 50px; }
 .leaders-table .col-player { font-weight: 600; }
-.leaders-table .col-player a { color: var(--white); text-decoration: none; transition: color .15s; }
-.leaders-table .col-player a:hover { color: var(--gold); }
 .leaders-table .col-team { white-space: nowrap; color: var(--muted); font-size: 13px; }
 .leaders-table .col-stat { text-align: right; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 18px; }
 .team-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
@@ -104,7 +102,7 @@ body.dark .nav-signup-btn { background: #5b9aff !important; }
 .leaders-table tbody tr.rank-1 { background: linear-gradient(90deg, rgba(0,45,114,.06), transparent 70%); }
 .leaders-table tbody tr.rank-1 .col-rank { color: #D4A017; font-size: 16px; }
 .leaders-table tbody tr.rank-1 .col-stat { color: var(--gold); font-size: 22px; }
-.leaders-table tbody tr.rank-1 .col-player a { color: var(--gold); }
+.leaders-table tbody tr.rank-1 .col-player { color: var(--gold); }
 
 /* FOOTER */
 footer { padding: 40px 48px; border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; background: var(--bg2); }
@@ -276,22 +274,8 @@ async function getDb() {
 // ============ HAMBURGER ============
 const hb = document.getElementById('hbg');
 const mm = document.getElementById('mobMenu');
-let _mobScrollY=0;
-if (hb) hb.addEventListener('click', () => {
-  hb.classList.toggle('open'); mm.classList.toggle('open');
-  if(mm.classList.contains('open')){
-    _mobScrollY=window.scrollY||0;
-    document.body.style.overflow='hidden';
-    document.body.style.position='fixed';
-    document.body.style.top='-'+_mobScrollY+'px';
-    document.body.style.width='100%';
-  } else {
-    document.body.style.overflow='';document.body.style.position='';
-    document.body.style.top='';document.body.style.width='';
-    window.scrollTo(0,_mobScrollY);
-  }
-});
-if (mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); document.body.style.overflow='';document.body.style.position='';document.body.style.top='';document.body.style.width='';window.scrollTo(0,_mobScrollY); }));
+if (hb) hb.addEventListener('click', () => { hb.classList.toggle('open'); mm.classList.toggle('open'); });
+if (mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); }));
 
 // ============ HELPERS ============
 function normalizeName(n) {
@@ -507,7 +491,7 @@ function renderUI() {
 
       tableHtml += `<tr${rowClass}>
         <td class="col-rank">${rank}</td>
-        <td class="col-player"><a href="index.html?player=${encodeURIComponent(p.name)}">${p.name}</a></td>
+        <td class="col-player">${p.name}</td>
         <td class="col-team"><span class="team-dot" style="background:${teamColor}"></span>${teamAbbr}</td>
         <td class="col-stat">${statVal}</td>
       </tr>`;
