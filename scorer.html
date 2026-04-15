@@ -4953,14 +4953,18 @@ async function loadGames() {
     loading.style.display = 'none';
     select.style.display = 'block';
 
-    gamesData.sort((a, b) => (a.week || 0) - (b.week || 0));
+    gamesData.sort((a, b) => (a.wk || a.week || 0) - (b.wk || b.week || 0));
 
     gamesData.forEach(game => {
       const opt = document.createElement('option');
       opt.value = game.id;
-      const awayName = game.away_team_short || game.away_team || 'Away';
-      const homeName = game.home_team_short || game.home_team || 'Home';
-      const week = game.week ? `Wk${game.week}: ` : '';
+      // Firebase stores away/home as team IDs — look up short names from teamsData
+      const awayId = game.away || game.away_team_id || game.away_id || '';
+      const homeId = game.home || game.home_team_id || game.home_id || '';
+      const awayName = game.away_team_short || teamsData[awayId]?.short || teamsData[awayId]?.abbreviation || awayId.toUpperCase() || 'Away';
+      const homeName = game.home_team_short || teamsData[homeId]?.short || teamsData[homeId]?.abbreviation || homeId.toUpperCase() || 'Home';
+      const wk = game.wk || game.week;
+      const week = wk ? `Wk${wk}: ` : '';
       const dateStr = game.date ? ` · ${game.date}` : '';
       opt.textContent = `${week}${awayName} @ ${homeName}${dateStr}`;
       select.appendChild(opt);
@@ -5151,23 +5155,23 @@ document.getElementById('start-btn').addEventListener('click', async () => {
 
   G.gameId = gameId;
 
-  // Set team info
-  const awayId = game.away_team_id || game.away_id || '';
-  const homeId = game.home_team_id || game.home_id || '';
+  // Set team info — Firebase stores team IDs in game.away / game.home
+  const awayId = game.away || game.away_team_id || game.away_id || '';
+  const homeId = game.home || game.home_team_id || game.home_id || '';
 
   const awayTeam = teamsData[awayId] || {};
   const homeTeam = teamsData[homeId] || {};
 
   G.awayTeam = {
     id: awayId,
-    name: awayTeam.name || game.away_team || 'Away',
-    short: awayTeam.abbreviation || awayTeam.short || game.away_team_short || 'AWY',
+    name: awayTeam.name || game.away_team || awayId || 'Away',
+    short: awayTeam.short || awayTeam.abbreviation || game.away_team_short || awayId.toUpperCase() || 'AWY',
     color: awayTeam.color || '#888',
   };
   G.homeTeam = {
     id: homeId,
-    name: homeTeam.name || game.home_team || 'Home',
-    short: homeTeam.abbreviation || homeTeam.short || game.home_team_short || 'HME',
+    name: homeTeam.name || game.home_team || homeId || 'Home',
+    short: homeTeam.short || homeTeam.abbreviation || game.home_team_short || homeId.toUpperCase() || 'HME',
     color: homeTeam.color || '#002D72',
   };
 
