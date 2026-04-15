@@ -293,7 +293,7 @@ async function renderAvailability() {
           </div>
           ${g.done
             ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Game played${st?' · you marked '+st:''}</span>`
-            : `<div class="avail-btns">
+            : `<div class="avail-btns" id="avail-row-${g.id}">
                 <button onclick="window.setAvail('${g.id}','yes')" style="${btnStyle(st,'yes',st==='yes')}">✓ Yes</button>
                 <button onclick="window.setAvail('${g.id}','maybe')" style="${btnStyle(st,'maybe',st==='maybe')}">? Maybe</button>
                 <button onclick="window.setAvail('${g.id}','no')" style="${btnStyle(st,'no',st==='no')}">✕ No</button>
@@ -307,6 +307,25 @@ async function renderAvailability() {
   el.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:16px">Marking as: <span style="color:var(--navy)">${esc(player?.name||'')}</span></div>`
     + (upcoming.length ? gameBlock(upcoming,'Upcoming Games') : '<div class="empty-state">No upcoming games scheduled.</div>')
     + (recent.length ? gameBlock(recent,'Recent Games') : '');
+}
+
+// Rebuild just the buttons for one game row — no scroll jump
+function _rebuildAvailRow(gameId) {
+  const container = document.getElementById('avail-row-' + gameId);
+  if (!container) return;
+  const st = _rsvps[gameId] || '';
+  function btnStyle(kind, active) {
+    const colors = {yes:['var(--green)','rgba(22,163,74,.12)'], maybe:['#f59e0b','rgba(245,158,11,.12)'], no:['var(--red)','rgba(220,38,38,.1)']};
+    const [c, bg] = colors[kind];
+    return active
+      ? `padding:8px 16px;border-radius:8px;border:2px solid ${c};background:${bg};color:${c};font-weight:700;font-size:13px;cursor:pointer`
+      : `padding:8px 16px;border-radius:8px;border:2px solid var(--border);background:transparent;color:var(--muted);font-weight:700;font-size:13px;cursor:pointer`;
+  }
+  container.innerHTML =
+    `<button onclick="window.setAvail('${gameId}','yes')" style="${btnStyle('yes',st==='yes')}">✓ Yes</button>`
+    +`<button onclick="window.setAvail('${gameId}','maybe')" style="${btnStyle('maybe',st==='maybe')}">? Maybe</button>`
+    +`<button onclick="window.setAvail('${gameId}','no')" style="${btnStyle('no',st==='no')}">✕ No</button>`
+    +(st?`<button onclick="window.clearAvail('${gameId}')" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:14px;cursor:pointer" title="Clear">×</button>`:'');
 }
 
 window.setAvail = async function(gameId, status) {
@@ -325,7 +344,7 @@ window.setAvail = async function(gameId, status) {
       });
       _rsvps[gameId]=status;
     }
-    await renderAvailability();
+    _rebuildAvailRow(gameId);  // update only the changed row — no scroll jump
   } catch(e){ toast('Could not save: '+e.message,'error'); }
 };
 
@@ -335,7 +354,7 @@ window.clearAvail = async function(gameId) {
   try {
     await deleteDoc(doc(db,'availability',MY_TEAM.id+'_'+gameId+'_'+pid));
     delete _rsvps[gameId];
-    await renderAvailability();
+    _rebuildAvailRow(gameId);  // update only the changed row — no scroll jump
   } catch(e){ toast('Could not clear: '+e.message,'error'); }
 };
 

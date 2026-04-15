@@ -146,11 +146,15 @@ select.form-input{cursor:pointer}
   .top-bar-user{display:none}
   .tab-nav{padding:0 12px}
   .tab-item{padding:12px 14px;font-size:12px}
-  .main-content{padding:20px 16px 60px}
+  /* Remove horizontal padding so box score tables get full screen width */
+  .main-content{padding:12px 0 60px}
+  .panel{border-radius:0;border-left:none;border-right:none}
+  .game-card{border-radius:0;border-left:none;border-right:none;padding:14px 12px}
   .stat-grid{grid-template-columns:repeat(2,1fr)}
-  .game-card{flex-direction:column;align-items:flex-start}
   .form-row{flex-direction:column}
   .form-col-sm{flex:1}
+  /* Section title padding restored */
+  .section-title,.section-sub{padding:0 12px}
 }
 
 /* Scrollbar */
@@ -1179,7 +1183,7 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
   const thS='text-align:center;padding:5px 2px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);width:38px';
   const tdInp=(id,w,ph,isText)=>isText
     ?`<input type="text" placeholder="${ph||''}" style="width:${w};font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="${id}">`
-    :`<input type="number" min="0" value="0" style="width:${w};text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="${id}">`;
+    :`<input type="number" min="0" placeholder="0" style="width:${w};text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="${id}">`;
 
   function batTable(team, names) {
     const rows=names.map((nm,i)=>`<tr>
@@ -1221,7 +1225,7 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
             <tr>
               <td style="padding:4px 6px"><input type="text" placeholder="Pitcher name" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-name-0"></td>
               <td style="padding:4px 3px"><input type="text" placeholder="7" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-IP0"></td>
-              ${['H','R','ER','BB','K'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-${c}0"></td>`).join('')}
+              ${['H','R','ER','BB','K'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" placeholder="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-${c}0"></td>`).join('')}
               <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
             </tr>
           </tbody>
@@ -1583,7 +1587,7 @@ window.addBsRow = function(gameId, teamPrefix, startIdx) {
   const batCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
   const tr = document.createElement('tr');
   tr.innerHTML = `<td style="padding:4px 6px"><input type="text" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
-    ${batCols.map(col=>`<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/\W/g,'')}${i}"></td>`).join('')}
+    ${batCols.map(col=>`<td style="padding:4px 3px"><input type="number" min="0" placeholder="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/\W/g,'')}${i}"></td>`).join('')}
     <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
   tbody.appendChild(tr);
 };
@@ -1595,7 +1599,7 @@ window.addBsPitchRow = function(gameId, team) {
   const tr = document.createElement('tr');
   tr.innerHTML = `<td style="padding:4px 6px"><input type="text" placeholder="Pitcher name" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-name-${i}"></td>
     <td style="padding:4px 3px"><input type="text" placeholder="7" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-IP${i}"></td>
-    ${['H','R','ER','BB','K'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" value="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-${c}${i}"></td>`).join('')}
+    ${['H','R','ER','BB','K'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" placeholder="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-${c}${i}"></td>`).join('')}
     <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
   tbody.appendChild(tr);
 };
