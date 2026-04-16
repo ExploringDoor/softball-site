@@ -183,13 +183,26 @@ window.checkMapping = async function() {
     firestoreTeams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     out(`Found ${firestoreTeams.length} teams in Firestore.`, 'ok');
 
+    // Manual overrides: PDF code → team name keyword (case-insensitive substring match)
+    const NAME_OVERRIDES = {
+      'SA1':   'shir ami',
+      'BA1':   'beth am',
+      'TOAST': 'toast',
+    };
+
     // Build mapping: try matching PDF code to team short or id (case-insensitive)
     teamMap = {};
     for (const code of PDF_CODES) {
-      const match = firestoreTeams.find(t =>
+      let match = firestoreTeams.find(t =>
         (t.short || '').toUpperCase() === code.toUpperCase() ||
         (t.id || '').toUpperCase() === code.toUpperCase()
       );
+      // Fallback: name-based override
+      if (!match && NAME_OVERRIDES[code]) {
+        const kw = NAME_OVERRIDES[code].toLowerCase();
+        match = firestoreTeams.find(t => (t.name || '').toLowerCase().includes(kw));
+      }
+      // If still no match for TOAST, just use 'toast' as ID
       teamMap[code] = match ? match.id : null;
     }
 
