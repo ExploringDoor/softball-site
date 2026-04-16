@@ -2602,6 +2602,8 @@ let HIST_TEAMS = [];
 let ALL_TEAMS = [];
 let PLAYERS = [];
 let SCHEDULE_PREVIEW = [];
+// Teams whose long name should display as short code everywhere except the team page
+const SHORT_DISPLAY_IDS = new Set(['tbir','tbimc','btbj','tsmc']);
 let RECAPS = [];
 
 // ── TBIR Historical Seasons Data (2019-2025) ──
@@ -2790,6 +2792,7 @@ async function loadAllData() {
       .filter(t => t.active !== false)
       .map(t => ({
         id: t.id, name: t.name, short: t.short, div: t.div, color: t.color,
+        displayName: SHORT_DISPLAY_IDS.has(t.id) ? t.short : t.name,
         w: t.w||0, l: t.l||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
         streak: t.streak||'—', rs: t.rs||0, ra: t.ra||0,
         founded: t.founded, field: t.field
@@ -2798,6 +2801,7 @@ async function loadAllData() {
 
     HIST_TEAMS = histTeams.map(t => ({
       id: t.id, name: t.name, short: t.short, color: t.color,
+      displayName: SHORT_DISPLAY_IDS.has(t.id) ? t.short : t.name,
       w: t.w||0, l: t.l||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
       streak: t.streak||'—', rs: t.rs||0, ra: t.ra||0
     }));
@@ -3100,6 +3104,7 @@ async function refreshVolatileData() {
     const freshTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
     TEAMS = freshTeams.map(t => ({
       id: t.id, name: t.name, short: t.short, div: t.div, color: t.color,
+      displayName: SHORT_DISPLAY_IDS.has(t.id) ? t.short : t.name,
       w: t.w||0, l: t.l||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
       streak: t.streak||'—', rs: t.rs||0, ra: t.ra||0,
       founded: t.founded, field: t.field
@@ -3472,7 +3477,7 @@ function filterPlayerSearch(query){
   grid.innerHTML = players.map(p => {
     const t = getTeam(p.team);
     return `<div class="pcard" onclick="openModal('${p.id}')">
-      <div class="pcard-team"><div class="pcard-dot" style="background:${t?.color||'var(--gold)'}"></div>${t?.name||''}</div>
+      <div class="pcard-team"><div class="pcard-dot" style="background:${t?.color||'var(--gold)'}"></div>${t?.displayName||t?.name||''}</div>
       <div class="pcard-name">${p.name}</div>
       <div class="pcard-stats">
         <div class="pstat"><div class="pstat-val">${avg(p.avg)}</div><div class="pstat-lbl">AVG</div></div>
@@ -3596,7 +3601,7 @@ function buildLeadersPage(statKey, dir){
       <td class="lt-player">
         <div class="lt-info">
           <div class="lt-name">${p.name}</div>
-          <div class="lt-team">${t?.name||''}</div>
+          <div class="lt-team">${t?.displayName||t?.name||''}</div>
         </div>
       </td>
       <td class="lt-val highlight">${cat.fmt(p)}</td>
@@ -3692,7 +3697,7 @@ function openBsm(gameIdx){
         <div class="pop-matchup">
           <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goPage('team','${atTeam?.id||''}')">
             <div class="pop-abbr" style="color:${atColor}">${g.away}</div>
-            <div style="font-size:13px;color:rgba(0,0,0,.5)">${atTeam?.name||g.away}</div>
+            <div style="font-size:13px;color:rgba(0,0,0,.5)">${atTeam?.displayName||atTeam?.name||g.away}</div>
             <div class="pop-role-lbl">Away ${awayWon?'✓':''}</div>
           </div>
           <div class="pop-sc-mid">
@@ -3701,7 +3706,7 @@ function openBsm(gameIdx){
           </div>
           <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goPage('team','${htTeam?.id||''}')">
             <div class="pop-abbr" style="color:${htColor}">${g.home}</div>
-            <div style="font-size:13px;color:rgba(0,0,0,.5)">${htTeam?.name||g.home}</div>
+            <div style="font-size:13px;color:rgba(0,0,0,.5)">${htTeam?.displayName||htTeam?.name||g.home}</div>
             <div class="pop-role-lbl">Home ${!awayWon?'✓':''}</div>
           </div>
         </div>
@@ -3719,12 +3724,12 @@ function openBsm(gameIdx){
         <div class="pop-sec-title">Batting</div>
         <div class="pop-grid2">
           <div>
-            <div class="pop-team-lbl" style="color:${atColor};cursor:pointer" onclick="closeScPop();goPage('team','${atTeam?.id||''}')">${g.away} — ${atTeam?.name||''}</div>
+            <div class="pop-team-lbl" style="color:${atColor};cursor:pointer" onclick="closeScPop();goPage('team','${atTeam?.id||''}')">${g.away} — ${atTeam?.displayName||atTeam?.name||''}</div>
             <table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead>
             <tbody>${awayPlayers.length?mkRows(awayPlayers):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>'}</tbody></table>
           </div>
           <div>
-            <div class="pop-team-lbl" style="color:${htColor};cursor:pointer" onclick="closeScPop();goPage('team','${htTeam?.id||''}')">${g.home} — ${htTeam?.name||''}</div>
+            <div class="pop-team-lbl" style="color:${htColor};cursor:pointer" onclick="closeScPop();goPage('team','${htTeam?.id||''}')">${g.home} — ${htTeam?.displayName||htTeam?.name||''}</div>
             <table class="ptbl"><thead><tr><th>Player</th><th>AVG</th><th>HR</th><th>RBI</th></tr></thead>
             <tbody>${homePlayers.length?mkRows(homePlayers):'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No data</td></tr>'}</tbody></table>
           </div>
@@ -3736,7 +3741,7 @@ function openBsm(gameIdx){
         <div class="bsm-teams">
           <div class="bsm-team">
             <div class="bsm-abbr" style="color:${atColor}">${g.away}</div>
-            <div class="bsm-name">${atTeam?.name||g.away}</div>
+            <div class="bsm-name">${atTeam?.displayName||atTeam?.name||g.away}</div>
             <div class="bsm-label">Away</div>
           </div>
           <div class="bsm-score-center">
@@ -3744,7 +3749,7 @@ function openBsm(gameIdx){
           </div>
           <div class="bsm-team">
             <div class="bsm-abbr" style="color:${htColor}">${g.home}</div>
-            <div class="bsm-name">${htTeam?.name||g.home}</div>
+            <div class="bsm-name">${htTeam?.displayName||htTeam?.name||g.home}</div>
             <div class="bsm-label">Home</div>
           </div>
         </div>
@@ -3863,11 +3868,11 @@ function buildSchedule(){
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,atm?.short||g.away)}</div>
-          <div style="display:flex;align-items:center;min-width:0"><span class="preview-name" onclick="goPage('team','${atm?.id||g.away}')">${atm?.name||g.away}</span><span class="preview-name-mob" onclick="goPage('team','${atm?.id||g.away}')" style="line-height:1.1">${getMobileAbbr(g.away)}</span><span class="preview-rec">${aRec}</span></div>
+          <div style="display:flex;align-items:center;min-width:0"><span class="preview-name" onclick="goPage('team','${atm?.id||g.away}')">${atm?.displayName||atm?.name||g.away}</span><span class="preview-name-mob" onclick="goPage('team','${atm?.id||g.away}')" style="line-height:1.1">${getMobileAbbr(g.away)}</span><span class="preview-rec">${aRec}</span></div>
         </div>
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(htm?.id,htm?.short||g.home)}</div>
-          <div style="display:flex;align-items:center;min-width:0"><span class="preview-name" onclick="goPage('team','${htm?.id||g.home}')">${htm?.name||g.home}</span><span class="preview-name-mob" onclick="goPage('team','${htm?.id||g.home}')" style="line-height:1.1">${getMobileAbbr(g.home)}</span><span class="preview-rec">${hRec}</span></div>
+          <div style="display:flex;align-items:center;min-width:0"><span class="preview-name" onclick="goPage('team','${htm?.id||g.home}')">${htm?.displayName||htm?.name||g.home}</span><span class="preview-name-mob" onclick="goPage('team','${htm?.id||g.home}')" style="line-height:1.1">${getMobileAbbr(g.home)}</span><span class="preview-rec">${hRec}</span></div>
         </div>
       </div>
       <span class="preview-link" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${g.time||'TBD'}')">Preview</span>
@@ -5432,12 +5437,12 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         <div class="gb-rhe-hdr-row"><span style="flex:1"></span><span class="gb-rhe-lbl">R</span><span class="gb-rhe-lbl">H</span><span class="gb-rhe-lbl">E</span></div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:#fff;border-color:${ac};background:${atm?.id&&LOGO_TEAMS.has(atm.id)?'transparent':ac}">${teamLogoEl(atm?.id,g.away)}</div>
-          <span class="gb-name ${aW?'winner':'loser'}" data-short="${g.away}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
+          <span class="gb-name ${aW?'winner':'loser'}" data-short="${g.away}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.displayName||atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
           <span class="gb-score ${aW?'winner':'loser'}">${as}</span><span class="gb-rhe-val">${aH}</span><span class="gb-rhe-val">${aE}</span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:#fff;border-color:${hc};background:${htm?.id&&LOGO_TEAMS.has(htm.id)?'transparent':hc}">${teamLogoEl(htm?.id,g.home)}</div>
-          <span class="gb-name ${!aW?'winner':'loser'}" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
+          <span class="gb-name ${!aW?'winner':'loser'}" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.displayName||htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
           <span class="gb-score ${!aW?'winner':'loser'}">${hs}</span><span class="gb-rhe-val">${hH}</span><span class="gb-rhe-val">${hE}</span>
         </div>
         <div class="gb-status-lbl final">FINAL</div>
@@ -5456,11 +5461,11 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:#fff;border-color:${ac};background:${atm?.id&&LOGO_TEAMS.has(atm.id)?'transparent':ac}">${teamLogoEl(atm?.id,g.away)}</div>
-          <span class="gb-name winner" data-short="${g.away}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
+          <span class="gb-name winner" data-short="${g.away}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')"><span class="gb-name-text">${atm?.displayName||atm?.name||g.away}</span><span class="gb-rec">${aRec}</span></span>
         </div>
         <div class="gb-team-row">
           <div class="gb-logo" style="color:#fff;border-color:${hc};background:${htm?.id&&LOGO_TEAMS.has(htm.id)?'transparent':hc}">${teamLogoEl(htm?.id,g.home)}</div>
-          <span class="gb-name winner" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
+          <span class="gb-name winner" data-short="${g.home}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')"><span class="gb-name-text">${htm?.displayName||htm?.name||g.home}</span><span class="gb-rec">${hRec}</span></span>
         </div>
         <div style="padding-left:38px;margin-top:4px;font-size:13px;color:var(--gold);font-weight:700;font-family:'Oswald',sans-serif">${time} <span style="color:var(--muted);font-size:11px;font-family:'Inter',sans-serif;font-weight:500">· ${field}</span></div>
       </div>
