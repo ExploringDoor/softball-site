@@ -2755,10 +2755,10 @@ async function loadAllData() {
   try {
     // Load all collections in parallel from Firebase
     const [teams, histTeams, players, games, recaps, history, calendars, boxScoresRaw] = await Promise.all([
-      fbFetch('teams', 'name'),
-      fbFetch('hist_teams', 'name'),
+      fbFetch('teams', 'name').catch(e=>{console.error('teams load FAILED:',e);return[];}),
+      fbFetch('hist_teams', 'name').catch(()=>[]),
       fbFetch('players').catch(e=>{console.error('players load FAILED:',e);return[];}),
-      fbFetch('games', 'wk'),
+      fbFetch('games', 'wk').catch(e=>{console.error('games load FAILED:',e);return[];}),
       fbFetch('recaps', 'wk').catch(()=>[]),
       fbFetch('league_history', 'yr').catch(()=>[]),
       fbFetch('team_calendars').catch(()=>[]),
