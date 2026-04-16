@@ -1983,13 +1983,14 @@ window.printBsScore = function(gameId, awayTeamName, homeTeamName) {
   function batTable(bats, tname, color) {
     if (!bats.length) return '<div style="padding:8px;color:#aaa;font-size:11px;font-style:italic">No batting stats entered</div>';
     const tot = batTots(bats);
-    const rows = bats.map(p=>`<tr><td class="l">${p.name}</td><td>${p.ab}</td><td>${p.r}</td><td>${(p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0)}</td><td>${p.rbi}</td><td>${p.bb}</td><td>${p.k}</td></tr>`).join('');
+    const cols = ['ab','r','s','d','t','hr','rbi','bb','k','sac','sf','roe','fc'];
+    const hdrs = ['AB','R','1B','2B','3B','HR','RBI','BB','K','SAC','SF','ROE','FC'];
+    const rows = bats.map(p=>`<tr><td class="l">${p.name}</td>${cols.map(c=>`<td>${parseInt(p[c])||0}</td>`).join('')}</tr>`).join('');
     return `<table class="st"><thead><tr style="background:${color}">
       <th class="l" style="color:#fff">${tname}</th>
-      <th style="color:#fff">AB</th><th style="color:#fff">R</th><th style="color:#fff">H</th>
-      <th style="color:#fff">RBI</th><th style="color:#fff">BB</th><th style="color:#fff">SO</th>
+      ${hdrs.map(h=>`<th style="color:#fff">${h}</th>`).join('')}
     </tr></thead><tbody>${rows}
-      <tr class="tot"><td class="l">Totals</td><td>${tot.ab}</td><td>${tot.r}</td><td>${tot.s+tot.d+tot.t+tot.hr}</td><td>${tot.rbi}</td><td>${tot.bb}</td><td>${tot.k}</td></tr>
+      <tr class="tot"><td class="l">Totals</td>${cols.map(c=>`<td>${parseInt(tot[c])||0}</td>`).join('')}</tr>
     </tbody></table>
     <div class="notes">${xbhNotes(bats)||'&nbsp;'}</div>`;
   }
@@ -2037,7 +2038,7 @@ table.st tr:nth-child(even) td{background:#f5f7ff}
 tr.tot td{font-weight:800;border-top:2px solid #002D72;background:rgba(0,45,114,.06)}
 .notes{font-size:10px;color:#444;line-height:1.7;margin-bottom:10px;padding:2px 0;min-height:14px}
 .ft{text-align:center;font-size:10px;color:#bbb;margin-top:20px;padding-top:8px;border-top:1px solid #eee}
-@media print{@page{margin:.4in;size:letter portrait}body{padding:0}button{display:none}}
+@media print{@page{margin:.4in;size:letter landscape}body{padding:0}button{display:none}}
 </style></head><body>
 <div class="hdr">
   <div class="teams-row">
@@ -2059,7 +2060,8 @@ tr.tot td{font-weight:800;border-top:2px solid #002D72;background:rgba(0,45,114,
 <tr><td class="tn">${homeTeamName}</td>${homeInnCells}<td class="sep">${homeR}</td><td style="font-weight:700">${homeH}</td><td>${homeE}</td></tr>
 </tbody></table>
 <div class="sec">Batting</div>
-<div class="two"><div>${batTable(awayBatters,awayTeamName,awayColor)}</div><div>${batTable(homeBatters,homeTeamName,homeColor)}</div></div>
+<div style="margin-bottom:10px">${batTable(awayBatters,awayTeamName,awayColor)}</div>
+<div style="margin-bottom:14px">${batTable(homeBatters,homeTeamName,homeColor)}</div>
 ${(awayPitchers.length||homePitchers.length)?`<div class="sec">Pitching</div><div class="two"><div>${pitTable(awayPitchers,awayTeamName,awayColor)}</div><div>${pitTable(homePitchers,homeTeamName,homeColor)}</div></div>`:''}
 <div class="ft">DVSL Official Box Score &bull; Generated ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
 <script>window.onload=function(){window.print()}<\/script>
