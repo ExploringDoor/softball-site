@@ -189,14 +189,27 @@ async function syncTeamCalendars(token) {
   for (const short of selected) {
     const team = TEAMS[short];
     if (!team) { out(`⚠️  Skipping ${short} — not found in Firebase`); continue; }
-    const calName = `DVSL 2026 — ${team.name}`;
+    const calName = `DVSL 2026 — ${team.short}`;
     const teamGames = GAMES.filter(g => g.away === team.id || g.home === team.id);
-    out(`\n── ${team.name} (${teamGames.length} games) ──`);
+    out(`\n── ${team.short} (${teamGames.length} games) ──`);
 
-    let calId = existingCals[calName] || null;
+    // Also check old-style name in case calendar was created with full team name
+    let calId = existingCals[calName] || existingCals[`DVSL 2026 — ${team.name}`] || null;
 
     // Clear old events if calendar exists
     if (calId) {
+      // Rename to short-code style if needed
+      const currentName = Object.keys(existingCals).find(k => existingCals[k] === calId);
+      if (currentName && currentName !== calName) {
+        try {
+          await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}`, {
+            method: 'PUT',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ summary: calName, timeZone: 'America/New_York' })
+          });
+          out(`  Renamed: "${currentName}" → "${calName}"`);
+        } catch(e) { out(`  Note: could not rename: ${e.message}`); }
+      }
       out(`  Found existing calendar, clearing events...`);
       try {
         const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`, {
@@ -260,18 +273,19 @@ async function syncTeamCalendars(token) {
       const endTotalMin = hour * 60 + min + 90;
       const endStr = `2026-${pad(mon)}-${pad(day)}T${pad(Math.floor(endTotalMin/60))}:${pad(endTotalMin%60)}:00`;
 
+      const awayShort = TEAMS_BY_ID[g.away]?.short || (g.away||'?').toUpperCase();
+      const homeShort = TEAMS_BY_ID[g.home]?.short || (g.home||'?').toUpperCase();
       const awayName = TEAMS_BY_ID[g.away]?.name || g.away || '?';
       const homeName = TEAMS_BY_ID[g.home]?.name || g.home || '?';
       const isHome = g.home === team.id;
-      const opponent = isHome ? awayName : homeName;
-      const oppShort = isHome ? (TEAMS_BY_ID[g.away]?.short || g.away) : (TEAMS_BY_ID[g.home]?.short || g.home);
+      const oppShort = isHome ? awayShort : homeShort;
       const vsAt = isHome ? 'vs' : '@';
       const field = g.field || 'TBD';
       const addr = g.addr || '';
 
       const event = {
-        summary: `⚾ ${team.name} ${vsAt} ${opponent}`,
-        description: `DVSL Softball 2026 — Week ${g.wk}\n${awayName} at ${homeName}\nField: ${field}${addr ? '\n'+addr : ''}\n\nFull schedule: https://dvsl.vercel.app`,
+        summary: `⚾ ${team.short} ${vsAt} ${oppShort}`,
+        description: `DVSL Softball 2026 — Week ${g.wk}\n${awayShort} @ ${homeShort}\nField: ${field}${addr ? '\n'+addr : ''}\n\nFull schedule: https://dvsl.vercel.app`,
         location: field + (addr ? ', ' + addr : ''),
         start: { dateTime: dateStr, timeZone: 'America/New_York' },
         end: { dateTime: endStr, timeZone: 'America/New_York' }
