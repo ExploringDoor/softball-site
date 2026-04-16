@@ -2048,6 +2048,7 @@ function renderBoxScore(awayName, homeName, g) {
         <div style="overflow-x:auto;padding:8px 10px 4px">
           <table style="width:100%;border-collapse:collapse;min-width:780px">
             <thead><tr style="background:rgba(0,0,0,.03)">
+              <th style="width:18px"></th>
               <th style="text-align:left;padding:5px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:150px">Player</th>
               <th style="${thS}">AB</th><th style="${thS}">R</th><th style="${thS}">1B</th>
               <th style="${thS}">2B</th><th style="${thS}">3B</th><th style="${thS}">HR</th>
@@ -2059,7 +2060,12 @@ function renderBoxScore(awayName, homeName, g) {
               ${lineup.map((p, i) => {
                 if (p.dnp) return '';
                 const orderNum = activeLineup.indexOf(p) + 1;
+                const isFirst = orderNum === 1, isLast = orderNum === activeLineup.length;
                 return `<tr>
+                  <td style="padding:2px 1px;text-align:center">
+                    <button onclick="bsMoveRow('${side}',${i},-1)" ${isFirst?'disabled':''} style="display:block;background:none;border:none;cursor:pointer;color:${isFirst?'#ccc':'var(--muted)'};font-size:9px;line-height:1;padding:1px 3px" title="Move up">▲</button>
+                    <button onclick="bsMoveRow('${side}',${i},1)" ${isLast?'disabled':''} style="display:block;background:none;border:none;cursor:pointer;color:${isLast?'#ccc':'var(--muted)'};font-size:9px;line-height:1;padding:1px 3px" title="Move down">▼</button>
+                  </td>
                   <td style="padding:3px 6px;white-space:nowrap">
                     <span style="font-size:10px;color:var(--muted2);width:14px;display:inline-block;text-align:right;margin-right:2px">${orderNum}.</span>
                     ${p.guest
@@ -2085,6 +2091,7 @@ function renderBoxScore(awayName, homeName, g) {
             </tbody>
             <tfoot>
               <tr style="border-top:2px solid var(--navy-mid);background:var(--navy-light)">
+                <td></td>
                 <td style="padding:6px 6px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--navy)">TOTALS</td>
                 <td id="bv-total-${side}-ab" style="text-align:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15px;color:var(--navy)">${totals.ab}</td>
                 <td id="bv-total-${side}-r" style="text-align:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15px;color:var(--navy)">${totals.r}</td>
@@ -2550,6 +2557,14 @@ window.bsUpdateBatterDOM = function(side, idx, input) {
 
 window.bsRemoveBatter = function(side, idx) {
   (side==='away' ? bsAwayLineup : bsHomeLineup).splice(idx, 1);
+  bsRerender();
+};
+window.bsMoveRow = function(side, idx, dir) {
+  const lineup = side==='away' ? bsAwayLineup : bsHomeLineup;
+  const activeCount = lineup.filter(p => !p.dnp).length;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= activeCount) return;
+  [lineup[idx], lineup[newIdx]] = [lineup[newIdx], lineup[idx]];
   bsRerender();
 };
 

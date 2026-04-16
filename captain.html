@@ -1186,7 +1186,12 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
     :`<input type="number" min="0" placeholder="0" style="width:${w};text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="${id}">`;
 
   function batTable(team, names) {
+    const total=names.length;
     const rows=names.map((nm,i)=>`<tr>
+      <td style="padding:2px 1px;text-align:center">
+        <button onclick="capMoveBatRow(this,-1)" ${i===0?'disabled':''} style="display:block;background:none;border:none;cursor:pointer;color:${i===0?'#ccc':'var(--muted)'};font-size:9px;line-height:1;padding:1px 3px" title="Move up">▲</button>
+        <button onclick="capMoveBatRow(this,1)" ${i===total-1?'disabled':''} style="display:block;background:none;border:none;cursor:pointer;color:${i===total-1?'#ccc':'var(--muted)'};font-size:9px;line-height:1;padding:1px 3px" title="Move down">▼</button>
+      </td>
       <td style="padding:4px 6px;white-space:nowrap"><input type="text" value="${esc(nm)}" readonly style="width:100%;font-size:12px;padding:3px 6px;border:1px solid transparent;border-radius:4px;font-family:inherit;background:transparent;font-weight:600;color:var(--navy);cursor:default" id="bs-${gameId}-${team}-name-${i}"></td>
       ${batCols.map(col=>`<td style="padding:4px 3px">${tdInp(`bs-${gameId}-${team}-${col.replace(/\W/g,'')}${i}`,'40px','',false)}</td>`).join('')}
       <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
@@ -1194,6 +1199,7 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
     return `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
       <table style="width:100%;border-collapse:collapse;min-width:700px">
         <thead><tr style="background:rgba(0,0,0,.03)">
+          <th style="width:18px"></th>
           <th style="text-align:left;padding:5px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:120px">Player</th>
           ${batCols.map(c=>`<th style="${thS}">${c}</th>`).join('')}
           <th style="width:24px"></th>
@@ -1566,7 +1572,36 @@ window.bsSwitchTab = function(gameId, tab) {
   });
 };
 
-window.removeBsRow = function(btn) { btn.closest('tr').remove(); };
+window.removeBsRow = function(btn) {
+  const tbody = btn.closest('tr').parentElement;
+  btn.closest('tr').remove();
+  _capRefreshMoveButtons(tbody);
+};
+
+function _capRefreshMoveButtons(tbody) {
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.forEach((tr, i) => {
+    const btns = tr.querySelectorAll('td:first-child button');
+    if (btns.length < 2) return;
+    const up = btns[0], dn = btns[1];
+    up.disabled = i === 0; up.style.color = i === 0 ? '#ccc' : 'var(--muted)';
+    dn.disabled = i === rows.length - 1; dn.style.color = i === rows.length - 1 ? '#ccc' : 'var(--muted)';
+  });
+}
+
+window.capMoveBatRow = function(btn, dir) {
+  const tr = btn.closest('tr');
+  const tbody = tr.parentElement;
+  if (dir === -1) {
+    const prev = tr.previousElementSibling;
+    if (prev) tbody.insertBefore(tr, prev);
+  } else {
+    const next = tr.nextElementSibling;
+    if (next) tbody.insertBefore(next, tr);
+  }
+  _capRefreshMoveButtons(tbody);
+};
 
 // Monotonic counter per tbody so deleting rows never reuses an old index
 const _bsRowCounters = {};
@@ -1633,10 +1668,14 @@ window.capConfirmAddBatter = function() {
     ? `<input type="text" value="${name.replace(/"/g,'&quot;')}" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-name-${i}">`
     : `<input type="text" value="${name.replace(/"/g,'&quot;')}" readonly style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid transparent;border-radius:4px;font-family:inherit;background:transparent;font-weight:600;color:var(--navy);cursor:default" id="bs-${gameId}-${team}-name-${i}">`;
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td style="padding:4px 6px">${nameInput}</td>
+  tr.innerHTML = `<td style="padding:2px 1px;text-align:center">
+    <button onclick="capMoveBatRow(this,-1)" style="display:block;background:none;border:none;cursor:pointer;color:var(--muted);font-size:9px;line-height:1;padding:1px 3px" title="Move up">▲</button>
+    <button onclick="capMoveBatRow(this,1)" style="display:block;background:none;border:none;cursor:pointer;color:var(--muted);font-size:9px;line-height:1;padding:1px 3px" title="Move down">▼</button>
+    </td><td style="padding:4px 6px">${nameInput}</td>
     ${batCols.map(col=>`<td style="padding:4px 3px"><input type="number" min="0" placeholder="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-${col.replace(/\W/g,'')}${i}"></td>`).join('')}
     <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
   tbody.appendChild(tr);
+  _capRefreshMoveButtons(tbody);
   modal.remove();
 };
 
