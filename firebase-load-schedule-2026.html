@@ -206,6 +206,14 @@ window.checkMapping = async function() {
       teamMap[code] = match ? match.id : null;
     }
 
+    // Show all Firestore teams first
+    let allHtml = `<p style="color:#94a3b8;margin:12px 0 4px;font-size:12px">ALL FIRESTORE TEAMS (doc id · short · name):</p><table><thead><tr><th>Doc ID</th><th>short</th><th>Name</th></tr></thead><tbody>`;
+    for (const t of firestoreTeams) {
+      allHtml += `<tr><td>${t.id}</td><td>${t.short||'—'}</td><td>${t.name||'—'}</td></tr>`;
+    }
+    allHtml += '</tbody></table>';
+    document.getElementById('mapping-table').innerHTML = allHtml;
+
     // Show mapping table
     const unmatched = PDF_CODES.filter(c => !teamMap[c]);
     let html = `<table><thead><tr><th>PDF Code</th><th>→ Firestore Team ID</th><th>Team Name</th><th>Status</th></tr></thead><tbody>`;
@@ -217,7 +225,7 @@ window.checkMapping = async function() {
       html += `<tr><td>${code}</td><td class="${cls}">${tid || '—'}</td><td>${tname}</td><td class="${cls}">${status}</td></tr>`;
     }
     html += '</tbody></table>';
-    document.getElementById('mapping-table').innerHTML = html;
+    document.getElementById('mapping-table').innerHTML = allHtml + html;
 
     if (unmatched.length > 0) {
       out(`⚠ ${unmatched.length} team(s) not matched in Firestore: ${unmatched.join(', ')}`, 'warn');
