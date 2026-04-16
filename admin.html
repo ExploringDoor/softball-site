@@ -2172,6 +2172,49 @@ function renderBoxScore(awayName, homeName, g) {
             </div>
           </div>` : ''}
         </div>
+        ${(() => {
+          const awayInningR = bsInnings.away.reduce((s,v)=>s+(parseInt(v)||0),0);
+          const homeInningR = bsInnings.home.reduce((s,v)=>s+(parseInt(v)||0),0);
+          const awayH = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+((parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0)),0);
+          const homeH = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+((parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0)),0);
+          const awayMismatch = awayInningR !== awayR;
+          const homeMismatch = homeInningR !== homeR;
+          const thStyle = 'padding:6px 4px;font-size:11px;font-weight:700;color:rgba(0,0,0,.4);text-align:center;min-width:36px';
+          const tdStyle = 'padding:4px 2px;text-align:center';
+          const inputStyle = 'width:36px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:3px;font-size:13px;font-family:Oswald,sans-serif;background:#fff';
+          const totalStyle = 'padding:6px 4px;text-align:center;font-family:Oswald,sans-serif;font-size:15px;font-weight:700';
+          return `<div style="border-top:1px solid var(--border);padding:10px 16px 4px;background:rgba(0,0,0,.02)">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,0,0,.4);margin-bottom:8px">Line Score</div>
+            <div style="overflow-x:auto;margin-bottom:8px">
+              <table style="border-collapse:collapse;margin:0 auto;font-family:Oswald,sans-serif">
+                <thead><tr>
+                  <th style="min-width:120px;text-align:left;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(0,0,0,.4)">TEAM</th>
+                  ${bsInnings.away.map((_,i) => '<th style="'+thStyle+'">'+(i+1)+'</th>').join('')}
+                  <th style="${thStyle};border-left:2px solid rgba(0,0,0,.15)">R</th>
+                  <th style="${thStyle}">H</th>
+                  <th style="${thStyle}">E</th>
+                </tr></thead>
+                <tbody>
+                  <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
+                    <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
+                    ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
+                    <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-away-r">${awayR}${awayMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+awayInningR+'\">inns: '+awayInningR+'</div>':''}</td>
+                    <td style="${totalStyle}" id="bs-linescore-away-h">${awayH}</td>
+                    <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
+                  </tr>
+                  <tr>
+                    <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
+                    ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
+                    <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-home-r">${homeR}${homeMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+homeInningR+'\">inns: '+homeInningR+'</div>':''}</td>
+                    <td style="${totalStyle}" id="bs-linescore-home-h">${homeH}</td>
+                    <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
+            </div>
+          </div>`;
+        })()}
         ${bsScoreOnlyMode ? '' : `
         <div style="display:flex;border-bottom:2px solid var(--border)">
           <button id="bs-tab-away" onclick="bsSwitchBsTab('away')" style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:var(--navy);color:#fff;border-right:1px solid rgba(255,255,255,.2)">▲ ${awayName}</button>
@@ -2186,49 +2229,6 @@ function renderBoxScore(awayName, homeName, g) {
           </div>
         </div>`}
       </div>
-      ${(() => {
-        const awayInningR = bsInnings.away.reduce((s,v)=>s+(parseInt(v)||0),0);
-        const homeInningR = bsInnings.home.reduce((s,v)=>s+(parseInt(v)||0),0);
-        const awayH = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+((parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0)),0);
-        const homeH = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+((parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0)),0);
-        const awayMismatch = awayInningR !== awayR;
-        const homeMismatch = homeInningR !== homeR;
-        const thStyle = 'padding:6px 4px;font-size:11px;font-weight:700;color:rgba(0,0,0,.4);text-align:center;min-width:36px';
-        const tdStyle = 'padding:4px 2px;text-align:center';
-        const inputStyle = 'width:36px;padding:4px 2px;text-align:center;border:1px solid rgba(0,0,0,.12);border-radius:3px;font-size:13px;font-family:Oswald,sans-serif;background:#fff';
-        const totalStyle = 'padding:6px 4px;text-align:center;font-family:Oswald,sans-serif;font-size:15px;font-weight:700';
-        return `<div style="margin-bottom:6px;margin-top:20px;display:flex;align-items:center;justify-content:space-between">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,0,0,.5)">Line Score</div>
-        </div>
-        <div style="overflow-x:auto;margin-bottom:20px;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:10px">
-          <table style="border-collapse:collapse;margin:0 auto;font-family:Oswald,sans-serif">
-            <thead><tr>
-              <th style="min-width:120px;text-align:left;padding:8px 12px;font-size:12px;font-weight:700;color:rgba(0,0,0,.4)">TEAM</th>
-              ${bsInnings.away.map((_,i) => '<th style="'+thStyle+'">'+(i+1)+'</th>').join('')}
-              <th style="${thStyle};border-left:2px solid rgba(0,0,0,.15)">R</th>
-              <th style="${thStyle}">H</th>
-              <th style="${thStyle}">E</th>
-            </tr></thead>
-            <tbody>
-              <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
-                <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
-                ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
-                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-away-r">${awayR}${awayMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+awayInningR+'\">inns: '+awayInningR+'</div>':''}</td>
-                <td style="${totalStyle}" id="bs-linescore-away-h">${awayH}</td>
-                <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
-              </tr>
-              <tr>
-                <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
-                ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
-                <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-home-r">${homeR}${homeMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+homeInningR+'\">inns: '+homeInningR+'</div>':''}</td>
-                <td style="${totalStyle}" id="bs-linescore-home-h">${homeH}</td>
-                <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
-              </tr>
-            </tbody>
-          </table>
-          <div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="bsAddInning()" style="font-size:11px;padding:4px 12px">+ Extra Inning</button></div>
-        </div>`;
-      })()}
       <!-- Player of the Game + Game Recap -->
       <div style="background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:8px;padding:14px 16px;margin-bottom:16px">
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:rgba(0,0,0,.5);margin-bottom:12px">Player of the Game & Recap</div>
