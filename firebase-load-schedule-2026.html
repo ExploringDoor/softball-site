@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>DVSL — Load 2026 Schedule</title>
+<style>
+  body{font-family:monospace;background:#111;color:#eee;padding:32px;max-width:900px}
+  h2{color:#f0c040}
+  button{padding:10px 22px;margin:6px 4px;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:700}
+  #btn-check{background:#3b82f6;color:#fff}
+  #btn-wipe{background:#ef4444;color:#fff}
+  #btn-load{background:#22c55e;color:#fff}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  pre{background:#000;padding:20px;border-radius:8px;max-height:500px;overflow:auto;font-size:12px;line-height:1.5}
+  .ok{color:#4ade80} .warn{color:#f0c040} .err{color:#f87171} .info{color:#60a5fa}
+  table{border-collapse:collapse;width:100%;margin:12px 0}
+  th{background:#1e293b;padding:8px 10px;text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#94a3b8}
+  td{padding:7px 10px;border-bottom:1px solid #1e293b;font-size:13px}
+  .match{color:#4ade80} .nomatch{color:#f87171;font-weight:700}
+</style>
+</head>
+<body>
+<h2>DVSL 2026 — Load Final Schedule</h2>
+<p style="color:#94a3b8;font-size:13px">Step 1: Check team mapping &nbsp;→&nbsp; Step 2: Wipe existing games &nbsp;→&nbsp; Step 3: Load 112 new games</p>
+
+<button id="btn-check" onclick="checkMapping()">Step 1: Check Team Mapping</button>
+<button id="btn-wipe" onclick="wipeGames()" disabled>Step 2: Wipe All Existing Games</button>
+<button id="btn-load" onclick="loadGames()" disabled>Step 3: Load 112 New Games</button>
+
+<div id="mapping-table"></div>
+<pre id="log"></pre>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const app = initializeApp({
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+});
+const db = getFirestore(app);
+
+const logEl = document.getElementById('log');
+function out(msg, cls='') {
+  const line = document.createElement('span');
+  if (cls) line.className = cls;
+  line.textContent = msg + '\n';
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ── 112 games from DVSL 2026 Final Schedule PDF ──────────────────────────────
+const PDF_GAMES = [
+  {wk:1,date:"2026-04-20",time:"8:00 PM",away:"GOLD",home:"CHA",field:"Mondauk 5"},
+  {wk:1,date:"2026-04-21",time:"6:00 PM",away:"DN",home:"BOR",field:"Mondauk 4"},
+  {wk:1,date:"2026-04-21",time:"8:00 PM",away:"TBIMC",home:"BSMC",field:"Mondauk 5"},
+  {wk:1,date:"2026-04-22",time:"8:00 PM",away:"SA1",home:"TSMC",field:"Mondauk 5"},
+  {wk:2,date:"2026-04-27",time:"6:00 PM",away:"BSMC",home:"BTBJ",field:"Mondauk 4"},
+  {wk:2,date:"2026-04-27",time:"8:00 PM",away:"GJC",home:"TBIMC",field:"Mondauk 5"},
+  {wk:2,date:"2026-04-27",time:"",away:"TOAST",home:"OA",field:"Plymouth"},
+  {wk:2,date:"2026-04-28",time:"6:00 PM",away:"KI",home:"GOLD",field:"Mondauk 4"},
+  {wk:2,date:"2026-04-28",time:"8:00 PM",away:"BOB",home:"CHA",field:"Mondauk 5"},
+  {wk:2,date:"2026-04-29",time:"8:00 PM",away:"DN",home:"TOAST",field:"Mondauk 5"},
+  {wk:2,date:"2026-04-29",time:"6:00 PM",away:"SA1",home:"BOR",field:"South"},
+  {wk:2,date:"2026-04-30",time:"8:00 PM",away:"GOLD",home:"TSMC",field:"Mondauk 5"},
+  {wk:3,date:"2026-05-04",time:"6:00 PM",away:"BOR",home:"GJC",field:"Mondauk 4"},
+  {wk:3,date:"2026-05-04",time:"8:00 PM",away:"OA",home:"BA1",field:"Mondauk 5"},
+  {wk:3,date:"2026-05-04",time:"",away:"BSMC",home:"DN",field:"Plymouth"},
+  {wk:3,date:"2026-05-05",time:"6:00 PM",away:"SA1",home:"BOB",field:"Mondauk 4"},
+  {wk:3,date:"2026-05-05",time:"6:00 PM",away:"CHA",home:"KI",field:"South"},
+  {wk:3,date:"2026-05-05",time:"",away:"TBIMC",home:"TOAST",field:"Sunny Hill"},
+  {wk:3,date:"2026-05-07",time:"",away:"TSMC",home:"BOR",field:"Lukens #2"},
+  {wk:3,date:"2026-05-07",time:"6:00 PM",away:"CHA",home:"TBIR",field:"Mondauk 4"},
+  {wk:3,date:"2026-05-07",time:"8:00 PM",away:"BTBJ",home:"SA1",field:"Mondauk 5"},
+  {wk:4,date:"2026-05-11",time:"6:00 PM",away:"GJC",home:"BOB",field:"Mondauk 4"},
+  {wk:4,date:"2026-05-11",time:"8:00 PM",away:"OA",home:"CHA",field:"Mondauk 5"},
+  {wk:4,date:"2026-05-12",time:"",away:"BOR",home:"KI",field:"Lukens #2"},
+  {wk:4,date:"2026-05-12",time:"6:00 PM",away:"BSMC",home:"GOLD",field:"Mondauk 4"},
+  {wk:4,date:"2026-05-12",time:"8:00 PM",away:"SA1",home:"BA1",field:"Mondauk 5"},
+  {wk:4,date:"2026-05-13",time:"",away:"DN",home:"BTBJ",field:"Cedar Hill"},
+  {wk:4,date:"2026-05-14",time:"",away:"BA1",home:"CHA",field:"Lukens #2"},
+  {wk:4,date:"2026-05-14",time:"6:00 PM",away:"GOLD",home:"TBIR",field:"Mondauk 4"},
+  {wk:4,date:"2026-05-14",time:"8:00 PM",away:"BOB",home:"TBIMC",field:"Mondauk 5"},
+  {wk:5,date:"2026-05-18",time:"6:00 PM",away:"GOLD",home:"BA1",field:"Mondauk 4"},
+  {wk:5,date:"2026-05-18",time:"8:00 PM",away:"TBIMC",home:"BTBJ",field:"Mondauk 5"},
+  {wk:5,date:"2026-05-18",time:"",away:"BOR",home:"CHA",field:"Plymouth"},
+  {wk:5,date:"2026-05-19",time:"6:00 PM",away:"OA",home:"KI",field:"Mondauk 4"},
+  {wk:5,date:"2026-05-19",time:"8:00 PM",away:"BSMC",home:"GJC",field:"Mondauk 5"},
+  {wk:5,date:"2026-05-20",time:"6:00 PM",away:"TSMC",home:"DN",field:"Mondauk 4"},
+  {wk:5,date:"2026-05-20",time:"8:00 PM",away:"BTBJ",home:"TBIR",field:"Mondauk 5"},
+  {wk:5,date:"2026-05-21",time:"6:00 PM",away:"BOB",home:"OA",field:"Mondauk 4"},
+  {wk:6,date:"2026-05-26",time:"",away:"CHA",home:"BSMC",field:"Lukens #2"},
+  {wk:6,date:"2026-05-26",time:"6:00 PM",away:"KI",home:"BOB",field:"Mondauk 4"},
+  {wk:6,date:"2026-05-26",time:"8:00 PM",away:"DN",home:"GJC",field:"Mondauk 5"},
+  {wk:6,date:"2026-05-26",time:"",away:"BOR",home:"OA",field:"Sunny Hill"},
+  {wk:6,date:"2026-05-27",time:"6:00 PM",away:"TOAST",home:"GOLD",field:"Mondauk 4"},
+  {wk:6,date:"2026-05-27",time:"8:00 PM",away:"TBIR",home:"SA1",field:"Mondauk 5"},
+  {wk:6,date:"2026-05-28",time:"",away:"TSMC",home:"OA",field:"Lukens #2"},
+  {wk:6,date:"2026-05-28",time:"6:00 PM",away:"BA1",home:"BTBJ",field:"Mondauk 4"},
+  {wk:6,date:"2026-05-28",time:"8:00 PM",away:"DN",home:"TBIMC",field:"Mondauk 5"},
+  {wk:7,date:"2026-06-01",time:"6:00 PM",away:"BOR",home:"TOAST",field:"Mondauk 4"},
+  {wk:7,date:"2026-06-01",time:"8:00 PM",away:"TSMC",home:"TBIR",field:"Mondauk 5"},
+  {wk:7,date:"2026-06-01",time:"",away:"BA1",home:"TBIMC",field:"Plymouth"},
+  {wk:7,date:"2026-06-02",time:"6:00 PM",away:"TBIR",home:"KI",field:"Mondauk 4"},
+  {wk:7,date:"2026-06-02",time:"8:00 PM",away:"OA",home:"GOLD",field:"Mondauk 5"},
+  {wk:7,date:"2026-06-03",time:"6:00 PM",away:"BTBJ",home:"TSMC",field:"Mondauk 4"},
+  {wk:7,date:"2026-06-04",time:"",away:"SA1",home:"KI",field:"Lukens #2"},
+  {wk:7,date:"2026-06-04",time:"6:00 PM",away:"BSMC",home:"TOAST",field:"Mondauk 4"},
+  {wk:8,date:"2026-06-08",time:"6:00 PM",away:"TOAST",home:"GJC",field:"Mondauk 4"},
+  {wk:8,date:"2026-06-08",time:"8:00 PM",away:"DN",home:"BA1",field:"Mondauk 5"},
+  {wk:8,date:"2026-06-08",time:"",away:"TBIR",home:"BOR",field:"Sunny Hill"},
+  {wk:8,date:"2026-06-09",time:"8:00 PM",away:"KI",home:"BSMC",field:"Mondauk 5"},
+  {wk:8,date:"2026-06-09",time:"",away:"BTBJ",home:"CHA",field:"Sunny Hill"},
+  {wk:8,date:"2026-06-10",time:"8:00 PM",away:"TSMC",home:"TOAST",field:"Mondauk 5"},
+  {wk:8,date:"2026-06-10",time:"8:00 PM",away:"TBIMC",home:"SA1",field:"South"},
+  {wk:8,date:"2026-06-11",time:"",away:"BSMC",home:"OA",field:"Lukens #2"},
+  {wk:8,date:"2026-06-11",time:"6:00 PM",away:"BOB",home:"GOLD",field:"Mondauk 4"},
+  {wk:8,date:"2026-06-11",time:"8:00 PM",away:"BA1",home:"BOR",field:"Mondauk 5"},
+  {wk:9,date:"2026-06-15",time:"6:00 PM",away:"GOLD",home:"SA1",field:"Mondauk 4"},
+  {wk:9,date:"2026-06-15",time:"8:00 PM",away:"TBIR",home:"BOB",field:"Mondauk 5"},
+  {wk:9,date:"2026-06-15",time:"",away:"GJC",home:"TSMC",field:"Plymouth"},
+  {wk:9,date:"2026-06-16",time:"6:00 PM",away:"KI",home:"TBIMC",field:"Mondauk 4"},
+  {wk:9,date:"2026-06-16",time:"8:00 PM",away:"BTBJ",home:"TOAST",field:"Mondauk 5"},
+  {wk:9,date:"2026-06-17",time:"6:00 PM",away:"GJC",home:"SA1",field:"Mondauk 4"},
+  {wk:9,date:"2026-06-17",time:"8:00 PM",away:"BA1",home:"TBIR",field:"Mondauk 5"},
+  {wk:9,date:"2026-06-18",time:"",away:"TBIMC",home:"CHA",field:"Lukens #2"},
+  {wk:9,date:"2026-06-18",time:"6:00 PM",away:"BOB",home:"BSMC",field:"Mondauk 4"},
+  {wk:9,date:"2026-06-18",time:"8:00 PM",away:"DN",home:"GOLD",field:"Mondauk 5"},
+  {wk:10,date:"2026-06-22",time:"6:00 PM",away:"BOR",home:"BSMC",field:"Mondauk 4"},
+  {wk:10,date:"2026-06-22",time:"8:00 PM",away:"SA1",home:"DN",field:"Mondauk 5"},
+  {wk:10,date:"2026-06-22",time:"",away:"TBIR",home:"TBIMC",field:"Sunny Hill"},
+  {wk:10,date:"2026-06-23",time:"",away:"BTBJ",home:"KI",field:"Lukens #2"},
+  {wk:10,date:"2026-06-23",time:"6:00 PM",away:"TOAST",home:"BA1",field:"Mondauk 4"},
+  {wk:10,date:"2026-06-23",time:"8:00 PM",away:"GJC",home:"GOLD",field:"Mondauk 5"},
+  {wk:10,date:"2026-06-24",time:"6:00 PM",away:"TSMC",home:"BOB",field:"Mondauk 4"},
+  {wk:10,date:"2026-06-24",time:"",away:"TBIMC",home:"OA",field:"Sunny Hill"},
+  {wk:10,date:"2026-06-25",time:"8:00 PM",away:"CHA",home:"GJC",field:"Mondauk 5"},
+  {wk:11,date:"2026-06-29",time:"6:00 PM",away:"BA1",home:"BOB",field:"Mondauk 4"},
+  {wk:11,date:"2026-06-29",time:"8:00 PM",away:"GOLD",home:"BTBJ",field:"Mondauk 5"},
+  {wk:11,date:"2026-06-29",time:"",away:"OA",home:"SA1",field:"Plymouth"},
+  {wk:11,date:"2026-06-30",time:"6:00 PM",away:"CHA",home:"TSMC",field:"Mondauk 4"},
+  {wk:11,date:"2026-06-30",time:"8:00 PM",away:"KI",home:"GJC",field:"Mondauk 5"},
+  {wk:11,date:"2026-07-01",time:"6:00 PM",away:"TSMC",home:"BA1",field:"Mondauk 4"},
+  {wk:11,date:"2026-07-01",time:"8:00 PM",away:"TBIR",home:"BSMC",field:"Mondauk 5"},
+  {wk:11,date:"2026-07-02",time:"6:00 PM",away:"CHA",home:"TOAST",field:"Mondauk 4"},
+  {wk:11,date:"2026-07-02",time:"8:00 PM",away:"GJC",home:"OA",field:"Mondauk 5"},
+  {wk:12,date:"2026-07-06",time:"6:00 PM",away:"BTBJ",home:"BOR",field:"Mondauk 4"},
+  {wk:12,date:"2026-07-06",time:"8:00 PM",away:"TBIMC",home:"TSMC",field:"Mondauk 5"},
+  {wk:12,date:"2026-07-06",time:"",away:"GJC",home:"TBIR",field:"Sunny Hill"},
+  {wk:12,date:"2026-07-07",time:"",away:"TOAST",home:"KI",field:"Lukens #2"},
+  {wk:12,date:"2026-07-07",time:"6:00 PM",away:"BOB",home:"DN",field:"Mondauk 4"},
+  {wk:12,date:"2026-07-07",time:"8:00 PM",away:"GOLD",home:"BOR",field:"Mondauk 5"},
+  {wk:12,date:"2026-07-08",time:"",away:"CHA",home:"SA1",field:"Cedar Hill"},
+  {wk:12,date:"2026-07-08",time:"6:00 PM",away:"BSMC",home:"TSMC",field:"Mondauk 4"},
+  {wk:12,date:"2026-07-08",time:"8:00 PM",away:"BA1",home:"GJC",field:"Mondauk 5"},
+  {wk:12,date:"2026-07-09",time:"6:00 PM",away:"BOB",home:"BTBJ",field:"Mondauk 4"},
+  {wk:12,date:"2026-07-09",time:"8:00 PM",away:"OA",home:"DN",field:"Mondauk 5"},
+  {wk:13,date:"2026-07-13",time:"8:00 PM",away:"SA1",home:"BSMC",field:"Mondauk 5"},
+  {wk:13,date:"2026-07-13",time:"",away:"OA",home:"BTBJ",field:"Plymouth"},
+  {wk:13,date:"2026-07-13",time:"",away:"TOAST",home:"TBIR",field:"Sunny Hill"},
+  {wk:13,date:"2026-07-14",time:"",away:"KI",home:"DN",field:"Lukens #2"},
+  {wk:13,date:"2026-07-15",time:"",away:"BOR",home:"TBIMC",field:"Cedar Hill"},
+  {wk:13,date:"2026-07-16",time:"",away:"TBIR",home:"DN",field:"Lukens #2"},
+  {wk:13,date:"2026-07-16",time:"6:00 PM",away:"TOAST",home:"BOB",field:"Mondauk 4"},
+  {wk:13,date:"2026-07-16",time:"6:00 PM",away:"KI",home:"BA1",field:"South"},
+];
+
+const PDF_CODES = [...new Set(PDF_GAMES.flatMap(g=>[g.away,g.home]))].sort();
+
+let firestoreTeams = [];
+let teamMap = {}; // PDF code → Firestore team ID
+let existingGameDocs = [];
+
+window.checkMapping = async function() {
+  document.getElementById('btn-check').disabled = true;
+  logEl.innerHTML = '';
+  out('Reading teams from Firestore...', 'info');
+  try {
+    const snap = await getDocs(collection(db, 'teams'));
+    firestoreTeams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    out(`Found ${firestoreTeams.length} teams in Firestore.`, 'ok');
+
+    // Build mapping: try matching PDF code to team short or id (case-insensitive)
+    teamMap = {};
+    for (const code of PDF_CODES) {
+      const match = firestoreTeams.find(t =>
+        (t.short || '').toUpperCase() === code.toUpperCase() ||
+        (t.id || '').toUpperCase() === code.toUpperCase()
+      );
+      teamMap[code] = match ? match.id : null;
+    }
+
+    // Show mapping table
+    const unmatched = PDF_CODES.filter(c => !teamMap[c]);
+    let html = `<table><thead><tr><th>PDF Code</th><th>→ Firestore Team ID</th><th>Team Name</th><th>Status</th></tr></thead><tbody>`;
+    for (const code of PDF_CODES) {
+      const tid = teamMap[code];
+      const tname = tid ? (firestoreTeams.find(t=>t.id===tid)?.name || '') : '???';
+      const cls = tid ? 'match' : 'nomatch';
+      const status = tid ? '✓ matched' : '✗ NO MATCH — will use PDF code as-is';
+      html += `<tr><td>${code}</td><td class="${cls}">${tid || '—'}</td><td>${tname}</td><td class="${cls}">${status}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('mapping-table').innerHTML = html;
+
+    if (unmatched.length > 0) {
+      out(`⚠ ${unmatched.length} team(s) not matched in Firestore: ${unmatched.join(', ')}`, 'warn');
+      out('These will be stored with the PDF code as the team ID. Make sure those teams exist in Firestore first, or the schedule will show the raw code.', 'warn');
+    } else {
+      out('✓ All 16 teams matched!', 'ok');
+    }
+
+    // Count existing games
+    const gSnap = await getDocs(collection(db, 'games'));
+    existingGameDocs = gSnap.docs;
+    out(`Found ${existingGameDocs.length} existing games in Firestore.`, 'info');
+    out('Ready. Click Step 2 to wipe existing games.', 'ok');
+    document.getElementById('btn-wipe').disabled = false;
+  } catch(e) {
+    out('ERROR: ' + e.message, 'err');
+    document.getElementById('btn-check').disabled = false;
+  }
+};
+
+window.wipeGames = async function() {
+  if (!confirm(`DELETE all ${existingGameDocs.length} existing games from Firestore? This cannot be undone.`)) return;
+  document.getElementById('btn-wipe').disabled = true;
+  out(`Wiping ${existingGameDocs.length} games...`, 'warn');
+  try {
+    // Delete in batches of 500
+    let batch = writeBatch(db);
+    let count = 0;
+    for (const d of existingGameDocs) {
+      batch.delete(doc(db, 'games', d.id));
+      count++;
+      if (count % 500 === 0) { await batch.commit(); batch = writeBatch(db); }
+    }
+    await batch.commit();
+    out(`✓ Deleted ${existingGameDocs.length} games.`, 'ok');
+    out('Ready. Click Step 3 to load the new schedule.', 'ok');
+    document.getElementById('btn-load').disabled = false;
+  } catch(e) {
+    out('ERROR wiping: ' + e.message, 'err');
+    document.getElementById('btn-wipe').disabled = false;
+  }
+};
+
+window.loadGames = async function() {
+  document.getElementById('btn-load').disabled = true;
+  out('Loading 112 games...', 'info');
+  try {
+    let batch = writeBatch(db);
+    let count = 0;
+    for (const g of PDF_GAMES) {
+      const awayId = teamMap[g.away] || g.away.toLowerCase();
+      const homeId = teamMap[g.home] || g.home.toLowerCase();
+      const ref = doc(collection(db, 'games'));
+      batch.set(ref, {
+        wk:    g.wk,
+        date:  g.date,
+        time:  g.time,
+        away:  awayId,
+        home:  homeId,
+        field: g.field,
+        done:  false,
+      });
+      count++;
+      if (count % 500 === 0) { await batch.commit(); batch = writeBatch(db); }
+    }
+    await batch.commit();
+    out(`✓ Loaded ${count} games successfully!`, 'ok');
+    out('All done! Go check the site schedule.', 'ok');
+  } catch(e) {
+    out('ERROR loading games: ' + e.message, 'err');
+    document.getElementById('btn-load').disabled = false;
+  }
+};
+</script>
+</body>
+</html>
