@@ -2825,7 +2825,7 @@ async function loadAllData() {
           for (const p of lineup) {
             const nm = (p.name || '').trim(); if (!nm) continue;
             const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
-            if (!batMap[key]) batMap[key] = { name: nm, team: sid, gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
+            if (!batMap[key]) batMap[key] = { name: nm, team: sid, gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0, sac:0, sf:0, roe:0, fc:0 };
             const b = batMap[key];
             b.gp++;
             b.ab  += parseInt(p.ab)||0;                b.r   += parseInt(p.r)||0;
@@ -2838,6 +2838,8 @@ async function loadAllData() {
             b.s   += _s;  b.d  += _d;  b.tri += _t;  b.hr  += _hr;
             b.rbi += parseInt(p.rbi)||0;               b.bb  += parseInt(p.bb)||0;
             b.so  += parseInt(p.so ?? p.k)||0;         // captain: 'k', admin: 'so'
+            b.sac += parseInt(p.sac)||0;               b.sf  += parseInt(p.sf)||0;
+            b.roe += parseInt(p.roe)||0;               b.fc  += parseInt(p.fc)||0;
           }
         }
         // Pitching
@@ -2936,6 +2938,7 @@ async function loadAllData() {
         pl.gp = b.gp; pl.ab = b.ab; pl.r = b.r;
         pl.s  = b.s;  pl.d  = b.d;  pl.t = b.tri; pl.hr = b.hr;
         pl.rbi = b.rbi; pl.bb = b.bb; pl.so = b.so;
+        pl.sac = b.sac; pl.sf = b.sf; pl.roe = b.roe; pl.fc = b.fc;
         pl.h   = b.s + b.d + b.tri + b.hr;
         pl.avg = pl.ab > 0 ? pl.h / pl.ab : 0;
         const obp = (pl.ab + pl.bb) > 0 ? (pl.h + pl.bb) / (pl.ab + pl.bb) : 0;
