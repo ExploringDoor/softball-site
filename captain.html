@@ -1187,15 +1187,10 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
 
   function batTable(team, names) {
     const rows=names.map((nm,i)=>`<tr>
-      <td style="padding:4px 6px;white-space:nowrap"><input type="text" value="${esc(nm)}" placeholder="Player name" style="width:100%;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-name-${i}"></td>
+      <td style="padding:4px 6px;white-space:nowrap"><input type="text" value="${esc(nm)}" readonly style="width:100%;font-size:12px;padding:3px 6px;border:1px solid transparent;border-radius:4px;font-family:inherit;background:transparent;font-weight:600;color:var(--navy);cursor:default" id="bs-${gameId}-${team}-name-${i}"></td>
       ${batCols.map(col=>`<td style="padding:4px 3px">${tdInp(`bs-${gameId}-${team}-${col.replace(/\W/g,'')}${i}`,'40px','',false)}</td>`).join('')}
       <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
     </tr>`).join('');
-    const emptyR=`<tr>
-      <td style="padding:4px 6px">${tdInp(`bs-${gameId}-${team}-name-${names.length}`,'100%','Player name',true)}</td>
-      ${batCols.map((col,ci)=>`<td style="padding:4px 3px">${tdInp(`bs-${gameId}-${team}-${col.replace(/\W/g,'')}${names.length}`,'40px','',false)}</td>`).join('')}
-      <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
-    </tr>`;
     return `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
       <table style="width:100%;border-collapse:collapse;min-width:700px">
         <thead><tr style="background:rgba(0,0,0,.03)">
@@ -1203,10 +1198,10 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
           ${batCols.map(c=>`<th style="${thS}">${c}</th>`).join('')}
           <th style="width:24px"></th>
         </tr></thead>
-        <tbody id="bs-${gameId}-${team}-tbody">${rows}${names.length===0?emptyR:''}</tbody>
+        <tbody id="bs-${gameId}-${team}-tbody">${rows}</tbody>
       </table></div>
     <div style="padding:4px 16px 6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-      <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${team}',${names.length})">+ Add Batter</button>
+      <button class="btn btn-outline btn-sm" onclick="capShowAddBatterUI('${gameId}','${team}')">+ Add Batter</button>
       <span style="font-size:10px;color:var(--muted);font-style:italic">SAC = sac bunt &nbsp;&bull;&nbsp; SF = sac fly &nbsp;&bull;&nbsp; ROE = reached on error &nbsp;&bull;&nbsp; FC = fielder's choice</span>
     </div>`;
   }
@@ -1232,7 +1227,7 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
         </table>
       </div>
       <div style="padding:0 16px 8px">
-        <button class="btn btn-outline btn-sm" onclick="addBsPitchRow('${gameId}','${team}')">+ Add Pitcher</button>
+        <button class="btn btn-outline btn-sm" onclick="capShowAddPitcherUI('${gameId}','${team}')">+ Add Pitcher</button>
       </div>
     </div>
     <div style="margin-top:10px;border-top:1px solid var(--border);padding:10px 16px 12px">
@@ -1575,33 +1570,141 @@ window.removeBsRow = function(btn) { btn.closest('tr').remove(); };
 
 // Monotonic counter per tbody so deleting rows never reuses an old index
 const _bsRowCounters = {};
-window.addBsRow = function(gameId, teamPrefix, startIdx) {
-  const tbody = document.getElementById('bs-' + gameId + '-' + teamPrefix + '-tbody');
-  if (!tbody) return;
-  const key = gameId + '-' + teamPrefix;
-  if (_bsRowCounters[key] === undefined) {
-    // Seed from existing rows on first call so pre-populated rows stay stable
-    _bsRowCounters[key] = tbody.querySelectorAll('tr').length;
+
+// ── Add Batter modal (captain) ────────────────────────────────────────────────
+window.capShowAddBatterUI = function(gameId, team) {
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const teamId = team === 'away' ? g.away : g.home;
+  const roster = ALL_PLAYERS.filter(p => p.team === teamId).sort((a,b) => (+(a.num||99))-(+(b.num||99)));
+  const tbody = document.getElementById(`bs-${gameId}-${team}-tbody`);
+  const usedNames = new Set(
+    Array.from(tbody?.querySelectorAll('input[type="text"]') || [])
+      .map(el => el.value.trim()).filter(Boolean)
+  );
+  const available = roster.filter(p => !usedNames.has(p.name));
+  const teamName = getTeamName(teamId);
+  document.getElementById('cap-add-batter-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'cap-add-batter-modal';
+  modal.dataset.gameId = gameId;
+  modal.dataset.team = team;
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;box-shadow:0 -4px 24px rgba(0,0,0,.15)">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:.04em;text-transform:uppercase;color:var(--navy);margin-bottom:14px">Add Batter — ${esc(teamName)}</div>
+      <select id="cap-add-batter-sel" onchange="document.getElementById('cap-add-batter-newrow').style.display=this.value==='__new__'?'block':'none'" style="width:100%;font-size:14px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;font-family:inherit">
+        <option value="">— Select from roster —</option>
+        ${available.map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}|${p.num||''}">#${p.num||'?'} ${esc(p.name)}</option>`).join('')}
+        <option value="__new__">✏ New player (type name)…</option>
+      </select>
+      <div id="cap-add-batter-newrow" style="display:none;margin-bottom:10px">
+        <input id="cap-add-batter-newinp" type="text" placeholder="Player name" style="width:100%;font-size:14px;padding:10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="capConfirmAddBatter()" style="flex:1;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;cursor:pointer">ADD</button>
+        <button onclick="document.getElementById('cap-add-batter-modal').remove()" style="padding:12px 20px;background:none;border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+};
+window.capConfirmAddBatter = function() {
+  const modal = document.getElementById('cap-add-batter-modal');
+  if (!modal) return;
+  const gameId = modal.dataset.gameId, team = modal.dataset.team;
+  const sel = document.getElementById('cap-add-batter-sel');
+  if (!sel || !sel.value) return;
+  let name = '', num = '', isGuest = false;
+  if (sel.value === '__new__') {
+    const inp = document.getElementById('cap-add-batter-newinp');
+    name = inp?.value?.trim();
+    if (!name) { inp?.focus(); return; }
+    isGuest = true;
+  } else {
+    const parts = sel.value.split('|'); name = parts[0]; num = parts[1] || '';
   }
+  const tbody = document.getElementById(`bs-${gameId}-${team}-tbody`);
+  if (!tbody) return;
+  const key = gameId + '-' + team;
+  if (_bsRowCounters[key] === undefined) _bsRowCounters[key] = tbody.querySelectorAll('tr').length;
   const i = _bsRowCounters[key]++;
   const batCols = ['AB','R','1B','2B','3B','HR','RBI','BB','K','SAC','SF','ROE','FC'];
+  const nameInput = isGuest
+    ? `<input type="text" value="${name.replace(/"/g,'&quot;')}" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-name-${i}">`
+    : `<input type="text" value="${name.replace(/"/g,'&quot;')}" readonly style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid transparent;border-radius:4px;font-family:inherit;background:transparent;font-weight:600;color:var(--navy);cursor:default" id="bs-${gameId}-${team}-name-${i}">`;
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td style="padding:4px 6px"><input type="text" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
-    ${batCols.map(col=>`<td style="padding:4px 3px"><input type="number" min="0" placeholder="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/\W/g,'')}${i}"></td>`).join('')}
+  tr.innerHTML = `<td style="padding:4px 6px">${nameInput}</td>
+    ${batCols.map(col=>`<td style="padding:4px 3px"><input type="number" min="0" placeholder="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-${col.replace(/\W/g,'')}${i}"></td>`).join('')}
     <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
   tbody.appendChild(tr);
+  modal.remove();
 };
 
-window.addBsPitchRow = function(gameId, team) {
+// ── Add Pitcher modal (captain) ───────────────────────────────────────────────
+window.capShowAddPitcherUI = function(gameId, team) {
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const teamId = team === 'away' ? g.away : g.home;
+  const roster = ALL_PLAYERS.filter(p => p.team === teamId).sort((a,b) => (+(a.num||99))-(+(b.num||99)));
+  const tbody = document.getElementById(`bs-${gameId}-${team}-pitch-tbody`);
+  const usedNames = new Set(
+    Array.from(tbody?.querySelectorAll('tr') || [])
+      .map(tr => tr.querySelector('input[type="text"]')?.value?.trim()).filter(Boolean)
+  );
+  const available = roster.filter(p => !usedNames.has(p.name));
+  const teamName = getTeamName(teamId);
+  document.getElementById('cap-add-pitcher-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'cap-add-pitcher-modal';
+  modal.dataset.gameId = gameId;
+  modal.dataset.team = team;
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;box-shadow:0 -4px 24px rgba(0,0,0,.15)">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:.04em;text-transform:uppercase;color:var(--navy);margin-bottom:14px">Add Pitcher — ${esc(teamName)}</div>
+      <select id="cap-add-pitcher-sel" onchange="document.getElementById('cap-add-pitcher-newrow').style.display=this.value==='__new__'?'block':'none'" style="width:100%;font-size:14px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;font-family:inherit">
+        <option value="">— Select from roster —</option>
+        ${available.map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}|${p.num||''}">#${p.num||'?'} ${esc(p.name)}</option>`).join('')}
+        <option value="__new__">✏ New pitcher (type name)…</option>
+      </select>
+      <div id="cap-add-pitcher-newrow" style="display:none;margin-bottom:10px">
+        <input id="cap-add-pitcher-newinp" type="text" placeholder="Pitcher name" style="width:100%;font-size:14px;padding:10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="capConfirmAddPitcher()" style="flex:1;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;cursor:pointer">ADD</button>
+        <button onclick="document.getElementById('cap-add-pitcher-modal').remove()" style="padding:12px 20px;background:none;border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+};
+window.capConfirmAddPitcher = function() {
+  const modal = document.getElementById('cap-add-pitcher-modal');
+  if (!modal) return;
+  const gameId = modal.dataset.gameId, team = modal.dataset.team;
+  const sel = document.getElementById('cap-add-pitcher-sel');
+  if (!sel || !sel.value) return;
+  let name = '', num = '', isGuest = false;
+  if (sel.value === '__new__') {
+    const inp = document.getElementById('cap-add-pitcher-newinp');
+    name = inp?.value?.trim() || '';
+    if (!name) { inp?.focus(); return; }
+    isGuest = true;
+  } else {
+    const parts = sel.value.split('|'); name = parts[0]; num = parts[1] || '';
+  }
   const tbody = document.getElementById(`bs-${gameId}-${team}-pitch-tbody`);
   if (!tbody) return;
   const i = tbody.querySelectorAll('tr').length;
+  const nameInput = isGuest
+    ? `<input type="text" value="${name.replace(/"/g,'&quot;')}" placeholder="Pitcher name" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-name-${i}">`
+    : `<input type="text" value="${name.replace(/"/g,'&quot;')}" readonly style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid transparent;border-radius:4px;font-family:inherit;background:transparent;font-weight:600;color:var(--navy);cursor:default" id="bs-${gameId}-${team}-p-name-${i}">`;
   const tr = document.createElement('tr');
-  tr.innerHTML = `<td style="padding:4px 6px"><input type="text" placeholder="Pitcher name" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-name-${i}"></td>
+  tr.innerHTML = `<td style="padding:4px 6px">${nameInput}</td>
     <td style="padding:4px 3px"><input type="text" placeholder="7" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-IP${i}"></td>
     ${['H','R','ER','BB','K'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" placeholder="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${team}-p-${c}${i}"></td>`).join('')}
     <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>`;
   tbody.appendChild(tr);
+  modal.remove();
 };
 
 // ── LINESCORE HELPERS ──────────────────────────────────────────────────────
