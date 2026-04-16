@@ -168,6 +168,18 @@ const PDF_GAMES = [
   {wk:13,date:"2026-07-16",time:"6:00 PM",away:"KI",home:"BA1",field:"South"},
 ];
 
+// Normalize: fix field name, set all times to 6:15 PM, then apply exceptions
+PDF_GAMES.forEach(g => {
+  if (g.field === 'Sunny Hill') g.field = 'Sunnybrook';
+  g.time = '6:15 PM';
+});
+// Exceptions: 6:00 PM start
+PDF_GAMES.forEach(g => {
+  if (g.wk === 3 && g.away === 'CHA'  && g.home === 'KI')  g.time = '6:00 PM'; // week of 5/4
+  if (g.wk === 2 && g.away === 'SA1'  && g.home === 'BOR') g.time = '6:00 PM'; // week of 4/27
+  if (g.wk === 13 && g.away === 'KI'  && g.home === 'BA1') g.time = '6:00 PM'; // week of 7/13
+});
+
 const PDF_CODES = [...new Set(PDF_GAMES.flatMap(g=>[g.away,g.home]))].sort();
 
 let firestoreTeams = [];
