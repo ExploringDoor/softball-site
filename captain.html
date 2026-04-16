@@ -1178,7 +1178,7 @@ window.bsToStats = function(gameId){
 
 function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamName) {
   const el=document.getElementById('boxscore-entry-'+gameId); if(!el) return;
-  const batCols=['AB','R','H','2B','3B','HR','RBI','BB','K'];
+  const batCols=['AB','R','1B','2B','3B','HR','RBI','BB','K','SAC','SF','ROE','FC'];
   const pitCols=['IP','H','R','ER','BB','K'];
   const thS='text-align:center;padding:5px 2px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);width:38px';
   const tdInp=(id,w,ph,isText)=>isText
@@ -1197,7 +1197,7 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
       <td style="padding:4px 3px"><button onclick="removeBsRow(this)" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button></td>
     </tr>`;
     return `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <table style="width:100%;border-collapse:collapse;min-width:480px">
+      <table style="width:100%;border-collapse:collapse;min-width:700px">
         <thead><tr style="background:rgba(0,0,0,.03)">
           <th style="text-align:left;padding:5px 6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:120px">Player</th>
           ${batCols.map(c=>`<th style="${thS}">${c}</th>`).join('')}
@@ -1207,7 +1207,7 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
       </table></div>
     <div style="padding:4px 16px 6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
       <button class="btn btn-outline btn-sm" onclick="addBsRow('${gameId}','${team}',${names.length})">+ Add Batter</button>
-      <span style="font-size:10px;color:var(--muted);font-style:italic">H = total hits · singles = H − 2B − 3B − HR</span>
+      <span style="font-size:10px;color:var(--muted);font-style:italic">SAC = sac bunt &nbsp;&bull;&nbsp; SF = sac fly &nbsp;&bull;&nbsp; ROE = reached on error &nbsp;&bull;&nbsp; FC = fielder's choice</span>
     </div>`;
   }
 
@@ -1584,7 +1584,7 @@ window.addBsRow = function(gameId, teamPrefix, startIdx) {
     _bsRowCounters[key] = tbody.querySelectorAll('tr').length;
   }
   const i = _bsRowCounters[key]++;
-  const batCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
+  const batCols = ['AB','R','1B','2B','3B','HR','RBI','BB','K','SAC','SF','ROE','FC'];
   const tr = document.createElement('tr');
   tr.innerHTML = `<td style="padding:4px 6px"><input type="text" placeholder="Player name" style="width:100%;min-width:110px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-name-${i}"></td>
     ${batCols.map(col=>`<td style="padding:4px 3px"><input type="number" min="0" placeholder="0" style="width:40px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit" id="bs-${gameId}-${teamPrefix}-${col.replace(/\W/g,'')}${i}"></td>`).join('')}
@@ -1626,7 +1626,7 @@ function _bsUpdateSB(gameId, team, val) {
 window.bsAutoLinescore = function(gameId, team, col) {
   const tbody = document.getElementById(`bs-${gameId}-${team}-tbody`);
   if (!tbody) return;
-  const batCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
+  const batCols = ['AB','R','1B','2B','3B','HR','RBI','BB','K','SAC','SF','ROE','FC'];
   const colIdx = batCols.indexOf(col);
   if (colIdx < 0) return;
   let sum = 0;
@@ -1634,32 +1634,37 @@ window.bsAutoLinescore = function(gameId, team, col) {
     const numInputs = tr.querySelectorAll('input[type="number"]');
     if (numInputs[colIdx]) sum += parseInt(numInputs[colIdx].value || '0') || 0;
   });
-  const target = col === 'H'
-    ? document.getElementById(`bs-${gameId}-ls-${team}-H`)
-    : document.getElementById(`bs-${gameId}-ls-${team}-R`);
-  if (target) target.value = sum;
-  if (col === 'R') _bsUpdateSB(gameId, team, sum);
+  // Auto-sync R column to linescore; compute H from hits for linescore
+  if (col === 'R') {
+    const target = document.getElementById(`bs-${gameId}-ls-${team}-R`);
+    if (target) target.value = sum;
+    _bsUpdateSB(gameId, team, sum);
+  } else if (col === '1B' || col === '2B' || col === '3B' || col === 'HR') {
+    // Recompute total H for linescore from all hit columns
+    let hSum = 0;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const ns = tr.querySelectorAll('input[type="number"]');
+      hSum += (parseInt(ns[2]?.value)||0)+(parseInt(ns[3]?.value)||0)+(parseInt(ns[4]?.value)||0)+(parseInt(ns[5]?.value)||0);
+    });
+    const hEl = document.getElementById(`bs-${gameId}-ls-${team}-H`);
+    if (hEl) hEl.value = hSum;
+  }
 };
 
-// Global delegated listener: catches R, H, and XBH column inputs in any box score form
+// Global delegated listener: catches R, 1B, and XBH column inputs in any box score form
 document.addEventListener('input', function(e) {
   const id = e.target?.id || '';
   // bs-GAMEID-TEAM-R0..N  (not HR, not RBI)
   const rM = id.match(/^bs-(.+)-(away|home)-R(\d+)$/);
-  // bs-GAMEID-TEAM-H0..N  (not HR, not HBP)
-  const hM = id.match(/^bs-(.+)-(away|home)-H(\d+)$/);
-  // bs-GAMEID-TEAM-2B/3B/HR N  — bump H to at least sum of XBH, then recalc linescore
+  // bs-GAMEID-TEAM-1B0..N
+  const oneB = id.match(/^bs-(.+)-(away|home)-1B(\d+)$/);
+  // bs-GAMEID-TEAM-2B/3B/HR N  — recalc linescore H
   const xbhM = id.match(/^bs-(.+)-(away|home)-(2B|3B|HR)(\d+)$/);
   if (rM) bsAutoLinescore(rM[1], rM[2], 'R');
-  else if (hM) bsAutoLinescore(hM[1], hM[2], 'H');
+  else if (oneB) bsAutoLinescore(oneB[1], oneB[2], '1B');
   else if (xbhM) {
-    const [, gid, team, , rowIdx] = xbhM;
-    const d2 = parseInt(document.getElementById(`bs-${gid}-${team}-2B${rowIdx}`)?.value)||0;
-    const t3 = parseInt(document.getElementById(`bs-${gid}-${team}-3B${rowIdx}`)?.value)||0;
-    const hr = parseInt(document.getElementById(`bs-${gid}-${team}-HR${rowIdx}`)?.value)||0;
-    const hEl = document.getElementById(`bs-${gid}-${team}-H${rowIdx}`);
-    if (hEl && (parseInt(hEl.value)||0) < d2+t3+hr) hEl.value = d2+t3+hr;
-    bsAutoLinescore(gid, team, 'H');
+    const [, gid, team2] = xbhM;
+    bsAutoLinescore(gid, team2, xbhM[3]);
   }
 });
 
@@ -1769,7 +1774,7 @@ window.printBsScore = function(gameId, awayTeamName, homeTeamName) {
     awayInnings.push(document.getElementById(`bs-${gameId}-ls-away-i${i}`)?.value||'');
     homeInnings.push(document.getElementById(`bs-${gameId}-ls-home-i${i}`)?.value||'');
   }
-  // Read batting rows — batCols index: 0=AB,1=R,2=H,3=2B,4=3B,5=HR,6=RBI,7=BB,8=K
+  // Read batting rows — batCols index: 0=AB,1=R,2=1B,3=2B,4=3B,5=HR,6=RBI,7=BB,8=K,9=SAC,10=SF,11=ROE,12=FC
   function getBatters(team) {
     const tbody = document.getElementById(`bs-${gameId}-${team}-tbody`);
     if (!tbody) return [];
@@ -1777,7 +1782,7 @@ window.printBsScore = function(gameId, awayTeamName, homeTeamName) {
       const nm = tr.querySelector('input[type="text"]')?.value?.trim()||'';
       if (!nm) return null;
       const ns = Array.from(tr.querySelectorAll('input[type="number"]')).map(x=>parseInt(x.value)||0);
-      return {name:nm,ab:ns[0],r:ns[1],h:ns[2],d:ns[3],t:ns[4],hr:ns[5],rbi:ns[6],bb:ns[7],k:ns[8]};
+      return {name:nm,ab:ns[0],r:ns[1],s:ns[2],d:ns[3],t:ns[4],hr:ns[5],rbi:ns[6],bb:ns[7],k:ns[8],sac:ns[9]||0,sf:ns[10]||0,roe:ns[11]||0,fc:ns[12]||0};
     }).filter(Boolean);
   }
   // Read pitching rows: first text=name, second text=IP, then numbers H,R,ER,BB,K
@@ -1795,9 +1800,9 @@ window.printBsScore = function(gameId, awayTeamName, homeTeamName) {
   }
   const awayBatters=getBatters('away'), homeBatters=getBatters('home');
   const awayPitchers=getPitchers('away'), homePitchers=getPitchers('home');
-  function batTots(b){return b.reduce((s,p)=>({ab:s.ab+p.ab,r:s.r+p.r,h:s.h+p.h,rbi:s.rbi+p.rbi,bb:s.bb+p.bb,k:s.k+p.k,d:s.d+p.d,t:s.t+p.t,hr:s.hr+p.hr}),{ab:0,r:0,h:0,rbi:0,bb:0,k:0,d:0,t:0,hr:0});}
+  function batTots(b){return b.reduce((acc,p)=>({ab:acc.ab+p.ab,r:acc.r+p.r,s:acc.s+(p.s||0),d:acc.d+p.d,t:acc.t+p.t,hr:acc.hr+p.hr,rbi:acc.rbi+p.rbi,bb:acc.bb+p.bb,k:acc.k+p.k,sac:acc.sac+(p.sac||0),sf:acc.sf+(p.sf||0),roe:acc.roe+(p.roe||0),fc:acc.fc+(p.fc||0)}),{ab:0,r:0,s:0,d:0,t:0,hr:0,rbi:0,bb:0,k:0,sac:0,sf:0,roe:0,fc:0});}
   // TB = H + 2B + 2×3B + 3×HR  (since TB = 1B×1 + 2B×2 + 3B×3 + HR×4 = (H-2B-3B-HR) + 2×2B + 3×3B + 4×HR)
-  function calcTB(p){return p.h+p.d+2*p.t+3*p.hr;}
+  function calcTB(p){return (p.s||0)+2*(p.d||0)+3*(p.t||0)+4*(p.hr||0);}
   function xbhNotes(bats){
     const parts=[];
     const hr=bats.filter(p=>p.hr>0).map(p=>p.name+(p.hr>1?' '+p.hr:''));
@@ -1836,13 +1841,13 @@ window.printBsScore = function(gameId, awayTeamName, homeTeamName) {
   function batTable(bats, tname, color) {
     if (!bats.length) return '<div style="padding:8px;color:#aaa;font-size:11px;font-style:italic">No batting stats entered</div>';
     const tot = batTots(bats);
-    const rows = bats.map(p=>`<tr><td class="l">${p.name}</td><td>${p.ab}</td><td>${p.r}</td><td>${p.h}</td><td>${p.rbi}</td><td>${p.bb}</td><td>${p.k}</td></tr>`).join('');
+    const rows = bats.map(p=>`<tr><td class="l">${p.name}</td><td>${p.ab}</td><td>${p.r}</td><td>${(p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0)}</td><td>${p.rbi}</td><td>${p.bb}</td><td>${p.k}</td></tr>`).join('');
     return `<table class="st"><thead><tr style="background:${color}">
       <th class="l" style="color:#fff">${tname}</th>
       <th style="color:#fff">AB</th><th style="color:#fff">R</th><th style="color:#fff">H</th>
       <th style="color:#fff">RBI</th><th style="color:#fff">BB</th><th style="color:#fff">SO</th>
     </tr></thead><tbody>${rows}
-      <tr class="tot"><td class="l">Totals</td><td>${tot.ab}</td><td>${tot.r}</td><td>${tot.h}</td><td>${tot.rbi}</td><td>${tot.bb}</td><td>${tot.k}</td></tr>
+      <tr class="tot"><td class="l">Totals</td><td>${tot.ab}</td><td>${tot.r}</td><td>${tot.s+tot.d+tot.t+tot.hr}</td><td>${tot.rbi}</td><td>${tot.bb}</td><td>${tot.k}</td></tr>
     </tbody></table>
     <div class="notes">${xbhNotes(bats)||'&nbsp;'}</div>`;
   }
@@ -1943,7 +1948,7 @@ window.submitBoxScore = async function(gameId) {
   const awayErrors   = parseInt(document.getElementById(`bs-${gameId}-ls-away-E`)?.value) || 0;
   const homeErrors   = parseInt(document.getElementById(`bs-${gameId}-ls-home-E`)?.value) || 0;
 
-  const statCols = ['AB','R','H','2B','3B','HR','RBI','BB','K'];
+  const statCols = ['AB','R','1B','2B','3B','HR','RBI','BB','K','SAC','SF','ROE','FC'];
   function readBatters(teamPrefix) {
     const tbody = document.getElementById('bs-' + gameId + '-' + teamPrefix + '-tbody');
     if (!tbody) return [];
@@ -1957,9 +1962,10 @@ window.submitBoxScore = async function(gameId) {
         obj[col.toLowerCase().replace(/[^a-z0-9]/g, '')] = parseInt(inp?.value) || 0;
       });
       // Write canonical aliases so admin.html / index.html read correctly
-      obj.so = obj.k || 0;        // k → so (strikeouts)
-      obj.d  = obj['2b'] || 0;   // 2B → d (doubles)
-      obj.t  = obj['3b'] || 0;   // 3B → t (triples)
+      obj.so  = obj.k    || 0;   // k → so (strikeouts)
+      obj.d   = obj['2b'] || 0;  // 2B → d (doubles)
+      obj.t   = obj['3b'] || 0;  // 3B → t (triples)
+      obj.s   = obj['1b'] || 0;  // 1B → s (singles)
       return obj;
     }).filter(Boolean);
   }
