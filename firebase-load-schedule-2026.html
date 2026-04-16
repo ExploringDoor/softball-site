@@ -168,16 +168,30 @@ const PDF_GAMES = [
   {wk:13,date:"2026-07-16",time:"6:00 PM",away:"KI",home:"BA1",field:"South"},
 ];
 
-// Normalize: fix field name, set all times to 6:15 PM, then apply exceptions
+// Field name fixes and address lookup
+const FIELD_INFO = {
+  'Mondauk 4':  { name: 'Mondauk 4',    addr: '1452 Dillon Road, Ambler, PA 19034' },
+  'Mondauk 5':  { name: 'Mondauk 5',    addr: '1452 Dillon Road, Ambler, PA 19034' },
+  'Lukens #2':  { name: 'Lukens #2',    addr: '540 Dresher Road, Horsham, PA 19044' },
+  'Plymouth':   { name: 'Plymouth',     addr: '810 Germantown Pike, Plymouth Meeting, PA 19462' },
+  'South':      { name: 'Southampton',  addr: 'Schafer Park, Gravel Hill and Industrial Blvd, Southampton, PA 18966' },
+  'Cedar Hill': { name: 'Cedar Hill',   addr: '449 Cedar Hill Road, Ambler, PA 19002' },
+  'Sunny Hill': { name: 'Sunnybrook',   addr: '2532 Long Meadow Road, Lansdale, PA 19446' },
+  'Sunnybrook': { name: 'Sunnybrook',   addr: '2532 Long Meadow Road, Lansdale, PA 19446' },
+};
+
+// Normalize: fix field names/addresses, set all times to 6:15 PM, then apply exceptions
 PDF_GAMES.forEach(g => {
-  if (g.field === 'Sunny Hill') g.field = 'Sunnybrook';
+  const fi = FIELD_INFO[g.field];
+  if (fi) { g.field = fi.name; g.addr = fi.addr; }
   g.time = '6:15 PM';
 });
 // Exceptions: 6:00 PM start
 PDF_GAMES.forEach(g => {
   if (g.wk === 3 && g.away === 'CHA'  && g.home === 'KI')  g.time = '6:00 PM'; // week of 5/4
   if (g.wk === 2 && g.away === 'SA1'  && g.home === 'BOR') g.time = '6:00 PM'; // week of 4/27
-  if (g.wk === 13 && g.away === 'KI'  && g.home === 'BA1') g.time = '6:00 PM'; // week of 7/13
+  if (g.wk === 13 && g.away === 'KI'   && g.home === 'BA1')  g.time = '6:00 PM'; // week of 7/13
+  if (g.wk === 8  && g.away === 'TBIMC' && g.home === 'SA1') g.time = '8:00 PM'; // 6/8
 });
 
 const PDF_CODES = [...new Set(PDF_GAMES.flatMap(g=>[g.away,g.home]))].sort();
@@ -298,6 +312,7 @@ window.loadGames = async function() {
         away:  awayId,
         home:  homeId,
         field: g.field,
+        addr:  g.addr || '',
         done:  false,
       });
       count++;
