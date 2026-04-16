@@ -2275,7 +2275,7 @@ function renderBoxScore(awayName, homeName, g) {
       <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1);flex-wrap:wrap">
         <button class="btn btn-success" onclick="saveBoxScore(true)">Save & Mark Final</button>
         <button class="btn btn-outline" onclick="saveBoxScore(false)">Save Draft</button>
-        <button class="btn btn-outline" onclick="window.print()" title="Export box score as PDF">🖨️ Export PDF</button>
+        <button class="btn btn-outline" onclick="bsExportPdf()" title="Export box score as PDF">🖨️ Export PDF</button>
         ${bsGameData?.done ? `<button class="btn btn-outline" style="color:#e65100;border-color:#e65100" onclick="bsReopenGame()" title="Reset game to in-progress so scores can be edited">↺ Reopen Game</button>` : ''}
         <button class="btn btn-outline" onclick="closeBoxScore()">Cancel</button>
       </div>
@@ -2566,6 +2566,150 @@ window.bsMoveRow = function(side, idx, dir) {
   if (newIdx < 0 || newIdx >= activeCount) return;
   [lineup[idx], lineup[newIdx]] = [lineup[newIdx], lineup[idx]];
   bsRerender();
+};
+
+window.bsExportPdf = function() {
+  const awayTeam = TEAMS.find(t => t.id === bsGameData.away || t.short === bsGameData.away);
+  const homeTeam = TEAMS.find(t => t.id === bsGameData.home || t.short === bsGameData.home);
+  const awayName = awayTeam?.name || bsGameData.away || 'Away';
+  const homeName = homeTeam?.name || bsGameData.home || 'Home';
+  const awayActive = bsAwayLineup.filter(p => !p.dnp);
+  const homeActive = bsHomeLineup.filter(p => !p.dnp);
+  const awayR = awayActive.reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const homeR = homeActive.reduce((s,p)=>s+(parseInt(p.r)||0),0);
+
+  const batCols = ['AB','R','1B','2B','3B','HR','RBI','BB','K','SAC','SF','ROE','FC'];
+  const batKeys = ['ab','r','s','d','t','hr','rbi','bb','so','sac','sf','roe','fc'];
+
+  function batRows(lineup) {
+    return lineup.map((p,i) => `<tr>
+      <td class="num">${i+1}.</td>
+      <td class="name">${p.name}${p.num?' <span class="jersey">#'+p.num+'</span>':''}</td>
+      ${batKeys.map(k=>`<td>${parseInt(p[k])||0}</td>`).join('')}
+    </tr>`).join('');
+  }
+  function batTotals(lineup) {
+    return batKeys.map(k => lineup.reduce((s,p)=>s+(parseInt(p[k])||0),0));
+  }
+  function pitRows(pitchers) {
+    return pitchers.filter(p=>p.name).map(p=>`<tr>
+      <td class="name">${p.name}</td>
+      <td>${p.ip||'—'}</td>
+      <td>${parseInt(p.h)||0}</td>
+      <td>${parseInt(p.r)||0}</td>
+      <td>${parseInt(p.er)||0}</td>
+      <td>${parseInt(p.bb)||0}</td>
+      <td>${parseInt(p.so)||0}</td>
+    </tr>`).join('');
+  }
+
+  // Line score
+  const innCount = bsInnings.away.length;
+  const innHeaders = Array.from({length:innCount},(_,i)=>`<th>${i+1}</th>`).join('');
+  const awayInn = bsInnings.away.map(v=>`<td>${parseInt(v)||0}</td>`).join('');
+  const homeInn = bsInnings.home.map(v=>`<td>${parseInt(v)||0}</td>`).join('');
+  const awayH = awayActive.reduce((s,p)=>s+(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),0);
+  const homeH = homeActive.reduce((s,p)=>s+(parseInt(p.s)||0)+(parseInt(p.d)||0)+(parseInt(p.t)||0)+(parseInt(p.hr)||0),0);
+  const awayTots = batTotals(awayActive);
+  const homeTots = batTotals(homeActive);
+  const recap = bsGameRecap ? `<div class="recap"><strong>Recap:</strong> ${bsGameRecap.replace(/</g,'&lt;')}</div>` : '';
+  const gameLabel = `Week ${bsGameData?.wk||'?'} — ${awayName} @ ${homeName}`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Box Score — ${gameLabel}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Barlow Condensed',Arial,sans-serif;font-size:13px;color:#111;background:#fff;padding:24px 28px}
+    h1{font-size:22px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;color:#001a3e;margin-bottom:2px}
+    .sub{font-size:12px;color:#555;margin-bottom:18px}
+    .scoreboard{display:flex;align-items:center;gap:0;margin-bottom:18px;border:2px solid #001a3e;border-radius:8px;overflow:hidden}
+    .sb-team{flex:1;padding:12px 16px;background:#001a3e;color:#fff}
+    .sb-team .t{font-size:18px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}
+    .sb-team .l{font-size:10px;opacity:.6;letter-spacing:.1em;text-transform:uppercase;margin-top:2px}
+    .sb-score{padding:12px 20px;background:#fff;text-align:center;font-size:44px;font-weight:900;color:#001a3e;line-height:1;white-space:nowrap}
+    .sb-score .dash{font-size:28px;color:#aaa;margin:0 6px}
+    section{margin-bottom:20px}
+    h2{font-size:13px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:#001a3e;padding:5px 0;border-bottom:2px solid #001a3e;margin-bottom:6px}
+    h3{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#555;margin:10px 0 4px}
+    table{width:100%;border-collapse:collapse;font-size:11px}
+    th{text-align:center;padding:4px 3px;font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#555;border-bottom:1px solid #ccc;background:#f5f5f5}
+    th.left,td.name,td.num{text-align:left}
+    td{text-align:center;padding:3px 3px;border-bottom:1px solid #eee}
+    td.name{padding-left:4px;min-width:110px}
+    td.num{width:20px;color:#888;font-size:10px}
+    tr.totals td{font-weight:800;border-top:2px solid #001a3e;background:#f0f4ff;font-size:12px}
+    .jersey{color:#888;font-size:10px;font-weight:400}
+    .linescore th,.linescore td{min-width:22px}
+    .linescore td.name,.linescore th.left{min-width:100px}
+    .linescore td.bold{font-weight:900;color:#001a3e;font-size:13px}
+    .recap{font-size:12px;line-height:1.5;padding:10px 12px;background:#f8f9fa;border-left:3px solid #001a3e;border-radius:0 6px 6px 0;margin-top:4px}
+    .page-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;border-bottom:3px solid #001a3e;padding-bottom:10px}
+    .logo{font-size:28px;font-weight:900;letter-spacing:.08em;color:#001a3e}
+    @media print{body{padding:12px 16px}@page{margin:.5in;size:letter landscape}}
+  </style></head><body>
+  <div class="page-header">
+    <div>
+      <div class="logo">DVSL</div>
+      <div class="sub">Box Score — ${gameLabel}</div>
+    </div>
+    <div class="sub" style="text-align:right">Printed ${new Date().toLocaleDateString()}</div>
+  </div>
+
+  <div class="scoreboard">
+    <div class="sb-team"><div class="t">${awayName}</div><div class="l">Away</div></div>
+    <div class="sb-score"><span>${awayR}</span><span class="dash">—</span><span>${homeR}</span></div>
+    <div class="sb-team" style="text-align:right"><div class="t">${homeName}</div><div class="l">Home</div></div>
+  </div>
+
+  <section>
+    <h2>Line Score</h2>
+    <table class="linescore">
+      <thead><tr><th class="left">Team</th>${innHeaders}<th>R</th><th>H</th></tr></thead>
+      <tbody>
+        <tr><td class="name">${awayName}</td>${awayInn}<td class="bold">${awayR}</td><td class="bold">${awayH}</td></tr>
+        <tr><td class="name">${homeName}</td>${homeInn}<td class="bold">${homeR}</td><td class="bold">${homeH}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Batting</h2>
+    <h3>${awayName}</h3>
+    <table>
+      <thead><tr><th class="left" style="width:20px"></th><th class="left">Player</th>${batCols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+      <tbody>${batRows(awayActive)}<tr class="totals"><td></td><td class="name">TOTALS</td>${awayTots.map(v=>`<td>${v}</td>`).join('')}</tr></tbody>
+    </table>
+    <h3 style="margin-top:12px">${homeName}</h3>
+    <table>
+      <thead><tr><th class="left" style="width:20px"></th><th class="left">Player</th>${batCols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+      <tbody>${batRows(homeActive)}<tr class="totals"><td></td><td class="name">TOTALS</td>${homeTots.map(v=>`<td>${v}</td>`).join('')}</tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Pitching</h2>
+    <h3>${awayName}</h3>
+    <table>
+      <thead><tr><th class="left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th></tr></thead>
+      <tbody>${pitRows(bsAwayPitchers)||'<tr><td colspan="7" style="color:#aaa;font-style:italic">—</td></tr>'}</tbody>
+    </table>
+    <h3 style="margin-top:12px">${homeName}</h3>
+    <table>
+      <thead><tr><th class="left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th></tr></thead>
+      <tbody>${pitRows(bsHomePitchers)||'<tr><td colspan="7" style="color:#aaa;font-style:italic">—</td></tr>'}</tbody>
+    </table>
+  </section>
+
+  ${recap ? `<section><h2>Game Recap</h2>${recap}</section>` : ''}
+
+  <script>window.onload=function(){window.print();}<\/script>
+  </body></html>`;
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  if (!win) { alert('Pop-up blocked — please allow pop-ups for this page and try again.'); return; }
+  win.document.write(html);
+  win.document.close();
 };
 
 window.saveBoxScore = async function(markFinal) {
