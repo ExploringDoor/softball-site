@@ -2790,7 +2790,7 @@ function handlePitch(type) {
     flashFeedback('FOUL', 'var(--orange)');
     renderAll();
   } else if (type === 'hbp') {
-    endAtBat('hbp');
+    endAtBat('walk');
   } else if (type === 'iw') {
     endAtBat('walk');
   } else if (type === 'ci') {
@@ -2836,9 +2836,9 @@ function endAtBat(result, details) {
   const location = details?.location || null;
   const locStr = location ? ` to ${location.toUpperCase()}` : '';
 
-  if (result === 'walk' || result === 'hbp') {
-    if (sid) { if (result === 'hbp') stats.hbp = (stats.hbp||0)+1; else stats.bb++; }
-    // Force runners — batter takes 1B, each runner advances only if forced
+  if (result === 'walk') {
+    if (sid) { stats.bb++; }
+    // Force runners
     if (G.runners[1]) {
       if (G.runners[2]) {
         if (G.runners[3]) {
@@ -2868,14 +2868,10 @@ function endAtBat(result, details) {
       G.twoOutRbiLog.push({ name: G._twoOutBatter, team, rbi: rbis });
     }
     const pStatsBB = currentPitcherStats(fieldingTeam());
-    if (pStatsBB) { if (result === 'hbp') pStatsBB.hbp = (pStatsBB.hbp||0)+1; else pStatsBB.bb++; }
-    if (result === 'hbp') {
-      logPlay('HBP', rbis > 0 ? 'HBP — Hit by pitch, scores a run' : 'HBP — Hit by pitch');
-    } else {
-      logPlay('Walk', rbis > 0 ? `BB — Walk, scores a run` : 'BB — Base on balls');
-    }
+    if (pStatsBB) pStatsBB.bb++;
+    logPlay('Walk', rbis > 0 ? `BB — Walk, scores a run` : 'BB — Base on balls');
     advanceLineup(team);
-    flashFeedback(result === 'hbp' ? 'HBP' : 'WALK', 'var(--blue)');
+    flashFeedback('WALK', 'var(--blue)');
   } else if (result === 'single') {
     G.halfInningHits++;
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
@@ -2980,10 +2976,6 @@ function endAtBat(result, details) {
     logPlay('Out', 'Out');
     flashFeedback('OUT', 'var(--red)');
   }
-
-  // Advance batting order for simple outs — hits/walks/FC/DP all return early above;
-  // error already calls advanceLineup() in its branch; walk calls it too.
-  if (!['walk', 'error'].includes(result)) advanceLineup(team);
 
   G.balls = 0;
   G.strikes = 0;
@@ -3675,7 +3667,6 @@ function undoLast() {
   if (snap.halfInningErrors  !== undefined) G.halfInningErrors  = snap.halfInningErrors;
   G.selectedRunner = null;
   closeAllSheets();
-  _reenablePitchButtons(); // re-enable if undo happened after 3rd-out lock
   renderAll();
 }
 
@@ -4102,8 +4093,9 @@ document.getElementById('menu-reset-game').addEventListener('click', () => {
   // Wipe live score in Firebase if we have a gameId
   if (G.gameId) {
     try {
-      deleteDoc(doc(db, 'live_scores', G.gameId)).catch(() => {});
-      deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {}); // also clear saved mid-game state
+      import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js').then(({ doc, deleteDoc }) => {
+        deleteDoc(doc(db, 'live_scores', G.gameId)).catch(() => {});
+      });
     } catch(e) {}
   }
   // Reset all G state
@@ -5336,14 +5328,7 @@ async function loadRosters(awayTeamId, homeTeamId) {
 }
 
 // ===== SAVE SCORE =====
-let _saveScoreTimer = null;
-function saveScore() {
-  // Debounce: collapse rapid calls (e.g., multiple pitches in quick succession)
-  // into a single Firestore write 400 ms after the last call.
-  clearTimeout(_saveScoreTimer);
-  _saveScoreTimer = setTimeout(_doSaveScore, 400);
-}
-async function _doSaveScore() {
+async function saveScore() {
   if (!G.gameId || G.gameId === 'practice') return;
   try {
     await updateDoc(doc(db, 'games', G.gameId), {
