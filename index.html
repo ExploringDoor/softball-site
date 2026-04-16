@@ -3032,7 +3032,7 @@ async function loadAllData() {
     SCHEDULE_PREVIEW = games
       .map(g => ({
         id: g.id,
-        wk: g.wk, date: normGameDate(g.date), day: g.day, time: g.time,
+        wk: g.wk, date: normGameDate(g.date), rawDate: g.date||'', day: g.day, time: g.time,
         field: g.field, addr: g.addr||'',
         away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
         home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
@@ -3043,7 +3043,7 @@ async function loadAllData() {
           return (Date.now() - ts.getTime()) < 60 * 60 * 1000; // stale after 60 min
         })()
       }))
-      .sort((a,b) => a.wk - b.wk || (a.time||'').localeCompare(b.time||''));
+      .sort((a,b) => a.wk - b.wk || (a.rawDate||'').localeCompare(b.rawDate||'') || (a.time||'').localeCompare(b.time||''));
 
     // Map recaps — sort by wk desc
     // Normalize recap away/home to lowercase short codes (admin saves full names, games use short codes)
@@ -3110,7 +3110,7 @@ async function refreshVolatileData() {
     const freshGames = gamesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     SCHEDULE_PREVIEW = freshGames.map(g => ({
       id: g.id,
-      wk: g.wk, date: normGameDate(g.date), day: g.day, time: g.time,
+      wk: g.wk, date: normGameDate(g.date), rawDate: g.date||'', day: g.day, time: g.time,
       field: g.field, addr: g.addr||'',
       away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
       home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
