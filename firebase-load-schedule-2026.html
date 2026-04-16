@@ -234,10 +234,11 @@ window.checkMapping = async function() {
       out('✓ All 16 teams matched!', 'ok');
     }
 
-    // Count existing games
+    // Count existing 2026 games only
     const gSnap = await getDocs(collection(db, 'games'));
-    existingGameDocs = gSnap.docs;
-    out(`Found ${existingGameDocs.length} existing games in Firestore.`, 'info');
+    existingGameDocs = gSnap.docs.filter(d => (d.data().date || '').startsWith('2026-'));
+    out(`Found ${gSnap.docs.length} total games in Firestore.`, 'info');
+    out(`Found ${existingGameDocs.length} games from 2026 (only these will be wiped).`, 'warn');
     out('Ready. Click Step 2 to wipe existing games.', 'ok');
     document.getElementById('btn-wipe').disabled = false;
   } catch(e) {
