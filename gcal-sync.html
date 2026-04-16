@@ -100,9 +100,9 @@ window.loadGames = async function() {
       </label>`).join('');
     document.getElementById('team-list').style.display = 'block';
 
-    // Count games per team
+    // Count games per team (match by team id, not short)
     TEAM_LIST.forEach(t => {
-      const count = GAMES.filter(g => g.away === t.short || g.home === t.short).length;
+      const count = GAMES.filter(g => g.away === t.id || g.home === t.id).length;
       out(`  ${t.short}: ${count} games`);
     });
 
@@ -190,7 +190,7 @@ async function syncTeamCalendars(token) {
     const team = TEAMS[short];
     if (!team) { out(`⚠️  Skipping ${short} — not found in Firebase`); continue; }
     const calName = `DVSL 2026 — ${team.name}`;
-    const teamGames = GAMES.filter(g => g.away === short || g.home === short);
+    const teamGames = GAMES.filter(g => g.away === team.id || g.home === team.id);
     out(`\n── ${team.name} (${teamGames.length} games) ──`);
 
     let calId = existingCals[calName] || null;
@@ -236,9 +236,15 @@ async function syncTeamCalendars(token) {
     // Add games
     let added = 0;
     for (const g of teamGames) {
-      const parts = (g.date || '').split(' ');
-      const mon = monthMap[parts[0]] || 4;
-      const day = parseInt(parts[1]) || 1;
+      // Parse date — handle both ISO "2026-04-20" and display "Apr 20" formats
+      let mon, day;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(g.date||'')) {
+        const dp = g.date.split('-');
+        mon = parseInt(dp[1]); day = parseInt(dp[2]);
+      } else {
+        const parts = (g.date || '').split(' ');
+        mon = monthMap[parts[0]] || 4; day = parseInt(parts[1]) || 1;
+      }
       let hour = 19, min = 0;
       if (g.time) {
         const tp = g.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
@@ -254,11 +260,11 @@ async function syncTeamCalendars(token) {
       const endTotalMin = hour * 60 + min + 90;
       const endStr = `2026-${pad(mon)}-${pad(day)}T${pad(Math.floor(endTotalMin/60))}:${pad(endTotalMin%60)}:00`;
 
-      const awayName = TEAMS[g.away]?.name || g.away || '?';
-      const homeName = TEAMS[g.home]?.name || g.home || '?';
-      const isHome = g.home === short;
+      const awayName = TEAMS_BY_ID[g.away]?.name || g.away || '?';
+      const homeName = TEAMS_BY_ID[g.home]?.name || g.home || '?';
+      const isHome = g.home === team.id;
       const opponent = isHome ? awayName : homeName;
-      const oppShort = isHome ? (TEAMS[g.away]?.short || g.away) : (TEAMS[g.home]?.short || g.home);
+      const oppShort = isHome ? (TEAMS_BY_ID[g.away]?.short || g.away) : (TEAMS_BY_ID[g.home]?.short || g.home);
       const vsAt = isHome ? 'vs' : '@';
       const field = g.field || 'TBD';
       const addr = g.addr || '';
