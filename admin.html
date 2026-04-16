@@ -2062,7 +2062,9 @@ function renderBoxScore(awayName, homeName, g) {
                 return `<tr>
                   <td style="padding:3px 6px;white-space:nowrap">
                     <span style="font-size:10px;color:var(--muted2);width:14px;display:inline-block;text-align:right;margin-right:2px">${orderNum}.</span>
-                    <input type="text" value="${p.name.replace(/"/g,'&quot;')}" oninput="bsUpdateBatter('${side}',${i},'name',this.value)" style="width:calc(100% - 22px);font-size:12px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-family:inherit">
+                    ${p.guest
+                      ? `<input type="text" value="${p.name.replace(/"/g,'&quot;')}" oninput="bsUpdateBatter('${side}',${i},'name',this.value)" style="width:calc(100% - 22px);font-size:12px;padding:3px 5px;border:1px solid var(--border);border-radius:4px;font-family:inherit">`
+                      : `<span style="font-size:12px;font-weight:600;color:var(--navy);vertical-align:middle;display:inline-block;width:calc(100% - 22px);padding:3px 5px">${p.name}</span>`}
                   </td>
                   <td style="${tdS}"><input type="number" min="0" value="${parseInt(p.ab)||0}" data-side="${side}" data-idx="${i}" data-col="ab" oninput="bsUpdateBatterDOM('${side}',${i},this)" style="width:44px;text-align:center;font-size:13px;padding:3px 2px;border:1px solid var(--border);border-radius:4px;font-family:inherit;box-sizing:border-box"></td>
                   <td style="${tdS}"><input type="number" min="0" value="${parseInt(p.r)||0}" data-side="${side}" data-idx="${i}" data-col="r" oninput="bsUpdateBatterDOM('${side}',${i},this)" style="width:44px;text-align:center;font-size:13px;padding:3px 2px;border:1px solid var(--border);border-radius:4px;font-family:inherit;box-sizing:border-box"></td>
@@ -2103,7 +2105,7 @@ function renderBoxScore(awayName, homeName, g) {
           </table>
         </div>
         <div style="padding:4px 10px 8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-          <button class="btn btn-outline btn-sm" onclick="bsAddGuest('${side}')">+ Add Batter</button>
+          <button class="btn btn-outline btn-sm" onclick="bsShowAddBatterUI('${side}')">+ Add Batter</button>
           <span style="font-size:10px;color:var(--muted);font-style:italic">SAC = sac bunt &nbsp;&bull;&nbsp; SF = sac fly &nbsp;&bull;&nbsp; ROE = reached on error &nbsp;&bull;&nbsp; FC = fielder's choice</span>
         </div>
 
@@ -2120,7 +2122,9 @@ function renderBoxScore(awayName, homeName, g) {
               <tbody id="admin-pit-${side}-tbody">
                 ${(side==='away'?bsAwayPitchers:bsHomePitchers).map((pit,pi) => `
                 <tr>
-                  <td style="padding:4px 6px"><input type="text" value="${pit.name.replace(/"/g,'&quot;')}" placeholder="Pitcher name" oninput="bsUpdatePitcher('${side}',${pi},'name',this.value)" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit"></td>
+                  <td style="padding:4px 6px">${(pit.guest === true || !pit.name)
+                    ? `<input type="text" value="${pit.name.replace(/"/g,'&quot;')}" placeholder="Pitcher name" oninput="bsUpdatePitcher('${side}',${pi},'name',this.value)" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit">`
+                    : `<span style="font-size:12px;font-weight:600;color:var(--navy);display:block;padding:3px 6px">${pit.name}</span>`}</td>
                   <td style="padding:4px 3px"><input type="text" value="${pit.ip||''}" placeholder="7.0" oninput="bsUpdatePitcher('${side}',${pi},'ip',this.value)" style="width:44px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit"></td>
                   ${['h','r','er','bb','so'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" value="${parseInt(pit[c])||0}" oninput="bsUpdatePitcher('${side}',${pi},'${c}',this.value)" style="width:44px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit"></td>`).join('')}
                   <td style="padding:4px 3px">${pi>0?`<button onclick="bsRemovePitcher('${side}',${pi})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button>`:''}</td>
@@ -2129,7 +2133,7 @@ function renderBoxScore(awayName, homeName, g) {
             </table>
           </div>
           <div style="padding:4px 0 8px">
-            <button class="btn btn-outline btn-sm" onclick="bsAddPitcher('${side}')">+ Add Pitcher</button>
+            <button class="btn btn-outline btn-sm" onclick="bsShowAddPitcherUI('${side}')">+ Add Pitcher</button>
           </div>
         </div>
       </div>`;
@@ -2414,19 +2418,106 @@ window.bsUpdatePitcher = function(side, idx, field, val) {
     arr[idx][field] = val;
   }
 };
-window.bsAddPitcher = function(side) {
-  (side==='away'?bsAwayPitchers:bsHomePitchers).push({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:''});
-  bsRerender();
-};
 window.bsRemovePitcher = function(side, idx) {
   (side==='away'?bsAwayPitchers:bsHomePitchers).splice(idx, 1);
   bsRerender();
 };
 
-window.bsAddGuest = function(side) {
-  const name = prompt('Guest player name:');
-  if(!name) return;
-  (side==='away'?bsAwayLineup:bsHomeLineup).push({name,num:'',pos:'',ab:0,r:0,s:0,d:0,t:0,hr:0,rbi:0,bb:0,so:0,sac:0,sf:0,roe:0,fc:0,dnp:false,guest:true});
+// ── Add Batter modal ──────────────────────────────────────────────────────────
+window.bsShowAddBatterUI = function(side) {
+  const lineup   = side==='away' ? bsAwayLineup : bsHomeLineup;
+  const awayTeam = TEAMS.find(t => t.id === bsGameData.away || t.short === bsGameData.away);
+  const homeTeam = TEAMS.find(t => t.id === bsGameData.home || t.short === bsGameData.home);
+  const teamId   = side==='away' ? (awayTeam?.id || bsGameData.away) : (homeTeam?.id || bsGameData.home);
+  const roster   = PLAYERS.filter(p => p.team === teamId);
+  const usedNames = new Set(lineup.map(p => p.name));
+  const available = roster.filter(p => !usedNames.has(p.name)).sort((a,b)=>(parseInt(a.num)||99)-(parseInt(b.num)||99));
+  document.getElementById('bs-add-batter-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'bs-add-batter-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;box-shadow:0 -4px 24px rgba(0,0,0,.15)">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:.04em;text-transform:uppercase;color:var(--navy);margin-bottom:14px">Add Batter — ${side==='away'?(TEAMS.find(t=>t.id===bsGameData.away||t.short===bsGameData.away)?.name||bsGameData.away):(TEAMS.find(t=>t.id===bsGameData.home||t.short===bsGameData.home)?.name||bsGameData.home)}</div>
+      <select id="bs-add-batter-sel" onchange="document.getElementById('bs-add-batter-newrow').style.display=this.value==='__new__'?'block':'none'" style="width:100%;font-size:14px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;font-family:inherit">
+        <option value="">— Select from roster —</option>
+        ${available.map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}|${p.num||''}">#${p.num||'?'} ${p.name}</option>`).join('')}
+        <option value="__new__">✏ New player (type name)…</option>
+      </select>
+      <div id="bs-add-batter-newrow" style="display:none;margin-bottom:10px">
+        <input id="bs-add-batter-newinp" type="text" placeholder="Player name" style="width:100%;font-size:14px;padding:10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="bsConfirmAddBatter('${side}')" style="flex:1;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;cursor:pointer">ADD</button>
+        <button onclick="document.getElementById('bs-add-batter-modal').remove()" style="padding:12px 20px;background:none;border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+};
+window.bsConfirmAddBatter = function(side) {
+  const sel = document.getElementById('bs-add-batter-sel');
+  if (!sel || !sel.value) return;
+  let name, num = '', isGuest = false;
+  if (sel.value === '__new__') {
+    const inp = document.getElementById('bs-add-batter-newinp');
+    name = inp?.value?.trim();
+    if (!name) { inp?.focus(); return; }
+    isGuest = true;
+  } else {
+    const parts = sel.value.split('|');
+    name = parts[0]; num = parts[1] || '';
+  }
+  (side==='away'?bsAwayLineup:bsHomeLineup).push({name,num,pos:'',ab:0,r:0,s:0,d:0,t:0,hr:0,rbi:0,bb:0,so:0,sac:0,sf:0,roe:0,fc:0,dnp:false,guest:isGuest});
+  document.getElementById('bs-add-batter-modal')?.remove();
+  bsRerender();
+};
+
+// ── Add Pitcher modal ─────────────────────────────────────────────────────────
+window.bsShowAddPitcherUI = function(side) {
+  const pitchers = side==='away' ? bsAwayPitchers : bsHomePitchers;
+  const awayTeam = TEAMS.find(t => t.id === bsGameData.away || t.short === bsGameData.away);
+  const homeTeam = TEAMS.find(t => t.id === bsGameData.home || t.short === bsGameData.home);
+  const teamId   = side==='away' ? (awayTeam?.id || bsGameData.away) : (homeTeam?.id || bsGameData.home);
+  const roster   = PLAYERS.filter(p => p.team === teamId);
+  const usedNames = new Set(pitchers.map(p => p.name).filter(Boolean));
+  const available = roster.filter(p => !usedNames.has(p.name)).sort((a,b)=>(parseInt(a.num)||99)-(parseInt(b.num)||99));
+  document.getElementById('bs-add-pitcher-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'bs-add-pitcher-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;box-shadow:0 -4px 24px rgba(0,0,0,.15)">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:.04em;text-transform:uppercase;color:var(--navy);margin-bottom:14px">Add Pitcher — ${side==='away'?(TEAMS.find(t=>t.id===bsGameData.away||t.short===bsGameData.away)?.name||bsGameData.away):(TEAMS.find(t=>t.id===bsGameData.home||t.short===bsGameData.home)?.name||bsGameData.home)}</div>
+      <select id="bs-add-pitcher-sel" onchange="document.getElementById('bs-add-pitcher-newrow').style.display=this.value==='__new__'?'block':'none'" style="width:100%;font-size:14px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;font-family:inherit">
+        <option value="">— Select from roster —</option>
+        ${available.map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}|${p.num||''}">#${p.num||'?'} ${p.name}</option>`).join('')}
+        <option value="__new__">✏ New pitcher (type name)…</option>
+      </select>
+      <div id="bs-add-pitcher-newrow" style="display:none;margin-bottom:10px">
+        <input id="bs-add-pitcher-newinp" type="text" placeholder="Pitcher name" style="width:100%;font-size:14px;padding:10px;border:1px solid var(--border);border-radius:8px;box-sizing:border-box;font-family:inherit">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="bsConfirmAddPitcher('${side}')" style="flex:1;padding:12px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;cursor:pointer">ADD</button>
+        <button onclick="document.getElementById('bs-add-pitcher-modal').remove()" style="padding:12px 20px;background:none;border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+};
+window.bsConfirmAddPitcher = function(side) {
+  const sel = document.getElementById('bs-add-pitcher-sel');
+  if (!sel || !sel.value) return;
+  let name = '', num = '', isGuest = false;
+  if (sel.value === '__new__') {
+    const inp = document.getElementById('bs-add-pitcher-newinp');
+    name = inp?.value?.trim() || '';
+    if (!name) { inp?.focus(); return; }
+    isGuest = true;
+  } else {
+    const parts = sel.value.split('|');
+    name = parts[0]; num = parts[1] || '';
+  }
+  (side==='away'?bsAwayPitchers:bsHomePitchers).push({name,num,ip:'',h:0,r:0,er:0,bb:0,so:0,strikes:0,balls:0,decision:'',guest:isGuest});
+  document.getElementById('bs-add-pitcher-modal')?.remove();
   bsRerender();
 };
 window.bsUpdateBatter = function(side, idx, field, val) {
