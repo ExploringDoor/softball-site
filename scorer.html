@@ -1339,6 +1339,12 @@
     font-weight: 600;
     color: var(--text);
   }
+  .lu-pos-badge{display:inline-flex;align-items:center;justify-content:center;margin-left:6px;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;background:rgba(255,255,255,.1);color:#94a3b8;cursor:pointer;min-width:28px;transition:background .15s}
+  .lu-pos-badge:hover{background:rgba(245,158,11,.25);color:#f59e0b}
+  .lu-pitcher-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;margin:0 12px 6px;border-radius:10px;border:1.5px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);cursor:pointer;transition:all .2s}
+  .lu-pitcher-bar:active{opacity:.8}
+  .lu-pitcher-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+  .lu-pitcher-val{font-size:14px;font-weight:700;color:rgba(255,255,255,.7)}
   .lu-chip-n {
     font-family: 'Barlow Condensed', sans-serif;
     font-weight: 900;
@@ -1913,6 +1919,10 @@
     <div id="lus-away-strip" class="lu-strip">
       <span style="font-size:11px;color:var(--text-muted);font-style:italic">Tap players above to build batting order</span>
     </div>
+    <div id="lus-away-pitcher-bar" class="lu-pitcher-bar" onclick="luSelectPitcher('away')">
+      <span class="lu-pitcher-label">⚾ PITCHER</span>
+      <span id="lus-away-pitcher-name" class="lu-pitcher-val">Tap to select →</span>
+    </div>
     <div class="lu-toolbar">
       <button class="lu-btn lu-btn-sm" onclick="luToggleAddRow('away')">+ Add Player</button>
       <div style="display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 10px">
@@ -1942,6 +1952,10 @@
     <div id="lus-home-strip" class="lu-strip">
       <span style="font-size:11px;color:var(--text-muted);font-style:italic">Tap players above to build batting order</span>
     </div>
+    <div id="lus-home-pitcher-bar" class="lu-pitcher-bar" onclick="luSelectPitcher('home')">
+      <span class="lu-pitcher-label">⚾ PITCHER</span>
+      <span id="lus-home-pitcher-name" class="lu-pitcher-val">Tap to select →</span>
+    </div>
     <div class="lu-toolbar">
       <button class="lu-btn lu-btn-sm" onclick="luToggleAddRow('home')">+ Add Player</button>
       <div style="display:inline-flex;align-items:center;gap:6px;background:var(--card2);border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:5px 10px">
@@ -1959,6 +1973,20 @@
       <button class="btn-primary" onclick="startScoring()">START SCORING ›</button>
     </div>
   </div>
+</div>
+
+<!-- Pitcher picker sheet -->
+<div id="lu-pitcher-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998" onclick="luClosePitcherSheet()"></div>
+<div id="lu-pitcher-sheet" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1e293b;border-radius:16px 16px 0 0;z-index:9999;max-height:65vh;overflow-y:auto;padding:20px 16px 32px">
+  <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:white;text-align:center;margin-bottom:14px;letter-spacing:.06em">SELECT PITCHER</div>
+  <div id="lu-pitcher-list"></div>
+</div>
+
+<!-- Position picker sheet -->
+<div id="lu-pos-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998" onclick="luClosePosSheet()"></div>
+<div id="lu-pos-sheet" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1e293b;border-radius:16px 16px 0 0;z-index:9999;padding:20px 16px 32px">
+  <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:white;text-align:center;margin-bottom:14px;letter-spacing:.06em">SET POSITION</div>
+  <div id="lu-pos-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;max-width:360px;margin:0 auto"></div>
 </div>
 
 <!-- Main App -->
@@ -4820,7 +4848,7 @@ function luRefreshUI(team) {
   const strip = document.getElementById(stripId);
   if (strip) {
     strip.innerHTML = lineup.length
-      ? lineup.map((p, i) => `<div class="lu-chip"><span class="lu-chip-n">${i+1}</span>${p.num && p.num !== '?' ? `<span style="font-size:10px;color:var(--text-muted)">#${p.num}</span> ` : ''}<span>${p.name}</span></div>`).join('')
+      ? lineup.map((p, i) => `<div class="lu-chip"><span class="lu-chip-n">${i+1}</span>${p.num && p.num !== '?' ? `<span style="font-size:10px;color:var(--text-muted)">#${p.num}</span> ` : ''}<span>${p.name}</span><span class="lu-pos-badge" onclick="event.stopPropagation();luOpenPosPicker('${team}',${i})">${p.pos||'POS'}</span></div>`).join('')
       : '<span style="font-size:11px;color:var(--text-muted);font-style:italic">Tap players to build batting order</span>';
   }
 }
@@ -4883,7 +4911,78 @@ window.luApplyDummy = function(team) {
   luRefreshUI(team);
 };
 
+// ── Pitcher picker ──────────────────────────────────────────────────
+window.luSelectPitcher = function(team) {
+  const lineup = G.lineups[team] || [];
+  const list = document.getElementById('lu-pitcher-list');
+  if (!lineup.length) {
+    list.innerHTML = '<div style="color:#94a3b8;padding:16px;text-align:center;font-size:14px">Add players to the lineup first.</div>';
+  } else {
+    list.innerHTML = lineup.map((p, i) => {
+      const isCurrent = G.pitchers?.[team]?.name === p.name;
+      return `<div onclick="luSetPitcher('${team}','${p.name.replace(/'/g,"\\'")}','${(p.num||'').replace(/'/g,"\\'")}');luClosePitcherSheet()" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;margin-bottom:6px;background:${isCurrent?'rgba(34,197,94,.15)':'#0f172a'};border:1.5px solid ${isCurrent?'#22c55e':'rgba(255,255,255,.07)'};cursor:pointer">
+        <span style="font-size:12px;color:#64748b;width:18px;text-align:center">${i+1}</span>
+        ${p.num&&p.num!=='?'?`<span style="font-size:11px;color:#64748b">#${p.num}</span>`:''}
+        <span style="font-size:15px;font-weight:700;color:white;flex:1">${p.name}</span>
+        ${isCurrent?'<span style="font-size:12px;color:#22c55e">✓ current</span>':''}
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('lu-pitcher-sheet').style.display = 'block';
+  document.getElementById('lu-pitcher-overlay').style.display = 'block';
+};
+
+window.luSetPitcher = function(team, name, num) {
+  if (!G.pitchers) G.pitchers = {};
+  const pid = (G.rosters[team]||[]).find(p=>p.name===name)?.pid || '';
+  G.pitchers[team] = { name, num: num||'?', pid };
+  const bar = document.getElementById(`lus-${team}-pitcher-bar`);
+  const nameEl = document.getElementById(`lus-${team}-pitcher-name`);
+  if (nameEl) nameEl.textContent = name + (num ? ` (#${num})` : '');
+  if (bar) { bar.style.background = 'rgba(34,197,94,.12)'; bar.style.borderColor = '#22c55e'; }
+};
+
+window.luClosePitcherSheet = function() {
+  document.getElementById('lu-pitcher-sheet').style.display = 'none';
+  document.getElementById('lu-pitcher-overlay').style.display = 'none';
+};
+
+// ── Position picker ─────────────────────────────────────────────────
+const LU_POSITIONS = ['P','C','1B','2B','3B','SS','LF','CF','RF','DH'];
+let _luPosTeam = null, _luPosIdx = null;
+
+window.luOpenPosPicker = function(team, idx) {
+  _luPosTeam = team; _luPosIdx = idx;
+  const current = G.lineups[team]?.[idx]?.pos || '';
+  const player = G.lineups[team]?.[idx];
+  document.querySelector('#lu-pos-sheet > div:first-child').textContent = player ? `${player.name} — Position` : 'SET POSITION';
+  const grid = document.getElementById('lu-pos-grid');
+  grid.innerHTML = LU_POSITIONS.map(pos =>
+    `<button onclick="luSetPos('${pos}')" style="padding:11px 4px;border:2px solid ${pos===current?'#f59e0b':'rgba(255,255,255,.1)'};background:${pos===current?'rgba(245,158,11,.15)':'#0f172a'};color:${pos===current?'#f59e0b':'white'};border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;cursor:pointer;transition:all .15s">${pos}</button>`
+  ).join('') + `<button onclick="luSetPos('')" style="padding:11px 4px;border:2px solid rgba(255,255,255,.1);background:#0f172a;color:#94a3b8;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;cursor:pointer">CLEAR</button>`;
+  document.getElementById('lu-pos-sheet').style.display = 'block';
+  document.getElementById('lu-pos-overlay').style.display = 'block';
+};
+
+window.luSetPos = function(pos) {
+  if (_luPosTeam !== null && _luPosIdx !== null && G.lineups[_luPosTeam]?.[_luPosIdx] !== undefined) {
+    G.lineups[_luPosTeam][_luPosIdx].pos = pos;
+    luRefreshUI(_luPosTeam);
+  }
+  luClosePosSheet();
+};
+
+window.luClosePosSheet = function() {
+  document.getElementById('lu-pos-sheet').style.display = 'none';
+  document.getElementById('lu-pos-overlay').style.display = 'none';
+  _luPosTeam = null; _luPosIdx = null;
+};
+
 window.luNextStep = function() {
+  if (!G.pitchers?.away?.name) {
+    alert('Please select a pitcher for the away team before continuing.');
+    return;
+  }
   document.getElementById('lus-away').style.display = 'none';
   const homeStep = document.getElementById('lus-home');
   homeStep.style.display = 'flex';
@@ -4896,7 +4995,10 @@ window.luPrevStep = function() {
 };
 
 function startScoring() {
-  // If a team's lineup is empty, fall back to full roster order
+  if (!G.pitchers?.home?.name) {
+    alert('Please select a pitcher for the home team before starting.');
+    return;
+  }
   if (!G.lineups.away.length) G.lineups.away = G.rosters.away.slice();
   if (!G.lineups.home.length) G.lineups.home = G.rosters.home.slice();
   document.getElementById('lineup-screen').classList.remove('visible');
