@@ -2486,7 +2486,7 @@
 // ===== FIREBASE =====
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
-  getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, query, where, serverTimestamp
+  getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, query, where, serverTimestamp, Timestamp
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -5973,11 +5973,20 @@ async function saveBoxScore(isFinal = false) {
 
     // ── Step 1: Save this team's individual submission record ──────────────
     if (scoringSide) {
+      const submittingTeamObj = scoringSide === 'away' ? G.awayTeam : G.homeTeam;
       await setDoc(doc(db, 'score_submissions', `${G.gameId}_${scoringSide}`), {
         ...fullData,
         submitting_side: scoringSide,
         submitting_team: G.scoringTeam,
         submitted_at:    new Date().toISOString(),
+        // Fields captain.html filters on (MY_SUBMISSIONS = submissions.filter(s => s.team_id === captainData.team_id))
+        team_id:         G.scoringTeam || submittingTeamObj.id || '',
+        team_name:       submittingTeamObj.name || submittingTeamObj.short || '',
+        submitted_by:    submittingTeamObj.name || submittingTeamObj.short || '',
+        wk:              G.wk || 0,
+        timestamp:       Timestamp.now(),
+        status:          'approved',
+        has_boxscore:    true,
       });
     }
 
@@ -6075,6 +6084,8 @@ document.getElementById('start-btn').addEventListener('click', async () => {
   if (!game) return;
 
   G.gameId = gameId;
+  G.wk = game.wk || game.week || 0;
+  G.gameDate = game.date || '';
 
   // Set team info — Firebase stores team IDs in game.away / game.home
   const awayId = game.away || game.away_team_id || game.away_id || '';

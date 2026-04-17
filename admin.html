@@ -919,7 +919,7 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, Timestamp, deleteField } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
@@ -1461,10 +1461,24 @@ window.resetGame = async function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
   if (!g) return;
   const awayName = getTeamName(g.away), homeName = getTeamName(g.home);
-  if (!confirm(`Reset "${awayName} vs ${homeName}"?\n\nThis will:\n• Un-mark it as Final\n• Clear the score back to 0–0\n• Mark box score as draft (removes it from league leaders)\n• Recalculate standings`)) return;
+  if (!confirm(`Reset "${awayName} vs ${homeName}"?\n\nThis will:\n• Un-mark it as Final\n• Clear the score back to 0–0\n• Mark box score as draft (removes it from league leaders)\n• Clear captain submission flags and in-progress scorer state\n• Recalculate standings`)) return;
   try {
-    await updateDoc(doc(db, 'games', gameId), { done: false, away_score: 0, home_score: 0 });
+    // Clear score, done flag, AND all submission tracking fields on the game doc
+    const gameUpdate = {
+      done: false, live: false, away_score: 0, home_score: 0,
+      score_pending: deleteField(),
+      score_submitted_away_away: deleteField(),
+      score_submitted_away_home: deleteField(),
+      score_submitted_away_by:   deleteField(),
+      score_submitted_home_away: deleteField(),
+      score_submitted_home_home: deleteField(),
+      score_submitted_home_by:   deleteField(),
+    };
+    await updateDoc(doc(db, 'games', gameId), gameUpdate);
     g.done = false; g.away_score = 0; g.home_score = 0;
+    delete g.score_pending;
+    delete g.score_submitted_away_away; delete g.score_submitted_away_home; delete g.score_submitted_away_by;
+    delete g.score_submitted_home_away; delete g.score_submitted_home_home; delete g.score_submitted_home_by;
 
     // Delete box score entirely so lineup picker starts fresh on next entry
     try {
@@ -1473,6 +1487,19 @@ window.resetGame = async function(gameId) {
         await deleteDoc(doc(db, 'box_scores', bsSnap.docs[0].id));
       }
     } catch(bsErr) { console.warn('Could not delete box score:', bsErr); }
+
+    // Delete score_submissions records (both sides) so captain can re-submit and admin queue clears
+    try {
+      await deleteDoc(doc(db, 'score_submissions', `${gameId}_away`)).catch(() => {});
+      await deleteDoc(doc(db, 'score_submissions', `${gameId}_home`)).catch(() => {});
+      // Legacy: also delete any score_submissions docs where game_id matches
+      const subsSnap = await getDocs(query(collection(db, 'score_submissions'), where('game_id', '==', gameId)));
+      await Promise.all(subsSnap.docs.map(d => deleteDoc(doc(db, 'score_submissions', d.id)).catch(() => {})));
+    } catch(subErr) { console.warn('Could not delete submissions:', subErr); }
+
+    // Wipe in-progress scorer state so re-entry starts clean
+    try { await deleteDoc(doc(db, 'game_states', gameId)).catch(() => {}); } catch(e) {}
+    try { await deleteDoc(doc(db, 'live_scores', gameId)).catch(() => {}); } catch(e) {}
 
     toast('Game reset — enter box score fresh from lineup picker');
     await logActivity('Score Entry', `Reset game to in-progress: ${awayName} vs ${homeName}`);
