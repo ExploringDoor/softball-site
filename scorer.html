@@ -2826,6 +2826,12 @@ document.querySelectorAll('[data-pitch]').forEach(btn => {
 document.getElementById('undo-pitch-btn').addEventListener('click', () => undoLast());
 
 function handlePitch(type) {
+  // Guard: if the between-innings overlay (or any end-of-half modal) is open,
+  // don't process pitch clicks. They can bleed through on some layouts.
+  const halfEndOverlay = document.getElementById('half-end-overlay');
+  if (halfEndOverlay && halfEndOverlay.style.display !== 'none' && halfEndOverlay.style.display !== '') return;
+  const gameOverOverlay = document.getElementById('game-over-overlay');
+  if (gameOverOverlay && gameOverOverlay.style.display !== 'none' && gameOverOverlay.style.display !== '') return;
   if (type === 'bip') { openBipSheet('level1'); return; }
   snapshotState();
   if (type !== 'bip') {
@@ -5281,6 +5287,8 @@ document.getElementById('gom-final-btn').addEventListener('click', async () => {
       }).catch(() => {});
       recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
     }
+    // Once finalized, stop any further saveScore calls from overwriting the games doc
+    G._gameAlreadyFinal = true;
     // Always clean up game state (shared + per-side) regardless of submission order
     deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
     deleteDoc(doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
@@ -5821,6 +5829,13 @@ async function loadRosters(awayTeamId, homeTeamId) {
 async function saveScore() {
   if (!G.gameId || G.gameId === 'practice') return;
   try {
+    // If the game was already finalized by the other captain, NEVER overwrite the
+    // canonical score on the games doc — our in-progress scoring would clobber
+    // the real final score on the public site. Still persist our own state.
+    if (G._gameAlreadyFinal) {
+      saveFullState();
+      return;
+    }
     await updateDoc(doc(db, 'games', G.gameId), {
       away_score: G.awayScore,
       home_score: G.homeScore,
@@ -6103,6 +6118,10 @@ document.getElementById('start-btn').addEventListener('click', async () => {
   G.gameId = gameId;
   G.wk = game.wk || game.week || 0;
   G.gameDate = game.date || '';
+  // If another captain already finalized this game, don't overwrite the canonical
+  // score on the games doc when we call saveScore(). Our progress still persists
+  // to our per-side game_states doc.
+  G._gameAlreadyFinal = !!(game.done === true || game._alreadyFinal);
 
   // Set team info — Firebase stores team IDs in game.away / game.home
   const awayId = game.away || game.away_team_id || game.away_id || '';
