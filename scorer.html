@@ -5300,7 +5300,8 @@ async function recalcStandingsFromAllGames() {
   }
 }
 
-function exportBoxScorePDF() {
+// ===== BOX SCORE HTML BUILDER (shared by PDF export & share sheet) =====
+function buildBoxScoreHTML(autoprint) {
   const away = G.awayTeam.name || G.awayTeam.short;
   const home = G.homeTeam.name || G.homeTeam.short;
   const maxInning = Math.max(G.linescores.away.length, G.linescores.home.length, 1);
@@ -5329,7 +5330,8 @@ function exportBoxScorePDF() {
   function buildPitchingSection(side) {
     const pStats = G.pitcherStats[side] || {};
     const keys = Object.keys(pStats);
-    const teamName = (side === 'away' ? G.awayTeam : G.homeTeam).name || (side === 'away' ? G.awayTeam : G.homeTeam).short;
+    const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
+    const teamName = teamObj.name || teamObj.short;
     if (keys.length === 0) {
       const p = G.pitchers[side];
       if (!p) return '';
@@ -5358,8 +5360,9 @@ function exportBoxScorePDF() {
   const lsInnings = innings.map(n => `<th>${n}</th>`).join('');
   const awayLS = innings.map((_, i) => `<td>${lsCell('away', i)}</td>`).join('');
   const homeLS = innings.map((_, i) => `<td>${lsCell('home', i)}</td>`).join('');
+  const printScript = autoprint ? '<script>window.onload=function(){window.print();}<\/script>' : '';
 
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Box Score — ${away} vs ${home}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 13px; margin: 24px; color: #111; }
@@ -5374,7 +5377,7 @@ function exportBoxScorePDF() {
     @media print { body { margin: 12px; } }
   </style></head><body>
   <h1>DVSL Box Score</h1>
-  <div class="final">${away} ${G.awayScore} — ${G.homeTeam.short} ${G.homeScore}</div>
+  <div class="final">${away} ${G.awayScore} — ${home} ${G.homeScore}</div>
   <h2>Linescore</h2>
   <table><thead><tr><th>Team</th>${lsInnings}<th>R</th></tr></thead>
   <tbody>
@@ -5389,12 +5392,16 @@ function exportBoxScorePDF() {
   <tbody>${buildBattingRows('home')}</tbody></table>
   ${buildPitchingSection('away')}
   ${buildPitchingSection('home')}
-  <script>window.onload=function(){window.print();}<\/script>
+  ${printScript}
   </body></html>`;
+}
 
-  const w = window.open('', '_blank');
-  if (w) { w.document.write(html); w.document.close(); }
-  else { alert('Allow popups to export the PDF.'); }
+function exportBoxScorePDF() {
+  const html = buildBoxScoreHTML(true);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank');
+  if (!w) { alert('Allow popups to export the PDF.'); }
 }
 
 // ===== BOX SCORE SHARE SHEET =====
@@ -5404,6 +5411,10 @@ function showBoxScoreShareSheet() {
   const rows = document.getElementById('share-sheet-rows');
   rows.innerHTML = '';
 
+  const awayShort = G.awayTeam.short;
+  const homeShort = G.homeTeam.short;
+  const filename = `BoxScore-${awayShort}-vs-${homeShort}.html`;
+
   function makeRow(icon, label, onclick) {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;gap:14px;padding:0 16px;min-height:56px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05);font-family:"Barlow Condensed",sans-serif;';
@@ -5412,60 +5423,47 @@ function showBoxScoreShareSheet() {
     return row;
   }
 
-  // Build share text
-  function buildShareText() {
-    const away = G.awayTeam.name || G.awayTeam.short;
-    const home = G.homeTeam.name || G.homeTeam.short;
-    let text = `DVSL Box Score\n${away} ${G.awayScore} — ${home} ${G.homeScore}\n\n`;
-    ['away','home'].forEach(side => {
-      const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
-      text += `${(teamObj.name||teamObj.short).toUpperCase()} BATTING\n`;
-      const lineup = G.lineups[side] || [];
-      const stats = G.playerStats[side] || {};
-      lineup.forEach(p => {
-        const pid = p.pid||p.id||p.name;
-        const s = stats[pid]||{};
-        if ((s.ab||0) > 0 || (s.bb||0) > 0) {
-          text += `  #${p.num} ${p.name}: ${s.ab||0}AB ${s.h||0}H ${s.rbi||0}RBI ${s.r||0}R\n`;
-        }
-      });
-      text += '\n';
-    });
-    return text;
+  function closeSheet() {
+    overlay.style.display = 'none';
+    document.getElementById('game-over-overlay').classList.add('open');
   }
 
-  // Email
-  rows.appendChild(makeRow('📧', 'Email', () => {
-    const subject = encodeURIComponent(`Box Score: ${G.awayTeam.short} ${G.awayScore} - ${G.homeTeam.short} ${G.homeScore}`);
-    const body = encodeURIComponent(buildShareText());
-    window.open(`mailto:?subject=${subject}&body=${body}`);
-    overlay.style.display = 'none';
-    document.getElementById('game-over-overlay').classList.add('open');
+  // Open in browser with print dialog → Save as PDF
+  rows.appendChild(makeRow('📄', 'Open & Print / Save PDF', () => {
+    const html = buildBoxScoreHTML(true);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    closeSheet();
   }));
 
-  // Text / SMS
-  rows.appendChild(makeRow('💬', 'Text Message', () => {
-    const body = encodeURIComponent(buildShareText());
-    window.open(`sms:?&body=${body}`);
-    overlay.style.display = 'none';
-    document.getElementById('game-over-overlay').classList.add('open');
-  }));
-
-  // Web Share API (native share on mobile)
+  // Native Share with HTML file — lets user send via email, Messages, AirDrop, save to Files
   if (navigator.share) {
     rows.appendChild(makeRow('📤', 'Share…', () => {
-      navigator.share({
-        title: `Box Score: ${G.awayTeam.short} vs ${G.homeTeam.short}`,
-        text: buildShareText(),
-      }).catch(() => {});
-      overlay.style.display = 'none';
+      const html = buildBoxScoreHTML(false);
+      const file = new File([html], filename, { type: 'text/html' });
+      const canShareFile = navigator.canShare && navigator.canShare({ files: [file] });
+      const shareData = canShareFile
+        ? { files: [file], title: `Box Score: ${awayShort} vs ${homeShort}` }
+        : { title: `Box Score: ${awayShort} vs ${homeShort}`, text: `DVSL Box Score\n${awayShort} ${G.awayScore} — ${homeShort} ${G.homeScore}` };
+      navigator.share(shareData).catch(() => {});
+      closeSheet();
     }));
   }
 
-  // Print
-  rows.appendChild(makeRow('🖨️', 'Print / Save as PDF', () => {
-    overlay.style.display = 'none';
-    exportBoxScorePDF();
+  // Save HTML file directly to device
+  rows.appendChild(makeRow('💾', 'Save to Device', () => {
+    const html = buildBoxScoreHTML(false);
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    closeSheet();
   }));
 
   overlay.style.display = 'flex';
