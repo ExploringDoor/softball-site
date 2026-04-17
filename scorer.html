@@ -6055,28 +6055,31 @@ async function saveBoxScore(isFinal = false) {
         });
       }
 
-      // Batting discrepancies — compare the scoring team's own lineup
-      // (their batting data should be most accurate for their own players)
-      const firstLineup  = existing[`${scoringSide}_lineup`] || [];
-      const secondLineup = fullData[`${scoringSide}_lineup`];
-      const firstByName  = {};
-      firstLineup.forEach(p => { firstByName[p.name] = p; });
-      secondLineup.forEach(p => {
-        const prev = firstByName[p.name];
-        if (!prev) return; // new player — no conflict
-        const keys  = ['ab', 'h', 'r', 'rbi', 'bb'];
-        const diffs = keys.filter(k => (p[k] || 0) !== (prev[k] || 0));
-        if (diffs.length > 0) {
-          discrepancies.push({
-            type:             'batting',
-            player:           p.name,
-            side:             scoringSide,
-            first_submitter:  existing.first_submitter || 'unknown',
-            second_submitter: scoringSide,
-            first:  Object.fromEntries(keys.map(k => [k, prev[k] || 0])),
-            second: Object.fromEntries(keys.map(k => [k, p[k]   || 0])),
-          });
-        }
+      // Batting discrepancies — compare BOTH teams' lineups between first and
+      // second submitter so the stats-differ view shows conflicts for every
+      // player on both sides, not just the second submitter's own team.
+      ['away', 'home'].forEach(side => {
+        const firstLineup  = existing[`${side}_lineup`] || [];
+        const secondLineup = fullData[`${side}_lineup`] || [];
+        const firstByName  = {};
+        firstLineup.forEach(p => { firstByName[p.name] = p; });
+        secondLineup.forEach(p => {
+          const prev = firstByName[p.name];
+          if (!prev) return; // new player — no conflict
+          const keys  = ['ab', 'h', 'r', 'rbi', 'bb'];
+          const diffs = keys.filter(k => (p[k] || 0) !== (prev[k] || 0));
+          if (diffs.length > 0) {
+            discrepancies.push({
+              type:             'batting',
+              player:           p.name,
+              side:             side,
+              first_submitter:  existing.first_submitter || 'unknown',
+              second_submitter: scoringSide,
+              first:  Object.fromEntries(keys.map(k => [k, prev[k] || 0])),
+              second: Object.fromEntries(keys.map(k => [k, p[k]   || 0])),
+            });
+          }
+        });
       });
 
       // Merge: override the scoring team's side with their own data
