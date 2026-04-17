@@ -1570,6 +1570,86 @@ window.soAddInning = function(gameId) {
   });
 };
 
+// ─── Unified box-score upsert ───────────────────────────────────────────────
+// Mirrors scorer.html's saveBoxScore: write by gameId (not addDoc), so the
+// live scorer, captain form, PDF upload, and score-only paths all coordinate
+// through a single doc. On second submission, compute per-player stat
+// discrepancies between submitters.
+async function submitBoxScoreUnified(gameId, boxScoreData, myRole) {
+  const ref = doc(db, 'box_scores', gameId);
+  const snap = await getDoc(ref);
+  const existing = snap.exists() ? snap.data() : null;
+
+  // First submission (or same role resubmitting over their own prior write)
+  if (!existing || !existing.first_submitter || existing.first_submitter === myRole) {
+    await setDoc(ref, {
+      ...boxScoreData,
+      first_submitter: myRole,
+      has_discrepancy: false,
+      discrepancies:   [],
+      created_at:      existing?.created_at || new Date().toISOString(),
+    });
+    return { firstSubmission: !existing, hasDiscrepancy: false };
+  }
+
+  // ── Second submission: compute discrepancies ──────────────────────────────
+  const discrepancies = [];
+
+  // Score discrepancy
+  const newAway = boxScoreData.away_score ?? 0;
+  const newHome = boxScoreData.home_score ?? 0;
+  if (newAway !== (existing.away_score || 0) || newHome !== (existing.home_score || 0)) {
+    discrepancies.push({
+      type: 'score',
+      first_submitter:  existing.first_submitter,
+      second_submitter: myRole,
+      first_away:  existing.away_score, first_home: existing.home_score,
+      second_away: newAway,             second_home: newHome,
+    });
+  }
+
+  // Per-player batting discrepancies — compare BOTH teams so both sides' diffs
+  // are visible in the "stats differ" view.
+  ['away', 'home'].forEach(side => {
+    const firstLineup  = existing[`${side}_lineup`]  || existing[`${side}Batters`] || [];
+    const secondLineup = boxScoreData[`${side}_lineup`] || boxScoreData[`${side}Batters`] || [];
+    const firstByName  = {};
+    firstLineup.forEach(p => { firstByName[p.name] = p; });
+    secondLineup.forEach(p => {
+      const prev = firstByName[p.name];
+      if (!prev) return;
+      const keys = ['ab', 'h', 'r', 'rbi', 'bb'];
+      const diffs = keys.filter(k => (p[k] || 0) !== (prev[k] || 0));
+      if (diffs.length > 0) {
+        discrepancies.push({
+          type: 'batting', player: p.name, side,
+          first_submitter:  existing.first_submitter,
+          second_submitter: myRole,
+          first:  Object.fromEntries(keys.map(k => [k, prev[k] || 0])),
+          second: Object.fromEntries(keys.map(k => [k, p[k]   || 0])),
+        });
+      }
+    });
+  });
+
+  // Merge: overwrite only this role's own lineup/pitchers; preserve the first
+  // submitter's authoritative score so the top-level display stays stable.
+  const mergeUpdate = {
+    [`${myRole}_lineup`]:   boxScoreData[`${myRole}_lineup`]   || boxScoreData[`${myRole}Batters`] || [],
+    [`${myRole}_pitchers`]: boxScoreData[`${myRole}_pitchers`] || [],
+    second_submitter:    myRole,
+    has_discrepancy:     discrepancies.length > 0,
+    discrepancies:       discrepancies,
+    second_submitted_at: new Date().toISOString(),
+  };
+  await updateDoc(ref, mergeUpdate);
+
+  if (discrepancies.length > 0) {
+    await updateDoc(doc(db, 'games', gameId), { has_discrepancy: true }).catch(() => {});
+  }
+  return { firstSubmission: false, hasDiscrepancy: discrepancies.length > 0 };
+}
+
 window.submitScoreOnly = async function(gameId) {
   const g = MY_GAMES.find(x=>x.id===gameId); if(!g) return;
   const awayFinal = parseInt(document.getElementById(`so-ls-${gameId}-away-R`)?.value)||0;
@@ -1593,13 +1673,10 @@ window.submitScoreOnly = async function(gameId) {
     status: 'approved', timestamp: Timestamp.now(),
   };
   try {
-    // Upsert box score (using already-imported Firebase refs at module scope)
-    const bsSnap = await getDocs(query(collection(db,'box_scores'),where('game_id','==',gameId)));
-    if (!bsSnap.empty) await updateDoc(bsSnap.docs[0].ref, boxScoreData);
-    else await addDoc(collection(db,'box_scores'), boxScoreData);
-    // Update game record
+    // Upsert via unified helper (coordinates with live scorer + full box-score form)
     const myId = captainData.team_id;
     const isHome = g.home===myId; const myRole=isHome?'home':'away'; const otherRole=isHome?'away':'home';
+    await submitBoxScoreUnified(gameId, boxScoreData, myRole);
     const gameUpdate = { [`score_submitted_${myRole}_away`]:awayFinal, [`score_submitted_${myRole}_home`]:homeFinal, [`score_submitted_${myRole}_by`]:captainData.team_name, score_pending:true };
     const otherAway=g[`score_submitted_${otherRole}_away`]; const otherHome=g[`score_submitted_${otherRole}_home`];
     if (otherAway!==undefined&&otherHome!==undefined&&otherAway===awayFinal&&otherHome===homeFinal) {
@@ -2272,7 +2349,7 @@ window.submitBoxScore = async function(gameId) {
   boxScoreData.status = finalStatus === 'approved' ? 'approved' : 'pending';
 
   try {
-    await addDoc(collection(db, 'box_scores'), boxScoreData);
+    await submitBoxScoreUnified(gameId, boxScoreData, myRole);
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     Object.assign(g, gameUpdate);
     const subData = {
