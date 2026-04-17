@@ -2822,17 +2822,44 @@ window.closeBoxScore = function() {
   document.getElementById('sec-scores').querySelector('.main-header').style.display='';
 };
 window.bsReopenGame = async function() {
-  if (!confirm('Reopen this game? Scores and box score will be cleared so you can re-enter from scratch.')) return;
+  if (!confirm('Reopen this game? Scores, box score, captain submissions, and in-progress scorer state will be cleared so you can re-enter from scratch.')) return;
   try {
-    await updateDoc(doc(db,'games',bsGameId), { done: false, away_score: 0, home_score: 0 });
+    // Clear score, done flag, AND all submission tracking fields on the game doc
+    const gameUpdate = {
+      done: false, live: false, away_score: 0, home_score: 0,
+      score_pending: deleteField(),
+      score_submitted_away_away: deleteField(),
+      score_submitted_away_home: deleteField(),
+      score_submitted_away_by:   deleteField(),
+      score_submitted_home_away: deleteField(),
+      score_submitted_home_home: deleteField(),
+      score_submitted_home_by:   deleteField(),
+    };
+    await updateDoc(doc(db,'games',bsGameId), gameUpdate);
     const g = GAMES.find(x=>x.id===bsGameId);
-    if (g) { g.done = false; g.away_score = 0; g.home_score = 0; }
+    if (g) {
+      g.done = false; g.away_score = 0; g.home_score = 0;
+      delete g.score_pending;
+      delete g.score_submitted_away_away; delete g.score_submitted_away_home; delete g.score_submitted_away_by;
+      delete g.score_submitted_home_away; delete g.score_submitted_home_home; delete g.score_submitted_home_by;
+    }
     bsGameData.done = false;
     // Delete box score so lineup picker starts fresh on next entry
     try {
       const bsSnap = await getDocs(query(collection(db,'box_scores'), where('game_id','==',bsGameId)));
       if (!bsSnap.empty) await deleteDoc(doc(db,'box_scores',bsSnap.docs[0].id));
     } catch(e2) { console.warn('Could not delete box score:', e2); }
+    // Delete score_submissions records (both sides) so captain can re-submit
+    try {
+      await deleteDoc(doc(db, 'score_submissions', `${bsGameId}_away`)).catch(() => {});
+      await deleteDoc(doc(db, 'score_submissions', `${bsGameId}_home`)).catch(() => {});
+      const subsSnap = await getDocs(query(collection(db, 'score_submissions'), where('game_id', '==', bsGameId)));
+      await Promise.all(subsSnap.docs.map(d => deleteDoc(doc(db, 'score_submissions', d.id)).catch(() => {})));
+    } catch(subErr) { console.warn('Could not delete submissions:', subErr); }
+    // Wipe in-progress scorer state so re-entry starts clean
+    try { await deleteDoc(doc(db, 'game_states', bsGameId)).catch(() => {}); } catch(e) {}
+    try { await deleteDoc(doc(db, 'live_scores', bsGameId)).catch(() => {}); } catch(e) {}
+
     toast('Game reopened — enter lineup and box score fresh');
     await logActivity('Box Score', `Reopened game: ${getTeamName(bsGameData.away)} vs ${getTeamName(bsGameData.home)}`);
     await recalcStandingsFromGames();
