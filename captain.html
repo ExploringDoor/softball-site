@@ -990,7 +990,14 @@ window.saveEditGame = async function(gameId) {
 // ═══════════════════════════════════════════════════════════════════
 function renderPendingGames() {
   const el = document.getElementById('pending-games');
-  const pending = MY_GAMES.filter(g => !g.done);
+  // Show a game in pending if it isn't done yet, OR if it's done but I personally
+  // haven't submitted my own scorecard (the other team finalized first).
+  const pending = MY_GAMES.filter(g => {
+    if (!g.done) return true;
+    const myRole = g.home === captainData.team_id ? 'home' : 'away';
+    const iSubmitted = g[`score_submitted_${myRole}_away`] !== undefined;
+    return !iSubmitted;
+  });
 
   // Render confirm banners for games where other team already submitted but we haven't
   renderScoreConfirmBanners();
