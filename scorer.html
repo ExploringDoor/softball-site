@@ -2995,7 +2995,7 @@ function endAtBat(result, details) {
     if (sid) stats.so = (stats.so || 0) + 1;
     G.outs++;
     const pStatsK = currentPitcherStats(fieldingTeam());
-    if (pStatsK) { pStatsK.k++; pStatsK.outs++; }
+    if (pStatsK) { pStatsK.k++; if (G.outs <= 3) pStatsK.outs++; }
     logPlay('Strikeout', 'K — Struck out');
     showKIndicator();
     flashFeedback('K', 'var(--red)');
@@ -3010,25 +3010,25 @@ function endAtBat(result, details) {
     G.outs++;
     logPlay('Out', `GO — Ground out${locStr}`);
     const psGO = currentPitcherStats(fieldingTeam());
-    if (psGO) psGO.outs++;
+    if (psGO && G.outs <= 3) psGO.outs++;
     flashFeedback('OUT', 'var(--red)');
   } else if (result === 'flyout') {
     G.outs++;
     logPlay('Out', `FO — Fly out${locStr}`);
     const psFO = currentPitcherStats(fieldingTeam());
-    if (psFO) psFO.outs++;
+    if (psFO && G.outs <= 3) psFO.outs++;
     flashFeedback('OUT', 'var(--red)');
   } else if (result === 'popout') {
     G.outs++;
     logPlay('Out', 'PO — Pop out');
     const psPO = currentPitcherStats(fieldingTeam());
-    if (psPO) psPO.outs++;
+    if (psPO && G.outs <= 3) psPO.outs++;
     flashFeedback('OUT', 'var(--red)');
   } else if (result === 'bunt-out') {
     G.outs++;
     logPlay('Out', 'BO — Bunt out');
     const psBO = currentPitcherStats(fieldingTeam());
-    if (psBO) psBO.outs++;
+    if (psBO && G.outs <= 3) psBO.outs++;
     flashFeedback('OUT', 'var(--red)');
   } else if (result === 'doublePlay') {
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
@@ -5751,7 +5751,7 @@ async function saveBoxScore() {
       const lineup = G.lineups[side] || [];
       const stats = G.playerStats[side] || {};
       return lineup.map(player => {
-        const pid = player.pid || player.id;
+        const pid = player.pid || player.id || player.name; // must match how sid is built during at-bat
         const ps = stats[pid] || {};
         return {
           name: player.name,
