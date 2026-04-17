@@ -1915,6 +1915,7 @@
     <button class="btn-primary" id="start-btn" disabled>START SCORING</button>
   </div>
   <button id="practice-btn" style="background:none;border:1px solid rgba(255,255,255,0.2);color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;letter-spacing:2px;padding:12px 32px;border-radius:10px;cursor:pointer;margin-top:4px;">PRACTICE MODE</button>
+  <a href="index.html" style="color:rgba(255,255,255,0.35);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:600;letter-spacing:1px;text-decoration:none;margin-top:8px;">← Back to Site</a>
 </div>
 
 <!-- Lineup Screen -->
@@ -2422,7 +2423,7 @@
     <div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:12px auto 0;"></div>
     <div style="padding:14px 16px 10px;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:var(--text);letter-spacing:1px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);">SHARE BOX SCORE</div>
     <div id="share-sheet-rows"></div>
-    <button onclick="document.getElementById('share-sheet-overlay').style.display='none';" style="display:block;width:calc(100%-32px);margin:10px 16px 4px;background:var(--card2);color:var(--text-muted);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;cursor:pointer;text-align:center;">Cancel</button>
+    <button onclick="document.getElementById('share-sheet-overlay').style.display='none';document.getElementById('game-over-overlay').classList.add('open');" style="display:block;width:calc(100%-32px);margin:10px 16px 4px;background:var(--card2);color:var(--text-muted);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;cursor:pointer;text-align:center;">← Back</button>
   </div>
 </div>
 
@@ -4927,7 +4928,21 @@ function openBoxScoreSheet() {
     const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
     const pStats = G.pitcherStats[side];
     const pitcherKeys = Object.keys(pStats);
-    if (pitcherKeys.length === 0) return;
+    // Show pitcher even if no plays recorded yet (show 0s)
+    if (pitcherKeys.length === 0) {
+      const p = G.pitchers[side];
+      if (!p) return;
+      const hdr2 = document.createElement('div');
+      hdr2.className = 'bs-section-hdr';
+      hdr2.textContent = `${teamObj.name.toUpperCase()} PITCHING`;
+      content.appendChild(hdr2);
+      const wrap2 = document.createElement('div'); wrap2.className = 'bs-batting-wrap';
+      const pt2 = document.createElement('table'); pt2.className = 'bs-batting-table';
+      pt2.innerHTML = `<thead><tr><th class="bs-name-th">PITCHER</th><th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th></tr></thead>
+        <tbody><tr><td class="bs-name-td"><span class="bs-player-num">#${p.num||'?'}</span>${p.name}</td><td>0.0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody>`;
+      wrap2.appendChild(pt2); content.appendChild(wrap2);
+      return;
+    }
 
     const hdr = document.createElement('div');
     hdr.className = 'bs-section-hdr';
@@ -5311,6 +5326,27 @@ function exportBoxScorePDF() {
     return rows;
   }
 
+  function buildPitchingSection(side) {
+    const pStats = G.pitcherStats[side] || {};
+    const keys = Object.keys(pStats);
+    const teamName = (side === 'away' ? G.awayTeam : G.homeTeam).name || (side === 'away' ? G.awayTeam : G.homeTeam).short;
+    if (keys.length === 0) {
+      const p = G.pitchers[side];
+      if (!p) return '';
+      return `<h2>${teamName.toUpperCase()} Pitching</h2>
+  <table><thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th></tr></thead>
+  <tbody><tr><td>#${p.num||'?'} ${p.name}</td><td>—</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody></table>`;
+    }
+    const rows = keys.map(k => {
+      const s = pStats[k];
+      const ip = Math.floor(s.outs/3) + '.' + (s.outs%3);
+      return `<tr><td>#${s.num||'?'} ${s.name}</td><td>${ip}</td><td>${s.h||0}</td><td>${s.r||0}</td><td>${s.bb||0}</td><td>${s.k||0}</td></tr>`;
+    }).join('');
+    return `<h2>${teamName.toUpperCase()} Pitching</h2>
+  <table><thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th></tr></thead>
+  <tbody>${rows}</tbody></table>`;
+  }
+
   function lsCell(side, i) {
     const ls = G.linescores[side];
     if (ls[i] !== undefined) return ls[i];
@@ -5351,6 +5387,8 @@ function exportBoxScorePDF() {
   <h2>${home.toUpperCase()} Batting</h2>
   <table><thead><tr><th>Player</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>K</th></tr></thead>
   <tbody>${buildBattingRows('home')}</tbody></table>
+  ${buildPitchingSection('away')}
+  ${buildPitchingSection('home')}
   <script>window.onload=function(){window.print();}<\/script>
   </body></html>`;
 
@@ -5402,6 +5440,7 @@ function showBoxScoreShareSheet() {
     const body = encodeURIComponent(buildShareText());
     window.open(`mailto:?subject=${subject}&body=${body}`);
     overlay.style.display = 'none';
+    document.getElementById('game-over-overlay').classList.add('open');
   }));
 
   // Text / SMS
@@ -5409,6 +5448,7 @@ function showBoxScoreShareSheet() {
     const body = encodeURIComponent(buildShareText());
     window.open(`sms:?&body=${body}`);
     overlay.style.display = 'none';
+    document.getElementById('game-over-overlay').classList.add('open');
   }));
 
   // Web Share API (native share on mobile)
