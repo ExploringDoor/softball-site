@@ -1461,15 +1461,15 @@ window.resetGame = async function(gameId) {
     await updateDoc(doc(db, 'games', gameId), { done: false, away_score: 0, home_score: 0 });
     g.done = false; g.away_score = 0; g.home_score = 0;
 
-    // Reset box score status → 'draft' so it no longer counts in league leaders
+    // Delete box score entirely so lineup picker starts fresh on next entry
     try {
       const bsSnap = await getDocs(query(collection(db, 'box_scores'), where('game_id', '==', gameId)));
       if (!bsSnap.empty) {
-        await updateDoc(doc(db, 'box_scores', bsSnap.docs[0].id), { status: 'draft' });
+        await deleteDoc(doc(db, 'box_scores', bsSnap.docs[0].id));
       }
-    } catch(bsErr) { console.warn('Could not reset box score status:', bsErr); }
+    } catch(bsErr) { console.warn('Could not delete box score:', bsErr); }
 
-    toast('Game reset — box score set to draft');
+    toast('Game reset — enter box score fresh from lineup picker');
     await logActivity('Score Entry', `Reset game to in-progress: ${awayName} vs ${homeName}`);
     await recalcStandingsFromGames();
     renderScores(); renderDashboard(); renderStandings();
@@ -2762,13 +2762,18 @@ window.closeBoxScore = function() {
   document.getElementById('sec-scores').querySelector('.main-header').style.display='';
 };
 window.bsReopenGame = async function() {
-  if (!confirm('Reopen this game? It will be marked as in-progress and scores/standings will be reset.')) return;
+  if (!confirm('Reopen this game? Scores and box score will be cleared so you can re-enter from scratch.')) return;
   try {
     await updateDoc(doc(db,'games',bsGameId), { done: false, away_score: 0, home_score: 0 });
     const g = GAMES.find(x=>x.id===bsGameId);
     if (g) { g.done = false; g.away_score = 0; g.home_score = 0; }
     bsGameData.done = false;
-    toast('Game reopened — now in-progress');
+    // Delete box score so lineup picker starts fresh on next entry
+    try {
+      const bsSnap = await getDocs(query(collection(db,'box_scores'), where('game_id','==',bsGameId)));
+      if (!bsSnap.empty) await deleteDoc(doc(db,'box_scores',bsSnap.docs[0].id));
+    } catch(e2) { console.warn('Could not delete box score:', e2); }
+    toast('Game reopened — enter lineup and box score fresh');
     await logActivity('Box Score', `Reopened game: ${getTeamName(bsGameData.away)} vs ${getTeamName(bsGameData.home)}`);
     await recalcStandingsFromGames();
     bsRerender(); renderScores(); renderStandings(); renderDashboard();
