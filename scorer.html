@@ -5237,6 +5237,20 @@ document.getElementById('gom-final-btn').addEventListener('click', async () => {
   btn.textContent = '⏳ Saving…';
   const result = await saveBoxScore(true);
   if (G.gameId && G.gameId !== 'practice') {
+    // Determine which side this scorer represents (matches saveBoxScore logic)
+    const scoringSide = G.scoringTeam === G.awayTeam.id ? 'away'
+                      : G.scoringTeam === G.homeTeam.id ? 'home'
+                      : null;
+    // Always record THIS team's submission on the game doc so the captain page
+    // can tell who has/hasn't turned in their card (matches captain.html field schema)
+    if (scoringSide) {
+      const submissionUpdate = {};
+      submissionUpdate[`score_submitted_${scoringSide}_away`] = G.awayScore;
+      submissionUpdate[`score_submitted_${scoringSide}_home`] = G.homeScore;
+      submissionUpdate[`score_submitted_${scoringSide}_by`]   =
+        (scoringSide === 'away' ? G.awayTeam.short : G.homeTeam.short) || G.scoringTeam;
+      await updateDoc(doc(db, 'games', G.gameId), submissionUpdate).catch(() => {});
+    }
     if (result.firstSubmission) {
       // First submission — set official score and recalc standings
       await updateDoc(doc(db, 'games', G.gameId), {
@@ -5644,14 +5658,35 @@ async function loadGames() {
   try {
     const gamesSnap = await getDocs(collection(db, 'games'));
     const teamsSnap = await getDocs(collection(db, 'teams'));
+    // Pull existing score submissions so we can hide games this team has already submitted
+    let submittedSet = new Set();
+    try {
+      const subsSnap = await getDocs(collection(db, 'score_submissions'));
+      subsSnap.forEach(d => submittedSet.add(d.id)); // doc ids look like `${gameId}_${side}`
+    } catch (e) { console.warn('score_submissions read failed:', e); }
 
     teamsSnap.forEach(d => { teamsData[d.id] = { id: d.id, ...d.data() }; });
+
+    // Read ?team= early so we can filter the dropdown around it
+    const urlTeamId = new URLSearchParams(window.location.search).get('team');
 
     gamesData = [];
     gamesSnap.forEach(d => {
       const data = d.data();
-      if (!data.done) {
-        gamesData.push({ id: d.id, ...data });
+      const awayId = data.away || data.away_team_id || data.away_id || '';
+      const homeId = data.home || data.home_team_id || data.home_id || '';
+      // Determine which side this scorer is on for THIS game (if any)
+      const mySide = urlTeamId === awayId ? 'away'
+                   : urlTeamId === homeId ? 'home'
+                   : null;
+      if (urlTeamId && mySide) {
+        // Captain-context: only hide if THIS team already submitted their scorecard
+        if (submittedSet.has(`${d.id}_${mySide}`)) return;
+        gamesData.push({ id: d.id, ...data, _alreadyFinal: data.done === true });
+      } else {
+        // No team context (admin/manual) — keep legacy behavior: hide done games
+        if (data.done) return;
+        gamesData.push({ id: d.id, ...data, _alreadyFinal: false });
       }
     });
 
@@ -5679,14 +5714,14 @@ async function loadGames() {
       const wk = game.wk || game.week;
       const week = wk ? `Wk${wk}: ` : '';
       const dateStr = game.date ? ` · ${game.date}` : '';
-      opt.textContent = `${week}${awayName} @ ${homeName}${dateStr}`;
+      const finalMark = game._alreadyFinal ? ' ✓ (other team finalized — submit your card)' : '';
+      opt.textContent = `${week}${awayName} @ ${homeName}${dateStr}${finalMark}`;
       select.appendChild(opt);
     });
 
     document.getElementById('start-btn').disabled = false;
 
-    // Read ?team= param — identifies which captain is scoring (for dual-submission)
-    const urlTeamId = new URLSearchParams(window.location.search).get('team');
+    // Apply ?team= UI affordances (param itself was already read above)
     if (urlTeamId) {
       G.scoringTeam = urlTeamId;
       // Show a small badge on setup screen so scorer knows which team they're representing
@@ -5861,10 +5896,30 @@ async function saveBoxScore(isFinal = false) {
     const awayPitchers = buildPitcherArray('away');
     const homePitchers = buildPitcherArray('home');
 
+    // ── Player of the Game: pick the best batter across both lineups ──
+    // Score = HR×4 + 3B×3 + 2B×2 + H + RBI×2 + R (matches index.html openRecap formula)
+    let _potgName = '', _potgTeam = '';
+    {
+      const all = [
+        ...awayLineup.map(p => ({ ...p, _team: G.awayTeam.id })),
+        ...homeLineup.map(p => ({ ...p, _team: G.homeTeam.id })),
+      ];
+      const sc = p => {
+        const h = p.h || ((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
+        return (p.hr||0)*4 + (p.t||0)*3 + (p.d||0)*2 + h + (p.rbi||0)*2 + (p.r||0);
+      };
+      if (all.length) {
+        const best = all.reduce((a, b) => sc(b) > sc(a) ? b : a, all[0]);
+        if (sc(best) > 0) { _potgName = best.name; _potgTeam = best._team; }
+      }
+    }
+
     const fullData = {
       game_id:       G.gameId,
       away:          G.awayTeam.id,
       home:          G.homeTeam.id,
+      potg_name:     _potgName,
+      potg_team:     _potgTeam,
       away_score:    G.awayScore,
       home_score:    G.homeScore,
       inning:        G.inning,
