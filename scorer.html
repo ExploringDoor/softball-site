@@ -5633,6 +5633,13 @@ async function loadGames() {
     });
 
     document.getElementById('start-btn').disabled = false;
+
+    // Auto-start if game ID passed in URL (e.g. from admin/captain Score Live button)
+    const urlGameId = new URLSearchParams(window.location.search).get('game');
+    if (urlGameId && gamesData.find(g => g.id === urlGameId)) {
+      select.value = urlGameId;
+      document.getElementById('start-btn').click();
+    }
   } catch (err) {
     console.error('Error loading games:', err);
     document.getElementById('setup-loading').textContent = 'Error loading games. Check connection.';
