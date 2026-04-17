@@ -5288,6 +5288,15 @@ document.getElementById('gom-final-btn').addEventListener('click', async () => {
         away_score: G.awayScore, home_score: G.homeScore
       }).catch(() => {});
       recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
+    } else if (scoringSide) {
+      // Second submission — this captain is authoritative for their own team's
+      // total. Overwrite just their side of the game score and flag discrepancy
+      // if the two submitters disagreed.
+      const perSideUpdate = {};
+      perSideUpdate[`${scoringSide}_score`] = scoringSide === 'away' ? G.awayScore : G.homeScore;
+      if (result.hasDiscrepancy) perSideUpdate.has_discrepancy = true;
+      await updateDoc(doc(db, 'games', G.gameId), perSideUpdate).catch(() => {});
+      recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
     }
     // Once finalized, stop any further saveScore calls from overwriting the games doc
     G._gameAlreadyFinal = true;
@@ -6028,16 +6037,20 @@ async function saveBoxScore(isFinal = false) {
     const existingSnap = await getDoc(doc(db, 'box_scores', G.gameId));
     const existing     = existingSnap.exists() ? existingSnap.data() : null;
 
-    if (!existing || existing.status !== 'final' || !scoringSide) {
-      // First submission (or admin override) — write the full box score
+    // Treat this as a first submission only if no prior submitter is recorded
+    // (captain.html writes status 'approved'/'pending', not 'final', so we can't
+    // key off status alone), the scorer is unknown (admin override), or we're
+    // resubmitting our own side.
+    if (!existing || !existing.first_submitter || existing.first_submitter === scoringSide || !scoringSide) {
+      // First submission (or admin override, or same role resubmitting)
       await setDoc(doc(db, 'box_scores', G.gameId), {
         ...fullData,
         first_submitter:  scoringSide || 'admin',
-        has_discrepancy:  false,
-        discrepancies:    [],
-        created_at:       new Date().toISOString(),
+        has_discrepancy:  existing?.has_discrepancy || false,
+        discrepancies:    existing?.discrepancies || [],
+        created_at:       existing?.created_at || new Date().toISOString(),
       });
-      return { firstSubmission: true };
+      return { firstSubmission: !existing };
 
     } else {
       // ── Second submission: merge + discrepancy detection ────────────────
@@ -6084,15 +6097,26 @@ async function saveBoxScore(isFinal = false) {
         });
       });
 
-      // Merge: override the scoring team's side with their own data
-      await updateDoc(doc(db, 'box_scores', G.gameId), {
+      // Merge: override the scoring team's side with their own data — lineup,
+      // pitchers, team score, and that half of the linescore (each captain is
+      // authoritative for their own side).
+      const _mergePayload = {
         [`${scoringSide}_lineup`]:   fullData[`${scoringSide}_lineup`],
         [`${scoringSide}_pitchers`]: fullData[`${scoringSide}_pitchers`],
+        [`${scoringSide}_score`]:    fullData[`${scoringSide}_score`],
         second_submitter:     scoringSide,
         has_discrepancy:      discrepancies.length > 0,
         discrepancies:        discrepancies,
         second_submitted_at:  new Date().toISOString(),
-      });
+      };
+      // Linescore: write both the nested (scorer) and flat (captain) shapes so
+      // every reader picks it up correctly.
+      const _lsForSide = fullData.linescores?.[scoringSide] ?? fullData[`${scoringSide}_linescore`];
+      if (_lsForSide) {
+        _mergePayload[`linescores.${scoringSide}`] = _lsForSide;
+        _mergePayload[`${scoringSide}_linescore`]  = _lsForSide;
+      }
+      await updateDoc(doc(db, 'box_scores', G.gameId), _mergePayload);
 
       // Flag game doc so captain portal can show discrepancy without loading box_scores
       if (discrepancies.length > 0) {
