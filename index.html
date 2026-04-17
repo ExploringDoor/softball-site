@@ -3043,7 +3043,9 @@ async function loadAllData() {
 
       const _ws=PLAYERS.filter(p=>p.ab>0).length, _wl=PLAYERS.filter(p=>p.log?.length>0).length;
       console.log('[DVSL] stats applied — finalBS:',finalBS.length,'playersWithStats:',_ws,'playersWithLog:',_wl);
-      window._dvslDebug={boxScoreCount:boxScores.length,finalBSCount:finalBS.length,playerCount:PLAYERS.length,playersWithStats:_ws,playersWithLog:_wl,batMapKeys:Object.keys(batMap).slice(0,10),logMapKeys:Object.keys(logMap).slice(0,10),sampleBS:finalBS[0]?{id:finalBS[0].id,status:finalBS[0].status,away:finalBS[0].away,home:finalBS[0].home,awayLen:finalBS[0].away_lineup?.length,awayP0:finalBS[0].away_lineup?.[0]?.name}:null,samplePlayer:PLAYERS[0]?{name:PLAYERS[0].name,team:PLAYERS[0].team}:null};
+      const _wp=PLAYERS.filter(p=>p.ip>0).length;
+      console.log('[DVSL] pitchers with IP > 0:',_wp);
+      window._dvslDebug={boxScoreCount:boxScores.length,finalBSCount:finalBS.length,playerCount:PLAYERS.length,playersWithStats:_ws,playersWithLog:_wl,playersWithPitching:_wp,batMapKeys:Object.keys(batMap).slice(0,10),pitMapKeys:Object.keys(pitMap).slice(0,10),logMapKeys:Object.keys(logMap).slice(0,10),sampleBS:finalBS[0]?{id:finalBS[0].id,status:finalBS[0].status,away:finalBS[0].away,home:finalBS[0].home,awayLen:finalBS[0].away_lineup?.length,awayP0:finalBS[0].away_lineup?.[0]?.name}:null,samplePlayer:PLAYERS[0]?{name:PLAYERS[0].name,team:PLAYERS[0].team}:null};
     } else {
       console.log('[DVSL] no box scores with lineup data — total loaded:',boxScores.length);
       window._dvslDebug={boxScoreCount:boxScores.length,finalBSCount:0,playerCount:PLAYERS.length};
@@ -3165,12 +3167,20 @@ async function refreshVolatileData() {
     const finalBS = freshBS.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup || bs.awayLineup || bs.awayBatters) && (bs.away_lineup || bs.awayLineup || bs.awayBatters).length > 0));
     if (finalBS.length > 0) {
       const batMap = {};
+      const pitMap = {};
+      const splitLog = {};
+      const gIdToInfo = {};
+      freshGames.forEach(g => { if (g.id) gIdToInfo[g.id] = { date: g.date||'', time: g.time||'' }; });
+
       for (const bs of finalBS) {
+        const bsInfo = gIdToInfo[bs.id || bs.game_id] || {};
+        const bsDate = bsInfo.date || bs.date || '';
+        const bsTime = bsInfo.time || bs.time || '';
         const sides = [
-          { lineup: bs.away_lineup || bs.awayLineup || bs.awayBatters, team: bs.away },
-          { lineup: bs.home_lineup || bs.homeLineup || bs.homeBatters, team: bs.home },
+          { lineup: bs.away_lineup || bs.awayLineup || bs.awayBatters, team: bs.away, side: 'away', opp: bs.home },
+          { lineup: bs.home_lineup || bs.homeLineup || bs.homeBatters, team: bs.home, side: 'home', opp: bs.away },
         ];
-        for (const { lineup, team: sid } of sides) {
+        for (const { lineup, team: sid, side: gameSide, opp: oppId } of sides) {
           if (!Array.isArray(lineup)) continue;
           for (const p of lineup) {
             const nm = (p.name || '').trim(); if (!nm) continue;
@@ -3187,10 +3197,34 @@ async function refreshVolatileData() {
             b.s  += _s2;  b.d += _d2;  b.tri += _t2;  b.hr += _hr2;
             b.rbi+= parseInt(p.rbi)||0;               b.bb += parseInt(p.bb)||0;
             b.so += parseInt(p.so ?? p.k)||0;
+            if (!splitLog[key]) splitLog[key] = [];
+            splitLog[key].push({ side: gameSide, date: bsDate, time: bsTime, opp: oppId||'',
+              ab: parseInt(p.ab)||0, r: parseInt(p.r)||0, s:_s2, d:_d2, t:_t2, hr:_hr2,
+              rbi: parseInt(p.rbi)||0, bb: parseInt(p.bb)||0, so: parseInt(p.so ?? p.k)||0 });
+          }
+        }
+        // Pitching
+        const pitSides = [
+          { pitchers: bs.away_pitchers || bs.awayPitchers, team: bs.away },
+          { pitchers: bs.home_pitchers || bs.homePitchers, team: bs.home },
+        ];
+        for (const { pitchers, team: sid } of pitSides) {
+          if (!Array.isArray(pitchers)) continue;
+          for (const p of pitchers) {
+            const nm = (p.name || '').trim(); if (!nm) continue;
+            const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
+            if (!pitMap[key]) pitMap[key] = { name: nm, team: sid, gs:0, wins:0, losses:0, saves:0, ipOuts:0, h:0, er:0, bb:0, k:0 };
+            const pm = pitMap[key];
+            pm.gs++;
+            if (p.decision === 'W') pm.wins++; if (p.decision === 'L') pm.losses++; if (p.decision === 'S') pm.saves++;
+            if (p.outs !== undefined) { pm.ipOuts += parseInt(p.outs)||0; }
+            else { const [inn, rem] = String(p.ip || 0).split('.').map(Number); pm.ipOuts += (inn||0)*3 + (rem||0); }
+            pm.h += parseInt(p.h)||0; pm.er += parseInt(p.er ?? p.r)||0;
+            pm.bb += parseInt(p.bb)||0; pm.k += parseInt(p.so ?? p.k)||0;
           }
         }
       }
-      // Overlay aggregated stats onto PLAYERS (same three-fallback logic as loadAllData)
+      // Overlay batting stats onto PLAYERS
       PLAYERS.forEach(pl => {
         const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
         let b = batMap[key];
@@ -3212,7 +3246,7 @@ async function refreshVolatileData() {
             })?.[1];
           }
         }
-        if (!b) return;
+        if (!b) { pl.ip = pl.ip||0; return; }
         const tH = b.s + b.d + b.tri + b.hr;
         const tAB = b.ab;
         pl.ab = tAB; pl.h = tH; pl.hr = b.hr; pl.rbi = b.rbi;
@@ -3222,6 +3256,25 @@ async function refreshVolatileData() {
         const obp = (tAB + b.bb) > 0 ? (tH + b.bb) / (tAB + b.bb) : 0;
         const slg = tAB > 0 ? (b.s + 2*b.d + 3*b.tri + 4*b.hr) / tAB : 0;
         pl.slg = slg; pl.ops = obp + slg;
+      });
+      // Overlay pitching stats onto PLAYERS
+      PLAYERS.forEach(pl => {
+        const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
+        let pm = pitMap[key];
+        if (!pm) { const nm = pl.name.toLowerCase(); pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1]; }
+        if (!pm || pm.ipOuts === 0) { pl.ip = 0; return; }
+        pl.ip = parseFloat(`${Math.floor(pm.ipOuts/3)}.${pm.ipOuts%3}`);
+        pl.gs = pm.gs; pl.wins = pm.wins; pl.losses = pm.losses;
+        pl.h_allowed = pm.h; pl.bb_allowed = pm.bb; pl.k = pm.k;
+        pl.era = parseFloat(((pm.er / pm.ipOuts) * 21).toFixed(2));
+        pl.whip = parseFloat(((pm.bb + pm.h) / (pm.ipOuts / 3)).toFixed(2));
+      });
+      // Overlay split log onto PLAYERS
+      PLAYERS.forEach(pl => {
+        const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
+        let logs = splitLog[key];
+        if (!logs?.length) { const nm = pl.name.toLowerCase(); const f = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm); if (f) logs = f[1]; }
+        pl._splitLog = logs || [];
       });
       PLAYERS.sort((a, b) => b.avg - a.avg);
     }
