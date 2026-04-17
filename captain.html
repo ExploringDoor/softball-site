@@ -859,13 +859,14 @@ function renderSchedule() {
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${done
-            ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div><span class="badge badge-done">Final</span>`
+            ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div><span class="badge badge-done">Final</span>${g.has_discrepancy ? `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700;padding:4px 10px" onclick="showDiscrepancy('${g.id}')">⚠ Stats differ</button>` : ''}`
             : `<span class="badge badge-pending">Upcoming</span>`
           }
           ${canEdit ? `<button class="btn btn-outline btn-sm" onclick="toggleEditGame('${g.id}')">✏️ Edit</button>` : ''}
         </div>
       </div>
       ${canEdit ? `<div id="sched-edit-${g.id}" style="display:none"></div>` : ''}
+      ${g.has_discrepancy ? `<div id="sched-disc-${g.id}" style="display:none"></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -910,6 +911,50 @@ window.toggleEditGame = function(gameId) {
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('sched-edit-${gameId}').style.display='none'">Cancel</button>
     </div>
   </div>`;
+};
+
+window.showDiscrepancy = async function(gameId) {
+  const el = document.getElementById('sched-disc-' + gameId);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  el.innerHTML = `<div style="padding:8px;text-align:center;font-size:13px;color:var(--muted)">Loading…</div>`;
+  el.style.display = 'block';
+  try {
+    const snap = await getDoc(doc(db, 'box_scores', gameId));
+    if (!snap.exists()) { el.innerHTML = '<div style="padding:8px;color:var(--muted)">No box score found.</div>'; return; }
+    const bs = snap.data();
+    const discrepancies = bs.discrepancies || [];
+    if (discrepancies.length === 0) {
+      el.innerHTML = `<div style="padding:10px 14px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;font-size:13px;color:#166534;margin-top:4px">✓ No stat discrepancies found.</div>`;
+      return;
+    }
+    const rows = discrepancies.map(d => {
+      if (d.type === 'score') {
+        return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-weight:700;color:#92400e">Final Score</span>
+          <span style="color:#78350f">First submitted: ${d.first_away}–${d.first_home} &bull; Second submitted: ${d.second_away}–${d.second_home}</span>
+        </div>`;
+      }
+      if (d.type === 'batting') {
+        const diffs = Object.keys(d.first || {})
+          .filter(k => d.first[k] !== (d.second||{})[k])
+          .map(k => `${k.toUpperCase()}: ${d.first[k]} → ${(d.second||{})[k] ?? '?'}`)
+          .join(' &bull; ');
+        return `<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+          <span style="font-weight:700;color:#92400e;white-space:nowrap">${d.player}</span>
+          <span style="color:#78350f">${diffs}</span>
+        </div>`;
+      }
+      return '';
+    }).filter(Boolean).join('');
+    el.innerHTML = `<div style="padding:12px 14px;background:#fef3c7;border:1px solid #d97706;border-radius:8px;font-size:12px;margin-top:4px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#92400e;margin-bottom:8px">⚠ Stats Discrepancy — two scorers submitted different data</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${rows}</div>
+      <div style="font-size:11px;color:#78350f;margin-top:10px;border-top:1px solid #d97706;padding-top:8px">The admin will review and confirm the final stats. You may also contact your opponent to discuss.</div>
+    </div>`;
+  } catch(e) {
+    el.innerHTML = `<div style="padding:8px;color:var(--red)">Failed to load: ${e.message}</div>`;
+  }
 };
 
 window.saveEditGame = async function(gameId) {
@@ -1000,7 +1045,7 @@ function renderPendingGames() {
         </div>
         ${alreadySubmitted && !hasConflict ? `<span class="badge badge-pending">Score Submitted</span>` : hasConflict ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">⚠ Conflict</span>` : `
         <div style="display:flex;flex-wrap:wrap;gap:6px">
-          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&from=captain','_blank')">⚡ Score Live</button>
+          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&team=${captainData.team_id}&from=captain','_blank')">⚡ Score Live</button>
           <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="showUploadZone('${g.id}')">📄 Upload</button>
           <button class="btn btn-outline btn-sm" onclick="showScoreOnlyEntry('${g.id}')">📝 Score Only</button>
           <button class="btn btn-outline btn-sm" onclick="showBoxScoreEntry('${g.id}')">📊 Box Score</button>
