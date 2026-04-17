@@ -6133,12 +6133,15 @@ function generateGamePreview(atm,htm,g){
 }
 
 function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup){
+  const tied=as===hs;
   const aw=as>hs;
   const winTeam=aw?atm:htm, loseTeam=aw?htm:atm;
   const winScore=aw?as:hs, loseScore=aw?hs:as;
   const winLineup=aw?aLineup:hLineup, loseLineup=aw?hLineup:aLineup;
-  const winAbbr=winTeam?.short||(aw?away:home).toUpperCase();
-  const loseAbbr=loseTeam?.short||(aw?home:away).toUpperCase();
+  const awayAbbr=atm?.short||away.toUpperCase();
+  const homeAbbr=htm?.short||home.toUpperCase();
+  const winAbbr=aw?awayAbbr:homeAbbr;
+  const loseAbbr=aw?homeAbbr:awayAbbr;
   const winName=winAbbr;
   const loseName=loseAbbr;
   const diff=winScore-loseScore;
@@ -6166,7 +6169,11 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup){
   // S1: Result — "FIELD — WinTeam verb LoseTeam score on date."
   const fieldPfx=field?`${field.toUpperCase()} — `:'';
   const dt=date?` on ${date}`:'';
-  parts.push(`${fieldPfx}${winName} ${verb} ${loseName} ${winScore}–${loseScore}${dt}.`);
+  if(tied){
+    parts.push(`${fieldPfx}${awayAbbr} and ${homeAbbr} played to a ${as}–${hs} tie${dt}.`);
+  } else {
+    parts.push(`${fieldPfx}${winName} ${verb} ${loseName} ${winScore}–${loseScore}${dt}.`);
+  }
 
   // S2: Top performer
   if(hasStats){
@@ -6201,14 +6208,23 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup){
     parts.push(`${names} also ${extraHR.length===1?'went deep':'homered'}.`);
   }
 
-  // S6: Records
-  const wRec=winTeam?.w!=null?`${winTeam.w}-${winTeam.l}`:null;
-  const lRec=loseTeam?.w!=null?`${loseTeam.w}-${loseTeam.l}`:null;
-  if(wRec||lRec){
-    const rp=[];
-    if(wRec) rp.push(`${winAbbr} improves to ${wRec}`);
-    if(lRec) rp.push(`${loseAbbr} falls to ${lRec}`);
-    parts.push(rp.join(', while ')+'.');
+  // S6: Records — skip if both are 0-0 (standings not yet updated)
+  const awayRec=atm?.w!=null?`${atm.w}-${atm.l}`:null;
+  const homeRec=htm?.w!=null?`${htm.w}-${htm.l}`:null;
+  const bothZero=awayRec==='0-0'&&homeRec==='0-0';
+  if(!bothZero&&(awayRec||homeRec)){
+    if(tied){
+      const rp=[];
+      if(awayRec) rp.push(`${awayAbbr} is ${awayRec}`);
+      if(homeRec) rp.push(`${homeAbbr} is ${homeRec}`);
+      parts.push(rp.join(', ')+'.');
+    } else {
+      const wRec=aw?awayRec:homeRec, lRec=aw?homeRec:awayRec;
+      const rp=[];
+      if(wRec) rp.push(`${winAbbr} improves to ${wRec}`);
+      if(lRec) rp.push(`${loseAbbr} falls to ${lRec}`);
+      parts.push(rp.join(', while ')+'.');
+    }
   }
 
   return parts.join(' ');
