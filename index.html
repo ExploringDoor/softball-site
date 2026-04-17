@@ -2807,14 +2807,23 @@ async function loadAllData() {
     if (finalBS.length > 0) {
       const batMap = {};   // "name||team" → batting totals
       const pitMap = {};   // "name||team" → pitching totals
+      const splitLog = {}; // "name||team" → [{side,date,time,opp,ab,r,s,d,t,hr,rbi,bb,so}]
+
+      // Build gameId → {date, time} map so split log entries get accurate dates
+      const gameIdToInfo = {};
+      games.forEach(g => { if (g.id) gameIdToInfo[g.id] = { date: g.date||'', time: g.time||'' }; });
 
       for (const bs of finalBS) {
+        const bsInfo = gameIdToInfo[bs.id || bs.game_id] || {};
+        const bsDate = bsInfo.date || bs.date || '';
+        const bsTime = bsInfo.time || bs.time || '';
+
         // Batting — support snake_case (admin), camelCase (live-scorer), awayBatters (captain portal)
         const batSides = [
-          { lineup: bs.away_lineup || bs.awayLineup || bs.awayBatters, team: bs.away },
-          { lineup: bs.home_lineup || bs.homeLineup || bs.homeBatters, team: bs.home },
+          { lineup: bs.away_lineup || bs.awayLineup || bs.awayBatters, team: bs.away, side: 'away', opp: bs.home },
+          { lineup: bs.home_lineup || bs.homeLineup || bs.homeBatters, team: bs.home, side: 'home', opp: bs.away },
         ];
-        for (const { lineup, team: sid } of batSides) {
+        for (const { lineup, team: sid, side: gameSide, opp: oppId } of batSides) {
           if (!Array.isArray(lineup)) continue;
           for (const p of lineup) {
             const nm = (p.name || '').trim(); if (!nm) continue;
@@ -2834,6 +2843,13 @@ async function loadAllData() {
             b.so  += parseInt(p.so ?? p.k)||0;         // captain: 'k', admin: 'so'
             b.sac += parseInt(p.sac)||0;               b.sf  += parseInt(p.sf)||0;
             b.roe += parseInt(p.roe)||0;               b.fc  += parseInt(p.fc)||0;
+            // Per-game entry for real home/away/month split filtering
+            if (!splitLog[key]) splitLog[key] = [];
+            splitLog[key].push({ side: gameSide, date: bsDate, time: bsTime, opp: oppId||'',
+              ab: parseInt(p.ab)||0, r: parseInt(p.r)||0,
+              s: _s, d: _d, t: _t, hr: _hr,
+              rbi: parseInt(p.rbi)||0, bb: parseInt(p.bb)||0,
+              so: parseInt(p.so ?? p.k)||0 });
           }
         }
         // Pitching
@@ -2852,10 +2868,17 @@ async function loadAllData() {
             if (p.decision === 'W') pm.wins++;
             if (p.decision === 'L') pm.losses++;
             if (p.decision === 'S') pm.saves++;
-            const [inn, rem] = String(p.ip || 0).split('.').map(Number);
-            pm.ipOuts += (inn||0)*3 + (rem||0);
-            pm.h  += parseInt(p.h)||0;  pm.er += parseInt(p.er)||0;
-            pm.bb += parseInt(p.bb)||0; pm.k  += parseInt(p.so)||0;
+            // scorer saves 'outs' (integer); admin saves 'ip' as "6.1" string
+            if (p.outs !== undefined) {
+              pm.ipOuts += parseInt(p.outs)||0;
+            } else {
+              const [inn, rem] = String(p.ip || 0).split('.').map(Number);
+              pm.ipOuts += (inn||0)*3 + (rem||0);
+            }
+            pm.h  += parseInt(p.h)||0;
+            pm.er += parseInt(p.er ?? p.r)||0;   // scorer stores 'r', admin stores 'er'
+            pm.bb += parseInt(p.bb)||0;
+            pm.k  += parseInt(p.so ?? p.k)||0;   // scorer uses 'k', admin uses 'so'
           }
         }
       }
@@ -2902,7 +2925,7 @@ async function loadAllData() {
           if (altId) { const altKey = nm + '||' + altId; if (!map[altKey]) map[altKey] = map[key]; }
         });
       };
-      _normalizeMaps(batMap); _normalizeMaps(pitMap); _normalizeMaps(logMap);
+      _normalizeMaps(batMap); _normalizeMaps(pitMap); _normalizeMaps(logMap); _normalizeMaps(splitLog);
 
       // Apply batting stats to PLAYERS
       PLAYERS.forEach(pl => {
@@ -3002,6 +3025,18 @@ async function loadAllData() {
         // ERA per 7 innings (21 outs)
         pl.era  = parseFloat(((pm.er / pm.ipOuts) * 21).toFixed(2));
         pl.whip = parseFloat(((pm.bb + pm.h) / (pm.ipOuts / 3)).toFixed(2));
+      });
+
+      // Apply split log to PLAYERS for real home/away/month/opponent splits
+      PLAYERS.forEach(pl => {
+        const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
+        let logs = splitLog[key];
+        if (!logs?.length) {
+          const nm = pl.name.toLowerCase();
+          const found = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm);
+          if (found) logs = found[1];
+        }
+        pl._splitLog = logs || [];
       });
 
       PLAYERS.sort((a, b) => b.avg - a.avg);
@@ -6194,16 +6229,6 @@ function initScores(v){
 }
 
 // ═══ STATS JS ═══
-// Home/away split proxies (approximate until real split tracking is added)
-PLAYERS.forEach((p, i) => {
-  const seed = i + 1;
-  p.home_avg = parseFloat((p.avg * (0.9 + (seed%5)*0.05)).toFixed(3));
-  p.away_avg = parseFloat((p.avg * (0.95 + (seed%4)*0.04)).toFixed(3));
-  p.home_hr  = Math.floor(p.hr * 0.55);
-  p.away_hr  = p.hr - p.home_hr;
-  p.home_rbi = Math.floor(p.rbi * 0.52);
-  p.away_rbi = p.rbi - p.home_rbi;
-});
 
 // STATE
 let ctx    = 'player';   // player | team
@@ -6281,13 +6306,35 @@ function getTeamById(id){
 }
 
 function applyPlayerSplit(p){
-  if(split==='home')  return {...p, avg:p.home_avg||p.avg, hr:p.home_hr||Math.floor(p.hr*.55), rbi:p.home_rbi||Math.floor(p.rbi*.52), h:Math.floor(p.h*.52), ab:Math.floor(p.ab*.52), r:Math.floor(p.r*.52), bb:Math.floor(p.bb*.52)};
-  if(split==='away')  return {...p, avg:p.away_avg||p.avg, hr:p.away_hr||Math.ceil(p.hr*.45),  rbi:p.away_rbi||Math.ceil(p.rbi*.48), h:Math.ceil(p.h*.48), ab:Math.ceil(p.ab*.48), r:Math.ceil(p.r*.48), bb:Math.ceil(p.bb*.48)};
-  if(split==='april') return {...p, avg:parseFloat((p.avg*.92).toFixed(3)), hr:Math.floor(p.hr*.3), rbi:Math.floor(p.rbi*.3), h:Math.floor(p.h*.3), ab:Math.floor(p.ab*.3)};
-  if(split==='may')   return {...p, avg:parseFloat((p.avg*1.04).toFixed(3)), hr:Math.floor(p.hr*.35), rbi:Math.floor(p.rbi*.35), h:Math.floor(p.h*.35), ab:Math.floor(p.ab*.35)};
-  if(split==='june')  return {...p, avg:parseFloat((p.avg*1.02).toFixed(3)), hr:Math.floor(p.hr*.35), rbi:Math.floor(p.rbi*.35), h:Math.floor(p.h*.35), ab:Math.floor(p.ab*.35)};
-  if(split==='july')  return {...p, avg:parseFloat((p.avg*.98).toFixed(3)), hr:Math.floor(p.hr*.2), rbi:Math.floor(p.rbi*.2), h:Math.floor(p.h*.2), ab:Math.floor(p.ab*.2)};
-  return p;
+  if(split==='all') return p;
+  const logs = p._splitLog || [];
+  let filtered;
+  if     (split==='home')    filtered = logs.filter(g=>g.side==='home');
+  else if(split==='away')    filtered = logs.filter(g=>g.side==='away');
+  else if(split==='april')   filtered = logs.filter(g=>/apr/i.test(g.date));
+  else if(split==='may')     filtered = logs.filter(g=>/may/i.test(g.date));
+  else if(split==='june')    filtered = logs.filter(g=>/jun/i.test(g.date));
+  else if(split==='july')    filtered = logs.filter(g=>/jul/i.test(g.date));
+  else if(split==='vs_top')  filtered = logs.filter(g=>{ const o=ALL_TEAMS.find(t=>t.id===g.opp); return o&&(o.pct||0)>=0.5; });
+  else if(split==='vs_bot')  filtered = logs.filter(g=>{ const o=ALL_TEAMS.find(t=>t.id===g.opp); return o&&(o.pct||0)<0.5; });
+  else if(split==='day')     filtered = logs.filter(g=>{ const m=(g.time||'').match(/(\d+):\d+\s*(am|pm)/i); if(!m)return false; let h=parseInt(m[1]); if(/pm/i.test(m[2])&&h<12)h+=12; return h<17; });
+  else if(split==='night')   filtered = logs.filter(g=>{ const m=(g.time||'').match(/(\d+):\d+\s*(am|pm)/i); if(!m)return true;  let h=parseInt(m[1]); if(/pm/i.test(m[2])&&h<12)h+=12; return h>=17; });
+  else return p;
+  if(!filtered||!filtered.length) return {...p,ab:0,r:0,s:0,d:0,t:0,hr:0,rbi:0,bb:0,so:0,h:0,avg:0,slg:0,ops:0,gp:0};
+  const ab =filtered.reduce((s,g)=>s+g.ab,0);
+  const r  =filtered.reduce((s,g)=>s+g.r,0);
+  const _s =filtered.reduce((s,g)=>s+g.s,0);
+  const d  =filtered.reduce((s,g)=>s+g.d,0);
+  const t  =filtered.reduce((s,g)=>s+g.t,0);
+  const hr =filtered.reduce((s,g)=>s+g.hr,0);
+  const rbi=filtered.reduce((s,g)=>s+g.rbi,0);
+  const bb =filtered.reduce((s,g)=>s+g.bb,0);
+  const so =filtered.reduce((s,g)=>s+g.so,0);
+  const h  =_s+d+t+hr;
+  const avg=ab>0?h/ab:0;
+  const obp=(ab+bb)>0?(h+bb)/(ab+bb):0;
+  const slg=ab>0?(_s+2*d+3*t+4*hr)/ab:0;
+  return {...p,ab,r,s:_s,d,t,hr,rbi,bb,so,h,avg,slg,ops:obp+slg,gp:filtered.length};
 }
 
 function getRows(){
