@@ -3827,8 +3827,7 @@ function buildHomeSidebar(){
   if(!el) return;
   if(!TEAMS.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:rgba(0,0,0,.4);font-size:13px">Loading...</div>'; return; }
   const sorted=[...TEAMS].filter(t=>t.active!==false).sort((a,b)=>b.pct-a.pct||b.w-a.w);
-  const top8=sorted.slice(0,8);
-  el.innerHTML=top8.map((t,i)=>`<div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:12px" onclick="goPage('team','${t.id}')">
+  el.innerHTML=sorted.map((t,i)=>`<div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:12px" onclick="goPage('team','${t.id}')">
     <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;color:rgba(0,0,0,.35);width:18px">${i+1}</span>
     ${LOGO_TEAMS.has(t.id)?`<img src="logos/${t.id}.png" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" loading="lazy">`:`<span style="width:8px;height:8px;border-radius:50%;background:${t.color};flex-shrink:0"></span>`}
     <span style="font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:#1a1a1a;flex:1">${t.short||t.name}</span>
@@ -4719,7 +4718,7 @@ function populateTeamsDropdown(){
   list.innerHTML = sorted.map(t=>`
     <div class="nav-team-item" onclick="goPage('team','${t.id}');(function(){const w=document.getElementById('nl-players');w.style.pointerEvents='none';setTimeout(()=>{w.style.pointerEvents='';},400);})()">
       <div class="nav-team-dot">${teamLogoEl(t.id,t.short)}</div>
-      <span class="nav-team-name">${t.displayName||t.name}</span>
+      <span class="nav-team-name">${t.short||t.name}</span>
     </div>`).join('');
 }
 
@@ -6028,7 +6027,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     } else {
       // Auto-generate recap from box score stats
       const _al=boxScore.away_lineup||boxScore.awayLineup||boxScore.awayBatters||[], _hl=boxScore.home_lineup||boxScore.homeLineup||boxScore.homeBatters||[];
-      const autoRecap=generateAutoRecap(away,home,as,hs,date,field,atm,htm,_al,_hl);
+      const autoRecap=generateAutoRecap(away,home,as,hs,date,field,atm,htm,_al,_hl,boxScore.potg_name||'',boxScore.potg_team||'');
       bodyHtml += `<div class="pop-recap">${autoRecap}</div>`;
     }
     bodyHtml += `</div>`;
@@ -6132,7 +6131,7 @@ function generateGamePreview(atm,htm,g){
   return parts.join(' ');
 }
 
-function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup){
+function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup,potgName,potgTeam){
   const tied=as===hs;
   const aw=as>hs;
   const winTeam=aw?atm:htm, loseTeam=aw?htm:atm;
@@ -6147,11 +6146,12 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup){
   const diff=winScore-loseScore;
   const verb=diff===1?'edged':diff<=2?'defeated':diff>=8?'rolled past':'topped';
 
-  // POTG: highest scorer by HR×4 + H + RBI×2 + R
+  // POTG: use admin-designated name if provided, otherwise auto-calculate from stats
   const allL=[...aLineup.map(p=>({...p,_t:away})),...hLineup.map(p=>({...p,_t:home}))];
   const ps=p=>{const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));return (p.hr||0)*4+h+(p.rbi||0)*2+(p.r||0);};
-  const star=allL.length?allL.reduce((b,p)=>ps(p)>ps(b)?p:b,allL[0]):null;
+  let star=allL.length?allL.reduce((b,p)=>ps(p)>ps(b)?p:b,allL[0]):null;
   const hasStats=star&&ps(star)>0;
+  const adminPotg = potgName ? allL.find(p=>p.name?.toLowerCase()===potgName.toLowerCase()) || {name:potgName,_t:potgTeam||''} : null;
 
   const statLine=p=>{
     const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
@@ -6175,8 +6175,11 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup){
     parts.push(`${fieldPfx}${winName} ${verb} ${loseName} ${winScore}–${loseScore}${dt}.`);
   }
 
-  // S2: Top performer
-  if(hasStats){
+  // S2: Top performer / POTG
+  if(adminPotg){
+    const sl=statLine(adminPotg);
+    parts.push(`🏆 Player of the Game: ${adminPotg.name}${sl?`, going ${sl}`:'.'}`);
+  } else if(hasStats){
     const sl=statLine(star);
     if(sl) parts.push(`${star.name} led all hitters, going ${sl}.`);
   }

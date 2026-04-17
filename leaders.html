@@ -285,18 +285,20 @@ function normalizeName(n) {
 
 // ============ STAT CATEGORIES ============
 const CATEGORIES = [
-  { key: 'avg', label: 'AVG', format: v => v.toFixed(3), isRate: true },
-  { key: 'hr',  label: 'HR',  format: v => v, isRate: false },
-  { key: 'rbi', label: 'RBI', format: v => v, isRate: false },
-  { key: 'r',   label: 'R',   format: v => v, isRate: false },
-  { key: 'h',   label: 'H',   format: v => v, isRate: false },
-  { key: 'bb',  label: 'BB',  format: v => v, isRate: false },
-  { key: 'so',  label: 'SO',  format: v => v, isRate: false },
+  { key: 'avg', label: 'AVG',      format: v => v.toFixed(3), isRate: true  },
+  { key: 'hr',  label: 'HR',       format: v => v,             isRate: false },
+  { key: 'rbi', label: 'RBI',      format: v => v,             isRate: false },
+  { key: 'r',   label: 'R',        format: v => v,             isRate: false },
+  { key: 'h',   label: 'H',        format: v => v,             isRate: false },
+  { key: 'bb',  label: 'BB',       format: v => v,             isRate: false },
+  { key: 'so',  label: 'Batter K', format: v => v,             isRate: false },
+  { key: 'pso', label: 'Pitcher K', format: v => v,            isRate: false, isPitcher: true },
 ];
 
 let allPlayers = [];
+let allPitchers = [];   // keyed by name+team, aggregated from box_scores pitcher arrays
 let teamsMap = {};
-let currentCat = 'avg';
+let currentCat = 'h';
 
 // ============ MAIN ============
 async function loadLeaders() {
@@ -376,6 +378,27 @@ async function loadLeaders() {
       avg: p.ab > 0 ? p.h / p.ab : 0,
     }));
 
+    // Aggregate pitcher stats for Pitcher K leaders
+    const pitcherMap = {};
+    for (const bs of boxScores) {
+      const pitcherSides = [
+        { pitchers: bs.away_pitchers || bs.away_pitching, teamId: bs.away },
+        { pitchers: bs.home_pitchers || bs.home_pitching, teamId: bs.home },
+      ];
+      for (const { pitchers, teamId } of pitcherSides) {
+        if (!Array.isArray(pitchers)) continue;
+        for (const p of pitchers) {
+          const name = (p.name || '').trim();
+          if (!name || name === '' || name === 'Pitcher') continue;
+          const key = name.toLowerCase() + '||' + (teamId || '');
+          if (!pitcherMap[key]) pitcherMap[key] = { name, team: teamId || '', pso: 0, gp: 0 };
+          pitcherMap[key].pso += parseInt(p.so ?? p.k) || 0;
+          pitcherMap[key].gp  += 1;
+        }
+      }
+    }
+    allPitchers = Object.values(pitcherMap);
+
     // Render the full UI
     renderUI();
 
@@ -402,21 +425,16 @@ function getTeamFullName(id) {
 
 function getTopPlayer(cat) {
   const c = CATEGORIES.find(c => c.key === cat);
-  let pool = [...allPlayers];
-  if (c && c.isRate) {
-    pool = pool.filter(p => p.ab >= 10);
-  }
-  // For SO, lower is better? No -- SO leaders means most SO. Keep descending.
+  let pool = c?.isPitcher ? [...allPitchers] : [...allPlayers];
+  if (c && c.isRate) pool = pool.filter(p => p.ab >= 3);
   pool.sort((a, b) => b[cat] - a[cat]);
   return pool[0] || null;
 }
 
 function getTopPlayers(cat, limit) {
   const c = CATEGORIES.find(c => c.key === cat);
-  let pool = [...allPlayers];
-  if (c && c.isRate) {
-    pool = pool.filter(p => p.ab >= 10);
-  }
+  let pool = c?.isPitcher ? [...allPitchers] : [...allPlayers];
+  if (c && c.isRate) pool = pool.filter(p => p.ab >= 3);
   pool.sort((a, b) => b[cat] - a[cat]);
   return pool.slice(0, limit);
 }
@@ -502,7 +520,7 @@ function renderUI() {
 
     // Qualifier note for rate stats
     if (activeCat.isRate) {
-      tableHtml += '<div style="font-size:11px;color:var(--muted);margin-top:12px;font-style:italic;">Minimum 10 at-bats to qualify for rate stats.</div>';
+      tableHtml += '<div style="font-size:11px;color:var(--muted);margin-top:12px;font-style:italic;">Minimum 3 at-bats to qualify for AVG.</div>';
     }
   }
   tableHtml += '</div>';
