@@ -1498,8 +1498,10 @@ window.resetGame = async function(gameId) {
       await Promise.all(subsSnap.docs.map(d => deleteDoc(doc(db, 'score_submissions', d.id)).catch(() => {})));
     } catch(subErr) { console.warn('Could not delete submissions:', subErr); }
 
-    // Wipe in-progress scorer state so re-entry starts clean
+    // Wipe in-progress scorer state so re-entry starts clean (shared + per-side)
     try { await deleteDoc(doc(db, 'game_states', gameId)).catch(() => {}); } catch(e) {}
+    try { await deleteDoc(doc(db, 'game_states', `${gameId}_away`)).catch(() => {}); } catch(e) {}
+    try { await deleteDoc(doc(db, 'game_states', `${gameId}_home`)).catch(() => {}); } catch(e) {}
     try { await deleteDoc(doc(db, 'live_scores', gameId)).catch(() => {}); } catch(e) {}
 
     toast('Game reset — enter box score fresh from lineup picker');
@@ -2857,8 +2859,10 @@ window.bsReopenGame = async function() {
       const subsSnap = await getDocs(query(collection(db, 'score_submissions'), where('game_id', '==', bsGameId)));
       await Promise.all(subsSnap.docs.map(d => deleteDoc(doc(db, 'score_submissions', d.id)).catch(() => {})));
     } catch(subErr) { console.warn('Could not delete submissions:', subErr); }
-    // Wipe in-progress scorer state so re-entry starts clean
+    // Wipe in-progress scorer state so re-entry starts clean (shared + per-side)
     try { await deleteDoc(doc(db, 'game_states', bsGameId)).catch(() => {}); } catch(e) {}
+    try { await deleteDoc(doc(db, 'game_states', `${bsGameId}_away`)).catch(() => {}); } catch(e) {}
+    try { await deleteDoc(doc(db, 'game_states', `${bsGameId}_home`)).catch(() => {}); } catch(e) {}
     try { await deleteDoc(doc(db, 'live_scores', bsGameId)).catch(() => {}); } catch(e) {}
 
     toast('Game reopened — enter lineup and box score fresh');

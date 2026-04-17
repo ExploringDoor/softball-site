@@ -4267,7 +4267,10 @@ document.getElementById('menu-reset-game').addEventListener('click', () => {
     try {
       import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js').then(({ doc, deleteDoc, updateDoc }) => {
         deleteDoc(doc(db, 'live_scores', G.gameId)).catch(() => {});
+        // Delete both shared and per-side state docs
         deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
+        deleteDoc(doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
+        deleteDoc(doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
         // Clear live flag + scores on the game doc itself so re-entry starts clean
         updateDoc(doc(db, 'games', G.gameId), { live: false, away_score: 0, home_score: 0 }).catch(() => {});
       });
@@ -4346,6 +4349,8 @@ function showExitConfirmSheet() {
       try {
         const { doc: _doc, deleteDoc: _del, updateDoc: _upd } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
         await _del(_doc(db, 'game_states', G.gameId)).catch(() => {});
+        await _del(_doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
+        await _del(_doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
         await _del(_doc(db, 'live_scores', G.gameId)).catch(() => {});
         await _upd(_doc(db, 'games', G.gameId), { live: false, away_score: 0, home_score: 0 }).catch(() => {});
       } catch(e) {}
@@ -5276,8 +5281,10 @@ document.getElementById('gom-final-btn').addEventListener('click', async () => {
       }).catch(() => {});
       recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
     }
-    // Always clean up game state regardless of submission order
+    // Always clean up game state (shared + per-side) regardless of submission order
     deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
+    deleteDoc(doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
+    deleteDoc(doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
   }
   // Show a brief toast if this was a second submission
   if (!result.firstSubmission) {
@@ -5829,10 +5836,20 @@ async function saveScore() {
   }
 }
 
+// When two captains score simultaneously they each need their own state doc,
+// otherwise one overwrites the other. Per-side key when scoringTeam is set,
+// plain gameId for admin.
+function stateDocKey() {
+  if (!G.gameId) return null;
+  const side = G.scoringTeam === G.awayTeam?.id ? 'away'
+             : G.scoringTeam === G.homeTeam?.id ? 'home' : null;
+  return side ? `${G.gameId}_${side}` : G.gameId;
+}
+
 async function saveFullState() {
   if (!G.gameId || G.gameId === 'practice') return;
   try {
-    await setDoc(doc(db, 'game_states', G.gameId), {
+    await setDoc(doc(db, 'game_states', stateDocKey()), {
       savedAt: serverTimestamp(),
       inning: G.inning,
       half: G.half,
@@ -6110,10 +6127,15 @@ document.getElementById('start-btn').addEventListener('click', async () => {
   // Load rosters
   await loadRosters(awayId, homeId);
 
-  // Check for a saved mid-game state
+  // Check for a saved mid-game state (prefer my per-side doc, fall back to shared admin doc)
   let resumed = false;
   try {
-    const stateSnap = await getDoc(doc(db, 'game_states', gameId));
+    const _myUrlTeamId = new URLSearchParams(window.location.search).get('team');
+    const _mySide = _myUrlTeamId === awayId ? 'away' : _myUrlTeamId === homeId ? 'home' : null;
+    let stateSnap = _mySide
+      ? await getDoc(doc(db, 'game_states', `${gameId}_${_mySide}`))
+      : { exists: () => false };
+    if (!stateSnap.exists()) stateSnap = await getDoc(doc(db, 'game_states', gameId));
     if (stateSnap.exists()) {
       const s = stateSnap.data();
       G.inning     = s.inning     ?? 1;
