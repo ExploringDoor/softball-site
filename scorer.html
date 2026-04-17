@@ -2869,8 +2869,10 @@ function endAtBat(result, details) {
   }
   const stats = sid ? G.playerStats[team][sid] : {};
 
-  // Track RISP (runner on 2nd or 3rd)
-  const haRISP = G.runners[2] || G.runners[3];
+  // Track RISP (runner on 2nd or 3rd) — require a real runner object with a
+  // name or pid so zombie/empty values don't falsely inflate the count.
+  const r2 = G.runners[2], r3 = G.runners[3];
+  const haRISP = !!((r2 && (r2.pid || r2.name)) || (r3 && (r3.pid || r3.name)));
   const isHitResult = ['single','double','triple','homerun','itphr'].includes(result);
   if (haRISP && !['walk','hbp'].includes(result)) {
     G.risp[team].ab++;
