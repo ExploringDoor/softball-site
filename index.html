@@ -199,9 +199,10 @@ body.dark [style*="border-bottom:1px solid rgba(0,0,0"]{border-bottom-color:rgba
 .nav-dd-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:7px;font-size:12.5px;font-weight:600;color:#1a1a1a;text-decoration:none;cursor:pointer;transition:background .1s;letter-spacing:.02em;white-space:nowrap}
 .nav-dd-item:hover{background:rgba(0,45,114,.07);color:#002D72}
 .nav-teams-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;min-width:280px}
-.nav-team-item{display:flex;align-items:center;padding:7px 12px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s}
+.nav-team-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s}
 .nav-team-item:hover{background:rgba(0,87,216,.08);box-shadow:0 0 0 1px rgba(0,87,216,.12)}
-.nav-team-dot{display:none}
+.nav-team-dot{display:flex;align-items:center;justify-content:center;width:22px;height:22px;flex-shrink:0}
+.nav-team-dot img{width:22px;height:22px;object-fit:contain;display:block}
 .nav-team-name{font-size:12px;font-weight:600;color:#1a1a1a;white-space:nowrap}
 body.dark .nav-dropdown{background:#1e2532;border-color:rgba(255,255,255,.1);box-shadow:0 8px 32px rgba(0,0,0,.4)}
 body.dark .nav-dd-item{color:#e0e0e0}
@@ -664,8 +665,9 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .preview-team-row>div{display:flex;align-items:center;}
   .pgrid{grid-template-columns:1fr 1fr}
   /* Gameday popup: anchored to top on mobile so it's always reachable */
-  .pop{align-items:flex-start!important;padding:70px 10px 16px!important;z-index:800!important;}
-  .pop-box{max-height:calc(100vh - 86px)!important;border-radius:12px!important;}
+  .pop{align-items:flex-start!important;padding:70px 10px calc(16px + env(safe-area-inset-bottom,0px))!important;z-index:800!important;}
+  /* Use 100dvh so iOS Safari URL bar doesn't clip the bottom of the popup */
+  .pop-box{max-height:calc(100vh - 86px)!important;max-height:calc(100dvh - 86px - env(safe-area-inset-bottom,0px))!important;border-radius:12px!important;padding-bottom:env(safe-area-inset-bottom,0px)!important;}
   .pop-x{z-index:900!important;}
   .pop-hd{padding:18px 18px 12px!important;}
   .pop-body{padding:14px 18px!important;}
@@ -2804,6 +2806,8 @@ async function loadAllData() {
     // ── Aggregate real stats from box_scores ──────────────────────────
     // Include final + any draft that has actual lineup data entered
     const finalBS = boxScores.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup || bs.awayLineup || bs.awayBatters) && (bs.away_lineup || bs.awayLineup || bs.awayBatters).length > 0));
+    // Expose for recap-card POTG fallback (buildRecaps reads window.FINAL_BOX_SCORES)
+    window.FINAL_BOX_SCORES = finalBS;
     if (finalBS.length > 0) {
       const batMap = {};   // "name||team" → batting totals
       const pitMap = {};   // "name||team" → pitching totals
@@ -2927,14 +2931,19 @@ async function loadAllData() {
       };
       _normalizeMaps(batMap); _normalizeMaps(pitMap); _normalizeMaps(logMap); _normalizeMaps(splitLog);
 
+      // Build set of names that appear on multiple roster entries — skip name-only fallback for them
+      const _nameCount = {};
+      PLAYERS.forEach(pl => { const n = pl.name.toLowerCase(); _nameCount[n] = (_nameCount[n]||0)+1; });
+      const _dupNames = new Set(Object.keys(_nameCount).filter(n => _nameCount[n] > 1));
+
       // Apply batting stats to PLAYERS
       PLAYERS.forEach(pl => {
         const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
         let b = batMap[key];
         if (!b) {
-          // Fallback 1: name-only match (handles team-id mismatches)
+          // Fallback 1: name-only match (handles team-id mismatches) — skip for duplicate names
           const nm = pl.name.toLowerCase();
-          b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
+          if (!_dupNames.has(nm)) b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
         }
         if (!b) {
           // Fallback 2: "A Miller" in box score → "Adam Miller" in players DB
@@ -2968,12 +2977,14 @@ async function loadAllData() {
         const teamKey = (pl.team||'').toLowerCase();
         const key = pl.name.toLowerCase() + '||' + teamKey;
         if (logMap[key] && logMap[key].length) { pl.log = logMap[key]; return; }
-        // Fallback 1: name-only match across any team
+        // Fallback 1: name-only match across any team — skip for duplicate names
         const nameOnly = pl.name.toLowerCase();
         const allEntries = [];
-        for (const k of Object.keys(logMap)) {
-          const [nm] = k.split('||');
-          if (nm === nameOnly) allEntries.push(...logMap[k]);
+        if (!_dupNames.has(nameOnly)) {
+          for (const k of Object.keys(logMap)) {
+            const [nm] = k.split('||');
+            if (nm === nameOnly) allEntries.push(...logMap[k]);
+          }
         }
         if (allEntries.length) { pl.log = allEntries.sort((a,b)=>(a.date||'').localeCompare(b.date||'')); return; }
         // Fallback 2: "A Miller" in box score → "Adam Miller" in players DB
@@ -2998,7 +3009,7 @@ async function loadAllData() {
         let pm = pitMap[key];
         if (!pm) {
           const nm = pl.name.toLowerCase();
-          pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1];
+          if (!_dupNames.has(nm)) pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1];
         }
         if (!pm) {
           const plParts = pl.name.toLowerCase().split(/\s+/);
@@ -3033,8 +3044,7 @@ async function loadAllData() {
         let logs = splitLog[key];
         if (!logs?.length) {
           const nm = pl.name.toLowerCase();
-          const found = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm);
-          if (found) logs = found[1];
+          if (!_dupNames.has(nm)) { const found = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm); if (found) logs = found[1]; }
         }
         pl._splitLog = logs || [];
       });
@@ -3224,13 +3234,18 @@ async function refreshVolatileData() {
           }
         }
       }
+      // Build duplicate names set for name-only fallback guard
+      const _nameCount2 = {};
+      PLAYERS.forEach(pl => { const n = pl.name.toLowerCase(); _nameCount2[n] = (_nameCount2[n]||0)+1; });
+      const _dupNames2 = new Set(Object.keys(_nameCount2).filter(n => _nameCount2[n] > 1));
+
       // Overlay batting stats onto PLAYERS
       PLAYERS.forEach(pl => {
         const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
         let b = batMap[key];
         if (!b) {
           const nm = pl.name.toLowerCase();
-          b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
+          if (!_dupNames2.has(nm)) b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
         }
         if (!b) {
           const plParts = pl.name.toLowerCase().split(/\s+/);
@@ -3261,7 +3276,7 @@ async function refreshVolatileData() {
       PLAYERS.forEach(pl => {
         const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
         let pm = pitMap[key];
-        if (!pm) { const nm = pl.name.toLowerCase(); pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1]; }
+        if (!pm) { const nm = pl.name.toLowerCase(); if (!_dupNames2.has(nm)) pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1]; }
         if (!pm || pm.ipOuts === 0) { pl.ip = 0; return; }
         pl.ip = parseFloat(`${Math.floor(pm.ipOuts/3)}.${pm.ipOuts%3}`);
         pl.gs = pm.gs; pl.wins = pm.wins; pl.losses = pm.losses;
@@ -3273,7 +3288,7 @@ async function refreshVolatileData() {
       PLAYERS.forEach(pl => {
         const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
         let logs = splitLog[key];
-        if (!logs?.length) { const nm = pl.name.toLowerCase(); const f = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm); if (f) logs = f[1]; }
+        if (!logs?.length) { const nm = pl.name.toLowerCase(); if (!_dupNames2.has(nm)) { const f = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm); if (f) logs = f[1]; } }
         pl._splitLog = logs || [];
       });
       PLAYERS.sort((a, b) => b.avg - a.avg);
@@ -4690,14 +4705,31 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 function buildRecaps(){
   document.getElementById('recap-list').innerHTML=RECAPS.map(r=>{
     const at=getTeamByShort(r.away), ht=getTeamByShort(r.home);
-    const potgPlayer = r.potg_name ? PLAYERS.find(p=>p.name===r.potg_name||p.name?.toLowerCase()===r.potg_name?.toLowerCase()) : null;
-    const potgTeamObj = r.potg_team ? (TEAMS.find(t=>t.id===r.potg_team||t.short?.toLowerCase()===r.potg_team?.toLowerCase())||HIST_TEAMS.find(t=>t.id===r.potg_team)) : null;
-    const potgHtml = r.potg_name ? `
+    // POTG: prefer admin-set value; else auto-pick best batter from this game's box score
+    let _potgName = r.potg_name || '';
+    let _potgTeam = r.potg_team || '';
+    if (!_potgName && Array.isArray(window.FINAL_BOX_SCORES)) {
+      const bs = window.FINAL_BOX_SCORES.find(b =>
+        (b.away===r.away && b.home===r.home) ||
+        (at && ht && b.away===at.id && b.home===ht.id));
+      if (bs) {
+        const allLine=[...(bs.away_lineup||bs.awayBatters||[]).map(p=>({...p,_team:r.away})),
+                       ...(bs.home_lineup||bs.homeBatters||[]).map(p=>({...p,_team:r.home}))];
+        const sc=p=>{const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));return (p.hr||0)*4+(p.t||0)*3+(p.d||0)*2+h+(p.rbi||0)*2+(p.r||0);};
+        if (allLine.length) {
+          const best=allLine.reduce((a,b)=>sc(b)>sc(a)?b:a, allLine[0]);
+          if (sc(best)>0) { _potgName=best.name; _potgTeam=best._team; }
+        }
+      }
+    }
+    const potgPlayer = _potgName ? PLAYERS.find(p=>p.name===_potgName||p.name?.toLowerCase()===_potgName.toLowerCase()) : null;
+    const potgTeamObj = _potgTeam ? (TEAMS.find(t=>t.id===_potgTeam||t.short?.toLowerCase()===_potgTeam?.toLowerCase())||HIST_TEAMS.find(t=>t.id===_potgTeam)) : null;
+    const potgHtml = _potgName ? `
       <div style="display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,#fffaeb,#fef9e4);border:1px solid #f5c842;border-radius:10px;padding:10px 14px;margin-top:10px">
         <span style="font-size:20px;line-height:1">🏆</span>
         <div>
           <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#92400e;margin-bottom:1px">Player of the Game</div>
-          <div style="font-weight:700;font-size:14px;color:#1a1a1a;cursor:${potgPlayer?'pointer':'default'}" ${potgPlayer?`onclick="openModal('${potgPlayer.id}')"`:''}>${r.potg_name}${potgTeamObj?` <span style="font-weight:400;font-size:12px;color:#777">· ${potgTeamObj.short||potgTeamObj.name}</span>`:''}</div>
+          <div style="font-weight:700;font-size:14px;color:#1a1a1a;cursor:${potgPlayer?'pointer':'default'}" ${potgPlayer?`onclick="openModal('${potgPlayer.id}')"`:''}>${_potgName}${potgTeamObj?` <span style="font-weight:400;font-size:12px;color:#777">· ${potgTeamObj.short||potgTeamObj.name}</span>`:''}</div>
         </div>
       </div>` : '';
     return `<div class="recap-card">
@@ -5794,6 +5826,42 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const hH = hLineup.reduce((s,p)=>s+(p.h||0),0);
     const aE = boxScore.away_errors || 0;
     const hE = boxScore.home_errors || 0;
+
+    // ── Player of the Game banner (auto-compute from lineup if not saved) ──
+    {
+      const allLineup=[...aLineup.map(p=>({...p,_team:away})),...hLineup.map(p=>({...p,_team:home}))];
+      const potgScore=p=>{
+        const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
+        return (p.hr||0)*4+(p.t||0)*3+(p.d||0)*2+h+(p.rbi||0)*2+(p.r||0);
+      };
+      let potgEntry=null;
+      if(boxScore.potg_name){
+        const potgLower=boxScore.potg_name.toLowerCase();
+        potgEntry=allLineup.find(p=>p.name?.toLowerCase()===potgLower)
+          ||{name:boxScore.potg_name,_team:boxScore.potg_team||''};
+      } else if(allLineup.length){
+        potgEntry=allLineup.reduce((best,p)=>potgScore(p)>potgScore(best)?p:best,allLineup[0]);
+        if(potgScore(potgEntry)===0) potgEntry=null;
+      }
+      if(potgEntry){
+        const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===potgEntry._team||x.short===potgEntry._team);return t?.short||potgEntry._team||'';})();
+        const ph=potgEntry.h||((potgEntry.s||0)+(potgEntry.d||0)+(potgEntry.t||0)+(potgEntry.hr||0));
+        const sp=[];
+        if(ph) sp.push(`${ph}H`);
+        if(potgEntry.hr) sp.push(`${potgEntry.hr} HR`);
+        if(potgEntry.rbi) sp.push(`${potgEntry.rbi} RBI`);
+        if(potgEntry.r) sp.push(`${potgEntry.r} R`);
+        const potgStatLine=sp.length?sp.join(', '):'';
+        bodyHtml+=`<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:28px;flex-shrink:0">⭐</span>
+          <div style="min-width:0;flex:1">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#92400e;margin-bottom:3px">Player of the Game</div>
+            <div style="font-size:16px;font-weight:800;color:#1a1a1a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${potgEntry.name}</div>
+            <div style="font-size:12px;color:#555;margin-top:3px">${potgTeamName}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
+          </div>
+        </div>`;
+      }
+    }
 
     // Line score with innings
     const innCount = Math.max(aInnings.length, hInnings.length, 7);
