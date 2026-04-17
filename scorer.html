@@ -4262,11 +4262,14 @@ document.getElementById('menu-game-over').addEventListener('click', () => {
 document.getElementById('menu-reset-game').addEventListener('click', () => {
   closeMenuSheet();
   if (!confirm('Reset this game back to 0–0 and return to game select? All scores and stats will be cleared.')) return;
-  // Wipe live score in Firebase if we have a gameId
+  // Wipe live score + saved game state in Firebase if we have a gameId
   if (G.gameId) {
     try {
-      import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js').then(({ doc, deleteDoc }) => {
+      import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js').then(({ doc, deleteDoc, updateDoc }) => {
         deleteDoc(doc(db, 'live_scores', G.gameId)).catch(() => {});
+        deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
+        // Clear live flag + scores on the game doc itself so re-entry starts clean
+        updateDoc(doc(db, 'games', G.gameId), { live: false, away_score: 0, home_score: 0 }).catch(() => {});
       });
     } catch(e) {}
   }
@@ -4338,8 +4341,15 @@ function showExitConfirmSheet() {
   });
   document.getElementById('exit-discard-btn').addEventListener('click', async () => {
     div.style.display = 'none';
-    // Still save game state (so it can be resumed), just skip box score
-    await saveFullState().catch(() => {});
+    // Discard: delete saved state + live score so re-entry starts fresh
+    if (G.gameId && G.gameId !== 'practice') {
+      try {
+        const { doc: _doc, deleteDoc: _del, updateDoc: _upd } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+        await _del(_doc(db, 'game_states', G.gameId)).catch(() => {});
+        await _del(_doc(db, 'live_scores', G.gameId)).catch(() => {});
+        await _upd(_doc(db, 'games', G.gameId), { live: false, away_score: 0, home_score: 0 }).catch(() => {});
+      } catch(e) {}
+    }
     document.getElementById('app').classList.remove('visible');
     document.getElementById('bottom-nav').classList.remove('active');
     document.getElementById('setup-screen').style.display = 'flex';
