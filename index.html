@@ -201,8 +201,8 @@ body.dark [style*="border-bottom:1px solid rgba(0,0,0"]{border-bottom-color:rgba
 .nav-teams-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;min-width:280px}
 .nav-team-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .12s,color .12s}
 .nav-team-item:hover{background:rgba(0,87,216,.08);box-shadow:0 0 0 1px rgba(0,87,216,.12)}
-.nav-team-dot{display:flex;align-items:center;justify-content:center;width:22px;height:22px;flex-shrink:0}
-.nav-team-dot img{width:22px;height:22px;object-fit:contain;display:block}
+.nav-team-dot{display:flex;align-items:center;justify-content:center;width:66px;height:66px;flex-shrink:0}
+.nav-team-dot img{width:66px;height:66px;object-fit:contain;display:block}
 .nav-team-name{font-size:12px;font-weight:600;color:#1a1a1a;white-space:nowrap}
 body.dark .nav-dropdown{background:#1e2532;border-color:rgba(255,255,255,.1);box-shadow:0 8px 32px rgba(0,0,0,.4)}
 body.dark .nav-dd-item{color:#e0e0e0}
@@ -5722,12 +5722,34 @@ async function openRecap(away,home,as,hs,field,date){
       if(potgEntry.rbi) sp.push(`${potgEntry.rbi} RBI`);
       if(potgEntry.r) sp.push(`${potgEntry.r} R`);
       const potgStatLine=sp.length?`Batting · ${sp.join(', ')}`:'';
-      potgHtml=`<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:center;gap:14px">
-        <span style="font-size:30px;flex-shrink:0">⭐</span>
-        <div style="min-width:0">
+      // Build a narrative sentence about POTG
+      const _pab=potgEntry.ab||0, _ph=ph, _phr=potgEntry.hr||0, _prbi=potgEntry.rbi||0, _pr=potgEntry.r||0, _p2b=potgEntry.d||0, _p3b=potgEntry.t||0;
+      const _teamWon=(potgEntry._team===away && as>hs)||(potgEntry._team===home && hs>as);
+      const _teamLost=(potgEntry._team===away && as<hs)||(potgEntry._team===home && hs<as);
+      const _outcome=_teamWon?'powered the win':(_teamLost?'shined in a tough loss':'put on a show');
+      const _lineParts=[];
+      if(_pab) _lineParts.push(`went ${_ph}-for-${_pab}`);
+      else if(_ph) _lineParts.push(`collected ${_ph} hit${_ph!==1?'s':''}`);
+      const _extras=[];
+      if(_phr) _extras.push(`${_phr} home run${_phr!==1?'s':''}`);
+      if(_p3b) _extras.push(`${_p3b} triple${_p3b!==1?'s':''}`);
+      if(_p2b) _extras.push(`${_p2b} double${_p2b!==1?'s':''}`);
+      if(_prbi) _extras.push(`${_prbi} RBI`);
+      if(_pr) _extras.push(`${_pr} run${_pr!==1?'s':''} scored`);
+      if(_extras.length){
+        const _ex=_extras.length===1?_extras[0]:_extras.length===2?`${_extras[0]} and ${_extras[1]}`:`${_extras.slice(0,-1).join(', ')}, and ${_extras[_extras.length-1]}`;
+        _lineParts.push(`with ${_ex}`);
+      }
+      const _narrative=_lineParts.length
+        ? `${potgEntry.name} ${_outcome} for ${potgTeamName||'the team'}, ${_lineParts.join(' ')}.`
+        : `${potgEntry.name} earned Player of the Game honors for ${potgTeamName||'the team'}.`;
+      potgHtml=`<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:16px 18px;margin-bottom:20px;display:flex;align-items:flex-start;gap:14px">
+        <span style="font-size:30px;flex-shrink:0;margin-top:2px">⭐</span>
+        <div style="min-width:0;flex:1">
           <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#92400e;margin-bottom:3px">Player of the Game</div>
-          <div style="font-size:17px;font-weight:800;color:#1a1a1a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${potgEntry.name}</div>
+          <div style="font-size:17px;font-weight:800;color:#1a1a1a;line-height:1.2">${potgEntry.name}</div>
           <div style="font-size:12px;color:#555;margin-top:3px">${potgTeamName||''}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
+          <div style="font-size:13px;color:#333;margin-top:8px;line-height:1.45;font-style:italic">${_narrative}</div>
         </div>
       </div>`;
     }
@@ -5826,42 +5848,6 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const hH = hLineup.reduce((s,p)=>s+(p.h||0),0);
     const aE = boxScore.away_errors || 0;
     const hE = boxScore.home_errors || 0;
-
-    // ── Player of the Game banner (auto-compute from lineup if not saved) ──
-    {
-      const allLineup=[...aLineup.map(p=>({...p,_team:away})),...hLineup.map(p=>({...p,_team:home}))];
-      const potgScore=p=>{
-        const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
-        return (p.hr||0)*4+(p.t||0)*3+(p.d||0)*2+h+(p.rbi||0)*2+(p.r||0);
-      };
-      let potgEntry=null;
-      if(boxScore.potg_name){
-        const potgLower=boxScore.potg_name.toLowerCase();
-        potgEntry=allLineup.find(p=>p.name?.toLowerCase()===potgLower)
-          ||{name:boxScore.potg_name,_team:boxScore.potg_team||''};
-      } else if(allLineup.length){
-        potgEntry=allLineup.reduce((best,p)=>potgScore(p)>potgScore(best)?p:best,allLineup[0]);
-        if(potgScore(potgEntry)===0) potgEntry=null;
-      }
-      if(potgEntry){
-        const potgTeamName=(()=>{const t=TEAMS.find(x=>x.id===potgEntry._team||x.short===potgEntry._team);return t?.short||potgEntry._team||'';})();
-        const ph=potgEntry.h||((potgEntry.s||0)+(potgEntry.d||0)+(potgEntry.t||0)+(potgEntry.hr||0));
-        const sp=[];
-        if(ph) sp.push(`${ph}H`);
-        if(potgEntry.hr) sp.push(`${potgEntry.hr} HR`);
-        if(potgEntry.rbi) sp.push(`${potgEntry.rbi} RBI`);
-        if(potgEntry.r) sp.push(`${potgEntry.r} R`);
-        const potgStatLine=sp.length?sp.join(', '):'';
-        bodyHtml+=`<div style="background:linear-gradient(135deg,#fffaeb,#fef3c7);border:2px solid #f5c842;border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
-          <span style="font-size:28px;flex-shrink:0">⭐</span>
-          <div style="min-width:0;flex:1">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#92400e;margin-bottom:3px">Player of the Game</div>
-            <div style="font-size:16px;font-weight:800;color:#1a1a1a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${potgEntry.name}</div>
-            <div style="font-size:12px;color:#555;margin-top:3px">${potgTeamName}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
-          </div>
-        </div>`;
-      }
-    }
 
     // Line score with innings
     const innCount = Math.max(aInnings.length, hInnings.length, 7);

@@ -5887,7 +5887,9 @@ async function saveBoxScore(isFinal = false) {
       return pitchers.map(p => {
         const key = Object.keys(pc).find(k => pc[k].name === p.name) || p.name;
         const counts = pc[key] || { p: 0, s: 0 };
-        return { ...p, pitches: counts.p, strikes: counts.s };
+        const outs = p.outs || 0;
+        const ip = Math.floor(outs / 3) + '.' + (outs % 3);
+        return { ...p, ip, pitches: counts.p, strikes: counts.s };
       });
     }
 

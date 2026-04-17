@@ -370,7 +370,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="financials" data-sec="financials" onclick="showSection('financials')"><span class="icon">&#128181;</span> Financials</div>
       <div class="nav-item" data-section="registrations" data-sec="registrations" onclick="showSection('registrations')"><span class="icon">&#128221;</span> Registrations</div>
       <div class="nav-item" data-section="emailblast" data-sec="emailblast" onclick="showSection('emailblast')"><span class="icon">&#128140;</span> Email Blast</div>
-      <div class="nav-item" data-section="pages" data-sec="pages" onclick="showSection('pages')"><span class="icon">&#9998;</span> Page Editor</div>
+      <div class="nav-item" data-section="pages" data-sec="pages" onclick="showSection('pages')" style="display:none"><span class="icon">&#9998;</span> Page Editor</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
       <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
       <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')" style="display:none"><span class="icon">&#9989;</span> Score Reviews</div>
@@ -792,7 +792,11 @@ select.form-input{cursor:pointer}
       </div>
       <div style="max-width:640px">
         <div class="card" style="padding:24px;margin-bottom:16px">
-          <div id="ml-subscriber-count" style="font-size:13px;color:var(--muted2);margin-bottom:20px">Loading subscriber count...</div>
+          <div id="ml-subscriber-count" style="font-size:13px;color:var(--muted2);margin-bottom:8px">Loading subscriber count...</div>
+          <div style="margin-bottom:20px">
+            <button type="button" id="ml-toggle-list" onclick="toggleSubscriberList()" style="background:none;border:none;color:var(--blue);font-size:12px;cursor:pointer;padding:0;text-decoration:underline">View subscribers</button>
+            <div id="ml-subscriber-list" style="display:none;margin-top:10px;max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg2);font-size:12px;line-height:1.7"></div>
+          </div>
           <div class="form-group" style="margin-bottom:14px">
             <label class="form-label">Subject Line</label>
             <input type="text" id="blast-subject" class="form-input" placeholder="e.g. Game Reminder — Week 4 Tonight!">
@@ -1980,7 +1984,14 @@ window.openBoxScore = async function(gameId, skipClear) {
     bsAwayScoreOverride = null; bsHomeScoreOverride = null;
     const defP = () => ({name:'',ip:'',h:0,r:0,er:0,bb:0,so:0,bf:0,strikes:0,balls:0,decision:''});
     // Normalize pitcher objects: handle old captain docs that saved as 'away_pitching' and used 'k' instead of 'so'
-    const normPit = (p) => ({ ...p, so: parseInt(p.so ?? p.k) || 0 });
+    // Also derive ip string from outs (scorer saves outs as integer, admin uses ip as "6.1" string)
+    const normPit = (p) => {
+      let ip = p.ip;
+      if ((ip === undefined || ip === null || ip === '') && typeof p.outs === 'number') {
+        ip = Math.floor(p.outs / 3) + '.' + (p.outs % 3);
+      }
+      return { ...p, ip: ip || '', so: parseInt(p.so ?? p.k) || 0 };
+    };
     const rawAwayPit = existing?.away_pitchers || existing?.away_pitching || (existing?.away_pitcher ? [existing.away_pitcher] : null);
     const rawHomePit = existing?.home_pitchers || existing?.home_pitching || (existing?.home_pitcher ? [existing.home_pitcher] : null);
     bsAwayPitchers = rawAwayPit ? rawAwayPit.map(normPit) : [defP()];
@@ -4531,6 +4542,40 @@ async function loadMailerLiteStats() {
     el.textContent = 'Could not load subscriber count.';
   }
 }
+
+let _mlSubsLoaded = false;
+window.toggleSubscriberList = async function() {
+  const list = document.getElementById('ml-subscriber-list');
+  const btn = document.getElementById('ml-toggle-list');
+  if (!list || !btn) return;
+  if (list.style.display === 'none') {
+    list.style.display = 'block';
+    btn.textContent = 'Hide subscribers';
+    if (!_mlSubsLoaded) {
+      list.innerHTML = '<div style="color:var(--muted2)">Loading subscribers…</div>';
+      try {
+        const res = await fetch(`https://connect.mailerlite.com/api/subscribers?filter[group]=${ML_GROUP_ID}&filter[status]=active&limit=100`, { headers: ML_HEADERS });
+        const data = await res.json();
+        const subs = data?.data || [];
+        if (!subs.length) {
+          list.innerHTML = '<div style="color:var(--muted2)">No active subscribers found.</div>';
+        } else {
+          list.innerHTML = subs.map(s => {
+            const name = [s.fields?.name, s.fields?.last_name].filter(Boolean).join(' ').trim();
+            const email = s.email || '(no email)';
+            return `<div style="padding:3px 0;border-bottom:1px solid var(--border)">${name ? `<strong>${name}</strong> · ` : ''}<span style="color:var(--muted2)">${email}</span></div>`;
+          }).join('');
+        }
+        _mlSubsLoaded = true;
+      } catch(e) {
+        list.innerHTML = '<div style="color:var(--red,#c00)">Could not load subscribers.</div>';
+      }
+    }
+  } else {
+    list.style.display = 'none';
+    btn.textContent = 'View subscribers';
+  }
+};
 
 window.sendEmailBlast = async function() {
   const subject = document.getElementById('blast-subject').value.trim();
