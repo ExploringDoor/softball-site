@@ -2535,6 +2535,7 @@ const G = {
   risp: { away: { h: 0, ab: 0 }, home: { h: 0, ab: 0 } },
   pitchCount: { away: {}, home: {} }, // {pitcherKey: {p:0, s:0}}
   errors: { away: [], home: [] },     // [{inning, pos}] — positional errors
+  scoringTeam: null,                  // team ID from ?team= URL param (null = admin)
 };
 
 let gamesData = [];
@@ -5234,14 +5235,26 @@ document.getElementById('gom-final-btn').addEventListener('click', async () => {
   const btn = document.getElementById('gom-final-btn');
   btn.disabled = true;
   btn.textContent = '⏳ Saving…';
-  await saveBoxScore();
+  const result = await saveBoxScore(true);
   if (G.gameId && G.gameId !== 'practice') {
-    await updateDoc(doc(db, 'games', G.gameId), {
-      done: true, live: false,
-      away_score: G.awayScore, home_score: G.homeScore
-    }).catch(() => {});
+    if (result.firstSubmission) {
+      // First submission — set official score and recalc standings
+      await updateDoc(doc(db, 'games', G.gameId), {
+        done: true, live: false,
+        away_score: G.awayScore, home_score: G.homeScore
+      }).catch(() => {});
+      recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
+    }
+    // Always clean up game state regardless of submission order
     deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
-    recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
+  }
+  // Show a brief toast if this was a second submission
+  if (!result.firstSubmission) {
+    const msg = result.hasDiscrepancy
+      ? 'Submitted ✓ — stats discrepancy flagged for admin review'
+      : 'Submitted ✓ — stats matched the first scorer';
+    flashFeedback(msg, result.hasDiscrepancy ? 'var(--orange)' : 'var(--green)');
+    await new Promise(r => setTimeout(r, 2200));
   }
   document.getElementById('game-over-overlay').classList.remove('open');
   document.getElementById('app').classList.remove('visible');
@@ -5672,6 +5685,23 @@ async function loadGames() {
 
     document.getElementById('start-btn').disabled = false;
 
+    // Read ?team= param — identifies which captain is scoring (for dual-submission)
+    const urlTeamId = new URLSearchParams(window.location.search).get('team');
+    if (urlTeamId) {
+      G.scoringTeam = urlTeamId;
+      // Show a small badge on setup screen so scorer knows which team they're representing
+      const existing = document.getElementById('scoring-as-badge');
+      if (!existing) {
+        const badge = document.createElement('div');
+        badge.id = 'scoring-as-badge';
+        badge.style.cssText = 'background:rgba(255,215,0,0.18);border:1px solid rgba(255,215,0,0.4);color:#FFD700;font-family:"Barlow Condensed",sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;padding:7px 18px;border-radius:8px;text-align:center;';
+        const tName = (teamsData[urlTeamId] && (teamsData[urlTeamId].short || teamsData[urlTeamId].name)) || urlTeamId.toUpperCase();
+        badge.textContent = `⚾ SCORING AS: ${tName}`;
+        const card = document.getElementById('setup-card');
+        if (card) card.insertAdjacentElement('afterend', badge);
+      }
+    }
+
     // Auto-start if game ID passed in URL (e.g. from admin/captain Score Live button)
     const urlGameId = new URLSearchParams(window.location.search).get('game');
     if (urlGameId && gamesData.find(g => g.id === urlGameId)) {
@@ -5787,33 +5817,32 @@ async function saveFullState() {
 }
 
 // ===== SAVE BOX SCORE =====
-async function saveBoxScore() {
-  if (!G.gameId) return;
+async function saveBoxScore(isFinal = false) {
+  if (!G.gameId) return { firstSubmission: true };
   try {
-    // Convert G.playerStats[side][pid] + G.lineups[side] into lineup arrays
-    // that index.html's stats aggregation expects: [{name, num, pos, ab, r, s, d, t, hr, rbi, bb, so}]
+    // Build batting lineup arrays (only players who had at-bats or walks)
     function buildLineupArray(side) {
       const lineup = G.lineups[side] || [];
       const stats = G.playerStats[side] || {};
       return lineup.map(player => {
-        const pid = player.pid || player.id || player.name; // must match how sid is built during at-bat
+        const pid = player.pid || player.id || player.name;
         const ps = stats[pid] || {};
         return {
           name: player.name,
-          num: player.num || '?',
-          pos: player.pos || '',
-          ab:  ps.ab  || 0,
-          r:   ps.r   || 0,
-          s:   ps.singles || 0,
-          d:   ps.doubles || 0,
-          t:   ps.triples || 0,
-          hr:  ps.hr  || 0,
-          h:   (ps.singles||0) + (ps.doubles||0) + (ps.triples||0) + (ps.hr||0),
-          rbi: ps.rbi || 0,
-          bb:  ps.bb  || 0,
-          so:  ps.so  || 0,
+          num:  player.num || '?',
+          pos:  player.pos || '',
+          ab:   ps.ab  || 0,
+          r:    ps.r   || 0,
+          s:    ps.singles || 0,
+          d:    ps.doubles || 0,
+          t:    ps.triples || 0,
+          hr:   ps.hr  || 0,
+          h:    (ps.singles||0) + (ps.doubles||0) + (ps.triples||0) + (ps.hr||0),
+          rbi:  ps.rbi || 0,
+          bb:   ps.bb  || 0,
+          so:   ps.so  || 0,
         };
-      }).filter(p => p.ab > 0 || p.bb > 0); // only players who batted
+      }).filter(p => p.ab > 0 || p.bb > 0);
     }
 
     // Build pitcher arrays with pitch counts merged in
@@ -5827,29 +5856,135 @@ async function saveBoxScore() {
       });
     }
 
-    await setDoc(doc(db, 'box_scores', G.gameId), {
-      game_id:      G.gameId,
-      away:         G.awayTeam.id,
-      home:         G.homeTeam.id,
-      away_score:   G.awayScore,
-      home_score:   G.homeScore,
-      inning:       G.inning,
-      linescores:   G.linescores,
-      away_lineup:  buildLineupArray('away'),
-      home_lineup:  buildLineupArray('home'),
-      away_pitchers: buildPitcherArray('away'),
-      home_pitchers: buildPitcherArray('home'),
-      hr_log:       G.hrLog || [],
+    const awayLineup   = buildLineupArray('away');
+    const homeLineup   = buildLineupArray('home');
+    const awayPitchers = buildPitcherArray('away');
+    const homePitchers = buildPitcherArray('home');
+
+    const fullData = {
+      game_id:       G.gameId,
+      away:          G.awayTeam.id,
+      home:          G.homeTeam.id,
+      away_score:    G.awayScore,
+      home_score:    G.homeScore,
+      inning:        G.inning,
+      linescores:    G.linescores,
+      away_lineup:   awayLineup,
+      home_lineup:   homeLineup,
+      away_pitchers: awayPitchers,
+      home_pitchers: homePitchers,
+      hr_log:        G.hrLog || [],
       two_out_rbi_log: G.twoOutRbiLog || [],
-      lob:          G.lob || { away: 0, home: 0 },
-      risp:         G.risp || { away: { h:0, ab:0 }, home: { h:0, ab:0 } },
-      away_errors:  G.errors?.away?.length || 0,
-      home_errors:  G.errors?.home?.length || 0,
-      status:       'final',
-      created_at:   new Date().toISOString(),
-    });
+      lob:           G.lob  || { away: 0, home: 0 },
+      risp:          G.risp || { away: { h:0, ab:0 }, home: { h:0, ab:0 } },
+      away_errors:   G.errors?.away?.length || 0,
+      home_errors:   G.errors?.home?.length || 0,
+      status:        'final',
+    };
+
+    // Which side is this scorer representing? (null = admin/unknown)
+    const scoringSide = G.scoringTeam === G.awayTeam.id ? 'away'
+                      : G.scoringTeam === G.homeTeam.id ? 'home'
+                      : null;
+
+    // ── Non-final (mid-game checkpoint): simple overwrite, no dual-sub logic ──
+    if (!isFinal) {
+      await setDoc(doc(db, 'box_scores', G.gameId), {
+        ...fullData,
+        status: 'draft',
+        created_at: new Date().toISOString(),
+      });
+      return { firstSubmission: true };
+    }
+
+    // ── Step 1: Save this team's individual submission record ──────────────
+    if (scoringSide) {
+      await setDoc(doc(db, 'score_submissions', `${G.gameId}_${scoringSide}`), {
+        ...fullData,
+        submitting_side: scoringSide,
+        submitting_team: G.scoringTeam,
+        submitted_at:    new Date().toISOString(),
+      });
+    }
+
+    // ── Step 2: Upsert the canonical box_score doc ─────────────────────────
+    const existingSnap = await getDoc(doc(db, 'box_scores', G.gameId));
+    const existing     = existingSnap.exists() ? existingSnap.data() : null;
+
+    if (!existing || existing.status !== 'final' || !scoringSide) {
+      // First submission (or admin override) — write the full box score
+      await setDoc(doc(db, 'box_scores', G.gameId), {
+        ...fullData,
+        first_submitter:  scoringSide || 'admin',
+        has_discrepancy:  false,
+        discrepancies:    [],
+        created_at:       new Date().toISOString(),
+      });
+      return { firstSubmission: true };
+
+    } else {
+      // ── Second submission: merge + discrepancy detection ────────────────
+      const discrepancies = [];
+
+      // Score discrepancy?
+      if (G.awayScore !== (existing.away_score || 0) ||
+          G.homeScore !== (existing.home_score || 0)) {
+        discrepancies.push({
+          type:             'score',
+          first_submitter:  existing.first_submitter || 'unknown',
+          second_submitter: scoringSide,
+          first_away:       existing.away_score,
+          first_home:       existing.home_score,
+          second_away:      G.awayScore,
+          second_home:      G.homeScore,
+        });
+      }
+
+      // Batting discrepancies — compare the scoring team's own lineup
+      // (their batting data should be most accurate for their own players)
+      const firstLineup  = existing[`${scoringSide}_lineup`] || [];
+      const secondLineup = fullData[`${scoringSide}_lineup`];
+      const firstByName  = {};
+      firstLineup.forEach(p => { firstByName[p.name] = p; });
+      secondLineup.forEach(p => {
+        const prev = firstByName[p.name];
+        if (!prev) return; // new player — no conflict
+        const keys  = ['ab', 'h', 'r', 'rbi', 'bb'];
+        const diffs = keys.filter(k => (p[k] || 0) !== (prev[k] || 0));
+        if (diffs.length > 0) {
+          discrepancies.push({
+            type:             'batting',
+            player:           p.name,
+            side:             scoringSide,
+            first_submitter:  existing.first_submitter || 'unknown',
+            second_submitter: scoringSide,
+            first:  Object.fromEntries(keys.map(k => [k, prev[k] || 0])),
+            second: Object.fromEntries(keys.map(k => [k, p[k]   || 0])),
+          });
+        }
+      });
+
+      // Merge: override the scoring team's side with their own data
+      await updateDoc(doc(db, 'box_scores', G.gameId), {
+        [`${scoringSide}_lineup`]:   fullData[`${scoringSide}_lineup`],
+        [`${scoringSide}_pitchers`]: fullData[`${scoringSide}_pitchers`],
+        second_submitter:     scoringSide,
+        has_discrepancy:      discrepancies.length > 0,
+        discrepancies:        discrepancies,
+        second_submitted_at:  new Date().toISOString(),
+      });
+
+      // Flag game doc so captain portal can show discrepancy without loading box_scores
+      if (discrepancies.length > 0) {
+        await updateDoc(doc(db, 'games', G.gameId), {
+          has_discrepancy: true,
+        }).catch(() => {});
+      }
+      return { firstSubmission: false, hasDiscrepancy: discrepancies.length > 0 };
+    }
   } catch (err) {
     console.warn('saveBoxScore error:', err);
+    return { firstSubmission: true }; // safe default on error
   }
 }
 
