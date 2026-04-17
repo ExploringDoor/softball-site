@@ -2129,9 +2129,12 @@ function renderBoxScore(awayName, homeName, g) {
               <tbody id="admin-pit-${side}-tbody">
                 ${(side==='away'?bsAwayPitchers:bsHomePitchers).map((pit,pi) => `
                 <tr>
-                  <td style="padding:4px 6px">${(pit.guest === true || !pit.name)
-                    ? `<input type="text" value="${pit.name.replace(/"/g,'&quot;')}" placeholder="Pitcher name" oninput="bsUpdatePitcher('${side}',${pi},'name',this.value)" style="width:100%;min-width:120px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:inherit">`
-                    : `<span style="font-size:12px;font-weight:600;color:var(--navy);display:block;padding:3px 6px">${pit.name}</span>`}</td>
+                  <td style="padding:4px 6px">${(()=>{
+                    const _tId = side==='away' ? (TEAMS.find(t=>t.id===bsGameData.away||t.short===bsGameData.away)?.id||bsGameData.away) : (TEAMS.find(t=>t.id===bsGameData.home||t.short===bsGameData.home)?.id||bsGameData.home);
+                    const _ros = PLAYERS.filter(p=>p.team===_tId).sort((a,b)=>(parseInt(a.num)||99)-(parseInt(b.num)||99));
+                    const _opts = _ros.map(p=>`<option value="${p.name.replace(/"/g,'&quot;')}|${p.num||''}" ${p.name===pit.name?'selected':''}>#${p.num||'?'} ${p.name}</option>`).join('');
+                    return `<select onchange="bsPitcherSelectChange('${side}',${pi},this.value)" style="width:100%;min-width:130px;font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-family:'Barlow Condensed',sans-serif;color:var(--navy);font-weight:600"><option value="">— Select pitcher —</option>${_opts}</select>`;
+                  })()}</td>
                   <td style="padding:4px 3px"><input type="text" value="${pit.ip||''}" placeholder="7.0" oninput="bsUpdatePitcher('${side}',${pi},'ip',this.value)" style="width:44px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit"></td>
                   ${['h','r','er','bb','so'].map(c=>`<td style="padding:4px 3px"><input type="number" min="0" value="${parseInt(pit[c])||0}" oninput="bsUpdatePitcher('${side}',${pi},'${c}',this.value)" style="width:44px;text-align:center;font-size:12px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;font-family:inherit"></td>`).join('')}
                   <td style="padding:4px 3px">${pi>0?`<button onclick="bsRemovePitcher('${side}',${pi})" style="background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1">✕</button>`:''}</td>
@@ -2415,6 +2418,14 @@ window.bsToggleDnp = function(side, idx, checked) {
     // Clear batting order for this player
     delete orderMap[idx];
   }
+  bsRerender();
+};
+window.bsPitcherSelectChange = function(side, idx, val) {
+  if (!val) return;
+  const parts = val.split('|');
+  const name = parts[0], num = parts[1] || '';
+  const pitchers = side==='away' ? bsAwayPitchers : bsHomePitchers;
+  if (pitchers[idx]) { pitchers[idx].name = name; pitchers[idx].num = num; }
   bsRerender();
 };
 window.bsUpdatePitcher = function(side, idx, field, val) {

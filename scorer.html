@@ -1770,12 +1770,16 @@
   }
 
   .bs-batting-table td {
-    font-size: 14px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     color: var(--text);
-    padding: 7px 5px;
+    padding: 8px 6px;
     text-align: center;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .bs-batting-table tbody tr:nth-child(even) td {
+    background: rgba(255,255,255,0.03);
   }
 
   .bs-batting-table td.bs-name-td {
@@ -1783,11 +1787,19 @@
     padding-left: 16px;
   }
 
+  .bs-batting-table tr.bs-totals-row td {
+    font-size: 16px;
+    font-weight: 900;
+    color: var(--gold);
+    background: rgba(255,215,0,0.06);
+    border-top: 2px solid rgba(255,215,0,0.3);
+  }
+
   .bs-player-num {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 800;
-    color: var(--text-muted);
-    margin-right: 4px;
+    color: rgba(255,255,255,0.5);
+    margin-right: 5px;
   }
 
   /* ===== MOBILE COMPACTION ===== */
@@ -1870,9 +1882,9 @@
     transition: transform 0.1s;
   }
   .gom-btn:active { transform: scale(0.97); }
+  .gom-btn-final    { background: #16a34a; color: white; font-size: 19px; }
   #gom-pdf-btn      { background: var(--navy); color: white; }
   #gom-continue-btn { background: var(--card2); color: var(--text); }
-  #gom-exit-btn     { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3) !important; }
 
   /* Play log edit icon */
   .play-log-edit-btn {
@@ -2012,6 +2024,7 @@
           <span class="count-label">O</span>
           <div class="count-dot" id="o1"></div>
           <div class="count-dot" id="o2"></div>
+          <div class="count-dot" id="o3"></div>
         </div>
       </div>
       <button id="menu-btn-top">MENU</button>
@@ -2357,6 +2370,7 @@
     </div>
     <div id="ras-rows"></div>
     <button class="ras-confirm" id="ras-confirm-btn" onclick="confirmRunnerAdvance()">CONFIRM</button>
+    <button id="ras-cancel-btn" style="display:block;width:100%;padding:14px;background:transparent;color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;border:none;cursor:pointer;padding-bottom:max(14px,env(safe-area-inset-bottom));">Cancel</button>
   </div>
 </div>
 
@@ -2396,9 +2410,19 @@
   <div id="game-over-modal">
     <div class="gom-title">GAME OVER</div>
     <div class="gom-score" id="gom-score">0 – 0</div>
-    <button class="gom-btn" id="gom-pdf-btn">📄 Create PDF of Box Score</button>
+    <button class="gom-btn gom-btn-final" id="gom-final-btn">✅ Mark Final</button>
+    <button class="gom-btn" id="gom-pdf-btn">📄 Box Score / Share</button>
     <button class="gom-btn" id="gom-continue-btn">↩ Continue Scoring</button>
-    <button class="gom-btn" id="gom-exit-btn">Exit Game</button>
+  </div>
+</div>
+
+<!-- Box Score Share Sheet -->
+<div id="share-sheet-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:3000;align-items:flex-end;justify-content:center;width:100vw;max-width:none;">
+  <div style="background:var(--sheet-bg);border-radius:20px 20px 0 0;width:100%;max-width:520px;padding-bottom:max(16px,env(safe-area-inset-bottom));overflow:hidden;">
+    <div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:12px auto 0;"></div>
+    <div style="padding:14px 16px 10px;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:var(--text);letter-spacing:1px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);">SHARE BOX SCORE</div>
+    <div id="share-sheet-rows"></div>
+    <button onclick="document.getElementById('share-sheet-overlay').style.display='none';" style="display:block;width:calc(100%-32px);margin:10px 16px 4px;background:var(--card2);color:var(--text-muted);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:14px;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;cursor:pointer;text-align:center;">Cancel</button>
   </div>
 </div>
 
@@ -2587,7 +2611,7 @@ function renderAll() {
   const dots = [
     ['b1','b2','b3'],
     ['s1','s2'],
-    ['o1','o2']
+    ['o1','o2','o3']
   ];
   const vals = [G.balls, G.strikes, G.outs];
   const classes = ['active-ball','active-strike','active-out'];
@@ -2908,7 +2932,17 @@ function endAtBat(result, details) {
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     const allRunners = resetRunnersForHit('single', batEntry);
     advanceLineup(team);
-    showRunnerAdvanceSheet('single', batEntry, allRunners, team, sid, locStr);
+    if (allRunners.length === 0) {
+      // No runners on base — batter goes to 1B, skip runner sheet
+      const hitLabel = 'Single'; const abLabel = '1B';
+      const desc = `${abLabel} — ${hitLabel}${locStr}`;
+      logPlay(hitLabel, desc);
+      flashFeedback('SINGLE', 'var(--green)');
+      G.balls = 0; G.strikes = 0;
+      if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); } else { renderAll(); saveScore(); }
+    } else {
+      showRunnerAdvanceSheet('single', batEntry, allRunners, team, sid, locStr);
+    }
     return;
   } else if (result === 'double') {
     G.halfInningHits++;
@@ -2918,7 +2952,17 @@ function endAtBat(result, details) {
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     const allRunners = resetRunnersForHit('double', batEntry);
     advanceLineup(team);
-    showRunnerAdvanceSheet('double', batEntry, allRunners, team, sid, locStr);
+    if (allRunners.length === 0) {
+      // No runners on base — batter goes to 2B, skip runner sheet
+      const hitLabel = 'Double'; const abLabel = '2B';
+      const desc = `${abLabel} — ${hitLabel}${locStr}`;
+      logPlay(hitLabel, desc);
+      flashFeedback('DOUBLE', 'var(--green)');
+      G.balls = 0; G.strikes = 0;
+      if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); } else { renderAll(); saveScore(); }
+    } else {
+      showRunnerAdvanceSheet('double', batEntry, allRunners, team, sid, locStr);
+    }
     return;
   } else if (result === 'triple') {
     G.halfInningHits++;
@@ -2928,7 +2972,17 @@ function endAtBat(result, details) {
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     const allRunners = resetRunnersForHit('triple', batEntry);
     advanceLineup(team);
-    showRunnerAdvanceSheet('triple', batEntry, allRunners, team, sid, locStr);
+    if (allRunners.length === 0) {
+      // No runners on base — batter goes to 3B, skip runner sheet
+      const hitLabel = 'Triple'; const abLabel = '3B';
+      const desc = `${abLabel} — ${hitLabel}${locStr}`;
+      logPlay(hitLabel, desc);
+      flashFeedback('TRIPLE', 'var(--green)');
+      G.balls = 0; G.strikes = 0;
+      if (G.outs >= 3) { setTimeout(() => endHalfInning(), 800); } else { renderAll(); saveScore(); }
+    } else {
+      showRunnerAdvanceSheet('triple', batEntry, allRunners, team, sid, locStr);
+    }
     return;
   } else if (result === 'homerun' || result === 'itphr') {
     G.halfInningHits++;
@@ -3021,12 +3075,16 @@ let _dpEntries = [];  // [{runner, from, isBatter, sel}]
 let _dpTeam = null;
 let _dpBatterSid = null;
 let _dpRequired = 2;  // 2 = double play, 3 = triple play
+let _rasPrePlaySnapshot = null; // snapshot of G state before play started (for cancel)
 
 function showDoublePlaySheet(batEntry, team, sid, locStr, requiredOuts = 2) {
   _dpRequired = requiredOuts;
   _dpTeam = team;
   _dpBatterSid = sid;
   window._dpLocStr = locStr;
+
+  // Save pre-play snapshot for cancel
+  _rasPrePlaySnapshot = G.plays.length > 0 ? G.plays[G.plays.length - 1] : null;
 
   // Capture current runners then clear the bases
   const entries = [];
@@ -3129,6 +3187,7 @@ function renderDpSheet() {
 
 function confirmDoublePlay() {
   document.getElementById('runner-advance-overlay').style.display = 'none';
+  _rasPrePlaySnapshot = null; // clear cancel snapshot
   // Restore confirm button to normal
   document.getElementById('ras-confirm-btn').onclick = confirmRunnerAdvance;
 
@@ -3139,9 +3198,11 @@ function confirmDoublePlay() {
   _dpEntries.forEach(entry => {
     const nm = (entry.runner.name && entry.runner.name !== 'Batter') ? entry.runner.name : '#' + entry.runner.num;
     if (entry.sel === 'out') {
-      G.outs++;
-      const ps = currentPitcherStats(fTeam);
-      if (ps) ps.outs++;
+      if (G.outs < 3) {  // cap at 3 — prevents IP overcounting when DP/TP ends inning
+        G.outs++;
+        const ps = currentPitcherStats(fTeam);
+        if (ps) ps.outs++;
+      }
       outNames.push(nm + (entry.isBatter ? ' (batter)' : ` (from ${entry.from === 1 ? '1st' : entry.from === 2 ? '2nd' : '3rd'})`));
     } else if (entry.sel === 'score') {
       if (team === 'away') G.awayScore++; else G.homeScore++;
@@ -3164,6 +3225,37 @@ function confirmDoublePlay() {
   else { renderAll(); saveScore(); }
 }
 window.confirmDoublePlay = confirmDoublePlay;
+
+// Cancel runner advance / double-triple play sheet: restore pre-play state
+function cancelRunnerAdvanceSheet() {
+  document.getElementById('runner-advance-overlay').style.display = 'none';
+  // Restore confirm button to normal
+  document.getElementById('ras-confirm-btn').onclick = confirmRunnerAdvance;
+  // Undo to the snapshot taken before this play began
+  if (_rasPrePlaySnapshot) {
+    const snap = JSON.parse(_rasPrePlaySnapshot);
+    G.inning = snap.inning; G.half = snap.half;
+    G.outs = snap.outs; G.balls = snap.balls; G.strikes = snap.strikes;
+    G.awayScore = snap.awayScore; G.homeScore = snap.homeScore;
+    G.runners = snap.runners; G.lineupIdx = snap.lineupIdx;
+    G.playerStats = snap.playerStats;
+    if (snap.pitchers)     G.pitchers = snap.pitchers;
+    if (snap.pitcherStats) G.pitcherStats = snap.pitcherStats;
+    if (snap.playLog)      G.playLog = snap.playLog;
+    G._prevAwayScore = snap._prevAwayScore; G._prevHomeScore = snap._prevHomeScore;
+    if (snap.halfInningPitches !== undefined) G.halfInningPitches = snap.halfInningPitches;
+    if (snap.halfInningHits    !== undefined) G.halfInningHits    = snap.halfInningHits;
+    if (snap.halfInningErrors  !== undefined) G.halfInningErrors  = snap.halfInningErrors;
+    G.selectedRunner = null;
+    _rasPrePlaySnapshot = null;
+    renderAll();
+  } else {
+    // Fallback: just undo last
+    undoLast();
+  }
+}
+
+document.getElementById('ras-cancel-btn').addEventListener('click', cancelRunnerAdvanceSheet);
 
 // ===== RUNNER ADVANCEMENT HELPER =====
 function resetRunnersForHit(hitType, batterEntry) {
@@ -3193,6 +3285,8 @@ function showRunnerAdvanceSheet(hitType, batEntry, allRunners, team, sid, locStr
   _rasBatEntry = batEntry;
   _rasBatterSid = sid;
   _rasTeam = team;
+  // Save pre-play snapshot for cancel (last snapshot on the stack = before this hit was processed)
+  _rasPrePlaySnapshot = G.plays.length > 0 ? G.plays[G.plays.length - 1] : null;
 
   const batterBase = hitType === 'single' || hitType === 'fc' ? 1 : hitType === 'double' ? 2 : 3;
   // Smart defaults: runners advance by hit distance; runner on 3rd scores on single/double, etc.
@@ -3292,6 +3386,7 @@ function renderRasSheet() {
 
 function confirmRunnerAdvance() {
   document.getElementById('runner-advance-overlay').style.display = 'none';
+  _rasPrePlaySnapshot = null; // clear cancel snapshot
   const team = _rasTeam;
   const sid = _rasBatterSid;
   const stats = sid && G.playerStats[team] ? G.playerStats[team][sid] : null;
@@ -3307,9 +3402,11 @@ function confirmRunnerAdvance() {
       const pStatsR = currentPitcherStats(team === 'away' ? 'home' : 'away');
       if (pStatsR) pStatsR.r++;
     } else if (sel === 'out') {
-      G.outs++;
-      const pStatsRunnerOut = currentPitcherStats(team === 'away' ? 'home' : 'away');
-      if (pStatsRunnerOut) pStatsRunnerOut.outs++;
+      if (G.outs < 3) {  // cap at 3 to prevent IP overcounting
+        G.outs++;
+        const pStatsRunnerOut = currentPitcherStats(team === 'away' ? 'home' : 'away');
+        if (pStatsRunnerOut) pStatsRunnerOut.outs++;
+      }
     } else {
       G.runners[sel] = runner;
     }
@@ -3443,6 +3540,9 @@ function endHalfInning() {
   if (pitchBtns) { pitchBtns.style.pointerEvents = 'none'; pitchBtns.style.opacity = '0.25'; }
   if (undoBtn)   { undoBtn.disabled = true; undoBtn.style.opacity = '0.3'; }
 
+  // Ensure out counter shows 3 before the overlay appears
+  renderAll();
+
   // Show overlay
   const overlay = document.getElementById('half-end-overlay');
   overlay.style.display = 'flex';
@@ -3454,6 +3554,8 @@ function _reenablePitchButtons() {
   if (pitchBtns) { pitchBtns.style.pointerEvents = ''; pitchBtns.style.opacity = ''; }
   if (undoBtn)   { undoBtn.disabled = false; undoBtn.style.opacity = ''; }
 }
+
+const MAX_INNINGS = 7;
 
 function doHalfInningSwitch() {
   _reenablePitchButtons();
@@ -3488,11 +3590,38 @@ function doHalfInningSwitch() {
   G.halfInningHits    = 0;
   G.halfInningErrors  = 0;
 
-  if (G.half === 'top') {
-    G.half = 'bottom';
-  } else {
+  // Check walk-off / game-over conditions (7 inning minimum, extra innings if tied)
+  if (G.half === 'top' && G.inning >= MAX_INNINGS) {
+    // Just finished top of 7th+: if home leads, skip bottom half — game over
+    if (G.homeScore > G.awayScore) {
+      G.half = 'bottom'; // keep for display purposes
+      renderAll();
+      saveScore();
+      setTimeout(() => showGameOverOverlay(), 400);
+      return;
+    }
+  }
+
+  if (G.half === 'bottom') {
+    // Just finished bottom of an inning
     G.half = 'top';
     G.inning++;
+    // After 7+ innings, end only if NOT tied — if tied, keep playing extra innings
+    if (G.inning > MAX_INNINGS && G.awayScore !== G.homeScore) {
+      renderAll();
+      saveScore();
+      setTimeout(() => showGameOverOverlay(), 400);
+      return;
+    }
+  } else {
+    G.half = 'bottom';
+    // Going into bottom of 7th+: if home already leads, they don't bat — game over
+    if (G.inning >= MAX_INNINGS && G.homeScore > G.awayScore) {
+      renderAll();
+      saveScore();
+      setTimeout(() => showGameOverOverlay(), 400);
+      return;
+    }
   }
 
   renderAll();
@@ -3709,10 +3838,16 @@ function openBipSheet(level) {
   const overlay = document.getElementById('bip-sheet-overlay');
   overlay.classList.add('open');
   document.getElementById('bip-back-btn').style.display = level === 'level1' ? 'none' : 'block';
+  // Disable pitch buttons while BIP sheet is open
+  const pb = document.getElementById('pitch-buttons');
+  if (pb) { pb.style.pointerEvents = 'none'; pb.style.opacity = '0.35'; }
 }
 
 function closeBipSheet() {
   document.getElementById('bip-sheet-overlay').classList.remove('open');
+  // Re-enable pitch buttons when BIP sheet closes
+  const pb = document.getElementById('pitch-buttons');
+  if (pb) { pb.style.pointerEvents = ''; pb.style.opacity = ''; }
 }
 
 document.getElementById('bip-back-btn').addEventListener('click', () => {
@@ -4155,12 +4290,56 @@ document.getElementById('menu-reset-game').addEventListener('click', () => {
 });
 
 document.getElementById('menu-exit').addEventListener('click', () => {
-  if (confirm('Exit without saving box score?')) {
-    closeMenuSheet();
-    document.getElementById('app').classList.remove('visible');
-    document.getElementById('setup-screen').style.display = 'flex';
-  }
+  closeMenuSheet();
+  showExitConfirmSheet();
 });
+
+function showExitConfirmSheet() {
+  const overlay = document.getElementById('exit-confirm-overlay');
+  if (overlay) { overlay.style.display = 'flex'; return; }
+  // Build overlay dynamically
+  const div = document.createElement('div');
+  div.id = 'exit-confirm-overlay';
+  div.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:4500;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;width:100vw;max-width:none;';
+  div.innerHTML = `
+    <div style="background:var(--sheet-bg);border-radius:18px;width:100%;max-width:360px;padding:28px 24px;display:flex;flex-direction:column;gap:14px;align-items:center;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:900;color:var(--text);letter-spacing:1px;">EXIT GAME?</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:600;color:var(--text-muted);text-align:center;line-height:1.4;">Your game state is saved automatically. Would you like to save the final box score before exiting?</div>
+      <button id="exit-save-btn" style="width:100%;padding:14px;border-radius:12px;border:none;background:var(--navy);color:white;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;letter-spacing:0.5px;cursor:pointer;">Save Box Score &amp; Exit</button>
+      <button id="exit-discard-btn" style="width:100%;padding:14px;border-radius:12px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.12);color:#f87171;font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:800;letter-spacing:0.5px;cursor:pointer;">Exit Without Saving</button>
+      <button id="exit-cancel-btn" style="width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);background:var(--card2);color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;cursor:pointer;">Cancel</button>
+    </div>
+  `;
+  document.body.appendChild(div);
+  document.getElementById('exit-save-btn').addEventListener('click', async () => {
+    div.style.display = 'none';
+    // Save game state + box score
+    await saveFullState().catch(() => {});
+    await saveBoxScore().catch(() => {});
+    if (G.gameId && G.gameId !== 'practice') {
+      await updateDoc(doc(db, 'games', G.gameId), {
+        live: false,
+        away_score: G.awayScore, home_score: G.homeScore
+      }).catch(() => {});
+    }
+    document.getElementById('app').classList.remove('visible');
+    document.getElementById('bottom-nav').classList.remove('active');
+    document.getElementById('setup-screen').style.display = 'flex';
+    _reenablePitchButtons();
+  });
+  document.getElementById('exit-discard-btn').addEventListener('click', async () => {
+    div.style.display = 'none';
+    // Still save game state (so it can be resumed), just skip box score
+    await saveFullState().catch(() => {});
+    document.getElementById('app').classList.remove('visible');
+    document.getElementById('bottom-nav').classList.remove('active');
+    document.getElementById('setup-screen').style.display = 'flex';
+    _reenablePitchButtons();
+  });
+  document.getElementById('exit-cancel-btn').addEventListener('click', () => {
+    div.style.display = 'none';
+  });
+}
 
 // ===== OVERRIDES SHEET =====
 function openOverridesSheet() {
@@ -4732,8 +4911,8 @@ function openBoxScoreSheet() {
     });
 
     // Totals row
-    btbody.innerHTML += `<tr style="border-top:1px solid rgba(255,255,255,0.15);font-weight:900;">
-      <td class="bs-name-td" style="color:var(--text-muted);font-size:12px;letter-spacing:1px;">TOTALS</td>
+    btbody.innerHTML += `<tr class="bs-totals-row">
+      <td class="bs-name-td">TOTALS</td>
       <td>${totals.ab}</td><td>${totals.h}</td><td>${totals.doubles}</td><td>${totals.triples}</td>
       <td>${totals.hr}</td><td>${totals.rbi}</td><td>${totals.r}</td><td>${totals.bb}</td><td>${totals.so}</td>
     </tr>`;
@@ -5029,15 +5208,17 @@ function showGameOverOverlay() {
 }
 
 document.getElementById('gom-pdf-btn').addEventListener('click', () => {
-  exportBoxScorePDF();
+  showBoxScoreShareSheet();
 });
 
 document.getElementById('gom-continue-btn').addEventListener('click', () => {
   document.getElementById('game-over-overlay').classList.remove('open');
 });
 
-document.getElementById('gom-exit-btn').addEventListener('click', async () => {
-  document.getElementById('game-over-overlay').classList.remove('open');
+document.getElementById('gom-final-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('gom-final-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Saving…';
   await saveBoxScore();
   if (G.gameId && G.gameId !== 'practice') {
     await updateDoc(doc(db, 'games', G.gameId), {
@@ -5047,6 +5228,7 @@ document.getElementById('gom-exit-btn').addEventListener('click', async () => {
     deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
     recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
   }
+  document.getElementById('game-over-overlay').classList.remove('open');
   document.getElementById('app').classList.remove('visible');
   document.getElementById('bottom-nav').classList.remove('active');
   document.getElementById('setup-screen').style.display = 'flex';
@@ -5177,6 +5359,78 @@ function exportBoxScorePDF() {
   else { alert('Allow popups to export the PDF.'); }
 }
 
+// ===== BOX SCORE SHARE SHEET =====
+function showBoxScoreShareSheet() {
+  document.getElementById('game-over-overlay').classList.remove('open');
+  const overlay = document.getElementById('share-sheet-overlay');
+  const rows = document.getElementById('share-sheet-rows');
+  rows.innerHTML = '';
+
+  function makeRow(icon, label, onclick) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:14px;padding:0 16px;min-height:56px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.05);font-family:"Barlow Condensed",sans-serif;';
+    row.innerHTML = `<span style="font-size:22px;width:32px;text-align:center;">${icon}</span><span style="font-size:18px;font-weight:700;color:var(--text);">${label}</span>`;
+    row.addEventListener('click', onclick);
+    return row;
+  }
+
+  // Build share text
+  function buildShareText() {
+    const away = G.awayTeam.name || G.awayTeam.short;
+    const home = G.homeTeam.name || G.homeTeam.short;
+    let text = `DVSL Box Score\n${away} ${G.awayScore} — ${home} ${G.homeScore}\n\n`;
+    ['away','home'].forEach(side => {
+      const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
+      text += `${(teamObj.name||teamObj.short).toUpperCase()} BATTING\n`;
+      const lineup = G.lineups[side] || [];
+      const stats = G.playerStats[side] || {};
+      lineup.forEach(p => {
+        const pid = p.pid||p.id||p.name;
+        const s = stats[pid]||{};
+        if ((s.ab||0) > 0 || (s.bb||0) > 0) {
+          text += `  #${p.num} ${p.name}: ${s.ab||0}AB ${s.h||0}H ${s.rbi||0}RBI ${s.r||0}R\n`;
+        }
+      });
+      text += '\n';
+    });
+    return text;
+  }
+
+  // Email
+  rows.appendChild(makeRow('📧', 'Email', () => {
+    const subject = encodeURIComponent(`Box Score: ${G.awayTeam.short} ${G.awayScore} - ${G.homeTeam.short} ${G.homeScore}`);
+    const body = encodeURIComponent(buildShareText());
+    window.open(`mailto:?subject=${subject}&body=${body}`);
+    overlay.style.display = 'none';
+  }));
+
+  // Text / SMS
+  rows.appendChild(makeRow('💬', 'Text Message', () => {
+    const body = encodeURIComponent(buildShareText());
+    window.open(`sms:?&body=${body}`);
+    overlay.style.display = 'none';
+  }));
+
+  // Web Share API (native share on mobile)
+  if (navigator.share) {
+    rows.appendChild(makeRow('📤', 'Share…', () => {
+      navigator.share({
+        title: `Box Score: ${G.awayTeam.short} vs ${G.homeTeam.short}`,
+        text: buildShareText(),
+      }).catch(() => {});
+      overlay.style.display = 'none';
+    }));
+  }
+
+  // Print
+  rows.appendChild(makeRow('🖨️', 'Print / Save as PDF', () => {
+    overlay.style.display = 'none';
+    exportBoxScorePDF();
+  }));
+
+  overlay.style.display = 'flex';
+}
+
 // ===== BOTTOM NAV TABS =====
 function switchTab(tab) {
   document.querySelectorAll('.bnav-tab').forEach(b => b.classList.remove('active'));
@@ -5274,8 +5528,8 @@ function renderStatsPanel() {
         <td>${rbi}</td><td>${r}</td><td>${bb}</td><td>${so}</td>
       </tr>`;
     });
-    btbody.innerHTML += `<tr style="border-top:1px solid rgba(255,255,255,0.15);font-weight:900;">
-      <td class="bs-name-td" style="color:var(--text-muted);font-size:12px;letter-spacing:1px;">TOTALS</td>
+    btbody.innerHTML += `<tr class="bs-totals-row">
+      <td class="bs-name-td">TOTALS</td>
       <td>${tot.ab}</td><td>${tot.h}</td><td>${tot.doubles}</td><td>${tot.triples}</td>
       <td>${tot.hr}</td><td>${tot.rbi}</td><td>${tot.r}</td><td>${tot.bb}</td><td>${tot.so}</td>
     </tr>`;
@@ -5323,8 +5577,8 @@ function renderStatsPanel() {
       </tr>`;
     });
     if (pitcherKeys.length > 1) {
-      ptbody.innerHTML += `<tr style="border-top:1px solid rgba(255,255,255,0.15);font-weight:900;">
-        <td class="bs-name-td" style="color:var(--text-muted);font-size:12px;letter-spacing:1px;">TOTALS</td>
+      ptbody.innerHTML += `<tr class="bs-totals-row">
+        <td class="bs-name-td">TOTALS</td>
         <td>${Math.floor(totIP/3)}.${totIP%3}</td><td>${totH}</td><td>${totR}</td><td>${totBB}</td><td>${totK}</td><td>${totP}</td>
       </tr>`;
     }
