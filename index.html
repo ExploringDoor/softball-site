@@ -3057,15 +3057,31 @@ async function loadAllData() {
       const t=_allTeams.find(t=>t.name===s||t.name?.toLowerCase()===s.toLowerCase()||t.short===s||t.short?.toLowerCase()===s.toLowerCase());
       return (t?.short||s).toLowerCase();
     };
+    // Build a POTG lookup from box scores keyed by away+home short codes
+    const _bsPotgMap = {};
+    boxScores.forEach(bs => {
+      const k = `${(bs.away||'').toLowerCase()}|${(bs.home||'').toLowerCase()}`;
+      if (bs.potg_name) _bsPotgMap[k] = { potg_name: bs.potg_name, potg_team: bs.potg_team||'' };
+    });
+
     RECAPS = recaps
-      .map(r => ({
-        date: r.date, wk: r.wk,
-        away: _toShort(r.away),
-        home: _toShort(r.home),
-        as: r.away_score, hs: r.home_score, field: r.field||'',
-        text: r.text||'', stars: Array.isArray(r.stars) ? r.stars : [],
-        headline: r.headline||''
-      }))
+      .map(r => {
+        const awayShort = _toShort(r.away);
+        const homeShort = _toShort(r.home);
+        // POTG: prefer recap's own field, fall back to box score
+        const bsPotg = _bsPotgMap[`${awayShort}|${homeShort}`];
+        const potg_name = (r.potg_name || '').trim() || bsPotg?.potg_name || '';
+        const potg_team = r.potg_team || bsPotg?.potg_team || '';
+        return {
+          date: r.date, wk: r.wk,
+          away: awayShort,
+          home: homeShort,
+          as: r.away_score, hs: r.home_score, field: r.field||'',
+          text: r.text||'', stars: Array.isArray(r.stars) ? r.stars : [],
+          headline: r.headline||'',
+          potg_name, potg_team
+        };
+      })
       .sort((a,b) => b.wk - a.wk);
 
     // Map history — sort by yr desc
@@ -4604,6 +4620,16 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 function buildRecaps(){
   document.getElementById('recap-list').innerHTML=RECAPS.map(r=>{
     const at=getTeamByShort(r.away), ht=getTeamByShort(r.home);
+    const potgPlayer = r.potg_name ? PLAYERS.find(p=>p.name===r.potg_name||p.name?.toLowerCase()===r.potg_name?.toLowerCase()) : null;
+    const potgTeamObj = r.potg_team ? (TEAMS.find(t=>t.id===r.potg_team||t.short?.toLowerCase()===r.potg_team?.toLowerCase())||HIST_TEAMS.find(t=>t.id===r.potg_team)) : null;
+    const potgHtml = r.potg_name ? `
+      <div style="display:flex;align-items:center;gap:10px;background:linear-gradient(90deg,#fffaeb,#fef9e4);border:1px solid #f5c842;border-radius:10px;padding:10px 14px;margin-top:10px">
+        <span style="font-size:20px;line-height:1">🏆</span>
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:#92400e;margin-bottom:1px">Player of the Game</div>
+          <div style="font-weight:700;font-size:14px;color:#1a1a1a;cursor:${potgPlayer?'pointer':'default'}" ${potgPlayer?`onclick="openModal('${potgPlayer.id}')"`:''}>${r.potg_name}${potgTeamObj?` <span style="font-weight:400;font-size:12px;color:#777">· ${potgTeamObj.short||potgTeamObj.name}</span>`:''}</div>
+        </div>
+      </div>` : '';
     return `<div class="recap-card">
       <div class="recap-top">
         <div>
@@ -4618,6 +4644,7 @@ function buildRecaps(){
       </div>
       <div class="recap-body">
         <p>${r.text}</p>
+        ${potgHtml}
         <div class="recap-stars">${r.stars.map(s=>{
           const pname=s.split('·')[0].trim().replace(/^[⭐★\s]+/,'');
           const stats=s.split('·').slice(1).join('·').trim();
