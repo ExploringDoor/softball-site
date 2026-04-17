@@ -3001,6 +3001,7 @@ function endAtBat(result, details) {
     logPlay('Strikeout', 'K — Struck out');
     showKIndicator();
     flashFeedback('K', 'var(--red)');
+    advanceLineup(team);
   } else if (result === 'error') {
     G.halfInningErrors++;
     if (sid) stats.ab++;
@@ -3014,24 +3015,28 @@ function endAtBat(result, details) {
     const psGO = currentPitcherStats(fieldingTeam());
     if (psGO && G.outs <= 3) psGO.outs++;
     flashFeedback('OUT', 'var(--red)');
+    advanceLineup(team);
   } else if (result === 'flyout') {
     G.outs++;
     logPlay('Out', `FO — Fly out${locStr}`);
     const psFO = currentPitcherStats(fieldingTeam());
     if (psFO && G.outs <= 3) psFO.outs++;
     flashFeedback('OUT', 'var(--red)');
+    advanceLineup(team);
   } else if (result === 'popout') {
     G.outs++;
     logPlay('Out', 'PO — Pop out');
     const psPO = currentPitcherStats(fieldingTeam());
     if (psPO && G.outs <= 3) psPO.outs++;
     flashFeedback('OUT', 'var(--red)');
+    advanceLineup(team);
   } else if (result === 'bunt-out') {
     G.outs++;
     logPlay('Out', 'BO — Bunt out');
     const psBO = currentPitcherStats(fieldingTeam());
     if (psBO && G.outs <= 3) psBO.outs++;
     flashFeedback('OUT', 'var(--red)');
+    advanceLineup(team);
   } else if (result === 'doublePlay') {
     const batEntry = b ? { name:b.name, num:b.num, pid:sid } : { name:'Batter', num:'?', pid:null };
     advanceLineup(team);
@@ -3054,11 +3059,13 @@ function endAtBat(result, details) {
     G.outs++;
     logPlay('Out', 'BI — Batter interference');
     flashFeedback('OUT', 'var(--red)');
+    advanceLineup(team);
   } else {
     // fallback out
     G.outs++;
     logPlay('Out', 'Out');
     flashFeedback('OUT', 'var(--red)');
+    advanceLineup(team);
   }
 
   G.balls = 0;
