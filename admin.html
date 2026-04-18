@@ -337,7 +337,9 @@ select.form-input{cursor:pointer}
     </div>
     <button class="btn btn-outline btn-full" id="login-btn" onclick="doLogin()">Commissioner Sign In</button>
     <div style="margin-top:10px;text-align:center">
-      <a href="#" onclick="enterAdminNoPass();return false" style="font-size:12px;color:#aaa;text-decoration:underline">Enter admin without password (temporary)</a>
+      <a href="#" onclick="doPasswordReset();return false" style="font-size:12px;color:#002D72;text-decoration:underline">Forgot password?</a>
+      <span style="color:#ccc;margin:0 6px">·</span>
+      <a href="#" onclick="enterAdminNoPass();return false" style="font-size:12px;color:#aaa;text-decoration:underline">Enter admin without password (read-only)</a>
     </div>
   </div>
 </div>
@@ -923,7 +925,7 @@ select.form-input{cursor:pointer}
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, Timestamp, deleteField } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -1039,6 +1041,33 @@ window.doLogin = async function() {
 window.doLogout = async function() {
   await signOut(auth);
   location.reload();
+};
+
+window.doPasswordReset = async function() {
+  const emailField = document.getElementById('login-email');
+  const errEl = document.getElementById('login-error');
+  const email = (emailField.value || '').trim();
+  if (!email) {
+    errEl.textContent = 'Enter your email above first, then click Forgot password.';
+    errEl.style.display = 'block';
+    emailField.focus();
+    return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    errEl.style.background = '#e6f4ea';
+    errEl.style.color = '#137333';
+    errEl.textContent = `Password reset email sent to ${email}. Check your inbox (and spam folder).`;
+    errEl.style.display = 'block';
+  } catch(e) {
+    errEl.style.background = '';
+    errEl.style.color = '';
+    let msg = e.message || 'Reset failed';
+    if (e.code === 'auth/user-not-found') msg = `No admin account exists for ${email}. Contact whoever set up the site.`;
+    if (e.code === 'auth/invalid-email') msg = 'That email address is not valid.';
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+  }
 };
 
 window.enterCaptainMode = async function() {
