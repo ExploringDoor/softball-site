@@ -1160,7 +1160,7 @@ if(urlParams.get('tab') === 'schedule'){
 // Loads real game scores and overlays them onto the weeks[] games array,
 // then refreshes CURRENT_WK_IDX and re-renders.
 import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, collection, getDocs } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const FB_CFG = {
   apiKey:"AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -1171,7 +1171,17 @@ const FB_CFG = {
   appId:"1:145862305559:web:153ec455bad57e17517952"
 };
 const app = getApps().length ? getApp() : initializeApp(FB_CFG);
-const db  = getFirestore(app);
+// PWA offline: initializeFirestore with persistent IndexedDB cache so reads
+// are served from disk when offline. Falls back to memory cache if IndexedDB
+// isn't available (e.g. Safari private mode).
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+} catch (e) {
+  db = getFirestore(app);
+}
 
 (async () => {
   try {

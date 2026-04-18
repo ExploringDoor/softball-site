@@ -17,7 +17,7 @@
 //
 // Phase 3 (future): push notifications will live here too.
 
-const VERSION = 'dvsl-v3';
+const VERSION = 'dvsl-v4';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
