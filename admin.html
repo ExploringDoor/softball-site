@@ -386,6 +386,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="standings" data-sec="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
       <div class="nav-item" data-section="recaps" data-sec="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
       <div class="nav-item" data-section="banner" data-sec="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
+      <div class="nav-item" data-section="push" data-sec="push" onclick="showSection('push')"><span class="icon">&#128276;</span> Push Notifications</div>
       <div class="nav-item" data-section="email" data-sec="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
       <div class="nav-item" data-section="contacts" data-sec="contacts" onclick="showSection('contacts')"><span class="icon">&#128222;</span> Contacts</div>
       <div class="nav-item" data-section="financials" data-sec="financials" onclick="showSection('financials')"><span class="icon">&#128181;</span> Financials</div>
@@ -711,6 +712,65 @@ select.form-input{cursor:pointer}
         <div id="alert-history-list">
           <div style="color:var(--muted);font-size:13px">Loading history...</div>
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ PUSH NOTIFICATIONS ═══ -->
+    <div class="section" id="sec-push">
+      <div class="main-header">
+        <div class="main-title">Push Notifications</div>
+        <div class="main-subtitle">Send a push alert to everyone who's subscribed on their phone</div>
+      </div>
+
+      <div id="push-setup-warning" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 14px;margin-bottom:14px;color:#78350f;font-size:13px"></div>
+
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-title" style="margin-bottom:12px">New Notification</div>
+        <div class="form-row">
+          <div class="form-col"><label class="form-label">Title</label>
+            <input type="text" class="form-input" id="push-title" maxlength="60" placeholder="e.g. DN beats TBIR 12-8">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-col"><label class="form-label">Message</label>
+            <textarea class="form-input" id="push-body" rows="3" maxlength="180" placeholder="e.g. Final: Dor Neshama 12, Temple Beth Israel Reform 8. Congrats DN!"></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-col" style="max-width:200px"><label class="form-label">Category</label>
+            <select class="form-input" id="push-category">
+              <option value="scores">Scores</option>
+              <option value="rainouts">Rainouts</option>
+              <option value="schedule">Schedule changes</option>
+              <option value="playoffs">Playoffs</option>
+            </select>
+          </div>
+          <div class="form-col" style="max-width:260px"><label class="form-label">Team (optional)</label>
+            <select class="form-input" id="push-team">
+              <option value="">— All teams —</option>
+            </select>
+          </div>
+          <div class="form-col" style="max-width:300px"><label class="form-label">Click-through URL (optional)</label>
+            <input type="text" class="form-input" id="push-url" placeholder="/schedule.html">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:12px">
+          <button class="btn btn-primary" onclick="sendPushNotification()">🔔 Send Notification</button>
+          <button class="btn btn-outline" onclick="refreshSubscriberCount()">Refresh Subscriber Count</button>
+          <span id="push-sub-count" style="align-self:center;color:var(--muted2);font-size:13px"></span>
+        </div>
+        <div id="push-result" style="margin-top:10px;font-size:13px"></div>
+      </div>
+
+      <div class="panel" style="background:#f8f9fa;border:1px dashed #cbd5e1">
+        <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:6px">Setup checklist (one-time)</div>
+        <ol style="margin:0;padding-left:18px;font-size:13px;color:#334155;line-height:1.7">
+          <li>Firebase Console → Project Settings → Cloud Messaging → <b>Generate a Web Push VAPID key pair</b>, paste into <code>notifications.html</code> (replace <code>YOUR_VAPID_KEY_HERE</code>).</li>
+          <li>Firebase Console → Service Accounts → <b>Generate new private key</b> (downloads JSON).</li>
+          <li>Vercel → DVSL project → Settings → Environment Variables. Add: <code>FCM_PROJECT_ID</code> (value: <code>dvsl-292dd</code>), <code>FCM_SERVICE_ACCOUNT_JSON</code> (paste the entire JSON as one line), and an <code>ADMIN_SEND_SECRET</code> of your choice (any random string).</li>
+          <li>Put the same <code>ADMIN_SEND_SECRET</code> in <code>admin.html</code> <code>PUSH_ADMIN_SECRET</code> constant so this form can authenticate.</li>
+          <li>Redeploy. Users enable notifications at <code>/notifications.html</code>.</li>
+        </ol>
       </div>
     </div>
 
@@ -5786,6 +5846,81 @@ window.previewBlast = function() {
       <div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af">DVSL — Delaware Valley Synagogue League</div>
     </div>
   </body></html>`);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// PUSH NOTIFICATIONS — sends via /api/send-notification
+// Paste the same secret you set as ADMIN_SEND_SECRET env var in Vercel.
+// If you leave it blank the endpoint will still work but is publicly
+// callable — set a secret before going live.
+// ═══════════════════════════════════════════════════════════════════
+const PUSH_ADMIN_SECRET = ''; // ← paste your secret here
+
+window.refreshSubscriberCount = async function() {
+  const el = document.getElementById('push-sub-count');
+  if (!el) return;
+  try {
+    const snap = await getDocs(collection(db, 'notification_tokens'));
+    el.textContent = `${snap.size} subscriber${snap.size===1?'':'s'}`;
+  } catch(e) { el.textContent = 'Subscriber count unavailable'; }
+};
+
+// Populate team dropdown when the push section is first shown
+window._pushTeamDropdownReady = false;
+function _pushFillTeamDropdown() {
+  const sel = document.getElementById('push-team');
+  if (!sel || window._pushTeamDropdownReady) return;
+  if (!TEAMS.length) return;
+  const opts = TEAMS.slice().sort((a,b)=>(a.name||a.id).localeCompare(b.name||b.id))
+    .map(t => `<option value="${t.id}">${esc(t.name || t.id)}</option>`).join('');
+  sel.insertAdjacentHTML('beforeend', opts);
+  window._pushTeamDropdownReady = true;
+  refreshSubscriberCount();
+}
+// Hook into showSection so the dropdown fills the first time user clicks Push
+(function(){
+  const _orig = window.showSection;
+  if (typeof _orig === 'function') {
+    window.showSection = function(name) {
+      _orig(name);
+      if (name === 'push') _pushFillTeamDropdown();
+    };
+  }
+})();
+
+window.sendPushNotification = async function() {
+  const title = document.getElementById('push-title').value.trim();
+  const body  = document.getElementById('push-body').value.trim();
+  const category = document.getElementById('push-category').value;
+  const team = document.getElementById('push-team').value || undefined;
+  const url = document.getElementById('push-url').value.trim() || undefined;
+  const result = document.getElementById('push-result');
+
+  if (!title || !body) { toast('Title and message are required', 'error'); return; }
+  if (!confirm(`Send push "${title}" to ${team ? getTeamName(team)+' subscribers' : 'ALL subscribers'}?`)) return;
+
+  result.innerHTML = `<span style="color:var(--muted2)">Sending...</span>`;
+  try {
+    const resp = await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(PUSH_ADMIN_SECRET ? { 'X-Admin-Secret': PUSH_ADMIN_SECRET } : {}),
+      },
+      body: JSON.stringify({ title, body, category, team, url }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
+    result.innerHTML = `<span style="color:#16a34a">✓ Sent to ${data.sent} device${data.sent===1?'':'s'}${data.failed ? ` (${data.failed} failed)` : ''}</span>`;
+    await logActivity('Push Notifications', `Sent "${title}" (${category}${team?', '+getTeamName(team):''}) to ${data.sent} devices`);
+  } catch(err) {
+    result.innerHTML = `<span style="color:#dc2626">✗ ${err.message}</span>`;
+    if (String(err.message).includes('not configured')) {
+      const w = document.getElementById('push-setup-warning');
+      w.style.display = 'block';
+      w.innerHTML = '⚠ Push is not fully configured yet. Follow the setup checklist below, then redeploy.';
+    }
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════

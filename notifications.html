@@ -185,6 +185,17 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
       </div>
     </div>
 
+    <!-- Favorite teams: gate notifications to chosen teams -->
+    <div class="categories" style="margin-top:20px">
+      <h3>Favorite Teams</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+        Choose one or more teams to only get alerts for those teams. Leave all unchecked to receive alerts for every team.
+      </p>
+      <div id="team-prefs-list" style="display:flex;flex-wrap:wrap;gap:8px">
+        <div style="color:var(--muted);font-size:13px">Loading teams...</div>
+      </div>
+    </div>
+
     <button class="btn-disable" id="btnDisable" onclick="disableNotifications()">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       Disable Notifications
@@ -280,6 +291,9 @@ function init() {
     loadSavedCategories();
   }
 
+  // Populate the team-preferences list regardless of subscription state
+  loadTeamPrefs();
+
   // Listen for foreground messages
   onMessage(messaging, (payload) => {
     const title = payload.notification?.title || 'DVSL Update';
@@ -319,6 +333,46 @@ function loadSavedCategories() {
   }
 }
 
+// Load teams from Firestore and render as checkboxes. Persists selections
+// to localStorage + Firestore so the backend can filter which tokens to
+// push a given team's alerts to.
+async function loadTeamPrefs() {
+  const host = document.getElementById('team-prefs-list');
+  if (!host) return;
+  let teams = [];
+  try {
+    const snap = await getDocs(collection(db, 'teams'));
+    teams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) {
+    host.innerHTML = '<div style="color:var(--muted);font-size:13px">Could not load teams.</div>';
+    return;
+  }
+  teams.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+  const saved = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
+  host.innerHTML = teams.map(t => `
+    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;background:var(--card2)">
+      <input type="checkbox" data-team="${t.id}" ${saved.includes(t.id) ? 'checked' : ''} onchange="updateTeamPrefs()" style="cursor:pointer">
+      <span>${(t.name || t.id).replace(/</g,'&lt;')}</span>
+    </label>`).join('') || '<div style="color:var(--muted);font-size:13px">No teams yet.</div>';
+}
+
+window.updateTeamPrefs = async function() {
+  const picked = [];
+  document.querySelectorAll('[data-team]').forEach(cb => { if (cb.checked) picked.push(cb.dataset.team); });
+  localStorage.setItem('dvsl-notif-teams', JSON.stringify(picked));
+  const token = localStorage.getItem('dvsl-notif-token');
+  if (!token) return; // not subscribed yet — they'll sync on enable
+  try {
+    const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      await updateDoc(doc(db, 'notification_tokens', d.id), { teams: picked });
+    }
+  } catch(err) {
+    console.warn('Failed to update team prefs:', err);
+  }
+};
+
 window.enableNotifications = async function() {
   if (!messaging) return;
   btnEnable.disabled = true;
@@ -346,11 +400,15 @@ window.enableNotifications = async function() {
     }
 
     const categories = ['scores', 'rainouts', 'schedule', 'playoffs'];
+    const teams = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
 
-    // Save token to Firestore
+    // Save token to Firestore — backend filters on (categories, teams)
+    // to decide which tokens to push a given event to. An empty teams
+    // array means "all teams".
     await addDoc(collection(db, 'notification_tokens'), {
       token,
       categories,
+      teams,
       timestamp: new Date()
     });
 
