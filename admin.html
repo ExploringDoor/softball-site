@@ -4523,31 +4523,46 @@ window.bulkImportCaptains = async function() {
     { team:'tbimc', name:'Adam Schulang',      phone:'215-704-6932', email:'aschulang@gmail.com' },
     { team:'tbir',  name:'Mark Schwartz',      phone:'917-751-5286', email:'markschwa@yahoo.com' },
   ];
-  if (!confirm(`Import ${LIST.length} captains across ${Object.keys(TEAM_NAMES).length} teams?\n\nExisting captains with matching team+email will be overwritten. This cannot be undone.`)) return;
+  if (!confirm(`Import ${LIST.length} captains across ${Object.keys(TEAM_NAMES).length} teams?\n\nDuplicates (same team + email) will be skipped. Existing captains without a match will be left alone.`)) return;
   toast(`Importing ${LIST.length} captains…`);
-  let ok = 0, failed = 0;
+
+  // Load existing captains so we can skip duplicates (match by team + lowercase email)
+  let existing = [];
+  try {
+    const snap = await getDocs(collection(db, 'captains'));
+    existing = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) { console.error('Failed to load existing captains:', e); }
+  const existsKey = (t, e) => `${t}::${(e||'').toLowerCase()}`;
+  const existingSet = new Set(existing.map(c => existsKey(c.team_id, c.email)));
+
+  let ok = 0, skipped = 0, failed = 0;
+  const firstError = { msg: null };
   for (const c of LIST) {
     const team_name = TEAM_NAMES[c.team] || c.team;
-    const emailLocal = (c.email || '').toLowerCase().split('@')[0].replace(/[^a-z0-9]+/g, '');
-    const nameSlug   = c.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
-    const id = `${c.team}_${emailLocal || nameSlug}`;
+    const emailLc   = (c.email || '').toLowerCase();
+    if (emailLc && existingSet.has(existsKey(c.team, emailLc))) { skipped++; continue; }
     try {
-      await setDoc(doc(db, 'captains', id), {
-        email: (c.email || '').toLowerCase(),
+      // Use same addDoc path as the working saveNewCaptain flow
+      const ref = await addDoc(collection(db, 'captains'), {
+        email: emailLc,
         team_id: c.team,
         team_name,
         name: c.name,
         phone: c.phone || '',
       });
+      CAPTAINS.push({ id: ref.id, email: emailLc, team_id: c.team, team_name, name: c.name, phone: c.phone || '' });
+      if (emailLc) existingSet.add(existsKey(c.team, emailLc));
       ok++;
     } catch(e) {
-      console.error(`Failed ${id}:`, e);
+      console.error(`Failed ${c.team} / ${c.name}:`, e);
+      if (!firstError.msg) firstError.msg = e.message || String(e);
       failed++;
     }
   }
-  toast(`Done — ${ok} imported${failed ? `, ${failed} failed (see console)` : ''}`, failed ? 'error' : 'success');
-  await logActivity('Captains', `Bulk import from sheet: ${ok} captains written`);
-  await loadCaptains();
+  const summary = `Imported ${ok}, skipped ${skipped} existing${failed ? `, ${failed} failed` : ''}`;
+  toast(failed ? `${summary} — first error: ${firstError.msg}` : summary, failed ? 'error' : 'success');
+  if (ok > 0) await logActivity('Captains', `Bulk import from sheet: ${summary}`);
+  renderCaptains();
 };
 
 window.removeCaptain = async function(captainId, label) {
