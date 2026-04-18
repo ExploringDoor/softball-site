@@ -3005,7 +3005,10 @@ function endAtBat(result, details) {
     if (sid) stats.so = (stats.so || 0) + 1;
     G.outs++;
     const pStatsK = currentPitcherStats(fieldingTeam());
-    if (pStatsK) { pStatsK.k++; if (G.outs <= 3) pStatsK.outs++; }
+    // Only count the K + out if this is a legitimate in-inning out (1st/2nd/3rd).
+    // Guards against phantom strikeouts recorded during the 800ms endHalfInning
+    // transition window, which previously inflated K without inflating outs.
+    if (pStatsK && G.outs <= 3) { pStatsK.k++; pStatsK.outs++; }
     logPlay('Strikeout', 'K — Struck out');
     showKIndicator();
     flashFeedback('K', 'var(--red)');
@@ -3852,6 +3855,10 @@ let bipHitResult = null;
 function openBipSheet(level) {
   bipLevel = level;
   renderBipContent();
+  // Close the pitch sheet if it's open — the BIP flow takes over from here and
+  // the pitch sheet sitting behind the BIP sheet blocks interaction / looks bad.
+  const pitchOv = document.getElementById('pitch-sheet-overlay');
+  if (pitchOv) pitchOv.style.display = 'none';
   const overlay = document.getElementById('bip-sheet-overlay');
   overlay.classList.add('open');
   document.getElementById('bip-back-btn').style.display = level === 'level1' ? 'none' : 'block';

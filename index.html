@@ -6059,15 +6059,31 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
 
     // Pitching (only if any pitcher data exists)
     if (aPitch.length || hPitch.length) {
+      // Sanity-check pitcher lines: flag impossible values (K > outs, strikes > pitches).
+      // A strikeout is always an out, so K can never exceed total outs recorded.
+      // Likewise strike-pitches can never exceed total pitches.
+      const warnStyle = 'color:#b91c1c;font-weight:800;border-bottom:1px dotted #b91c1c;cursor:help';
       const mkPitchRows=pitchers=>pitchers.length
         ? pitchers.map(p=>{
+            const outs = p.outs != null ? p.outs : (p.ip ? (Math.floor(parseFloat(p.ip))*3 + Math.round((parseFloat(p.ip)%1)*10)) : 0);
             const ip=p.ip!=null?p.ip:(Math.floor((p.outs||0)/3)+'.'+(p.outs||0)%3);
             const dec = p.decision;
             const decBadge = dec ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;background:${dec==='W'?'#dcfce7':dec==='L'?'#fee2e2':'#f3f4f6'};color:${dec==='W'?'#166534':dec==='L'?'#991b1b':'#374151'}">${dec}</span>` : '';
-            const pc=p.pitches||(p.balls||0)+(p.strikes||0)||null;
+            const kVal = p.k || p.so || 0;
+            const pitches = p.pitches || 0;
+            const strikesP = p.strikes || 0;
+            const kBad = outs > 0 && kVal > outs;
+            const pcBad = pitches > 0 && strikesP > 0 && strikesP > pitches;
+            const kCell = kBad
+              ? `<span style="${warnStyle}" title="Impossible: K (${kVal}) exceeds outs recorded (${outs}). A strikeout is always an out, so this line has bad data.">${kVal} ⚠</span>`
+              : kVal;
+            const pc=pitches||(p.balls||0)+strikesP||null;
+            const pcCell = pcBad
+              ? `<span style="${warnStyle}" title="Impossible: strike-pitches (${strikesP}) exceed total pitches (${pitches}).">${pc} ⚠</span>`
+              : (pc||'—');
             return `<tr>
               <td style="text-align:left"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${decBadge}</td>
-              <td>${ip}</td><td>${p.h||0}</td><td>${p.r||0}</td><td>${p.er||p.r||0}</td><td>${p.bb||0}</td><td>${p.k||p.so||0}</td><td>${pc||'—'}</td>
+              <td>${ip}</td><td>${p.h||0}</td><td>${p.r||0}</td><td>${p.er||p.r||0}</td><td>${p.bb||0}</td><td>${kCell}</td><td>${pcCell}</td>
             </tr>`;}).join('')
         : `<tr><td colspan="7" style="text-align:center;padding:10px;color:#999">—</td></tr>`;
 

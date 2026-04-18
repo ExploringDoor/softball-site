@@ -3044,8 +3044,10 @@ window.saveBoxScore = async function(markFinal) {
     away: bsGameData.away, home: bsGameData.home,
     away_lineup: bsAwayLineup.filter(p=>!p.dnp).map(p=>{const s=parseInt(p.s)||0,d=parseInt(p.d)||0,t=parseInt(p.t)||0,hr=parseInt(p.hr)||0;return{name:p.name,num:p.num,pos:p.pos||'',ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,s,d,t,hr,h:s+d+t+hr,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,sac:parseInt(p.sac)||0,sf:parseInt(p.sf)||0,roe:parseInt(p.roe)||0,fc:parseInt(p.fc)||0};}),
     home_lineup: bsHomeLineup.filter(p=>!p.dnp).map(p=>{const s=parseInt(p.s)||0,d=parseInt(p.d)||0,t=parseInt(p.t)||0,hr=parseInt(p.hr)||0;return{name:p.name,num:p.num,pos:p.pos||'',ab:parseInt(p.ab)||0,r:parseInt(p.r)||0,s,d,t,hr,h:s+d+t+hr,rbi:parseInt(p.rbi)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,sac:parseInt(p.sac)||0,sf:parseInt(p.sf)||0,roe:parseInt(p.roe)||0,fc:parseInt(p.fc)||0};}),
-    away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,bf:parseInt(p.bf)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
-    home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,bf:parseInt(p.bf)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
+    // Write both `so` and `k` on save — index.html display reads `p.k || p.so`,
+    // so a stale `k` (from scorer) would silently override an admin edit to `so`.
+    away_pitchers: bsAwayPitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,k:parseInt(p.so)||0,bf:parseInt(p.bf)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
+    home_pitchers: bsHomePitchers.filter(p=>p.name).map(p=>({...p,h:parseInt(p.h)||0,r:parseInt(p.r)||0,er:parseInt(p.er)||0,bb:parseInt(p.bb)||0,so:parseInt(p.so)||0,k:parseInt(p.so)||0,bf:parseInt(p.bf)||0,strikes:parseInt(p.strikes)||0,balls:parseInt(p.balls)||0})),
     innings: {away:[...bsInnings.away], home:[...bsInnings.home]},
     away_errors: bsAwayErrors, home_errors: bsHomeErrors,
     away_score: awayR, home_score: homeR, status: markFinal ? 'final' : 'draft',
