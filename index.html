@@ -3,6 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#002D72">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DVSL">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+  <!-- /PWA -->
 <title>DVSL — Delaware Valley Softball League</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,700;1,900&family=Inter:wght@400;500;600;700&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -7011,6 +7026,58 @@ function initStandings(){
     </div>
   </div>
 </div>
+
+<!-- PWA install banner — only shows on mobile, once, dismissable -->
+<div id="pwa-install-banner" style="display:none;position:fixed;bottom:12px;left:12px;right:12px;z-index:9998;background:#002D72;color:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-family:system-ui,-apple-system,sans-serif;font-size:14px;align-items:center;gap:12px;max-width:440px;margin:0 auto">
+  <div style="flex:1;line-height:1.4">
+    <div style="font-weight:800;margin-bottom:2px">📱 Add DVSL to Home Screen</div>
+    <div id="pwa-install-hint" style="font-size:12px;opacity:.85">Faster access, no browser bar</div>
+  </div>
+  <button id="pwa-install-btn" style="background:#F5C842;color:#000;border:none;border-radius:6px;padding:8px 14px;font-weight:800;font-size:13px;cursor:pointer;display:none">Install</button>
+  <button onclick="document.getElementById('pwa-install-banner').style.display='none';localStorage.setItem('dvsl_pwa_dismissed','1')" aria-label="Dismiss" style="background:transparent;color:#fff;border:none;font-size:22px;cursor:pointer;padding:0 4px;line-height:1">×</button>
+</div>
+<script>
+(function () {
+  try {
+    // Never show if already dismissed, already installed, or desktop
+    if (localStorage.getItem('dvsl_pwa_dismissed') === '1') return;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+    if (isStandalone) return;
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (!isMobile) return;
+
+    const banner = document.getElementById('pwa-install-banner');
+    const installBtn = document.getElementById('pwa-install-btn');
+    const hint = document.getElementById('pwa-install-hint');
+
+    // Android / Chrome — native install prompt available
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.style.display = 'inline-block';
+    });
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      banner.style.display = 'none';
+      localStorage.setItem('dvsl_pwa_dismissed', '1');
+    });
+
+    // iOS — no programmatic prompt, just tell them how
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      hint.innerHTML = 'Tap the Share button <span style="font-size:15px">⎋</span> then "Add to Home Screen"';
+    }
+
+    // Show after a short delay so it doesn't block first-paint
+    setTimeout(() => { banner.style.display = 'flex'; }, 2500);
+  } catch(_) {}
+})();
+</script>
 
 </body>
 </html>
