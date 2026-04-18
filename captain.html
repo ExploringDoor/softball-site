@@ -1483,6 +1483,25 @@ window.saveEditGame = async function(gameId) {
       });
     } catch(e) { console.warn('Could not queue gcal sync:', e.message); }
 
+    // Fire-and-forget email to admin. Lives on Vercel at /api/notify-admin
+    // — silently skips if RESEND_API_KEY / ADMIN_EMAIL env vars aren't set,
+    // so no-op if the endpoint isn't configured. We don't await this or let
+    // it block the success toast; failures show in console only.
+    try {
+      fetch('/api/notify-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameId,
+          teamsLabel,
+          editedBy: captainData?.team_name || 'captain',
+          editedByEmail: currentUser?.email || '',
+          summary: summary || 'game edited',
+          diff: summary || '',
+        }),
+      }).catch(e => console.warn('Admin notify failed:', e));
+    } catch(_) {}
+
     toast('Game updated!');
     renderSchedule();
   } catch(e) { toast('Failed to save: ' + e.message, 'error'); }
