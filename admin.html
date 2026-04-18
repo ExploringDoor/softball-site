@@ -409,6 +409,18 @@ select.form-input{cursor:pointer}
           <div class="loading"><div class="spinner"></div> Loading activity...</div>
         </div>
       </div>
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div class="panel-title" style="margin:0">Captains Chat</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="refreshCaptainChat()">↻ Refresh</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="clearCaptainChat()">Clear All</button>
+          </div>
+        </div>
+        <div id="captain-chat-preview" style="font-size:13px;color:var(--muted)">
+          <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ SCORES ═══ -->
@@ -1090,6 +1102,56 @@ window.clearActivityLog = async function() {
   }
 };
 
+// ── Captains Chat management ──────────────────────────────────────
+window.refreshCaptainChat = async function() {
+  const el = document.getElementById('captain-chat-preview');
+  if (!el) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+  try {
+    const snap = await getDocs(collection(db, 'captain_chat'));
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => {
+        const ta = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+        const tb = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+        return tb - ta;
+      });
+    if (!msgs.length) {
+      el.innerHTML = '<div class="empty" style="padding:12px">No messages in captains chat.</div>';
+      return;
+    }
+    const fmt = ts => {
+      if (!ts?.toDate) return '';
+      const d = ts.toDate();
+      return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    };
+    const preview = msgs.slice(0, 5).map(m => {
+      const team = m.team_name || '?';
+      const txt = (m.text || '').slice(0, 80) + ((m.text || '').length > 80 ? '…' : '');
+      return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px">
+        <div style="color:var(--text);font-weight:600">${team} <span style="color:var(--muted);font-weight:400;font-size:11px">· ${fmt(m.timestamp)}</span></div>
+        <div style="color:var(--muted);margin-top:2px">${txt}</div>
+      </div>`;
+    }).join('');
+    el.innerHTML = `<div style="margin-bottom:8px;color:var(--text);font-weight:600">${msgs.length} message${msgs.length===1?'':'s'}</div>${preview}${msgs.length > 5 ? `<div style="padding:8px;color:var(--muted);font-size:12px">…and ${msgs.length - 5} more</div>` : ''}`;
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);padding:8px">Failed to load: ${e.message}</div>`;
+  }
+};
+
+window.clearCaptainChat = async function() {
+  if (!confirm('Delete ALL messages in Captains Chat? This cannot be undone.')) return;
+  try {
+    const snap = await getDocs(collection(db, 'captain_chat'));
+    if (snap.empty) { toast('Captains chat is already empty'); return; }
+    const deletions = snap.docs.map(d => deleteDoc(doc(db, 'captain_chat', d.id)));
+    await Promise.all(deletions);
+    toast(`Deleted ${snap.size} captain chat message${snap.size===1?'':'s'}`);
+    refreshCaptainChat();
+  } catch(e) {
+    toast('Failed to clear captains chat: ' + e.message, 'error');
+  }
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════════════════════════════
@@ -1389,6 +1451,9 @@ function renderDashboard() {
   } else {
     ngEl.innerHTML = '<div class="empty">No upcoming games</div>';
   }
+
+  // Refresh the captains-chat preview panel on dashboard render
+  try { refreshCaptainChat(); } catch(_) {}
 }
 
 // ═══════════════════════════════════════════════════════════════════
