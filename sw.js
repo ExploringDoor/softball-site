@@ -1,32 +1,204 @@
-// DVSL Service Worker — Step 1 (installable only, no aggressive caching yet)
+// DVSL Service Worker — Step 2 (offline mode for public pages)
 //
-// Registering a service worker is what makes the site installable as a PWA
-// on iOS + Android. This worker intentionally does almost nothing beyond
-// exist and claim the page — we are NOT caching pages yet because cached
-// pages can serve stale data, which is bad for a live-scoring site.
+// Strategy:
+//   - Firestore / Firebase API calls  → network-only, never cache (live data)
+//   - HTML navigations                → network-first, fall back to cache,
+//                                        then fall back to offline.html
+//   - Static same-origin assets       → stale-while-revalidate
+//                                        (logos, icons, manifest, etc.)
+//   - Cross-origin (gstatic, etc.)    → stale-while-revalidate
 //
-// Phase 2 (future): add smart offline caching for schedule/standings/roster
-// Phase 3 (future): add push-notification handling here
+// What this gives the user:
+//   - At the field with no signal, schedule / standings / stats / rosters
+//     still load (they'll just show the last version they saw).
+//   - Live scorer + captain + admin always hit the network first so their
+//     data is fresh. If offline, they show the last cached HTML shell but
+//     the dynamic data obviously won't load until signal returns.
+//
+// Phase 3 (future): push notifications will live here too.
 
-const VERSION = 'dvsl-v1';
+const VERSION = 'dvsl-v3';
+const CORE_CACHE = `dvsl-core-${VERSION}`;
+const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
-self.addEventListener('install', (event) => {
-  // Take control on first install without waiting for tabs to close
-  self.skipWaiting();
+// Team codes used across schedule.html / stats.html / standings / index.
+// Logos are referenced dynamically as `logos/<code>.svg` or `logos/<code>.png`,
+// so stale-while-revalidate won't pre-populate them. We precache both forms
+// up-front so they render on the very first offline visit.
+const TEAM_CODES = [
+  'aj','ba','ba1','bami','bob','boo','bor','bsb','bsmc','btbj','cha','dn',
+  'gjc','gold','ka','ki','oa','os','sa','tbi1','tbimc','tbir','ti','tsbka',
+  'tsg','tsmc',
+];
+const LOGO_URLS = [];
+TEAM_CODES.forEach((c) => {
+  LOGO_URLS.push(`/logos/${c}.svg`);
+  LOGO_URLS.push(`/logos/${c}.png`);
 });
 
-self.addEventListener('activate', (event) => {
-  // Wipe any old caches from previous versions
+// Precache the public "shell" — pages a fan might want to pull up at the
+// field with no signal. Intentionally excludes admin / captain / scorer /
+// player / registration / live-score (those need live Firestore data).
+const CORE_URLS = [
+  '/',
+  '/index.html',
+  '/schedule.html',
+  '/stats.html',
+  '/leaders.html',
+  '/standings-history.html',
+  '/playoffs.html',
+  '/rules.html',
+  '/photos.html',
+  '/manifest.json',
+  '/offline.html',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/apple-touch-icon.png',
+  '/logos/glove.png',
+  '/dvsl-hero.png',
+  '/dvsl-logo-dark.png',
+  '/dvsl-logo-glass.png',
+  ...LOGO_URLS,
+];
+
+// ---- install: warm the core cache -----------------------------------------
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.open(CORE_CACHE).then((cache) =>
+      // Use addAll with individual catches so one 404 doesn't kill the install.
+      Promise.all(
+        CORE_URLS.map((url) =>
+          cache.add(new Request(url, { cache: 'reload' })).catch(() => {})
+        )
+      )
+    ).then(() => self.skipWaiting())
   );
 });
 
-// Pass-through fetch handler. The mere presence of a fetch listener is what
-// signals to the browser "this is a real PWA" and enables the install prompt.
+// ---- activate: wipe old caches --------------------------------------------
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter((k) => k !== CORE_CACHE && k !== RUNTIME_CACHE)
+            .map((k) => caches.delete(k))
+        )
+      )
+      .then(() => self.clients.claim())
+  );
+});
+
+// ---- helpers --------------------------------------------------------------
+function isFirebaseRequest(url) {
+  const h = url.hostname;
+  return (
+    h.endsWith('googleapis.com') ||
+    h.endsWith('firebaseio.com') ||
+    h.endsWith('firebase.com') ||
+    h.endsWith('firebaseapp.com') ||
+    h.endsWith('firestore.googleapis.com') ||
+    h.endsWith('identitytoolkit.googleapis.com')
+  );
+}
+
+function isApiRequest(url) {
+  return url.pathname.startsWith('/api/');
+}
+
+// Pages that are useless without fresh Firestore data — don't even try to
+// serve a cached version of these, just fall through to the network.
+function isLiveDataPage(pathname) {
+  return (
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/captain') ||
+    pathname.startsWith('/scorer') ||
+    pathname.startsWith('/player') ||
+    pathname.startsWith('/registration') ||
+    pathname.startsWith('/live-score') ||
+    pathname.startsWith('/notifications') ||
+    pathname.startsWith('/gcal-sync') ||
+    pathname.startsWith('/firebase-') ||
+    pathname.startsWith('/dvsl-admin') ||
+    pathname.startsWith('/tbir-stats') ||
+    pathname.startsWith('/league-site')
+  );
+}
+
+// network-first, fall back to cache, then offline.html
+async function htmlNetworkFirst(request) {
+  try {
+    const netResp = await fetch(request);
+    // Only cache successful, basic responses
+    if (netResp && netResp.ok && netResp.type === 'basic') {
+      const copy = netResp.clone();
+      caches.open(RUNTIME_CACHE).then((c) => c.put(request, copy)).catch(() => {});
+    }
+    return netResp;
+  } catch (err) {
+    const cached = await caches.match(request);
+    if (cached) return cached;
+    const offline = await caches.match('/offline.html');
+    if (offline) return offline;
+    // Last resort: re-throw so browser shows its own error
+    throw err;
+  }
+}
+
+// stale-while-revalidate for static assets
+async function staleWhileRevalidate(request) {
+  const cache = await caches.open(RUNTIME_CACHE);
+  const cached = await cache.match(request);
+  const networkFetch = fetch(request)
+    .then((resp) => {
+      if (resp && resp.ok) cache.put(request, resp.clone()).catch(() => {});
+      return resp;
+    })
+    .catch(() => null);
+  return cached || (await networkFetch) || new Response('', { status: 504 });
+}
+
+// ---- fetch router ---------------------------------------------------------
 self.addEventListener('fetch', (event) => {
-  // Let the network handle everything for now.
-  // Phase 2 will layer a stale-while-revalidate strategy on top.
+  const req = event.request;
+
+  // Only handle GETs. Firestore writes go through POST/PATCH and must never
+  // be intercepted.
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+
+  // Skip Firestore / Firebase traffic entirely — let it go straight to the
+  // network so live data never gets stale.
+  if (isFirebaseRequest(url)) return;
+
+  // Skip our own /api/* serverless routes (notify-admin, etc.) — network only.
+  if (isApiRequest(url)) return;
+
+  // HTML navigations
+  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
+    // For live-data pages, still network-first but don't bother caching —
+    // a stale admin / captain / scorer shell is worse than a real offline msg.
+    if (url.origin === self.location.origin && isLiveDataPage(url.pathname)) {
+      event.respondWith(
+        fetch(req).catch(async () => {
+          const offline = await caches.match('/offline.html');
+          return offline || new Response('Offline', { status: 503 });
+        })
+      );
+      return;
+    }
+    event.respondWith(htmlNetworkFirst(req));
+    return;
+  }
+
+  // Static same-origin assets (images, JSON, CSS, fonts) → stale-while-revalidate
+  if (url.origin === self.location.origin) {
+    event.respondWith(staleWhileRevalidate(req));
+    return;
+  }
+
+  // Cross-origin (e.g. gstatic, firebasejs CDN) → stale-while-revalidate too
+  event.respondWith(staleWhileRevalidate(req));
 });
