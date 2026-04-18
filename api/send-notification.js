@@ -133,10 +133,25 @@ async function listMatchingTokens({ projectId, accessToken, category, team }) {
 
 async function fcmSend({ projectId, accessToken, token, title, body, url }) {
   const endpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
+  // iOS PWA web push requires an explicit webpush.notification block and
+  // a high Urgency header — without these, iOS silently drops the push.
   const message = {
     token,
     notification: { title, body },
-    webpush: { fcm_options: { link: url || '/' } },
+    webpush: {
+      headers: {
+        Urgency: 'high',
+        TTL: '86400',
+      },
+      notification: {
+        title,
+        body,
+        icon: '/dvsl-logo-dark.png',
+        badge: '/dvsl-logo-dark.png',
+        requireInteraction: false,
+      },
+      fcm_options: { link: url || '/' },
+    },
   };
   const resp = await fetch(endpoint, {
     method: 'POST',
