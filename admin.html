@@ -4364,15 +4364,32 @@ function renderCaptains() {
     el.innerHTML = '<div class="empty">No captains assigned yet. Click "+ Add Captain" to get started.</div>';
     return;
   }
+  // Group by team so multiple captains per team stack neatly
+  const byTeam = {};
+  CAPTAINS.forEach(c => {
+    const key = c.team_id || '__unassigned';
+    (byTeam[key] ||= []).push(c);
+  });
+  const teamOrder = Object.keys(byTeam).sort((a,b) => {
+    const an = (byTeam[a][0]?.team_name || a).toLowerCase();
+    const bn = (byTeam[b][0]?.team_name || b).toLowerCase();
+    return an.localeCompare(bn);
+  });
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Team</th><th>Captain Email</th><th>Actions</th></tr></thead>
-    <tbody>${CAPTAINS.map(c => `<tr>
-      <td><strong>${esc(c.team_name || c.team_id)}</strong></td>
-      <td>${esc(c.email)}</td>
-      <td class="actions">
-        <button class="btn btn-danger btn-sm" onclick="removeCaptain('${c.id}', '${esc(c.email)}')">Remove</button>
-      </td>
-    </tr>`).join('')}</tbody>
+    <thead><tr><th>Team</th><th>Name</th><th>Email</th><th>Phone</th><th>Actions</th></tr></thead>
+    <tbody>${teamOrder.map(teamKey => {
+      const caps = byTeam[teamKey];
+      return caps.map((c, idx) => `<tr>
+        <td>${idx === 0 ? `<strong>${esc(c.team_name || c.team_id)}</strong>` : ''}</td>
+        <td>${esc(c.name || '')}</td>
+        <td>${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--blue)">${esc(c.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
+        <td>${c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--blue)">${esc(c.phone)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
+        <td class="actions">
+          <button class="btn btn-outline btn-sm" onclick="editCaptain('${c.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="removeCaptain('${c.id}', '${esc(c.email || c.name || '')}')">Remove</button>
+        </td>
+      </tr>`).join('');
+    }).join('')}</tbody>
   </table></div>`;
 }
 
@@ -4391,8 +4408,18 @@ window.openAddCaptain = function() {
         <select class="form-input" id="ac-team">${teamOpts}</select>
       </div>
       <div class="form-col">
-        <label class="form-label">Captain Email</label>
+        <label class="form-label">Captain Name</label>
+        <input type="text" class="form-input" id="ac-name" placeholder="Jane Smith">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-col">
+        <label class="form-label">Email</label>
         <input type="email" class="form-input" id="ac-email" placeholder="captain@example.com">
+      </div>
+      <div class="form-col">
+        <label class="form-label">Phone</label>
+        <input type="tel" class="form-input" id="ac-phone" placeholder="215-555-1234">
       </div>
     </div>
     <div class="form-row">
@@ -4405,30 +4432,51 @@ window.openAddCaptain = function() {
 window.saveNewCaptain = async function() {
   const teamId = document.getElementById('ac-team').value;
   const email = document.getElementById('ac-email').value.trim().toLowerCase();
+  const name  = document.getElementById('ac-name')?.value.trim() || '';
+  const phone = document.getElementById('ac-phone')?.value.trim() || '';
   if (!teamId) { toast('Please select a team', 'error'); return; }
-  if (!email) { toast('Please enter an email address', 'error'); return; }
+  if (!email && !name) { toast('Enter an email or name', 'error'); return; }
   const teamName = TEAMS.find(t => t.id === teamId)?.name || teamId;
   try {
     const ref = await addDoc(collection(db, 'captains'), {
-      email: email,
-      team_id: teamId,
-      team_name: teamName
+      email, team_id: teamId, team_name: teamName, name, phone
     });
-    CAPTAINS.push({ id: ref.id, email, team_id: teamId, team_name: teamName });
+    CAPTAINS.push({ id: ref.id, email, team_id: teamId, team_name: teamName, name, phone });
     document.getElementById('add-captain-form').style.display = 'none';
     toast('Captain added! Remember to create their Firebase Auth user too.');
-    await logActivity('Captains', `Assigned ${email} as captain of ${teamName}`);
+    await logActivity('Captains', `Assigned ${name || email} as captain of ${teamName}`);
     renderCaptains();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 
-window.removeCaptain = async function(captainId, email) {
-  if (!confirm(`Remove captain ${email}? They will no longer be able to access the Captain Portal.`)) return;
+window.editCaptain = function(captainId) {
+  const c = CAPTAINS.find(x => x.id === captainId);
+  if (!c) return;
+  const nextName  = window.prompt(`Name for ${c.team_name}:`, c.name || '');
+  if (nextName === null) return;
+  const nextEmail = window.prompt('Email:', c.email || '');
+  if (nextEmail === null) return;
+  const nextPhone = window.prompt('Phone:', c.phone || '');
+  if (nextPhone === null) return;
+  (async () => {
+    try {
+      const payload = { name: nextName.trim(), email: nextEmail.trim().toLowerCase(), phone: nextPhone.trim() };
+      await updateDoc(doc(db, 'captains', captainId), payload);
+      Object.assign(c, payload);
+      toast('Captain updated');
+      await logActivity('Captains', `Edited captain ${payload.name || payload.email} (${c.team_name})`);
+      renderCaptains();
+    } catch(e) { toast('Failed: ' + e.message, 'error'); }
+  })();
+};
+
+window.removeCaptain = async function(captainId, label) {
+  if (!confirm(`Remove captain ${label}? They will no longer be able to access the Captain Portal.`)) return;
   try {
     await deleteDoc(doc(db, 'captains', captainId));
     CAPTAINS = CAPTAINS.filter(c => c.id !== captainId);
     toast('Captain removed');
-    await logActivity('Captains', `Removed captain ${email}`);
+    await logActivity('Captains', `Removed captain ${label}`);
     renderCaptains();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
