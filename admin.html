@@ -326,6 +326,10 @@ select.form-input{cursor:pointer}
   .section{display:block!important}
 }
 </style>
+
+<!-- PDF export libs -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
 
@@ -468,6 +472,7 @@ select.form-input{cursor:pointer}
           <div class="main-subtitle">Manage the game schedule</div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="exportSchedulePDF()" title="Download schedule as PDF">📄 Export PDF</button>
           <button class="btn btn-primary" onclick="openAddGame()">+ Add Game</button>
           <button class="btn btn-outline" onclick="openImportCsv()">📋 Import CSV</button>
           <button class="btn btn-outline" id="btn-gcal-sync" onclick="openGcalSync()" title="Push current schedule to Google Calendars (one per team). Captains subscribed to those calendars will see updates.">🔄 Sync Google Calendars <span id="gcal-pending-badge" style="display:none;background:#dc2626;color:#fff;font-size:11px;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">0</span></button>
@@ -510,8 +515,9 @@ select.form-input{cursor:pointer}
             <option value="">-- Choose a team --</option>
           </select>
         </div>
-        <div style="padding-bottom:2px">
+        <div style="padding-bottom:2px;display:flex;gap:8px">
           <button class="btn btn-primary btn-sm" id="add-player-btn" onclick="openAddPlayer()" style="display:none">+ Add Player</button>
+          <button class="btn btn-outline btn-sm" onclick="exportRosterPDF()" title="Download selected team's roster as PDF">📄 Export PDF</button>
         </div>
       </div>
       <div id="add-player-form" style="display:none"></div>
@@ -548,7 +554,8 @@ select.form-input{cursor:pointer}
           <div class="main-title">Standings</div>
           <div class="main-subtitle">View and manage team standings</div>
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="exportStandingsPDF()" title="Download standings as PDF">📄 Export PDF</button>
           <button class="btn btn-warning" onclick="autoCalcStandings()">Auto-Calculate</button>
           <button class="btn btn-success" onclick="saveAllStandings()">Save All</button>
         </div>
@@ -774,6 +781,9 @@ select.form-input{cursor:pointer}
         <div>
           <div class="main-title">Contacts</div>
           <div class="main-subtitle">Player &amp; manager directory — email anyone at once</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline" onclick="exportContactsPDF()" title="Download contacts as PDF">📄 Export PDF</button>
         </div>
       </div>
 
@@ -5776,6 +5786,207 @@ window.previewBlast = function() {
       <div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af">DVSL — Delaware Valley Synagogue League</div>
     </div>
   </body></html>`);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// PDF EXPORTS — jsPDF + autoTable (loaded in <head>)
+// Uses the globals TEAMS / PLAYERS / GAMES / CAPTAINS that admin loads.
+// ═══════════════════════════════════════════════════════════════════
+const DVSL_NAVY = [0, 45, 114];
+const DVSL_RED  = [213, 0, 50];
+
+function _pdfNew() {
+  // jsPDF UMD exposes it as either window.jspdf.jsPDF or window.jsPDF
+  const JS = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+  if (!JS) { toast('PDF library not loaded — check your connection', 'error'); return null; }
+  return new JS({ orientation: 'portrait', unit: 'pt', format: 'letter' });
+}
+function _pdfHeader(pdf, title, subtitle) {
+  pdf.setFillColor(...DVSL_NAVY);
+  pdf.rect(0, 0, pdf.internal.pageSize.getWidth(), 60, 'F');
+  pdf.setTextColor(255);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(18);
+  pdf.text('DVSL — Delaware Valley Synagogue League', 40, 26);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(12);
+  pdf.text(title, 40, 46);
+  if (subtitle) {
+    pdf.setFontSize(10);
+    const w = pdf.internal.pageSize.getWidth();
+    pdf.text(subtitle, w - 40, 46, { align: 'right' });
+  }
+  pdf.setTextColor(17, 17, 17);
+}
+function _pdfFooterOnEveryPage(pdf) {
+  const pageCount = pdf.getNumberOfPages();
+  const stamp = new Date().toLocaleString();
+  for (let i = 1; i <= pageCount; i++) {
+    pdf.setPage(i);
+    pdf.setFontSize(9);
+    pdf.setTextColor(120);
+    const w = pdf.internal.pageSize.getWidth();
+    const h = pdf.internal.pageSize.getHeight();
+    pdf.text(`Generated ${stamp}`, 40, h - 20);
+    pdf.text(`Page ${i} of ${pageCount}`, w - 40, h - 20, { align: 'right' });
+  }
+}
+const _pdfAutoTable = (pdf, opts) => pdf.autoTable(Object.assign({
+  startY: 80,
+  theme: 'striped',
+  headStyles: { fillColor: DVSL_NAVY, textColor: 255, fontStyle: 'bold' },
+  alternateRowStyles: { fillColor: [245, 247, 251] },
+  styles: { fontSize: 10, cellPadding: 6 },
+  margin: { left: 40, right: 40 },
+}, opts));
+
+// ── ROSTER ────────────────────────────────────────────────────────
+window.exportRosterPDF = function() {
+  const teamId = document.getElementById('roster-team-select')?.value;
+  if (!teamId) { toast('Select a team first', 'error'); return; }
+  const team = TEAMS.find(t => t.id === teamId);
+  if (!team) { toast('Team not found', 'error'); return; }
+  const roster = PLAYERS
+    .filter(p => p.team === teamId)
+    .sort((a,b) => (parseInt(a.num)||99) - (parseInt(b.num)||99));
+
+  const pdf = _pdfNew(); if (!pdf) return;
+  _pdfHeader(pdf, `Roster — ${team.name}`, `${roster.length} players`);
+  _pdfAutoTable(pdf, {
+    head: [['#', 'Name', 'Position', 'Email', 'Phone']],
+    body: roster.length ? roster.map(p => [
+      p.num || '—',
+      p.name || '',
+      p.pos || '',
+      p.email || '',
+      p.phone || '',
+    ]) : [['—', 'No players on this roster', '', '', '']],
+    columnStyles: { 0: { cellWidth: 40, halign: 'center' }, 1: { cellWidth: 150 } },
+  });
+  _pdfFooterOnEveryPage(pdf);
+  pdf.save(`DVSL-Roster-${(team.short||team.id).toUpperCase()}-${new Date().toISOString().slice(0,10)}.pdf`);
+  toast(`Exported ${team.name} roster`);
+};
+
+// ── STANDINGS ─────────────────────────────────────────────────────
+window.exportStandingsPDF = function() {
+  if (!TEAMS.length) { toast('No teams to export', 'error'); return; }
+  const sorted = [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
+
+  const pdf = _pdfNew(); if (!pdf) return;
+  _pdfHeader(pdf, 'Standings', new Date().toLocaleDateString());
+  _pdfAutoTable(pdf, {
+    head: [['#', 'Team', 'W', 'L', 'T', 'PCT', 'GB', 'RS', 'RA', 'DIFF', 'Streak']],
+    body: sorted.map((t, i) => [
+      i + 1,
+      t.name || t.id,
+      t.w || 0,
+      t.l || 0,
+      t.t || 0,
+      (t.pct || 0).toFixed(3),
+      t.gb || '-',
+      t.rs || 0,
+      t.ra || 0,
+      ((t.rs||0) - (t.ra||0)) >= 0 ? `+${(t.rs||0)-(t.ra||0)}` : `${(t.rs||0)-(t.ra||0)}`,
+      t.streak || '-',
+    ]),
+    columnStyles: {
+      0: { cellWidth: 30, halign: 'center' },
+      1: { cellWidth: 130, fontStyle: 'bold' },
+      2: { halign: 'center' }, 3: { halign: 'center' }, 4: { halign: 'center' },
+      5: { halign: 'center' }, 6: { halign: 'center' }, 7: { halign: 'center' },
+      8: { halign: 'center' }, 9: { halign: 'center' }, 10:{ halign: 'center' },
+    },
+  });
+  _pdfFooterOnEveryPage(pdf);
+  pdf.save(`DVSL-Standings-${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('Standings exported');
+};
+
+// ── SCHEDULE ──────────────────────────────────────────────────────
+window.exportSchedulePDF = function() {
+  if (!GAMES.length) { toast('No games to export', 'error'); return; }
+  const filterTeam = document.getElementById('schedule-team-filter')?.value || 'all';
+  const visible = filterTeam === 'all'
+    ? GAMES
+    : GAMES.filter(g => g.away === filterTeam || g.home === filterTeam);
+  // Sort by wk, then date, then time
+  const sorted = [...visible].sort((a,b) =>
+    (a.wk||0) - (b.wk||0) ||
+    String(a.date||'').localeCompare(String(b.date||'')) ||
+    String(a.time||'').localeCompare(String(b.time||''))
+  );
+
+  const pdf = _pdfNew(); if (!pdf) return;
+  const teamLabel = filterTeam === 'all' ? 'All Teams' : (TEAMS.find(t=>t.id===filterTeam)?.name || filterTeam);
+  _pdfHeader(pdf, `Schedule — ${teamLabel}`, `${sorted.length} games`);
+  _pdfAutoTable(pdf, {
+    head: [['Wk', 'Date', 'Day', 'Time', 'Away', 'Home', 'Field', 'Score']],
+    body: sorted.map(g => [
+      g.wk || '',
+      g.date || '',
+      g.day || '',
+      g.time || '',
+      getTeamName(g.away),
+      getTeamName(g.home),
+      g.field || '',
+      g.done && g.away_score != null ? `${g.away_score}-${g.home_score}` : '—',
+    ]),
+    columnStyles: {
+      0: { cellWidth: 30, halign: 'center' },
+      4: { fontStyle: 'bold' }, 5: { fontStyle: 'bold' },
+      7: { halign: 'center' },
+    },
+    styles: { fontSize: 9 },
+  });
+  _pdfFooterOnEveryPage(pdf);
+  pdf.save(`DVSL-Schedule-${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('Schedule exported');
+};
+
+// ── CONTACTS ──────────────────────────────────────────────────────
+window.exportContactsPDF = function() {
+  if (!TEAMS.length) { toast('No teams to export', 'error'); return; }
+  const teamId = document.getElementById('contacts-team-sel')?.value || 'all';
+  const teams = teamId === 'all' ? TEAMS : TEAMS.filter(t => t.id === teamId);
+
+  const pdf = _pdfNew(); if (!pdf) return;
+  _pdfHeader(pdf, `Contacts — ${teamId === 'all' ? 'All Teams' : (teams[0]?.name || '')}`, new Date().toLocaleDateString());
+
+  // First page: managers overview
+  const managersRows = teams.map(t => {
+    const cap = (typeof CAPTAINS !== 'undefined' ? CAPTAINS : []).find(c => c.team_id === t.id);
+    return [ t.name || t.id, cap?.name || '—', cap?.email || '—', cap?.phone || '—' ];
+  });
+  _pdfAutoTable(pdf, {
+    head: [['Team', 'Manager', 'Email', 'Phone']],
+    body: managersRows,
+    columnStyles: { 0: { fontStyle: 'bold' } },
+    didDrawPage: (data) => {
+      pdf.setFontSize(11); pdf.setTextColor(...DVSL_NAVY); pdf.setFont('helvetica','bold');
+      pdf.text('Managers', 40, 76);
+    },
+  });
+
+  // Then one table per team for players
+  for (const t of teams) {
+    const players = PLAYERS
+      .filter(p => p.team === t.id)
+      .sort((a,b) => (parseInt(a.num)||99) - (parseInt(b.num)||99));
+    if (!players.length) continue;
+    pdf.addPage();
+    _pdfHeader(pdf, `Contacts — ${t.name}`, `${players.length} players`);
+    _pdfAutoTable(pdf, {
+      head: [['#', 'Name', 'Email', 'Phone']],
+      body: players.map(p => [ p.num || '—', p.name || '', p.email || '', p.phone || '' ]),
+      columnStyles: { 0: { cellWidth: 35, halign: 'center' }, 1: { fontStyle: 'bold' } },
+    });
+  }
+
+  _pdfFooterOnEveryPage(pdf);
+  const suffix = teamId === 'all' ? 'all' : (TEAMS.find(t=>t.id===teamId)?.short || teamId);
+  pdf.save(`DVSL-Contacts-${String(suffix).toUpperCase()}-${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('Contacts exported');
 };
 
 </script>
