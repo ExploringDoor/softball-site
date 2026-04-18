@@ -3298,6 +3298,8 @@ async function refreshVolatileData() {
     try { buildTicker(); } catch(e) {}
     try { buildTicker2(); } catch(e) {}
     try { buildStandings(); } catch(e) {}
+    try { buildHomeSidebar(); } catch(e) {}        // home-page standings
+    try { buildStand2026(); } catch(e) {}          // full standings page
     try { buildSchedule(); } catch(e) {}
     try { buildHomeRecentScores(); } catch(e) {}
     try { buildLeaderboard(); } catch(e) {}
@@ -5859,35 +5861,43 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
         </table>
       </div>`;
 
-    // Batting table builder with totals row
+    // Resolve a box-score batter row to a roster Player so we can deep-link.
+    // Shared between basic + advanced tables to avoid duplicated matching logic.
+    const resolveBatter=(p,teamShort)=>{
+      const teamObj=TEAMS.find(t=>t.short===teamShort||t.id===teamShort);
+      const _pname=p.name?.toLowerCase();
+      const _teamMatch=(pl)=>!teamObj||(pl.team===teamObj.id||pl.team===teamShort||pl.team.toLowerCase()===teamShort.toLowerCase());
+      return PLAYERS.find(pl=>pl.name.toLowerCase()===_pname&&_teamMatch(pl))
+        ||PLAYERS.find(pl=>pl.name.toLowerCase()===_pname)
+        ||(()=>{
+          const pP=(_pname||'').split(/\s+/);
+          if(pP.length<2) return undefined;
+          const pF=pP[0].replace(/\./g,'');
+          if(pF.length!==1) return undefined;
+          const pL=pP.slice(1).join(' ');
+          const tId=teamObj?.id?.toLowerCase();
+          return PLAYERS.find(pl=>{
+            const qP=pl.name.toLowerCase().split(/\s+/);
+            return qP.length>=2&&qP[0][0]===pF&&qP.slice(1).join(' ')===pL&&(!tId||pl.team.toLowerCase()===tId);
+          });
+        })();
+    };
+    const batNameCell=(p,teamShort)=>{
+      const player=resolveBatter(p,teamShort);
+      const nameEl=player
+        ? `<span onclick="openModal('${player.id}')" style="font-weight:600;color:#002D72;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${p.name||''}</span>`
+        : `<span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>`;
+      return `${nameEl}${p.pos?` <span style="font-size:9px;color:#999">${p.pos}</span>`:''}${p.num?` <span style="font-size:9px;color:#bbb">#${p.num}</span>`:''}`;
+    };
+
+    // Basic batting table (default view): Player / AB / H / R / RBI / AVG
     const mkBatRows=(lineup,teamShort)=>{
       if(!lineup.length) return `<tr><td colspan="6" style="text-align:center;padding:10px;color:#999">No batting data</td></tr>`;
-      const teamObj=TEAMS.find(t=>t.short===teamShort||t.id===teamShort);
       const rows=lineup.map(p=>{
         const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
         const avg=(p.ab>0)?(h/p.ab).toFixed(3).replace(/^0/,''):'.000';
-        const _pname=p.name?.toLowerCase();
-        const _teamMatch=(pl)=>!teamObj||(pl.team===teamObj.id||pl.team===teamShort||pl.team.toLowerCase()===teamShort.toLowerCase());
-        const player=PLAYERS.find(pl=>pl.name.toLowerCase()===_pname&&_teamMatch(pl))
-          ||PLAYERS.find(pl=>pl.name.toLowerCase()===_pname)
-          ||(()=>{
-            // "A Miller" → "Adam Miller" initial+last matching
-            const pP=(_pname||'').split(/\s+/);
-            if(pP.length<2) return undefined;
-            const pF=pP[0].replace(/\./g,'');
-            if(pF.length!==1) return undefined;
-            const pL=pP.slice(1).join(' ');
-            const tId=teamObj?.id?.toLowerCase();
-            return PLAYERS.find(pl=>{
-              const qP=pl.name.toLowerCase().split(/\s+/);
-              return qP.length>=2&&qP[0][0]===pF&&qP.slice(1).join(' ')===pL&&(!tId||pl.team.toLowerCase()===tId);
-            });
-          })();
-        const nameEl=player
-          ? `<span onclick="openModal('${player.id}')" style="font-weight:600;color:#002D72;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${p.name||''}</span>`
-          : `<span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>`;
         return `<tr>
-          <td style="text-align:left">${nameEl}${p.pos?` <span style="font-size:9px;color:#999">${p.pos}</span>`:''}${p.num?` <span style="font-size:9px;color:#bbb">#${p.num}</span>`:''}</td>
+          <td style="text-align:left">${batNameCell(p,teamShort)}</td>
           <td>${p.ab||0}</td><td>${h}</td><td>${p.r||0}</td><td>${p.rbi||0}</td><td>${avg}</td>
         </tr>`;}).join('');
       const tAB=lineup.reduce((s,p)=>s+(p.ab||0),0);
@@ -5897,6 +5907,51 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       const totalsRow=`<tr style="border-top:2px solid #e5e7eb;font-weight:700;background:#f9fafb">
         <td style="text-align:left;font-size:11px;letter-spacing:.05em;color:#374151">TOTALS</td>
         <td>${tAB}</td><td>${tH}</td><td>${tR}</td><td>${tRBI}</td><td></td>
+      </tr>`;
+      return rows+totalsRow;
+    };
+
+    // Advanced batting table — adds 2B/3B/HR/BB/SO and slash-line peripherals.
+    // Reveals everything the box-score schema already stores per player so the
+    // commissioner doesn't have to click through to the player page to see
+    // extra-base hits or plate discipline for a single game.
+    const mkBatRowsAdv=(lineup,teamShort)=>{
+      if(!lineup.length) return `<tr><td colspan="13" style="text-align:center;padding:10px;color:#999">No batting data</td></tr>`;
+      const rows=lineup.map(p=>{
+        const s=p.s!=null?(p.s||0):Math.max(0,(p.h||0)-(p.d||0)-(p.t||0)-(p.hr||0));
+        const d=p.d||0, t=p.t||0, hr=p.hr||0;
+        const h=p.h!=null?p.h:(s+d+t+hr);
+        const ab=p.ab||0, bb=p.bb||0, so=p.so??p.k??0, r=p.r||0, rbi=p.rbi||0;
+        const tb=s+2*d+3*t+4*hr;
+        const avg=ab>0?(h/ab).toFixed(3).replace(/^0/,''):'.000';
+        const obp=(ab+bb)>0?((h+bb)/(ab+bb)).toFixed(3).replace(/^0/,''):'.000';
+        const slg=ab>0?(tb/ab).toFixed(3).replace(/^0/,''):'.000';
+        const opsVal=ab>0?((h+bb)/(ab+bb||1)+tb/ab):0;
+        const ops=ab>0?opsVal.toFixed(3).replace(/^0/,''):'.000';
+        return `<tr>
+          <td style="text-align:left">${batNameCell(p,teamShort)}</td>
+          <td>${ab}</td><td>${r}</td><td>${h}</td>
+          <td>${d}</td><td>${t}</td><td>${hr}</td>
+          <td>${rbi}</td><td>${bb}</td><td>${so}</td>
+          <td>${avg}</td><td>${obp}</td><td>${slg}</td><td>${ops}</td>
+        </tr>`;}).join('');
+      const sum=(k)=>lineup.reduce((a,p)=>a+(parseInt(p[k])||0),0);
+      const tS=lineup.reduce((a,p)=>a+(p.s!=null?(p.s||0):Math.max(0,(p.h||0)-(p.d||0)-(p.t||0)-(p.hr||0))),0);
+      const tD=sum('d'), tT=sum('t'), tHR=sum('hr');
+      const tH=tS+tD+tT+tHR;
+      const tAB=sum('ab'), tR=sum('r'), tRBI=sum('rbi'), tBB=sum('bb');
+      const tSO=lineup.reduce((a,p)=>a+(parseInt(p.so ?? p.k)||0),0);
+      const tTB=tS+2*tD+3*tT+4*tHR;
+      const tAvg=tAB>0?(tH/tAB).toFixed(3).replace(/^0/,''):'.000';
+      const tObp=(tAB+tBB)>0?((tH+tBB)/(tAB+tBB)).toFixed(3).replace(/^0/,''):'.000';
+      const tSlg=tAB>0?(tTB/tAB).toFixed(3).replace(/^0/,''):'.000';
+      const tOps=tAB>0?(((tH+tBB)/(tAB+tBB||1))+tTB/tAB).toFixed(3).replace(/^0/,''):'.000';
+      const totalsRow=`<tr style="border-top:2px solid #e5e7eb;font-weight:700;background:#f9fafb">
+        <td style="text-align:left;font-size:11px;letter-spacing:.05em;color:#374151">TOTALS</td>
+        <td>${tAB}</td><td>${tR}</td><td>${tH}</td>
+        <td>${tD}</td><td>${tT}</td><td>${tHR}</td>
+        <td>${tRBI}</td><td>${tBB}</td><td>${tSO}</td>
+        <td>${tAvg}</td><td>${tObp}</td><td>${tSlg}</td><td>${tOps}</td>
       </tr>`;
       return rows+totalsRow;
     };
@@ -5973,8 +6028,11 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       return `<div class="bs-notes-block">${notes.map(n=>`<div class="bs-note-row">${n}</div>`).join('')}</div>`;
     };
 
-    bodyHtml += `<div class="pop-sec-title">Batting</div>
-      <div class="pop-grid2">
+    bodyHtml += `<div class="pop-sec-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <span>Batting</span>
+        <button type="button" id="bs-adv-toggle" onclick="toggleAdvBox(this)" style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:6px 12px;border:1px solid #002D72;color:#002D72;background:#fff;border-radius:4px;cursor:pointer">View Advanced Box Score</button>
+      </div>
+      <div id="bs-bat-basic" class="pop-grid2">
         <div>
           <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away}</div>
           <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(aLineup,away)}</tbody></table>
@@ -5983,6 +6041,18 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
         <div>
           <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home}</div>
           <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(hLineup,home)}</tbody></table>
+          ${mkBatNotes(hLineup,'home')}
+        </div>
+      </div>
+      <div id="bs-bat-adv" class="pop-grid2" style="display:none">
+        <div style="grid-column:1/-1">
+          <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away}</div>
+          <div style="overflow-x:auto"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(aLineup,away)}</tbody></table></div>
+          ${mkBatNotes(aLineup,'away')}
+        </div>
+        <div style="grid-column:1/-1;margin-top:16px">
+          <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home}</div>
+          <div style="overflow-x:auto"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(hLineup,home)}</tbody></table></div>
           ${mkBatNotes(hLineup,'home')}
         </div>
       </div>`;
@@ -6248,6 +6318,19 @@ function switchBoxTab(tab){
     if(btn) btn.classList.toggle('active',t===tab);
     if(pane) pane.style.display=t===tab?'':'none';
   });
+}
+
+// Toggle between the basic (AB/H/R/RBI/AVG) and advanced (adds 2B/3B/HR/BB/SO/
+// OBP/SLG/OPS) batting views inside the box-score popup. One button; the two
+// table wrappers are rendered upfront and only shown/hidden here.
+function toggleAdvBox(btn){
+  const basic = document.getElementById('bs-bat-basic');
+  const adv   = document.getElementById('bs-bat-adv');
+  if(!basic || !adv) return;
+  const showAdv = adv.style.display === 'none';
+  basic.style.display = showAdv ? 'none' : '';
+  adv.style.display   = showAdv ? '' : 'none';
+  if(btn) btn.textContent = showAdv ? 'View Basic Box Score' : 'View Advanced Box Score';
 }
 
 function openGameday(away,home,field,time){
@@ -6735,7 +6818,9 @@ const sortState = {};
 
 function buildStandTable(yr, sortKey, sortDir){
   const rows = [...DATA[yr]];
-  sortKey = sortKey || sortState[yr]?.key || 'w';
+  // Default sort is PCT desc with W then run-diff as tiebreakers — same as
+  // the home sidebar so both views always show rows in identical order.
+  sortKey = sortKey || sortState[yr]?.key || 'pct';
   sortDir = sortDir || sortState[yr]?.dir || 'desc';
   sortState[yr] = {key:sortKey, dir:sortDir};
 
@@ -6753,7 +6838,14 @@ function buildStandTable(yr, sortKey, sortDir){
     }
     if(typeof av==='string') av=parseFloat(av)||0;
     if(typeof bv==='string') bv=parseFloat(bv)||0;
-    return sortDir==='desc'?bv-av:av-bv;
+    const primary = sortDir==='desc' ? bv-av : av-bv;
+    if (primary !== 0) return primary;
+    // Tiebreakers when primary sort is equal — keep order stable and sensible
+    // regardless of which column the user sorted on. W desc, then run diff desc.
+    const aw = parseFloat(a.w)||0, bw = parseFloat(b.w)||0;
+    if (aw !== bw) return bw - aw;
+    const ad = parseFloat(a.diff)||0, bd = parseFloat(b.diff)||0;
+    return bd - ad;
   });
 
   // Column defs
