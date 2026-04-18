@@ -394,6 +394,7 @@ select.form-input{cursor:pointer}
         <div class="main-title">Dashboard</div>
         <div class="main-subtitle">Overview of the DVSL season</div>
       </div>
+      <div id="captain-edit-alert"></div>
       <div class="stat-grid" id="dash-stats"></div>
       <div class="panel" id="dash-next-game">
         <div class="panel-title">Next Upcoming Game</div>
@@ -1002,12 +1003,31 @@ async function loadActivityLog() {
   try {
     const q2 = query(collection(db, 'activity_log'), orderBy('timestamp', 'desc'));
     const snap = await getDocs(q2);
-    const items = snap.docs.slice(0, 10).map(d => d.data());
+    const allItems = snap.docs.map(d => d.data());
+    const items = allItems.slice(0, 10);
+
+    // Count captain schedule edits in the last 7 days for the dashboard banner.
+    const now = Date.now();
+    const sevenDaysAgo = now - 7*24*60*60*1000;
+    const recentCaptainEdits = allItems.filter(a => {
+      if (a.action !== 'Schedule (Captain Edit)') return false;
+      const t = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+      return t >= sevenDaysAgo;
+    });
+    renderCaptainEditAlert(recentCaptainEdits);
+
     if (!items.length) { el.innerHTML = '<div class="empty">No activity yet</div>'; return; }
     el.innerHTML = items.map(a => {
       const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
-      return `<div class="activity-item">
-        <div class="activity-dot"></div>
+      // Captain schedule edits get an orange dot + tinted row so the
+      // commissioner can spot unilateral reschedules at a glance.
+      const isCaptainEdit = a.action === 'Schedule (Captain Edit)';
+      const rowStyle = isCaptainEdit
+        ? 'background:#fff7ed;border-left:3px solid #ea580c;padding-left:10px'
+        : '';
+      const dotStyle = isCaptainEdit ? 'background:#ea580c' : '';
+      return `<div class="activity-item" style="${rowStyle}">
+        <div class="activity-dot" style="${dotStyle}"></div>
         <div><div class="activity-text"><strong>${esc(a.action)}</strong> &mdash; ${esc(a.details)}</div>
         <div class="activity-time">${t.toLocaleDateString()} ${t.toLocaleTimeString()} &bull; ${esc(a.user||'')}</div></div>
       </div>`;
@@ -1015,6 +1035,36 @@ async function loadActivityLog() {
   } catch(e) {
     el.innerHTML = '<div class="empty">Could not load activity log</div>';
   }
+}
+
+// Dashboard banner: "N captain schedule edits this week — review them".
+// Clicking jumps to the activity log. No email yet — keep it simple; the
+// commissioner is in admin often enough that a visible banner is enough.
+function renderCaptainEditAlert(edits) {
+  const host = document.getElementById('captain-edit-alert');
+  if (!host) return;
+  if (!edits || !edits.length) { host.innerHTML = ''; return; }
+  const recent = edits.slice(0, 3);
+  const more = edits.length - recent.length;
+  const lines = recent.map(a => {
+    const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
+    return `<div style="font-size:12px;color:#7c2d12;margin-top:4px">
+      <span style="color:#9a3412;font-weight:700">${t.toLocaleDateString()} ${t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+      — ${esc(a.details || '')}
+    </div>`;
+  }).join('');
+  const moreLine = more > 0 ? `<div style="font-size:11px;color:#9a3412;margin-top:6px;font-style:italic">…and ${more} more — see Activity Log below.</div>` : '';
+  host.innerHTML = `
+    <div style="background:#fff7ed;border:1px solid #ea580c;border-left:4px solid #ea580c;border-radius:8px;padding:12px 16px;margin-bottom:16px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;color:#9a3412;text-transform:uppercase;letter-spacing:.04em">
+        ⚠ ${edits.length} captain schedule edit${edits.length===1?'':'s'} in the last 7 days
+      </div>
+      ${lines}
+      ${moreLine}
+      <div style="font-size:11px;color:#9a3412;margin-top:8px">
+        Heads-up: captains can reschedule their own games without your approval. Review and sync Google Calendar if needed.
+      </div>
+    </div>`;
 }
 
 window.clearActivityLog = async function() {

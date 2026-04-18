@@ -1119,9 +1119,32 @@ window.saveEditGame = async function(gameId) {
     timeDisplay = `${h12}:${String(mm).padStart(2,'0')} ${suffix}`;
   }
   try {
-    await updateDoc(doc(db, 'games', gameId), { date: dateDisplay, day: dayDisplay, time: timeDisplay, time_24: time24||'', date_iso: dateIso||'', field: field||'' });
+    // Snapshot the pre-edit state so we can log exactly what changed. This is
+    // how the commissioner's dashboard surfaces unilateral captain reschedules.
     const g = MY_GAMES.find(x => x.id === gameId);
+    const before = g ? { date: g.date||'', day: g.day||'', time: g.time||'', field: g.field||'', date_iso: g.date_iso||'' } : null;
+    const after  = { date: dateDisplay, day: dayDisplay, time: timeDisplay, field: field||'', date_iso: dateIso||'' };
+
+    await updateDoc(doc(db, 'games', gameId), { date: dateDisplay, day: dayDisplay, time: timeDisplay, time_24: time24||'', date_iso: dateIso||'', field: field||'' });
     if (g) { g.date = dateDisplay; g.day = dayDisplay; g.time = timeDisplay; g.time_24 = time24||''; g.date_iso = dateIso||''; g.field = field||''; }
+
+    // Build a human-readable diff for the commissioner.
+    if (before) {
+      const teamsLabel = g ? `${getTeamName(g.away)} @ ${getTeamName(g.home)}` : '';
+      const diffs = [];
+      const fmtDate = (d, iso) => iso ? `${d} (${iso})` : d;
+      if (before.date_iso !== after.date_iso || before.date !== after.date) {
+        diffs.push(`date ${fmtDate(before.date, before.date_iso)} → ${fmtDate(after.date, after.date_iso)}`);
+      }
+      if (before.time !== after.time) diffs.push(`time ${before.time||'(none)'} → ${after.time||'(none)'}`);
+      if (before.field !== after.field) diffs.push(`field ${before.field||'(none)'} → ${after.field||'(none)'}`);
+      const summary = diffs.length ? diffs.join('; ') : 'no visible field changes';
+      await logActivity(
+        'Schedule (Captain Edit)',
+        `${captainData?.team_name || 'Captain'} edited ${teamsLabel}: ${summary}`
+      );
+    }
+
     toast('Game updated!');
     renderSchedule();
   } catch(e) { toast('Failed to save: ' + e.message, 'error'); }
