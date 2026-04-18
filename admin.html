@@ -3922,6 +3922,16 @@ window.saveEditGame = async function(gameId) {
     if (g) Object.assign(g, data);
     toast('Game updated!');
     await logActivity('Schedule', `Edited game: ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk}`);
+    // Remember this game was just edited so the next Sync click can target
+    // only it (update the 2 affected calendar events, not re-push 15 games
+    // per team). Cleared by gcal-sync.html after a successful targeted sync.
+    try {
+      const pending = JSON.parse(localStorage.getItem('dvsl_pending_gcal_games') || '[]');
+      if (!pending.includes(gameId)) {
+        pending.push(gameId);
+        localStorage.setItem('dvsl_pending_gcal_games', JSON.stringify(pending));
+      }
+    } catch(_) {}
     renderSchedule();
     renderScores();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
@@ -3982,9 +3992,28 @@ window.applyScheduleFilter = () => renderSchedule();
 
 // Open the Google Calendar sync tool in a new tab. Commissioner-only; uses
 // Adam's personal OAuth to push games into the per-team calendars he owns.
+// Priority order for what to sync:
+//   1. If there are pending edited games (tracked in localStorage), pass
+//      their IDs as ?games=id1,id2 — sync tool runs targeted mode that only
+//      updates those specific events on each affected team's calendar.
+//   2. Else if the Schedule view is filtered to a single team, pre-select
+//      that one team so Adam isn't re-pushing 14 other teams' calendars.
+//   3. Else open fresh (full sync possible).
 window.openGcalSync = function() {
-  window.open('gcal-sync.html', '_blank', 'noopener');
-  toast('Opened Google Calendar sync in a new tab. Sign in there to push updates.');
+  let pending = [];
+  try { pending = JSON.parse(localStorage.getItem('dvsl_pending_gcal_games') || '[]'); } catch(_) {}
+  const filterTeam = document.getElementById('schedule-team-filter')?.value || 'all';
+  let url = 'gcal-sync.html';
+  let msg = 'Opened Google Calendar sync in a new tab.';
+  if (pending.length) {
+    url = `gcal-sync.html?games=${encodeURIComponent(pending.join(','))}`;
+    msg = `Opened sync targeted to ${pending.length} recently-edited game${pending.length===1?'':'s'}.`;
+  } else if (filterTeam && filterTeam !== 'all') {
+    url = `gcal-sync.html?team=${encodeURIComponent(filterTeam)}`;
+    msg = `Opened sync pre-selected to ${TEAMS.find(t=>t.id===filterTeam)?.name || filterTeam}.`;
+  }
+  window.open(url, '_blank', 'noopener');
+  toast(msg);
 };
 
 window.loadRoster = function() {

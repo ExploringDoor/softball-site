@@ -101,6 +101,13 @@ let TEAMS_BY_ID = {}; // id → team object
 let GAMES = [];
 let TEAM_LIST = []; // array of {id, name, short}
 
+// Targeted-sync mode: when admin passes ?games=id1,id2 we update only those
+// specific events (delete matching + re-add), rather than clearing the whole
+// calendar. Kicked in when the commissioner edited a game and clicked Sync.
+const URL_PARAMS = new URLSearchParams(location.search);
+const TARGETED_GAME_IDS = (URL_PARAMS.get('games') || '').split(',').map(s => s.trim()).filter(Boolean);
+const PRESELECT_TEAM = URL_PARAMS.get('team') || '';
+
 window.loadGames = async function() {
   logEl.textContent = '';
   out('Loading teams and games from Firebase...\n');
@@ -120,7 +127,31 @@ window.loadGames = async function() {
     GAMES = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     out(`Loaded ${GAMES.length} games\n`);
 
-    // Show team checkboxes
+    // ── Targeted single-game mode ─────────────────────────────────────
+    // Triggered when admin passes ?games=id1,id2. Instead of showing the
+    // full 15-team checkbox grid, we lock in just the affected games and
+    // run a surgical update (delete matching event + re-add) on each
+    // team's calendar. Way faster than re-pushing the whole season.
+    if (TARGETED_GAME_IDS.length) {
+      const targeted = GAMES.filter(g => TARGETED_GAME_IDS.includes(g.id));
+      if (!targeted.length) {
+        out(`⚠️  ?games=${TARGETED_GAME_IDS.join(',')} — none of those IDs matched a current game. Falling back to full picker.`);
+      } else {
+        renderTargetedUi(targeted);
+        out(`\n🎯 Targeted mode: ${targeted.length} edited game${targeted.length===1?'':'s'} queued.`);
+        targeted.forEach(g => {
+          const awayShort = TEAMS_BY_ID[g.away]?.short || g.away;
+          const homeShort = TEAMS_BY_ID[g.home]?.short || g.home;
+          out(`  • Wk${g.wk} ${awayShort} @ ${homeShort} — ${g.date} ${g.time} @ ${g.field||'TBD'}`);
+        });
+        out(`\n✅ Ready. Click "Sign In & Update Only These Games".`);
+        document.getElementById('syncBtn').disabled = false;
+        document.getElementById('syncBtn').style.opacity = '1';
+        return;
+      }
+    }
+
+    // Show team checkboxes (full-sync mode)
     const cbWrap = document.getElementById('team-checkboxes');
     cbWrap.innerHTML = TEAM_LIST.map(t => `
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 10px;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer">
@@ -128,6 +159,17 @@ window.loadGames = async function() {
         <span><strong>${t.short}</strong> — ${t.name}</span>
       </label>`).join('');
     document.getElementById('team-list').style.display = 'block';
+
+    // If admin passed ?team=X, pre-check only that team and uncheck others.
+    if (PRESELECT_TEAM) {
+      const preTeam = TEAMS_BY_ID[PRESELECT_TEAM];
+      if (preTeam && preTeam.short) {
+        document.querySelectorAll('#team-checkboxes input[type=checkbox]').forEach(cb => {
+          cb.checked = (cb.value === preTeam.short);
+        });
+        out(`\n📌 Pre-selected ${preTeam.short} — ${preTeam.name} (from admin filter).`);
+      }
+    }
 
     // Count games per team (match by team id, not short)
     TEAM_LIST.forEach(t => {
@@ -142,6 +184,31 @@ window.loadGames = async function() {
     out('❌ Error: ' + e.message);
   }
 };
+
+// Render the locked "you're about to update these specific games" panel
+// shown in targeted mode. Replaces the big team-checkbox grid.
+function renderTargetedUi(games) {
+  const wrap = document.getElementById('team-list');
+  wrap.innerHTML = `
+    <div style="background:#ecfdf5;border:1px solid #10b981;border-radius:8px;padding:16px">
+      <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;margin-bottom:12px;color:#065f46">🎯 Targeted Sync — ${games.length} edited game${games.length===1?'':'s'}</h3>
+      <p style="font-size:12px;color:#065f46;margin-bottom:12px">Only the games listed below will be updated. Each game's event on both the home and away team calendars will be replaced with the new details — no other games touched.</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${games.map(g => {
+          const awayShort = TEAMS_BY_ID[g.away]?.short || g.away;
+          const homeShort = TEAMS_BY_ID[g.home]?.short || g.home;
+          return `<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:6px;padding:8px 12px;font-size:13px"><strong>Wk${g.wk} ${awayShort} @ ${homeShort}</strong> — ${g.date} ${g.time} @ ${g.field||'TBD'}</div>`;
+        }).join('')}
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <a href="gcal-sync.html" style="font-size:12px;padding:6px 12px;border:1px solid rgba(0,0,0,.2);border-radius:4px;cursor:pointer;background:#fff;text-decoration:none;color:#1a1a1a">Full sync instead →</a>
+      </div>
+    </div>`;
+  wrap.style.display = 'block';
+  // Relabel the primary button so it's clear we're doing the surgical op.
+  const btn = document.getElementById('syncBtn');
+  btn.textContent = '2. Sign In & Update Only These Games';
+}
 
 // One-time seed of the 15 calendars created April 2026
 window.seedFirebase = async function() {
@@ -189,11 +256,177 @@ window.authAndSync = async function() {
     callback: async (response) => {
       if (response.error) { out('❌ Auth failed: ' + response.error); return; }
       out('✅ Signed in to Google\n');
-      await syncTeamCalendars(response.access_token);
+      // Route to targeted-update path if admin passed specific game IDs.
+      const targeted = GAMES.filter(g => TARGETED_GAME_IDS.includes(g.id));
+      if (TARGETED_GAME_IDS.length && targeted.length) {
+        await syncTargetedGames(response.access_token, targeted);
+      } else {
+        await syncTeamCalendars(response.access_token);
+      }
     }
   });
   tokenClient.requestAccessToken();
 };
+
+// Build the exact event payload for a game on a given team's perspective.
+// Mirrors the structure used in syncTeamCalendars so updated events look
+// identical to the full-sync output. Keeps one source of truth-ish.
+function buildEventForGame(g, teamId) {
+  const monthMap = { 'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12 };
+  let mon, day;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(g.date_iso || '')) {
+    const dp = g.date_iso.split('-');
+    mon = parseInt(dp[1]); day = parseInt(dp[2]);
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(g.date || '')) {
+    const dp = g.date.split('-');
+    mon = parseInt(dp[1]); day = parseInt(dp[2]);
+  } else {
+    const parts = (g.date || '').split(' ');
+    mon = monthMap[parts[0]] || 4; day = parseInt(parts[1]) || 1;
+  }
+  let hour = 19, min = 0;
+  const src = g.time_24 || g.time || '';
+  const tp24 = src.match(/^(\d{1,2}):(\d{2})$/);
+  if (tp24) { hour = parseInt(tp24[1]); min = parseInt(tp24[2]); }
+  else {
+    const tp = src.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (tp) {
+      hour = parseInt(tp[1]); min = parseInt(tp[2]);
+      if (tp[3].toUpperCase() === 'PM' && hour !== 12) hour += 12;
+      if (tp[3].toUpperCase() === 'AM' && hour === 12) hour = 0;
+    }
+  }
+  const pad = n => String(n).padStart(2,'0');
+  const dateStr = `2026-${pad(mon)}-${pad(day)}T${pad(hour)}:${pad(min)}:00`;
+  const endTotalMin = hour * 60 + min + 90;
+  const endStr = `2026-${pad(mon)}-${pad(day)}T${pad(Math.floor(endTotalMin/60))}:${pad(endTotalMin%60)}:00`;
+  const awayShort = TEAMS_BY_ID[g.away]?.short || (g.away||'?').toUpperCase();
+  const homeShort = TEAMS_BY_ID[g.home]?.short || (g.home||'?').toUpperCase();
+  const team = TEAMS_BY_ID[teamId];
+  const isHome = g.home === teamId;
+  const oppShort = isHome ? awayShort : homeShort;
+  const vsAt = isHome ? 'vs' : '@';
+  const field = g.field || 'TBD';
+  const addr = g.addr || '';
+  return {
+    summary: `⚾ ${team.short} ${vsAt} ${oppShort}`,
+    // GAMEID marker lets future targeted syncs find this exact event
+    // without regex-guessing from summary/date.
+    description: `DVSL Softball 2026 — Week ${g.wk}\n${awayShort} @ ${homeShort}\nField: ${field}${addr ? '\n'+addr : ''}\n\nGAMEID:${g.id}\nFull schedule: https://dvsl.vercel.app`,
+    location: field + (addr ? ', ' + addr : ''),
+    start: { dateTime: dateStr, timeZone: 'America/New_York' },
+    end: { dateTime: endStr, timeZone: 'America/New_York' }
+  };
+}
+
+// Targeted mode: for each edited game, find its existing event on each
+// affected team's calendar and replace it. Events are located by
+// GAMEID:<id> marker in the description first, then by a fallback heuristic
+// (week + opponent short code) for legacy events created before the marker.
+async function syncTargetedGames(token, games) {
+  out(`Targeted updating ${games.length} game${games.length===1?'':'s'}...\n`);
+
+  // Map existing team calendars by summary so we can find calId per team.
+  let existingCals = {};
+  try {
+    const listRes = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?maxResults=250', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const listData = await listRes.json();
+    (listData.items || []).forEach(c => { existingCals[c.summary] = c.id; });
+  } catch(e) { out('❌ Could not load calendar list: ' + e.message); return; }
+
+  let totalUpdates = 0, totalMisses = 0;
+  const syncedGameIds = [];
+
+  for (const g of games) {
+    const awayShort = TEAMS_BY_ID[g.away]?.short || g.away;
+    const homeShort = TEAMS_BY_ID[g.home]?.short || g.home;
+    out(`\n── Wk${g.wk} ${awayShort} @ ${homeShort} ──`);
+
+    // Both teams' calendars must be updated (each side has its own copy).
+    for (const teamId of [g.home, g.away]) {
+      const team = TEAMS_BY_ID[teamId];
+      if (!team || !team.short) { out(`  ⚠️  No team record for ${teamId}`); continue; }
+      const calName = `DVSL 2026 — ${team.short}`;
+      const calId = existingCals[calName] || existingCals[`DVSL 2026 — ${team.name}`];
+      if (!calId) {
+        out(`  ⚠️  No calendar found for ${team.short} — skip (run full sync first to create it).`);
+        totalMisses++;
+        continue;
+      }
+
+      // Find matching events on this calendar.
+      let matches = [];
+      try {
+        // Search by GAMEID marker first — cheapest and most precise.
+        const qRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500&q=${encodeURIComponent('GAMEID:'+g.id)}`, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const qData = await qRes.json();
+        matches = (qData.items || []).filter(ev => (ev.description||'').includes(`GAMEID:${g.id}`));
+
+        // Fallback for legacy events without the marker: match by week + opponent.
+        if (!matches.length) {
+          const allRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events?maxResults=2500`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          const allData = await allRes.json();
+          const oppShort = (teamId === g.home) ? awayShort : homeShort;
+          matches = (allData.items || []).filter(ev => {
+            const desc = ev.description || '';
+            const summ = ev.summary || '';
+            const weekMatch = new RegExp(`Week ${g.wk}\\b`).test(desc);
+            const oppMatch  = summ.includes(oppShort) || desc.includes(`${awayShort} @ ${homeShort}`);
+            return weekMatch && oppMatch;
+          });
+        }
+      } catch(e) { out(`  ⚠️  Search failed on ${team.short}: ${e.message}`); totalMisses++; continue; }
+
+      // Delete matches, then insert the updated event.
+      for (const ev of matches) {
+        try {
+          await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${ev.id}`, {
+            method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token }
+          });
+        } catch(_) {}
+      }
+      const payload = buildEventForGame(g, teamId);
+      try {
+        await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        out(`  ✅ ${team.short}: ${matches.length ? 'replaced '+matches.length+' event'+(matches.length===1?'':'s') : 'no existing match — inserted new'}`);
+        totalUpdates++;
+      } catch(e) {
+        out(`  ❌ ${team.short}: insert failed: ${e.message}`);
+        totalMisses++;
+      }
+    }
+
+    syncedGameIds.push(g.id);
+  }
+
+  out(`\n════════════════════════`);
+  out(`Done! ${totalUpdates} calendar event${totalUpdates===1?'':'s'} updated across ${games.length} game${games.length===1?'':'s'}.${totalMisses?` (${totalMisses} issue${totalMisses===1?'':'s'}.)`:''}`);
+
+  // Clear the pending list in admin's localStorage for the games we handled.
+  // Written here because admin.html and gcal-sync.html share the same origin
+  // (same Vercel host), so localStorage is shared.
+  try {
+    const pending = JSON.parse(localStorage.getItem('dvsl_pending_gcal_games') || '[]');
+    const remaining = pending.filter(id => !syncedGameIds.includes(id));
+    if (remaining.length) {
+      localStorage.setItem('dvsl_pending_gcal_games', JSON.stringify(remaining));
+      out(`\n(${remaining.length} edited game${remaining.length===1?'':'s'} still queued for next sync.)`);
+    } else {
+      localStorage.removeItem('dvsl_pending_gcal_games');
+      out(`\nPending edit queue cleared.`);
+    }
+  } catch(_) {}
+}
 
 async function syncTeamCalendars(token) {
   const selected = Array.from(document.querySelectorAll('#team-checkboxes input:checked')).map(cb => cb.value);
@@ -314,7 +547,9 @@ async function syncTeamCalendars(token) {
 
       const event = {
         summary: `⚾ ${team.short} ${vsAt} ${oppShort}`,
-        description: `DVSL Softball 2026 — Week ${g.wk}\n${awayShort} @ ${homeShort}\nField: ${field}${addr ? '\n'+addr : ''}\n\nFull schedule: https://dvsl.vercel.app`,
+        // GAMEID marker lets later targeted syncs find this exact event
+        // without heuristic matching.
+        description: `DVSL Softball 2026 — Week ${g.wk}\n${awayShort} @ ${homeShort}\nField: ${field}${addr ? '\n'+addr : ''}\n\nGAMEID:${g.id}\nFull schedule: https://dvsl.vercel.app`,
         location: field + (addr ? ', ' + addr : ''),
         start: { dateTime: dateStr, timeZone: 'America/New_York' },
         end: { dateTime: endStr, timeZone: 'America/New_York' }
