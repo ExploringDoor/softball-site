@@ -2206,24 +2206,32 @@ function renderBoxScore(awayName, homeName, g) {
           ${bsScoreOnlyMode ? '📊 Full Stats Mode' : '🎯 Score Only Mode'}
         </button>
       </div>
-      ${(bsBoxScore?.has_discrepancy && bsBoxScore?.discrepancies?.length) ? (() => {
+      ${((bsBoxScore?.has_discrepancy || bsBoxScore?.discrepancy_resolved) && bsBoxScore?.discrepancies?.length) ? (() => {
         const discs = bsBoxScore.discrepancies || [];
+        const resolved = !!bsBoxScore.discrepancy_resolved && !bsBoxScore.has_discrepancy;
+        const picks = Array.isArray(bsBoxScore.discrepancy_picks) ? bsBoxScore.discrepancy_picks : [];
+        const pickFor = (i, key) => picks.find(p => p.disc === i && (key ? p.key === key : p.type === 'score'))?.which;
         const firstSide = discs[0]?.first_submitter || 'away';
         const awayIsFirst = firstSide === 'away';
         const whichFor = side => (side === 'away' ? (awayIsFirst ? 'first' : 'second') : (awayIsFirst ? 'second' : 'first'));
         const battingDs = discs.map((d, i) => ({d, i})).filter(x => x.d.type === 'batting');
         const scoreEntry = discs.map((d, i) => ({d, i})).find(x => x.d.type === 'score');
         const statKeys = ['ab','h','r','rbi','bb'];
-        const chipOn  = 'background:#f59e0b;color:#fff;border:2px solid #d97706;opacity:1';
-        const chipOff = 'background:#fff;color:#78350f;border:2px solid #fde68a;opacity:.55';
-        const statChip = (discIdx, key, which, val, isOn) => `<button class="disc-chip" data-disc="${discIdx}" data-key="${key}" data-which="${which}" data-selected="${isOn?1:0}" onclick="bsPickStat(this)" style="display:inline-block;padding:3px 10px;border-radius:12px;margin:2px 3px 0 0;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s;${isOn?chipOn:chipOff}"><strong>${key.toUpperCase()}</strong> ${val}</button>`;
+        const chipOn  = resolved ? 'background:#16a34a;color:#fff;border:2px solid #166534;opacity:1' : 'background:#f59e0b;color:#fff;border:2px solid #d97706;opacity:1';
+        const chipOff = resolved ? 'background:#fff;color:#9ca3af;border:2px solid #e5e7eb;opacity:.55;text-decoration:line-through' : 'background:#fff;color:#78350f;border:2px solid #fde68a;opacity:.55';
+        const chipCursor = resolved ? 'default' : 'pointer';
+        const chipClick = resolved ? '' : 'onclick="bsPickStat(this)"';
+        const statChip = (discIdx, key, which, val, isOn) => `<button class="disc-chip" data-disc="${discIdx}" data-key="${key}" data-which="${which}" data-selected="${isOn?1:0}" ${chipClick} ${resolved?'disabled':''} style="display:inline-block;padding:3px 10px;border-radius:12px;margin:2px 3px 0 0;font-size:11px;font-weight:700;cursor:${chipCursor};transition:all .15s;${isOn?chipOn:chipOff}"><strong>${key.toUpperCase()}</strong> ${val}</button>`;
         const buildBattingCol = side => {
           const which = whichFor(side);
           const rows = battingDs.map(({d, i}) => {
             const data = d[which] || {};
             const diffKeys = statKeys.filter(k => ((d.first||{})[k] || 0) !== ((d.second||{})[k] || 0));
             const defaultWhich = whichFor(d.side);
-            const chips = diffKeys.map(k => statChip(i, k, which, data[k] ?? 0, defaultWhich === which)).join('');
+            const chips = diffKeys.map(k => {
+              const winner = resolved ? (pickFor(i, k) || defaultWhich) : defaultWhich;
+              return statChip(i, k, which, data[k] ?? 0, winner === which);
+            }).join('');
             return `<div style="padding:8px 10px;background:#fff;border:1px solid #fbbf24;border-radius:6px;margin-bottom:6px">
               <div style="font-weight:700;font-size:13px;color:#1a1a1a">${d.player} <span style="font-size:10px;color:#92400e;text-transform:uppercase">(${d.side})</span></div>
               <div style="margin-top:4px">${chips || '<span style="font-size:11px;color:#999">no differences</span>'}</div>
@@ -2234,23 +2242,35 @@ function renderBoxScore(awayName, homeName, g) {
         let scoreHtml = '';
         if (scoreEntry) {
           const { d, i } = scoreEntry;
-          const pickOn  = 'background:#fef3c7;border:2px solid #d97706;opacity:1';
-          const pickOff = 'background:#fff;border:2px solid #fde68a;opacity:.55';
-          const scoreBtn = (which, label, a, h, isOn) => `<button class="disc-chip" data-disc="${i}" data-type="score" data-which="${which}" data-selected="${isOn?1:0}" onclick="bsPickStat(this)" style="flex:1;padding:10px 14px;border-radius:8px;cursor:pointer;text-align:left;transition:all .15s;${isOn?pickOn:pickOff}">
-            <div style="font-size:10px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.06em">${label} said</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:24px;color:#1a1a1a;line-height:1.1">${a}–${h}</div>
+          const winScore = resolved ? (pickFor(i) || 'first') : 'first';
+          const pickOn  = resolved ? 'background:#dcfce7;border:2px solid #166534;opacity:1' : 'background:#fef3c7;border:2px solid #d97706;opacity:1';
+          const pickOff = resolved ? 'background:#fff;border:2px solid #e5e7eb;opacity:.55' : 'background:#fff;border:2px solid #fde68a;opacity:.55';
+          const scoreClick = resolved ? '' : 'onclick="bsPickStat(this)"';
+          const scoreCursor = resolved ? 'default' : 'pointer';
+          const scoreBtn = (which, label, a, h, isOn) => `<button class="disc-chip" data-disc="${i}" data-type="score" data-which="${which}" data-selected="${isOn?1:0}" ${scoreClick} ${resolved?'disabled':''} style="flex:1;padding:10px 14px;border-radius:8px;cursor:${scoreCursor};text-align:left;transition:all .15s;${isOn?pickOn:pickOff}">
+            <div style="font-size:10px;font-weight:800;color:${resolved&&isOn?'#166534':'#92400e'};text-transform:uppercase;letter-spacing:.06em">${label} said</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:24px;color:${resolved&&!isOn?'#9ca3af':'#1a1a1a'};line-height:1.1;${resolved&&!isOn?'text-decoration:line-through':''}">${a}–${h}</div>
           </button>`;
           scoreHtml = `<div style="margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,.4);border-radius:8px">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:#92400e;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Final Score — pick one pair</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:${resolved?'#166534':'#92400e'};text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Final Score${resolved?'':' — pick one pair'}</div>
             <div style="display:flex;gap:8px">
-              ${scoreBtn('first', (d.first_submitter||'first').toUpperCase()+' captain', d.first_away ?? '?', d.first_home ?? '?', true)}
-              ${scoreBtn('second', (d.second_submitter||'second').toUpperCase()+' captain', d.second_away ?? '?', d.second_home ?? '?', false)}
+              ${scoreBtn('first', (d.first_submitter||'first').toUpperCase()+' captain', d.first_away ?? '?', d.first_home ?? '?', winScore === 'first')}
+              ${scoreBtn('second', (d.second_submitter||'second').toUpperCase()+' captain', d.second_away ?? '?', d.second_home ?? '?', winScore === 'second')}
             </div>
           </div>`;
         }
-        return `<div id="bs-disc-banner" style="background:#fef3c7;border:1px solid #d97706;border-radius:8px;padding:14px 16px;margin-bottom:14px">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;color:#92400e;margin-bottom:4px">⚠ Stats Differ — click the value you want to keep, then Apply</div>
-          <div style="font-size:11px;color:#78350f;margin-bottom:12px">Defaults follow per-side authority (each team's own captain). Click a different chip to override.</div>
+        const bannerBg = resolved ? '#f0fdf4' : '#fef3c7';
+        const bannerBorder = resolved ? '#166534' : '#d97706';
+        const bannerTitleColor = resolved ? '#166534' : '#92400e';
+        const bannerTitle = resolved
+          ? `✓ Stats Resolved by Commissioner${bsBoxScore.discrepancy_resolved_at ? ' — ' + new Date(bsBoxScore.discrepancy_resolved_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}`
+          : '⚠ Stats Differ — click the value you want to keep, then Apply';
+        const bannerSubtitle = resolved
+          ? 'Green values were accepted as final. Strikethrough values were overruled.'
+          : "Defaults follow per-side authority (each team's own captain). Click a different chip to override.";
+        return `<div id="bs-disc-banner" style="background:${bannerBg};border:1px solid ${bannerBorder};border-radius:8px;padding:14px 16px;margin-bottom:14px">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;color:${bannerTitleColor};margin-bottom:4px">${bannerTitle}</div>
+          <div style="font-size:11px;color:${resolved?'#166534':'#78350f'};margin-bottom:12px">${bannerSubtitle}</div>
           ${scoreHtml}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div>
@@ -2262,7 +2282,9 @@ function renderBoxScore(awayName, homeName, g) {
               ${buildBattingCol('home')}
             </div>
           </div>
-          <button onclick="bsApplyAndResolve()" style="margin-top:12px;background:#166534;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.04em">✓ APPLY &amp; RESOLVE</button>
+          ${resolved
+            ? `<button onclick="bsReopenDiscrepancy()" style="margin-top:12px;background:#fff;color:#166534;border:1px solid #166534;border-radius:6px;padding:7px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;cursor:pointer">↺ Re-open for editing</button>`
+            : `<button onclick="bsApplyAndResolve()" style="margin-top:12px;background:#166534;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.04em">✓ APPLY &amp; RESOLVE</button>`}
         </div>`;
       })() : ''}
       <!-- Card: BOX SCORE header + scoreboard + tabs + panels -->
@@ -2935,6 +2957,28 @@ window.bsClearDiscrepancy = async function() {
   } catch(e) { toast('Failed: '+e.message, 'error'); }
 };
 
+// ── Re-open a resolved discrepancy for further editing ────────────
+window.bsReopenDiscrepancy = async function() {
+  if (!bsGameId || !bsBoxScore) return;
+  try {
+    const bsRef = doc(db, 'box_scores', bsGameId);
+    const bsSnap = await getDoc(bsRef);
+    const update = { has_discrepancy: true, discrepancy_resolved: false };
+    if (bsSnap.exists()) await updateDoc(bsRef, update);
+    else {
+      const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
+      const qs = await getDocs(q2);
+      if (!qs.empty) await updateDoc(doc(db, 'box_scores', qs.docs[0].id), update);
+    }
+    await updateDoc(doc(db, 'games', bsGameId), update).catch(() => {});
+    if (bsBoxScore) { bsBoxScore.has_discrepancy = true; bsBoxScore.discrepancy_resolved = false; }
+    const g = GAMES.find(x => x.id === bsGameId);
+    if (g) { g.has_discrepancy = true; g.discrepancy_resolved = false; }
+    toast('Re-opened — pick again and Apply');
+    bsRerender();
+  } catch(e) { toast('Failed: '+e.message, 'error'); }
+};
+
 // ── Pick a stat value in the discrepancy banner ───────────────────
 window.bsPickStat = function(btn) {
   const banner = document.getElementById('bs-disc-banner');
@@ -2967,6 +3011,7 @@ window.bsApplyAndResolve = async function() {
   if (!banner) { toast('Discrepancy panel not found', 'error'); return; }
 
   // Apply batting picks in-memory
+  const picks = [];
   discs.forEach((d, i) => {
     if (d.type !== 'batting') return;
     const lineup = d.side === 'away' ? bsAwayLineup : bsHomeLineup;
@@ -2976,6 +3021,7 @@ window.bsApplyAndResolve = async function() {
       const sel = banner.querySelector(`.disc-chip[data-disc="${i}"][data-key="${k}"][data-selected="1"]`);
       if (!sel) return;
       const which = sel.dataset.which;
+      picks.push({ type:'batting', disc:i, key:k, which });
       const val = Number(((which === 'first' ? d.first : d.second) || {})[k] ?? 0);
       if (k === 'h') {
         const d_ = Number(entry.d||0), t_ = Number(entry.t||0), hr_ = Number(entry.hr||0);
@@ -2995,6 +3041,7 @@ window.bsApplyAndResolve = async function() {
     const sel = banner.querySelector(`.disc-chip[data-disc="${i}"][data-type="score"][data-selected="1"]`);
     if (!sel) return;
     const which = sel.dataset.which;
+    picks.push({ type:'score', disc:i, which });
     pickedAway = which === 'first' ? d.first_away : d.second_away;
     pickedHome = which === 'first' ? d.first_home : d.second_home;
   });
@@ -3018,7 +3065,8 @@ window.bsApplyAndResolve = async function() {
       away_score: finalAway,
       home_score: finalHome,
       has_discrepancy: false,
-      discrepancies: [],
+      discrepancy_resolved: true,
+      discrepancy_picks: picks,
       discrepancy_resolved_at: new Date().toISOString(),
     };
     const bsRef = doc(db, 'box_scores', bsGameId);
@@ -3030,7 +3078,7 @@ window.bsApplyAndResolve = async function() {
       const qs = await getDocs(q2);
       if (!qs.empty) await updateDoc(doc(db, 'box_scores', qs.docs[0].id), update);
     }
-    await updateDoc(doc(db, 'games', bsGameId), { away_score: finalAway, home_score: finalHome, has_discrepancy: false }).catch(() => {});
+    await updateDoc(doc(db, 'games', bsGameId), { away_score: finalAway, home_score: finalHome, has_discrepancy: false, discrepancy_resolved: true }).catch(() => {});
 
     if (bsBoxScore) {
       bsBoxScore.away_lineup = cleanAway;
@@ -3038,10 +3086,11 @@ window.bsApplyAndResolve = async function() {
       bsBoxScore.away_score = finalAway;
       bsBoxScore.home_score = finalHome;
       bsBoxScore.has_discrepancy = false;
-      bsBoxScore.discrepancies = [];
+      bsBoxScore.discrepancy_resolved = true;
+      bsBoxScore.discrepancy_picks = picks;
     }
     const g = GAMES.find(x => x.id === bsGameId);
-    if (g) { g.away_score = finalAway; g.home_score = finalHome; g.has_discrepancy = false; }
+    if (g) { g.away_score = finalAway; g.home_score = finalHome; g.has_discrepancy = false; g.discrepancy_resolved = true; }
 
     toast('Stats resolved');
     bsRerender();
