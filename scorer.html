@@ -6006,6 +6006,17 @@ async function saveBoxScore(isFinal = false) {
 
     // ── Non-final (mid-game checkpoint): simple overwrite, no dual-sub logic ──
     if (!isFinal) {
+      // Guard: never let a mid-game draft clobber a finalized box score.
+      // If either captain has already submitted (first_submitter set) or the
+      // doc is already marked final, skip the checkpoint write entirely.
+      const draftGuardSnap = await getDoc(doc(db, 'box_scores', G.gameId));
+      if (draftGuardSnap.exists()) {
+        const dg = draftGuardSnap.data() || {};
+        if (dg.first_submitter || dg.status === 'final' || dg.home_submission || dg.away_submission) {
+          console.info('Skipping mid-game draft save: finalized box score already exists');
+          return { firstSubmission: false, skippedDraftOverFinal: true };
+        }
+      }
       await setDoc(doc(db, 'box_scores', G.gameId), {
         ...fullData,
         status: 'draft',
