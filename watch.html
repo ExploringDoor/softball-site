@@ -349,7 +349,16 @@ function subscribeList() {
 
 function renderList() {
   const el = document.getElementById('live-games');
-  const merged = mergeGames(gamesSnap);
+  // Filter out stale game_state docs — a game that hasn't been touched in
+  // 6+ hours almost certainly isn't still being scored (a full game is ~2h).
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+  const cutoff = Date.now() - SIX_HOURS_MS;
+  const fresh = gamesSnap.filter(d => {
+    const t = d.data.savedAt?.toMillis?.() ||
+              (d.data.savedAt?.seconds ? d.data.savedAt.seconds * 1000 : 0);
+    return t && t > cutoff;
+  });
+  const merged = mergeGames(fresh);
   if (!merged.length) {
     el.innerHTML = `
       <div class="empty">
@@ -365,7 +374,7 @@ function renderList() {
     const tb = b.data.savedAt?.seconds || b.data.savedAt?.toMillis?.() || 0;
     return tb - ta;
   });
-  el.innerHTML = merged.map(m => renderGameCard(m.id, m.data)).join('');
+  el.innerHTML = merged.map(m => renderGameCard(baseId(m.id), m.data)).join('');
 }
 
 function renderGameCard(gid, g) {
