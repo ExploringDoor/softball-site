@@ -17,7 +17,7 @@
 //
 // Phase 3 (future): push notifications will live here too.
 
-const VERSION = 'dvsl-v4';
+const VERSION = 'dvsl-v5';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
@@ -49,6 +49,7 @@ const CORE_URLS = [
   '/playoffs.html',
   '/rules.html',
   '/photos.html',
+  '/watch.html',
   '/manifest.json',
   '/offline.html',
   '/icons/icon-192.png',

@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Watch Live — DVSL</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#002D72">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DVSL">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+
+  <style>
+    :root{
+      --navy:#002D72; --red:#D50032; --ink:#111; --muted:#667;
+      --line:#e5e8ef; --bg:#f5f7fb; --card:#fff;
+    }
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink);
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+    a{ color:var(--navy); text-decoration:none; }
+
+    /* ── header ─────────────────────────────────────── */
+    header{
+      background:var(--navy); color:#fff;
+      padding: 14px 16px;
+      display:flex; align-items:center; gap:12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.1);
+      position: sticky; top:0; z-index: 10;
+    }
+    header .title{ font-weight:800; letter-spacing:.5px; font-size:18px; }
+    header .live-dot{
+      display:inline-block; width:10px; height:10px; border-radius:50%;
+      background: var(--red); margin-right:6px;
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse{
+      0%,100%{ opacity:1; transform:scale(1); }
+      50%{ opacity:.4; transform:scale(1.25); }
+    }
+    header .back{
+      background: rgba(255,255,255,.15); color:#fff;
+      border: none; padding: 6px 12px; border-radius: 8px;
+      font-size:14px; font-weight:600; cursor:pointer;
+    }
+    header .home-link{
+      margin-left:auto; color:#fff; opacity:.9; font-size:14px;
+    }
+
+    .container{ max-width: 720px; margin: 0 auto; padding: 16px 12px 40px; }
+
+    /* ── list of live games ─────────────────────────── */
+    .section-title{
+      font-size:13px; font-weight:700; letter-spacing:1.5px;
+      color:var(--muted); margin: 6px 4px 10px; text-transform:uppercase;
+    }
+    .game-card{
+      background:var(--card); border-radius:14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.05);
+      padding: 14px 16px; margin-bottom: 12px;
+      display:flex; flex-direction:column; gap:10px;
+      cursor:pointer; border:1px solid var(--line);
+      transition: transform .08s ease;
+    }
+    .game-card:active{ transform:scale(.99); }
+    .game-card .inning-row{
+      display:flex; justify-content:space-between; align-items:center;
+      font-size:12px; font-weight:700; text-transform:uppercase;
+      letter-spacing:1px;
+    }
+    .game-card .live-badge{
+      color:var(--red); display:inline-flex; align-items:center;
+    }
+    .game-card .team-row{
+      display:flex; justify-content:space-between; align-items:center;
+      padding: 2px 0;
+    }
+    .game-card .team{
+      display:flex; align-items:center; gap:10px; flex:1; min-width:0;
+    }
+    .game-card .team img{
+      width:34px; height:34px; border-radius:50%; object-fit:cover;
+      background:#eef; flex-shrink:0;
+    }
+    .game-card .team-name{
+      font-weight:700; font-size:16px; color:var(--ink);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .game-card .score{
+      font-weight:900; font-size:26px; color:var(--ink); min-width:40px;
+      text-align:right; font-variant-numeric: tabular-nums;
+    }
+    .game-card .score.batting{ color:var(--red); }
+
+    .empty{
+      background:var(--card); border-radius:14px; border:1px solid var(--line);
+      padding: 40px 20px; text-align:center; color:var(--muted);
+    }
+    .empty h2{ color:var(--ink); font-size:18px; margin:0 0 6px; }
+    .empty p{ margin:0 0 16px; font-size:14px; line-height:1.5; }
+    .empty a{
+      display:inline-block; background:var(--navy); color:#fff;
+      padding: 10px 18px; border-radius:10px; font-weight:600;
+    }
+
+    /* ── detail view ────────────────────────────────── */
+    #detail{ display:none; }
+    .detail-hero{
+      background: var(--navy); color:#fff;
+      border-radius:16px; padding: 20px 16px 16px; margin-bottom:14px;
+      box-shadow: 0 4px 16px rgba(0,45,114,.2);
+    }
+    .detail-hero .inning{
+      text-align:center; font-size:12px; letter-spacing:2px;
+      font-weight:700; text-transform:uppercase; opacity:.85;
+      margin-bottom: 12px;
+    }
+    .detail-hero .score-row{
+      display:flex; justify-content:space-around; align-items:center;
+      padding: 8px 0 14px;
+    }
+    .detail-hero .side{
+      flex:1; text-align:center;
+    }
+    .detail-hero .side img{
+      width:56px; height:56px; border-radius:50%; object-fit:cover;
+      background:rgba(255,255,255,.1); margin-bottom: 8px;
+    }
+    .detail-hero .side .short{
+      font-size:13px; font-weight:600; opacity:.9; letter-spacing:1px;
+    }
+    .detail-hero .side .score{
+      font-size:48px; font-weight:900; line-height:1;
+      margin-top:4px; font-variant-numeric: tabular-nums;
+    }
+    .detail-hero .side.batting::after{
+      content:"⚾"; font-size:11px; display:block; opacity:.8; margin-top:2px;
+    }
+    .detail-hero .vs{
+      font-size:20px; font-weight:700; opacity:.6; padding: 0 6px;
+    }
+
+    .panel{
+      background:var(--card); border:1px solid var(--line);
+      border-radius:14px; padding: 14px; margin-bottom:12px;
+    }
+    .panel h3{
+      margin: 0 0 10px; font-size:12px; letter-spacing:1.5px;
+      text-transform:uppercase; color:var(--muted); font-weight:700;
+    }
+
+    /* batter / count / outs panel */
+    .bc-grid{
+      display:grid; grid-template-columns: 1fr auto; gap:12px; align-items:center;
+    }
+    .bc-batter .label{ font-size:11px; color:var(--muted); margin-bottom:2px; }
+    .bc-batter .name{ font-weight:700; font-size:17px; color:var(--ink); }
+    .bc-count{ text-align:right; }
+    .bc-count .bs{ font-weight:800; font-size:22px; font-variant-numeric:tabular-nums; }
+    .bc-count .outs{
+      display:inline-flex; gap:3px; margin-top:4px;
+    }
+    .bc-count .out-dot{
+      width:12px; height:12px; border-radius:50%;
+      background:#ddd; border:1px solid #bbb;
+    }
+    .bc-count .out-dot.on{ background:var(--red); border-color:var(--red); }
+
+    /* diamond for base runners */
+    .diamond-wrap{ display:flex; justify-content:center; padding: 6px 0; }
+    .diamond{
+      position:relative; width: 180px; height: 180px;
+    }
+    .base{
+      position:absolute; width:34px; height:34px; background:#fff;
+      border:2px solid #999; transform: rotate(45deg);
+    }
+    .base.home{ left: 73px; top: 140px; background:#fff; }
+    .base.first{ left: 140px; top: 73px; }
+    .base.second{ left: 73px; top: 6px; }
+    .base.third{ left: 6px; top: 73px; }
+    .base.on{ background: var(--red); border-color: var(--red); box-shadow: 0 0 12px var(--red); }
+
+    /* line score */
+    .linescore{ overflow-x:auto; }
+    .linescore table{
+      width:100%; border-collapse: collapse; font-size:13px;
+      font-variant-numeric: tabular-nums;
+    }
+    .linescore th, .linescore td{
+      padding: 6px 4px; text-align:center; border-bottom:1px solid var(--line);
+    }
+    .linescore th:first-child, .linescore td:first-child{
+      text-align:left; font-weight:700; padding-left: 8px; min-width: 60px;
+    }
+    .linescore .rhe{ font-weight:800; background:#fafbfd; }
+
+    /* play log */
+    .play-log{ max-height: 400px; overflow-y:auto; }
+    .play{
+      padding: 10px 0; border-bottom:1px solid var(--line);
+      display:grid; grid-template-columns: auto 1fr; gap:10px;
+    }
+    .play:last-child{ border-bottom:none; }
+    .play .inning-tag{
+      font-size:11px; font-weight:700; color:var(--muted);
+      letter-spacing:1px; text-transform:uppercase; white-space:nowrap;
+      padding-top:2px;
+    }
+    .play .body{ font-size:14px; line-height:1.4; }
+    .play .result{ font-weight:700; color:var(--navy); }
+    .play .desc{ color:#444; }
+    .play .sc{ display:inline-block; margin-left:6px; padding:1px 6px;
+      background:#eef; color:var(--navy); border-radius:4px; font-size:12px;
+      font-weight:700; font-variant-numeric:tabular-nums; }
+
+    .updated{
+      text-align:center; font-size:11px; color:var(--muted); margin-top:12px;
+    }
+
+    /* small */
+    @media (max-width: 420px){
+      .game-card .score{ font-size:22px; }
+      .detail-hero .side .score{ font-size:40px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button class="back" id="backBtn" style="display:none;" onclick="showList()">← Back</button>
+    <div class="title"><span class="live-dot"></span>Watch Live</div>
+    <a class="home-link" href="/">DVSL</a>
+  </header>
+
+  <div class="container">
+    <!-- list view -->
+    <div id="list">
+      <div class="section-title">Live now</div>
+      <div id="live-games"></div>
+    </div>
+
+    <!-- detail view -->
+    <div id="detail"></div>
+  </div>
+
+<script type="module">
+import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import {
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  getFirestore, collection, doc, getDocs, onSnapshot, query
+} from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const FB_CFG = {
+  apiKey:"AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain:"dvsl-292dd.firebaseapp.com",
+  projectId:"dvsl-292dd",
+  storageBucket:"dvsl-292dd.firebasestorage.app",
+  messagingSenderId:"145862305559",
+  appId:"1:145862305559:web:153ec455bad57e17517952"
+};
+const app = getApps().length ? getApp() : initializeApp(FB_CFG);
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+} catch (e) { db = getFirestore(app); }
+
+// ── state ─────────────────────────────────────────────
+let currentGameId = null;
+let gameListUnsub = null;
+let gameDetailUnsub = null;
+let gamesSnap = [];   // raw snap docs from current listen
+let teamsCache = {};  // id -> team doc (for names/colors if needed)
+
+// ── helpers ───────────────────────────────────────────
+// Doc keys: either "<gameId>", "<gameId>_away", or "<gameId>_home".
+// We group by base id, then pick the doc with the latest savedAt.
+function baseId(key) {
+  return key.replace(/_(away|home)$/, '');
+}
+
+function mergeGames(docs) {
+  const groups = {};
+  docs.forEach(d => {
+    const gid = baseId(d.id);
+    if (!groups[gid] || scoreNewer(d, groups[gid])) groups[gid] = d;
+  });
+  return Object.values(groups);
+}
+function scoreNewer(a, b) {
+  const ta = a.data.savedAt?.seconds || a.data.savedAt?.toMillis?.() || 0;
+  const tb = b.data.savedAt?.seconds || b.data.savedAt?.toMillis?.() || 0;
+  return ta > tb;
+}
+
+function logoUrl(teamId) {
+  if (!teamId) return '/logos/glove.png';
+  return `/logos/${teamId.toLowerCase()}.svg`;
+}
+function onLogoError(img) {
+  if (img.dataset.tried === 'png') { img.style.visibility='hidden'; return; }
+  img.dataset.tried = 'png';
+  img.src = img.src.replace(/\.svg$/, '.png');
+}
+window.onLogoError = onLogoError;
+
+function inningLabel(g) {
+  const half = (g.half || 'top').toLowerCase();
+  const arrow = half === 'top' ? '▲' : '▼';
+  return `${arrow} ${half === 'top' ? 'Top' : 'Bot'} ${g.inning || 1}`;
+}
+function battingSide(g) {
+  return (g.half || 'top').toLowerCase() === 'top' ? 'away' : 'home';
+}
+
+// ── list view ─────────────────────────────────────────
+function showList() {
+  currentGameId = null;
+  if (gameDetailUnsub) { gameDetailUnsub(); gameDetailUnsub = null; }
+  document.getElementById('detail').style.display = 'none';
+  document.getElementById('list').style.display = 'block';
+  document.getElementById('backBtn').style.display = 'none';
+}
+window.showList = showList;
+
+function subscribeList() {
+  if (gameListUnsub) gameListUnsub();
+  const col = collection(db, 'game_states');
+  gameListUnsub = onSnapshot(col, (snap) => {
+    gamesSnap = [];
+    snap.forEach(d => gamesSnap.push({ id: d.id, data: d.data() }));
+    renderList();
+  }, (err) => {
+    console.warn('watch list error:', err);
+    renderOffline();
+  });
+}
+
+function renderList() {
+  const el = document.getElementById('live-games');
+  const merged = mergeGames(gamesSnap);
+  if (!merged.length) {
+    el.innerHTML = `
+      <div class="empty">
+        <h2>No games being scored right now</h2>
+        <p>When a captain or the commissioner starts live-scoring a game, it'll appear here — refreshing in real time.</p>
+        <a href="/schedule.html">See upcoming games →</a>
+      </div>`;
+    return;
+  }
+  // Sort by savedAt desc
+  merged.sort((a,b) => {
+    const ta = a.data.savedAt?.seconds || a.data.savedAt?.toMillis?.() || 0;
+    const tb = b.data.savedAt?.seconds || b.data.savedAt?.toMillis?.() || 0;
+    return tb - ta;
+  });
+  el.innerHTML = merged.map(m => renderGameCard(m.id, m.data)).join('');
+}
+
+function renderGameCard(gid, g) {
+  const away = g.awayTeam || {};
+  const home = g.homeTeam || {};
+  const battingIsAway = battingSide(g) === 'away';
+  return `
+    <div class="game-card" onclick="showDetail('${gid}')">
+      <div class="inning-row">
+        <span class="live-badge">● LIVE</span>
+        <span>${inningLabel(g)}</span>
+      </div>
+      <div class="team-row">
+        <div class="team">
+          <img src="${logoUrl(away.id)}" alt="${away.short||''}" onerror="onLogoError(this)">
+          <span class="team-name">${away.name || away.short || 'Away'}</span>
+        </div>
+        <div class="score ${battingIsAway?'batting':''}">${g.awayScore ?? 0}</div>
+      </div>
+      <div class="team-row">
+        <div class="team">
+          <img src="${logoUrl(home.id)}" alt="${home.short||''}" onerror="onLogoError(this)">
+          <span class="team-name">${home.name || home.short || 'Home'}</span>
+        </div>
+        <div class="score ${!battingIsAway?'batting':''}">${g.homeScore ?? 0}</div>
+      </div>
+    </div>`;
+}
+
+function renderOffline() {
+  document.getElementById('live-games').innerHTML = `
+    <div class="empty">
+      <h2>Can't reach live scores</h2>
+      <p>You may be offline. We'll reconnect automatically.</p>
+    </div>`;
+}
+
+// ── detail view ───────────────────────────────────────
+function showDetail(gid) {
+  currentGameId = gid;
+  document.getElementById('list').style.display = 'none';
+  document.getElementById('detail').style.display = 'block';
+  document.getElementById('backBtn').style.display = 'inline-block';
+  subscribeDetail(gid);
+}
+window.showDetail = showDetail;
+
+function subscribeDetail(gid) {
+  if (gameDetailUnsub) gameDetailUnsub();
+  // Listen to whole collection so we can merge _away/_home sides for this gid.
+  const col = collection(db, 'game_states');
+  gameDetailUnsub = onSnapshot(col, (snap) => {
+    const matching = [];
+    snap.forEach(d => {
+      if (baseId(d.id) === gid) matching.push({ id: d.id, data: d.data() });
+    });
+    if (!matching.length) {
+      renderDetailEnded();
+      return;
+    }
+    // Pick freshest
+    matching.sort((a,b) => {
+      const ta = a.data.savedAt?.seconds || a.data.savedAt?.toMillis?.() || 0;
+      const tb = b.data.savedAt?.seconds || b.data.savedAt?.toMillis?.() || 0;
+      return tb - ta;
+    });
+    renderDetail(gid, matching[0].data);
+  });
+}
+
+function renderDetailEnded() {
+  document.getElementById('detail').innerHTML = `
+    <div class="empty">
+      <h2>This game has ended</h2>
+      <p>Final scores and box scores will appear on the schedule page.</p>
+      <a href="#" onclick="showList();return false;">← Back to live games</a>
+    </div>`;
+}
+
+function currentBatterName(g) {
+  const side = battingSide(g);
+  const lineup = (g.lineups && g.lineups[side]) || [];
+  const idxObj = g.lineupIdx || {};
+  const i = (idxObj[side] ?? 0) % Math.max(lineup.length, 1);
+  const b = lineup[i];
+  if (!b) return '—';
+  return `#${b.num || '?'} ${b.name || 'Batter'}`;
+}
+
+function renderDetail(gid, g) {
+  const away = g.awayTeam || {};
+  const home = g.homeTeam || {};
+  const battingIsAway = battingSide(g) === 'away';
+  const outs = g.outs ?? 0;
+  const balls = g.balls ?? 0;
+  const strikes = g.strikes ?? 0;
+  const r = g.runners || {};
+
+  // Detect if it's been more than 5 min since last update
+  const savedMs = g.savedAt?.toMillis?.() || (g.savedAt?.seconds ? g.savedAt.seconds*1000 : 0);
+  const staleMin = savedMs ? Math.round((Date.now() - savedMs) / 60000) : null;
+  const staleNote = (staleMin != null && staleMin >= 5)
+    ? `Last update ${staleMin} min ago — scoring may be paused`
+    : 'Updates live as the scorer taps';
+
+  const lineScoreHTML = renderLineScore(g);
+  const playLogHTML = renderPlayLog(g);
+
+  document.getElementById('detail').innerHTML = `
+    <div class="detail-hero">
+      <div class="inning">${inningLabel(g)} &nbsp;·&nbsp; ${outs} out${outs===1?'':'s'}</div>
+      <div class="score-row">
+        <div class="side ${battingIsAway?'batting':''}">
+          <img src="${logoUrl(away.id)}" alt="${away.short||''}" onerror="onLogoError(this)">
+          <div class="short">${away.short || away.name || 'AWY'}</div>
+          <div class="score">${g.awayScore ?? 0}</div>
+        </div>
+        <div class="vs">–</div>
+        <div class="side ${!battingIsAway?'batting':''}">
+          <img src="${logoUrl(home.id)}" alt="${home.short||''}" onerror="onLogoError(this)">
+          <div class="short">${home.short || home.name || 'HME'}</div>
+          <div class="score">${g.homeScore ?? 0}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>At Bat</h3>
+      <div class="bc-grid">
+        <div class="bc-batter">
+          <div class="label">Now batting</div>
+          <div class="name">${currentBatterName(g)}</div>
+        </div>
+        <div class="bc-count">
+          <div class="bs">${balls}-${strikes}</div>
+          <div class="outs">
+            <span class="out-dot ${outs>=1?'on':''}"></span>
+            <span class="out-dot ${outs>=2?'on':''}"></span>
+            <span class="out-dot ${outs>=3?'on':''}"></span>
+          </div>
+        </div>
+      </div>
+      <div class="diamond-wrap">
+        <div class="diamond">
+          <div class="base second ${r[2]?'on':''}"></div>
+          <div class="base third ${r[3]?'on':''}"></div>
+          <div class="base first ${r[1]?'on':''}"></div>
+          <div class="base home"></div>
+        </div>
+      </div>
+    </div>
+
+    ${lineScoreHTML}
+    ${playLogHTML}
+
+    <div class="updated">${staleNote}</div>
+  `;
+}
+
+function renderLineScore(g) {
+  const ls = g.linescores || {};
+  const awayLine = ls.away || [];
+  const homeLine = ls.home || [];
+  const maxInning = Math.max(awayLine.length, homeLine.length, g.inning || 1, 7);
+  let head = '<th></th>';
+  for (let i=1; i<=maxInning; i++) head += `<th>${i}</th>`;
+  head += '<th class="rhe">R</th>';
+  // Optionally H/E if tracked
+  const awaySum = (awayLine || []).reduce((s,x)=>s+(Number(x)||0),0);
+  const homeSum = (homeLine || []).reduce((s,x)=>s+(Number(x)||0),0);
+  const cells = (arr, total, shortName) => {
+    let html = `<td>${shortName}</td>`;
+    for (let i=0; i<maxInning; i++){
+      const v = arr[i];
+      html += `<td>${v==null?'–':v}</td>`;
+    }
+    html += `<td class="rhe">${total}</td>`;
+    return html;
+  };
+  return `
+    <div class="panel linescore">
+      <h3>Line Score</h3>
+      <table>
+        <thead><tr>${head}</tr></thead>
+        <tbody>
+          <tr>${cells(awayLine, g.awayScore ?? awaySum, g.awayTeam?.short || 'AWY')}</tr>
+          <tr>${cells(homeLine, g.homeScore ?? homeSum, g.homeTeam?.short || 'HME')}</tr>
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderPlayLog(g) {
+  const log = g.playLog || [];
+  if (!log.length) {
+    return `<div class="panel"><h3>Play-by-Play</h3><div style="color:var(--muted);font-size:14px;">No plays yet.</div></div>`;
+  }
+  const rows = log.slice(0, 40).map(p => `
+    <div class="play">
+      <div class="inning-tag">${p.inning || ''}<br>${p.team || ''}</div>
+      <div class="body">
+        <span class="result">${p.result || ''}</span>
+        ${p.desc ? `<span class="desc">— ${p.desc}</span>` : ''}
+        ${p.player ? `<div style="color:var(--muted);font-size:12px;margin-top:2px;">${p.player}</div>`:''}
+        ${p.score ? `<span class="sc">${p.score}</span>` : ''}
+      </div>
+    </div>`).join('');
+  return `<div class="panel"><h3>Play-by-Play</h3><div class="play-log">${rows}</div></div>`;
+}
+
+// ── deep-link support: /watch.html?g=<gameId> ────────
+const params = new URLSearchParams(location.search);
+const qGame = params.get('g');
+
+// start the feed
+subscribeList();
+if (qGame) showDetail(qGame);
+</script>
+</body>
+</html>
