@@ -18,21 +18,22 @@
 </div>
 
 <div style="margin-bottom:20px">
-  <label style="font-size:12px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4)">Google OAuth Client ID <span style="color:#22c55e;text-transform:none;font-weight:500;font-size:11px" id="client-id-status"></span></label>
-  <input type="text" id="clientId" style="width:100%;padding:10px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:14px;margin-top:4px" placeholder="xxxx.apps.googleusercontent.com" value="" oninput="saveClientId()">
-  <div style="font-size:11px;color:rgba(0,0,0,.4);margin-top:4px">Saved in this browser — you only need to paste it once.</div>
+  <label style="font-size:12px;font-weight:700;text-transform:uppercase;color:rgba(0,0,0,.4)">Google OAuth Client ID <span style="color:#22c55e;text-transform:none;font-weight:500;font-size:11px" id="client-id-status">✓ pre-filled</span></label>
+  <input type="text" id="clientId" style="width:100%;padding:10px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:14px;margin-top:4px" placeholder="xxxx.apps.googleusercontent.com" value="145862305559-jsrt1quklhnkl6mm104gkis9s3hg0okn.apps.googleusercontent.com" oninput="saveClientId()">
+  <div style="font-size:11px;color:rgba(0,0,0,.4);margin-top:4px">Pre-filled for the DVSL site. Safe to change; localStorage will remember your edit.</div>
 </div>
 
 <script>
-// Persist the OAuth client ID in localStorage so the commissioner doesn't
-// have to paste it on every sync. Client IDs are public by design (they
-// ship in every browser that uses Google Sign-In), so localStorage is fine.
+// OAuth Client IDs are public by design — they ship in every browser that
+// uses Google Sign-In. The default above is DVSL's. If the commissioner
+// ever edits the field, we remember that override in localStorage so it
+// sticks across sessions.
 (function restoreClientId(){
   try {
     const saved = localStorage.getItem('dvsl_gcal_client_id');
     if (saved) {
       document.getElementById('clientId').value = saved;
-      document.getElementById('client-id-status').textContent = '✓ remembered';
+      document.getElementById('client-id-status').textContent = '✓ custom (remembered)';
     }
   } catch(_) {}
 })();
@@ -41,7 +42,7 @@ window.saveClientId = function() {
     const v = document.getElementById('clientId').value.trim();
     if (v) {
       localStorage.setItem('dvsl_gcal_client_id', v);
-      document.getElementById('client-id-status').textContent = '✓ remembered';
+      document.getElementById('client-id-status').textContent = '✓ custom (remembered)';
     } else {
       localStorage.removeItem('dvsl_gcal_client_id');
       document.getElementById('client-id-status').textContent = '';
