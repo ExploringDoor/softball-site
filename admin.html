@@ -2216,29 +2216,68 @@ function renderBoxScore(awayName, homeName, g) {
       </div>
       ${((bsBoxScore?.has_discrepancy || bsBoxScore?.discrepancy_resolved) && bsBoxScore?.discrepancies?.length) ? (() => {
         const discs = bsBoxScore.discrepancies || [];
-        const resolved = !!bsBoxScore.discrepancy_resolved && !bsBoxScore.has_discrepancy;
         const picks = Array.isArray(bsBoxScore.discrepancy_picks) ? bsBoxScore.discrepancy_picks : [];
-        const pickFor = (i, key) => picks.find(p => p.disc === i && (key ? p.key === key : p.type === 'score'))?.which;
+        const pickFor = (i, key) => picks.find(p => p.disc === i && (key ? p.key === key : p.type === 'score'));
         const firstSide = discs[0]?.first_submitter || 'away';
         const awayIsFirst = firstSide === 'away';
         const whichFor = side => (side === 'away' ? (awayIsFirst ? 'first' : 'second') : (awayIsFirst ? 'second' : 'first'));
         const battingDs = discs.map((d, i) => ({d, i})).filter(x => x.d.type === 'batting');
         const scoreEntry = discs.map((d, i) => ({d, i})).find(x => x.d.type === 'score');
         const statKeys = ['ab','h','r','rbi','bb'];
-        const chipOn  = resolved ? 'background:#16a34a;color:#fff;border:2px solid #166534;opacity:1' : 'background:#f59e0b;color:#fff;border:2px solid #d97706;opacity:1';
-        const chipOff = resolved ? 'background:#fff;color:#9ca3af;border:2px solid #e5e7eb;opacity:.55;text-decoration:line-through' : 'background:#fff;color:#78350f;border:2px solid #fde68a;opacity:.55';
-        const chipCursor = resolved ? 'default' : 'pointer';
-        const chipClick = resolved ? '' : 'onclick="bsPickStat(this)"';
-        const statChip = (discIdx, key, which, val, isOn) => `<button class="disc-chip" data-disc="${discIdx}" data-key="${key}" data-which="${which}" data-selected="${isOn?1:0}" ${chipClick} ${resolved?'disabled':''} style="display:inline-block;padding:3px 10px;border-radius:12px;margin:2px 3px 0 0;font-size:11px;font-weight:700;cursor:${chipCursor};transition:all .15s;${isOn?chipOn:chipOff}"><strong>${key.toUpperCase()}</strong> ${val}</button>`;
+
+        // Count diff slots across all discs vs how many have picks
+        let totalSlots = 0;
+        discs.forEach((d, i) => {
+          if (d.type === 'batting') totalSlots += statKeys.filter(k => ((d.first||{})[k]||0) !== ((d.second||{})[k]||0)).length;
+          else if (d.type === 'score') totalSlots += 1;
+        });
+        const pickedCount = picks.length;
+        const fullyResolved = !!bsBoxScore.discrepancy_resolved && !bsBoxScore.has_discrepancy;
+        const someResolved = pickedCount > 0 && !fullyResolved;
+
+        // Chip style helpers
+        const stGreen       = 'background:#16a34a;color:#fff;border:2px solid #166534;opacity:1';
+        const stStruck      = 'background:#fff;color:#9ca3af;border:2px solid #e5e7eb;opacity:.6;text-decoration:line-through';
+        const stYellowOn    = 'background:#f59e0b;color:#fff;border:2px solid #d97706;opacity:1';
+        const stYellowOff   = 'background:#fff;color:#78350f;border:2px solid #fde68a;opacity:.55';
+        const chipBase      = 'display:inline-block;padding:3px 10px;border-radius:12px;margin:2px 3px 0 0;font-size:11px;font-weight:700;transition:all .15s;';
+        const iconBtn       = 'display:inline-block;padding:3px 7px;border-radius:10px;margin:2px 3px 0 0;font-size:11px;font-weight:700;cursor:pointer;background:#fff;color:#78350f;border:1px dashed #d97706;';
+
+        // Render one stat-key chip group for a given column (away/home)
+        const renderStatChip = (discIdx, key, d, whichCol, valCol) => {
+          const pick = pickFor(discIdx, key);
+          if (pick) {
+            if (pick.which === 'custom') {
+              // Show custom value once (same in both cols) with un-pick icon
+              return `<button class="disc-chip" data-disc="${discIdx}" data-key="${key}" disabled style="${chipBase}cursor:default;${stGreen}" title="Commissioner override"><strong>${key.toUpperCase()}</strong> ${pick.custom_value ?? 0}</button>` +
+                     `<button onclick="bsClearPick(${discIdx},'${key}')" style="${iconBtn}" title="Re-open this stat">↺</button>`;
+            }
+            const isWinner = pick.which === whichCol;
+            const style = isWinner ? stGreen : stStruck;
+            return `<button class="disc-chip" data-disc="${discIdx}" data-key="${key}" disabled style="${chipBase}cursor:default;${style}"><strong>${key.toUpperCase()}</strong> ${valCol}</button>` +
+                   (isWinner ? `<button onclick="bsClearPick(${discIdx},'${key}')" style="${iconBtn}" title="Re-open this stat">↺</button>` : '');
+          }
+          // Unpicked: A/B buttons are click-to-pick
+          const defaultWhich = whichFor(d.side);
+          const isDefault = whichCol === defaultWhich;
+          const style = isDefault ? stYellowOn : stYellowOff;
+          return `<button class="disc-chip" data-disc="${discIdx}" data-key="${key}" data-which="${whichCol}" onclick="bsSetPick(${discIdx},'${key}','${whichCol}')" style="${chipBase}cursor:pointer;${style}"><strong>${key.toUpperCase()}</strong> ${valCol}</button>`;
+        };
+
+        // Custom "✎" button renders only in the away column (to avoid duplication)
+        const renderCustomBtn = (discIdx, key, firstVal, secondVal) => {
+          if (pickFor(discIdx, key)) return '';
+          return `<button onclick="bsPromptCustom(${discIdx},'${key}',${Number(firstVal)||0},${Number(secondVal)||0})" style="${iconBtn}" title="Enter custom value">✎</button>`;
+        };
+
         const buildBattingCol = side => {
           const which = whichFor(side);
           const rows = battingDs.map(({d, i}) => {
             const data = d[which] || {};
             const diffKeys = statKeys.filter(k => ((d.first||{})[k] || 0) !== ((d.second||{})[k] || 0));
-            const defaultWhich = whichFor(d.side);
             const chips = diffKeys.map(k => {
-              const winner = resolved ? (pickFor(i, k) || defaultWhich) : defaultWhich;
-              return statChip(i, k, which, data[k] ?? 0, winner === which);
+              const customBtn = side === 'away' ? renderCustomBtn(i, k, (d.first||{})[k]||0, (d.second||{})[k]||0) : '';
+              return renderStatChip(i, k, d, which, data[k] ?? 0) + customBtn;
             }).join('');
             return `<div style="padding:8px 10px;background:#fff;border:1px solid #fbbf24;border-radius:6px;margin-bottom:6px">
               <div style="font-weight:700;font-size:13px;color:#1a1a1a">${d.player} <span style="font-size:10px;color:#92400e;text-transform:uppercase">(${d.side})</span></div>
@@ -2247,38 +2286,71 @@ function renderBoxScore(awayName, homeName, g) {
           }).join('');
           return rows || '<div style="font-size:11px;color:#999;padding:4px">—</div>';
         };
+
         let scoreHtml = '';
         if (scoreEntry) {
           const { d, i } = scoreEntry;
-          const winScore = resolved ? (pickFor(i) || 'first') : 'first';
-          const pickOn  = resolved ? 'background:#dcfce7;border:2px solid #166534;opacity:1' : 'background:#fef3c7;border:2px solid #d97706;opacity:1';
-          const pickOff = resolved ? 'background:#fff;border:2px solid #e5e7eb;opacity:.55' : 'background:#fff;border:2px solid #fde68a;opacity:.55';
-          const scoreClick = resolved ? '' : 'onclick="bsPickStat(this)"';
-          const scoreCursor = resolved ? 'default' : 'pointer';
-          const scoreBtn = (which, label, a, h, isOn) => `<button class="disc-chip" data-disc="${i}" data-type="score" data-which="${which}" data-selected="${isOn?1:0}" ${scoreClick} ${resolved?'disabled':''} style="flex:1;padding:10px 14px;border-radius:8px;cursor:${scoreCursor};text-align:left;transition:all .15s;${isOn?pickOn:pickOff}">
-            <div style="font-size:10px;font-weight:800;color:${resolved&&isOn?'#166534':'#92400e'};text-transform:uppercase;letter-spacing:.06em">${label} said</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:24px;color:${resolved&&!isOn?'#9ca3af':'#1a1a1a'};line-height:1.1;${resolved&&!isOn?'text-decoration:line-through':''}">${a}–${h}</div>
-          </button>`;
+          const pick = pickFor(i);
+          const pickCardOn  = 'background:#dcfce7;border:2px solid #166534;opacity:1';
+          const pickCardStruck = 'background:#fff;border:2px solid #e5e7eb;opacity:.6';
+          const pickCardYellowOn  = 'background:#fef3c7;border:2px solid #d97706;opacity:1';
+          const pickCardYellowOff = 'background:#fff;border:2px solid #fde68a;opacity:.55';
+          const headerColor = pick ? '#166534' : '#92400e';
+
+          const renderScoreCard = (which, label, a, h) => {
+            if (pick) {
+              if (pick.which === 'custom') return '';
+              const isWin = pick.which === which;
+              const cardStyle = isWin ? pickCardOn : pickCardStruck;
+              return `<button disabled class="disc-chip" style="flex:1;padding:10px 14px;border-radius:8px;cursor:default;text-align:left;${cardStyle}">
+                <div style="font-size:10px;font-weight:800;color:${isWin?'#166534':'#92400e'};text-transform:uppercase;letter-spacing:.06em">${label} said</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:24px;color:${isWin?'#1a1a1a':'#9ca3af'};line-height:1.1;${isWin?'':'text-decoration:line-through'}">${a}–${h}</div>
+              </button>`;
+            }
+            const style = which === 'first' ? pickCardYellowOn : pickCardYellowOff;
+            return `<button onclick="bsSetScorePick(${i},'${which}')" class="disc-chip" style="flex:1;padding:10px 14px;border-radius:8px;cursor:pointer;text-align:left;${style}">
+              <div style="font-size:10px;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.06em">${label} said</div>
+              <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:24px;color:#1a1a1a;line-height:1.1">${a}–${h}</div>
+            </button>`;
+          };
+
+          const customScoreBlock = (pick && pick.which === 'custom')
+            ? `<div style="flex:1;padding:10px 14px;border-radius:8px;${pickCardOn};text-align:left">
+                 <div style="font-size:10px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.06em">Commissioner set</div>
+                 <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:24px;color:#1a1a1a;line-height:1.1">${pick.custom_away ?? 0}–${pick.custom_home ?? 0}</div>
+               </div>`
+            : '';
+
+          const rightSide = pick
+            ? `<button onclick="bsClearScorePick(${i})" style="${iconBtn}" title="Re-open score">↺</button>`
+            : `<button onclick="bsPromptCustomScore(${i},${Number(d.first_away)||0},${Number(d.first_home)||0})" style="${iconBtn}" title="Enter custom final score">✎</button>`;
+
           scoreHtml = `<div style="margin-bottom:12px;padding:10px 12px;background:rgba(255,255,255,.4);border-radius:8px">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:${resolved?'#166534':'#92400e'};text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Final Score${resolved?'':' — pick one pair'}</div>
-            <div style="display:flex;gap:8px">
-              ${scoreBtn('first', (d.first_submitter||'first').toUpperCase()+' captain', d.first_away ?? '?', d.first_home ?? '?', winScore === 'first')}
-              ${scoreBtn('second', (d.second_submitter||'second').toUpperCase()+' captain', d.second_away ?? '?', d.second_home ?? '?', winScore === 'second')}
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:${headerColor};text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Final Score${pick?'':' — click to pick or ✎ for custom'}</div>
+            <div style="display:flex;gap:8px;align-items:center">
+              ${customScoreBlock || renderScoreCard('first', (d.first_submitter||'first').toUpperCase()+' captain', d.first_away ?? '?', d.first_home ?? '?')}
+              ${customScoreBlock ? '' : renderScoreCard('second', (d.second_submitter||'second').toUpperCase()+' captain', d.second_away ?? '?', d.second_home ?? '?')}
+              ${rightSide}
             </div>
           </div>`;
         }
-        const bannerBg = resolved ? '#f0fdf4' : '#fef3c7';
-        const bannerBorder = resolved ? '#166534' : '#d97706';
-        const bannerTitleColor = resolved ? '#166534' : '#92400e';
-        const bannerTitle = resolved
+
+        // Banner header reflects full/partial/none state
+        const bannerBg     = fullyResolved ? '#f0fdf4' : '#fef3c7';
+        const bannerBorder = fullyResolved ? '#166534' : '#d97706';
+        const titleColor   = fullyResolved ? '#166534' : '#92400e';
+        const bannerTitle = fullyResolved
           ? `✓ Stats Resolved by Commissioner${bsBoxScore.discrepancy_resolved_at ? ' — ' + new Date(bsBoxScore.discrepancy_resolved_at).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : ''}`
-          : '⚠ Stats Differ — click the value you want to keep, then Apply';
-        const bannerSubtitle = resolved
+          : someResolved
+            ? `⚠ Stats Differ — ${pickedCount} of ${totalSlots} resolved`
+            : '⚠ Stats Differ — click a chip to pick, ✎ to type a custom value';
+        const bannerSubtitle = fullyResolved
           ? 'Green values were accepted as final. Strikethrough values were overruled.'
-          : "Defaults follow per-side authority (each team's own captain). Click a different chip to override.";
+          : 'Each click persists immediately. ↺ next to a green chip re-opens just that stat.';
+
         return `<div id="bs-disc-banner" style="background:${bannerBg};border:1px solid ${bannerBorder};border-radius:8px;padding:14px 16px;margin-bottom:14px">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;color:${bannerTitleColor};margin-bottom:4px">${bannerTitle}</div>
-          <div style="font-size:11px;color:${resolved?'#166534':'#78350f'};margin-bottom:12px">${bannerSubtitle}</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;color:${titleColor};margin-bottom:4px">${bannerTitle}</div>
+          <div style="font-size:11px;color:${fullyResolved?'#166534':'#78350f'};margin-bottom:12px">${bannerSubtitle}</div>
           ${scoreHtml}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div>
@@ -2290,9 +2362,9 @@ function renderBoxScore(awayName, homeName, g) {
               ${buildBattingCol('home')}
             </div>
           </div>
-          ${resolved
-            ? `<button onclick="bsReopenDiscrepancy()" style="margin-top:12px;background:#fff;color:#166534;border:1px solid #166534;border-radius:6px;padding:7px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;cursor:pointer">↺ Re-open for editing</button>`
-            : `<button onclick="bsApplyAndResolve()" style="margin-top:12px;background:#166534;color:#fff;border:none;border-radius:6px;padding:9px 18px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;cursor:pointer;letter-spacing:.04em">✓ APPLY &amp; RESOLVE</button>`}
+          ${fullyResolved
+            ? `<button onclick="bsReopenDiscrepancy()" style="margin-top:12px;background:#fff;color:#166534;border:1px solid #166534;border-radius:6px;padding:7px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;cursor:pointer">↺ Re-open ALL for editing</button>`
+            : ''}
         </div>`;
       })() : ''}
       <!-- Card: BOX SCORE header + scoreboard + tabs + panels -->
@@ -2971,147 +3043,232 @@ window.bsClearDiscrepancy = async function() {
   } catch(e) { toast('Failed: '+e.message, 'error'); }
 };
 
-// ── Re-open a resolved discrepancy for further editing ────────────
+// ── Re-open ALL picks for editing (clears every pick in one shot) ─
 window.bsReopenDiscrepancy = async function() {
   if (!bsGameId || !bsBoxScore) return;
+  if (!confirm('Re-open every resolved pick? Admin will pick each stat again.')) return;
   try {
+    const update = {
+      has_discrepancy: true,
+      discrepancy_resolved: false,
+      discrepancy_partial: false,
+      discrepancy_picks: [],
+    };
     const bsRef = doc(db, 'box_scores', bsGameId);
     const bsSnap = await getDoc(bsRef);
-    const update = { has_discrepancy: true, discrepancy_resolved: false };
     if (bsSnap.exists()) await updateDoc(bsRef, update);
     else {
       const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
       const qs = await getDocs(q2);
       if (!qs.empty) await updateDoc(doc(db, 'box_scores', qs.docs[0].id), update);
     }
-    await updateDoc(doc(db, 'games', bsGameId), update).catch(() => {});
-    if (bsBoxScore) { bsBoxScore.has_discrepancy = true; bsBoxScore.discrepancy_resolved = false; }
+    await updateDoc(doc(db, 'games', bsGameId), { has_discrepancy: true, discrepancy_resolved: false, discrepancy_partial: false }).catch(() => {});
+    if (bsBoxScore) Object.assign(bsBoxScore, update);
     const g = GAMES.find(x => x.id === bsGameId);
-    if (g) { g.has_discrepancy = true; g.discrepancy_resolved = false; }
-    toast('Re-opened — pick again and Apply');
+    if (g) { g.has_discrepancy = true; g.discrepancy_resolved = false; g.discrepancy_partial = false; }
+    toast('All picks re-opened');
     bsRerender();
   } catch(e) { toast('Failed: '+e.message, 'error'); }
 };
 
-// ── Pick a stat value in the discrepancy banner ───────────────────
-window.bsPickStat = function(btn) {
-  const banner = document.getElementById('bs-disc-banner');
-  if (!banner) return;
-  const disc = btn.dataset.disc;
-  const isScore = btn.dataset.type === 'score';
-  const key = btn.dataset.key || '';
-  const selector = isScore
-    ? `.disc-chip[data-disc="${disc}"][data-type="score"]`
-    : `.disc-chip[data-disc="${disc}"][data-key="${key}"]`;
-  const chipOn  = 'background:#f59e0b;color:#fff;border:2px solid #d97706;opacity:1';
-  const chipOff = 'background:#fff;color:#78350f;border:2px solid #fde68a;opacity:.55';
-  const pickOn  = 'background:#fef3c7;border:2px solid #d97706;opacity:1';
-  const pickOff = 'background:#fff;border:2px solid #fde68a;opacity:.55';
-  banner.querySelectorAll(selector).forEach(el => {
-    const isMe = el === btn;
-    el.dataset.selected = isMe ? '1' : '0';
-    // Preserve layout styles, overwrite visual ones
-    const base = el.getAttribute('style') || '';
-    const core = base.replace(/background:[^;]+;?/g,'').replace(/color:[^;]+;?/g,'').replace(/border:[^;]+;?/g,'').replace(/opacity:[^;]+;?/g,'');
-    el.setAttribute('style', core + ';' + (isScore ? (isMe ? pickOn : pickOff) : (isMe ? chipOn : chipOff)));
+// ═══════════════════════════════════════════════════════════════════
+// Per-click discrepancy picks
+// Each click persists immediately to box_scores.discrepancy_picks and
+// writes the chosen value into the lineup/score. No "Apply" button.
+// ═══════════════════════════════════════════════════════════════════
+
+// Count how many diff-slots exist across all discrepancies
+function _bsTotalDiscSlots(discs) {
+  const statKeys = ['ab','h','r','rbi','bb'];
+  let n = 0;
+  (discs||[]).forEach(d => {
+    if (d.type === 'batting') n += statKeys.filter(k => ((d.first||{})[k]||0) !== ((d.second||{})[k]||0)).length;
+    else if (d.type === 'score') n += 1;
   });
-};
+  return n;
+}
 
-// ── Apply admin's picks and clear the discrepancy ─────────────────
-window.bsApplyAndResolve = async function() {
-  if (!bsGameId || !bsBoxScore) return;
-  const discs = bsBoxScore.discrepancies || [];
-  const banner = document.getElementById('bs-disc-banner');
-  if (!banner) { toast('Discrepancy panel not found', 'error'); return; }
+// Apply a single batting pick to the in-memory lineup entry
+function _bsApplyBattingToLineup(d, key, value) {
+  const lineup = d.side === 'away' ? bsAwayLineup : bsHomeLineup;
+  const entry = lineup.find(p => p.name === d.player);
+  if (!entry) return;
+  const val = Number(value) || 0;
+  if (key === 'h') {
+    const d_ = Number(entry.d||0), t_ = Number(entry.t||0), hr_ = Number(entry.hr||0);
+    const extras = d_ + t_ + hr_;
+    if (val >= extras) { entry.s = val - extras; entry.h = val; }
+    else { entry.s = val; entry.d = 0; entry.t = 0; entry.hr = 0; entry.h = val; }
+  } else {
+    entry[key] = val;
+  }
+}
 
-  // Apply batting picks in-memory
-  const picks = [];
-  discs.forEach((d, i) => {
-    if (d.type !== 'batting') return;
-    const lineup = d.side === 'away' ? bsAwayLineup : bsHomeLineup;
-    const entry = lineup.find(p => p.name === d.player);
-    if (!entry) return;
-    ['ab','h','r','rbi','bb'].forEach(k => {
-      const sel = banner.querySelector(`.disc-chip[data-disc="${i}"][data-key="${k}"][data-selected="1"]`);
-      if (!sel) return;
-      const which = sel.dataset.which;
-      picks.push({ type:'batting', disc:i, key:k, which });
-      const val = Number(((which === 'first' ? d.first : d.second) || {})[k] ?? 0);
-      if (k === 'h') {
-        const d_ = Number(entry.d||0), t_ = Number(entry.t||0), hr_ = Number(entry.hr||0);
-        const extras = d_ + t_ + hr_;
-        if (val >= extras) { entry.s = val - extras; entry.h = val; }
-        else { entry.s = val; entry.d = 0; entry.t = 0; entry.hr = 0; entry.h = val; }
-      } else {
-        entry[k] = val;
-      }
-    });
-  });
-
-  // Score pick
-  let pickedAway = null, pickedHome = null;
-  discs.forEach((d, i) => {
-    if (d.type !== 'score') return;
-    const sel = banner.querySelector(`.disc-chip[data-disc="${i}"][data-type="score"][data-selected="1"]`);
-    if (!sel) return;
-    const which = sel.dataset.which;
-    picks.push({ type:'score', disc:i, which });
-    pickedAway = which === 'first' ? d.first_away : d.second_away;
-    pickedHome = which === 'first' ? d.first_home : d.second_home;
-  });
-
-  // Build clean lineup arrays (same shape as saveBoxScore)
-  const normLineup = arr => arr.filter(p=>!p.dnp).map(p => {
+// Rebuild clean lineup arrays from in-memory state
+function _bsBuildCleanLineups() {
+  const norm = arr => arr.filter(p=>!p.dnp).map(p => {
     const s=parseInt(p.s)||0, d=parseInt(p.d)||0, t=parseInt(p.t)||0, hr=parseInt(p.hr)||0;
     return {name:p.name, num:p.num, pos:p.pos||'', ab:parseInt(p.ab)||0, r:parseInt(p.r)||0, s, d, t, hr, h:s+d+t+hr, rbi:parseInt(p.rbi)||0, bb:parseInt(p.bb)||0, so:parseInt(p.so)||0, sac:parseInt(p.sac)||0, sf:parseInt(p.sf)||0, roe:parseInt(p.roe)||0, fc:parseInt(p.fc)||0};
   });
-  const cleanAway = normLineup(bsAwayLineup);
-  const cleanHome = normLineup(bsHomeLineup);
-  const awayR = cleanAway.reduce((s,p)=>s+(p.r||0),0);
-  const homeR = cleanHome.reduce((s,p)=>s+(p.r||0),0);
-  const finalAway = (pickedAway !== null && pickedAway !== undefined) ? Number(pickedAway) : awayR;
-  const finalHome = (pickedHome !== null && pickedHome !== undefined) ? Number(pickedHome) : homeR;
+  return { cleanAway: norm(bsAwayLineup), cleanHome: norm(bsHomeLineup) };
+}
 
-  try {
-    const update = {
-      away_lineup: cleanAway,
-      home_lineup: cleanHome,
-      away_score: finalAway,
-      home_score: finalHome,
-      has_discrepancy: false,
-      discrepancy_resolved: true,
-      discrepancy_picks: picks,
-      discrepancy_resolved_at: new Date().toISOString(),
-    };
-    const bsRef = doc(db, 'box_scores', bsGameId);
-    const bsSnap = await getDoc(bsRef);
-    if (bsSnap.exists()) {
-      await updateDoc(bsRef, update);
-    } else {
-      const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
-      const qs = await getDocs(q2);
-      if (!qs.empty) await updateDoc(doc(db, 'box_scores', qs.docs[0].id), update);
+// Merge current state & write to Firestore (both box_scores + games docs)
+async function _bsPersistPicks(picks, extraUpdate = {}) {
+  const { cleanAway, cleanHome } = _bsBuildCleanLineups();
+  // Score: pick may include custom values, else fall back to lineup totals
+  const scorePick = picks.find(p => p.type === 'score');
+  const awayTotal = cleanAway.reduce((s,p)=>s+(p.r||0),0);
+  const homeTotal = cleanHome.reduce((s,p)=>s+(p.r||0),0);
+  let finalAway = awayTotal, finalHome = homeTotal;
+  if (scorePick) {
+    const d = (bsBoxScore.discrepancies||[])[scorePick.disc] || {};
+    if (scorePick.which === 'custom') {
+      finalAway = Number(scorePick.custom_away) || 0;
+      finalHome = Number(scorePick.custom_home) || 0;
+    } else if (scorePick.which === 'first') {
+      finalAway = Number(d.first_away) || 0;
+      finalHome = Number(d.first_home) || 0;
+    } else if (scorePick.which === 'second') {
+      finalAway = Number(d.second_away) || 0;
+      finalHome = Number(d.second_home) || 0;
     }
-    await updateDoc(doc(db, 'games', bsGameId), { away_score: finalAway, home_score: finalHome, has_discrepancy: false, discrepancy_resolved: true }).catch(() => {});
-
-    if (bsBoxScore) {
-      bsBoxScore.away_lineup = cleanAway;
-      bsBoxScore.home_lineup = cleanHome;
-      bsBoxScore.away_score = finalAway;
-      bsBoxScore.home_score = finalHome;
-      bsBoxScore.has_discrepancy = false;
-      bsBoxScore.discrepancy_resolved = true;
-      bsBoxScore.discrepancy_picks = picks;
-    }
-    const g = GAMES.find(x => x.id === bsGameId);
-    if (g) { g.away_score = finalAway; g.home_score = finalHome; g.has_discrepancy = false; g.discrepancy_resolved = true; }
-
-    toast('Stats resolved');
-    bsRerender();
-  } catch(e) {
-    console.error(e);
-    toast('Failed: '+e.message, 'error');
   }
+
+  const totalSlots = _bsTotalDiscSlots(bsBoxScore.discrepancies || []);
+  const fullyResolved = picks.length >= totalSlots && totalSlots > 0;
+
+  const update = {
+    away_lineup: cleanAway,
+    home_lineup: cleanHome,
+    away_score: finalAway,
+    home_score: finalHome,
+    discrepancy_picks: picks,
+    has_discrepancy: !fullyResolved,
+    discrepancy_resolved: fullyResolved,
+    discrepancy_partial: !fullyResolved && picks.length > 0,
+    ...(fullyResolved ? { discrepancy_resolved_at: new Date().toISOString() } : {}),
+    ...extraUpdate,
+  };
+
+  const bsRef = doc(db, 'box_scores', bsGameId);
+  const bsSnap = await getDoc(bsRef);
+  if (bsSnap.exists()) await updateDoc(bsRef, update);
+  else {
+    const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
+    const qs = await getDocs(q2);
+    if (!qs.empty) await updateDoc(doc(db, 'box_scores', qs.docs[0].id), update);
+  }
+  await updateDoc(doc(db, 'games', bsGameId), {
+    away_score: finalAway,
+    home_score: finalHome,
+    has_discrepancy: !fullyResolved,
+    discrepancy_resolved: fullyResolved,
+    discrepancy_partial: !fullyResolved && picks.length > 0,
+  }).catch(() => {});
+
+  if (bsBoxScore) {
+    bsBoxScore.away_lineup = cleanAway;
+    bsBoxScore.home_lineup = cleanHome;
+    bsBoxScore.away_score = finalAway;
+    bsBoxScore.home_score = finalHome;
+    bsBoxScore.discrepancy_picks = picks;
+    bsBoxScore.has_discrepancy = !fullyResolved;
+    bsBoxScore.discrepancy_resolved = fullyResolved;
+    bsBoxScore.discrepancy_partial = !fullyResolved && picks.length > 0;
+  }
+  const gRef = GAMES.find(x => x.id === bsGameId);
+  if (gRef) {
+    gRef.away_score = finalAway;
+    gRef.home_score = finalHome;
+    gRef.has_discrepancy = !fullyResolved;
+    gRef.discrepancy_resolved = fullyResolved;
+    gRef.discrepancy_partial = !fullyResolved && picks.length > 0;
+  }
+}
+
+// Upsert a pick into the picks list (replaces any existing pick for same disc+key)
+function _bsUpsertPick(picks, newPick) {
+  const idx = picks.findIndex(p => p.disc === newPick.disc && (newPick.type === 'score' ? p.type === 'score' : p.key === newPick.key));
+  if (idx >= 0) picks[idx] = newPick;
+  else picks.push(newPick);
+  return picks;
+}
+
+// Click an A/B chip for a batting stat
+window.bsSetPick = async function(discIdx, key, which) {
+  if (!bsGameId || !bsBoxScore) return;
+  const d = (bsBoxScore.discrepancies||[])[discIdx];
+  if (!d) return;
+  const value = Number(((which === 'first' ? d.first : d.second) || {})[key] ?? 0);
+  _bsApplyBattingToLineup(d, key, value);
+  const picks = Array.isArray(bsBoxScore.discrepancy_picks) ? [...bsBoxScore.discrepancy_picks] : [];
+  _bsUpsertPick(picks, { type:'batting', disc: discIdx, key, which });
+  try { await _bsPersistPicks(picks); toast(`${key.toUpperCase()} set`); bsRerender(); }
+  catch(e) { console.error(e); toast('Failed: '+e.message,'error'); }
+};
+
+// Click an A/B score card
+window.bsSetScorePick = async function(discIdx, which) {
+  if (!bsGameId || !bsBoxScore) return;
+  const picks = Array.isArray(bsBoxScore.discrepancy_picks) ? [...bsBoxScore.discrepancy_picks] : [];
+  _bsUpsertPick(picks, { type:'score', disc: discIdx, which });
+  try { await _bsPersistPicks(picks); toast('Final score set'); bsRerender(); }
+  catch(e) { console.error(e); toast('Failed: '+e.message,'error'); }
+};
+
+// Prompt admin for a custom batting-stat value
+window.bsPromptCustom = async function(discIdx, key, firstVal, secondVal) {
+  const raw = window.prompt(`Enter commissioner value for ${key.toUpperCase()} (${firstVal} / ${secondVal}):`, String(firstVal));
+  if (raw === null) return; // cancelled
+  const value = parseInt(raw, 10);
+  if (!Number.isFinite(value) || value < 0) { toast('Invalid number','error'); return; }
+  const d = (bsBoxScore.discrepancies||[])[discIdx];
+  if (!d) return;
+  _bsApplyBattingToLineup(d, key, value);
+  const picks = Array.isArray(bsBoxScore.discrepancy_picks) ? [...bsBoxScore.discrepancy_picks] : [];
+  _bsUpsertPick(picks, { type:'batting', disc: discIdx, key, which:'custom', custom_value: value });
+  try { await _bsPersistPicks(picks); toast(`${key.toUpperCase()} set to ${value}`); bsRerender(); }
+  catch(e) { console.error(e); toast('Failed: '+e.message,'error'); }
+};
+
+// Prompt admin for a custom final score
+window.bsPromptCustomScore = async function(discIdx, defaultAway, defaultHome) {
+  const rawA = window.prompt('Final AWAY score:', String(defaultAway));
+  if (rawA === null) return;
+  const rawH = window.prompt('Final HOME score:', String(defaultHome));
+  if (rawH === null) return;
+  const a = parseInt(rawA,10), h = parseInt(rawH,10);
+  if (!Number.isFinite(a) || !Number.isFinite(h) || a < 0 || h < 0) { toast('Invalid score','error'); return; }
+  const picks = Array.isArray(bsBoxScore.discrepancy_picks) ? [...bsBoxScore.discrepancy_picks] : [];
+  _bsUpsertPick(picks, { type:'score', disc: discIdx, which:'custom', custom_away: a, custom_home: h });
+  try { await _bsPersistPicks(picks); toast(`Final set to ${a}–${h}`); bsRerender(); }
+  catch(e) { console.error(e); toast('Failed: '+e.message,'error'); }
+};
+
+// Remove a batting pick (re-opens just that stat)
+window.bsClearPick = async function(discIdx, key) {
+  if (!bsGameId || !bsBoxScore) return;
+  const picks = (bsBoxScore.discrepancy_picks || []).filter(p => !(p.type === 'batting' && p.disc === discIdx && p.key === key));
+  // Revert that stat to per-side authority default (d[whichFor(d.side)][k])
+  const d = (bsBoxScore.discrepancies||[])[discIdx];
+  if (d && d.type === 'batting') {
+    const firstSide = (bsBoxScore.discrepancies[0] || {}).first_submitter || 'away';
+    const awayIsFirst = firstSide === 'away';
+    const defaultWhich = d.side === 'away' ? (awayIsFirst ? 'first' : 'second') : (awayIsFirst ? 'second' : 'first');
+    const defaultVal = Number(((defaultWhich === 'first' ? d.first : d.second) || {})[key] ?? 0);
+    _bsApplyBattingToLineup(d, key, defaultVal);
+  }
+  try { await _bsPersistPicks(picks); toast('Re-opened'); bsRerender(); }
+  catch(e) { console.error(e); toast('Failed: '+e.message,'error'); }
+};
+
+// Remove the score pick
+window.bsClearScorePick = async function(discIdx) {
+  if (!bsGameId || !bsBoxScore) return;
+  const picks = (bsBoxScore.discrepancy_picks || []).filter(p => !(p.type === 'score' && p.disc === discIdx));
+  try { await _bsPersistPicks(picks); toast('Score re-opened'); bsRerender(); }
+  catch(e) { console.error(e); toast('Failed: '+e.message,'error'); }
 };
 
 // ── Tap-to-Order ──────────────────────────────────────────────────
