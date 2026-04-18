@@ -420,7 +420,7 @@ select.form-input{cursor:pointer}
         <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
           <div class="form-col" style="max-width:280px">
             <label class="form-label">Filter by Team</label>
-            <select class="form-input" id="scores-team-filter" onchange="renderScores()">
+            <select class="form-input" id="scores-team-filter" onchange="applyScoresFilter()">
               <option value="all">All Teams</option>
             </select>
           </div>
@@ -447,7 +447,7 @@ select.form-input{cursor:pointer}
       <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
         <div class="form-col" style="max-width:280px">
           <label class="form-label">Filter by Team</label>
-          <select class="form-input" id="schedule-team-filter" onchange="renderSchedule()">
+          <select class="form-input" id="schedule-team-filter" onchange="applyScheduleFilter()">
             <option value="all">All Teams</option>
           </select>
         </div>
@@ -3922,6 +3922,12 @@ function populateTeamDropdowns() {
   populateContactsTeamSel();
   populateFinTeamSel();
 }
+
+// Window-scoped wrappers so the inline onchange handlers on the team-filter
+// dropdowns can actually invoke the render functions (module-scoped functions
+// are not visible as global handlers).
+window.applyScoresFilter   = () => renderScores();
+window.applyScheduleFilter = () => renderSchedule();
 
 window.loadRoster = function() {
   const teamId = document.getElementById('roster-team-select').value;
