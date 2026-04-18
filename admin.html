@@ -417,6 +417,14 @@ select.form-input{cursor:pointer}
           <div class="main-title">Scores</div>
           <div class="main-subtitle">Enter and manage game scores</div>
         </div>
+        <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
+          <div class="form-col" style="max-width:280px">
+            <label class="form-label">Filter by Team</label>
+            <select class="form-input" id="scores-team-filter" onchange="renderScores()">
+              <option value="all">All Teams</option>
+            </select>
+          </div>
+        </div>
         <div id="scores-content">
           <div class="loading"><div class="spinner"></div> Loading games...</div>
         </div>
@@ -434,6 +442,14 @@ select.form-input{cursor:pointer}
         <div style="display:flex;gap:8px">
           <button class="btn btn-primary" onclick="openAddGame()">+ Add Game</button>
           <button class="btn btn-outline" onclick="openImportCsv()">📋 Import CSV</button>
+        </div>
+      </div>
+      <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
+        <div class="form-col" style="max-width:280px">
+          <label class="form-label">Filter by Team</label>
+          <select class="form-input" id="schedule-team-filter" onchange="renderSchedule()">
+            <option value="all">All Teams</option>
+          </select>
         </div>
       </div>
       <div id="add-game-form" style="display:none"></div>
@@ -1276,9 +1292,15 @@ function renderDashboard() {
 // ═══════════════════════════════════════════════════════════════════
 function renderScores() {
   const el = document.getElementById('scores-content');
-  // In captain mode, only show games involving the captain's team
-  const visibleGames = captainMode && captainTeamId
-    ? GAMES.filter(g => g.away === captainTeamId || g.home === captainTeamId)
+  // Captain mode locks the view to the captain's own team.
+  // Admin mode honors the "Filter by Team" dropdown (default: all games).
+  const filterTeam = !captainMode
+    ? (document.getElementById('scores-team-filter')?.value || 'all')
+    : 'all';
+  const lockedTeam = captainMode && captainTeamId ? captainTeamId : null;
+  const activeTeam = lockedTeam || (filterTeam !== 'all' ? filterTeam : null);
+  const visibleGames = activeTeam
+    ? GAMES.filter(g => g.away === activeTeam || g.home === activeTeam)
     : GAMES;
   const byWeek = {};
   visibleGames.forEach(g => {
@@ -3514,9 +3536,19 @@ function renderSchedule() {
   const el = document.getElementById('schedule-content');
   if (!GAMES.length) { el.innerHTML = '<div class="empty">No games in schedule</div>'; return; }
 
+  const filterTeam = document.getElementById('schedule-team-filter')?.value || 'all';
+  const visibleGames = filterTeam === 'all'
+    ? GAMES
+    : GAMES.filter(g => g.away === filterTeam || g.home === filterTeam);
+  if (!visibleGames.length) {
+    const teamLabel = TEAMS.find(t => t.id === filterTeam)?.name || filterTeam;
+    el.innerHTML = `<div class="empty">No games scheduled for ${esc(teamLabel)}</div>`;
+    return;
+  }
+
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl" id="schedule-table">
     <thead><tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Away</th><th>Home</th><th>Field</th><th>Status</th><th>Actions</th></tr></thead>
-    <tbody>${GAMES.map(g => `<tr id="sched-row-${g.id}">
+    <tbody>${visibleGames.map(g => `<tr id="sched-row-${g.id}">
       <td>${g.wk||''}</td><td>${esc(g.date||'')}</td><td>${esc(g.day||'')}</td><td>${esc(g.time||'')}</td>
       <td><strong>${getTeamName(g.away)}</strong></td><td><strong>${getTeamName(g.home)}</strong></td>
       <td>${esc(g.field||'')}</td>
@@ -3872,6 +3904,19 @@ function populateTeamDropdowns() {
     `<option value="${t.id}">${esc(t.name)}</option>`
   ).join('');
   document.getElementById('email-to').innerHTML = emailOpts;
+
+  // Scores + Schedule "Filter by Team" dropdowns — preserve the current
+  // selection on re-populate so filters don't reset when new data loads.
+  const filterOpts = '<option value="all">All Teams</option>' + TEAMS.map(t =>
+    `<option value="${t.id}">${esc(t.name)}</option>`
+  ).join('');
+  ['scores-team-filter', 'schedule-team-filter'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value || 'all';
+    sel.innerHTML = filterOpts;
+    sel.value = prev;
+  });
 
   // Contacts + Financials dropdowns
   populateContactsTeamSel();
