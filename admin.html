@@ -697,7 +697,10 @@ select.form-input{cursor:pointer}
           <div class="main-title">Manage Captains</div>
           <div class="main-subtitle">Assign team captains for the Captain Portal</div>
         </div>
-        <button class="btn btn-primary" onclick="openAddCaptain()">+ Add Captain</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline" onclick="bulkImportCaptains()" title="Loads every captain from the commissioner's sheet. Safe to re-run; existing rows are overwritten by team+email.">📥 Import from sheet</button>
+          <button class="btn btn-primary" onclick="openAddCaptain()">+ Add Captain</button>
+        </div>
       </div>
       <div style="background:var(--blue-bg);color:var(--blue);font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:16px">
         After adding a captain here, you also need to create their login in <strong>Firebase Console &gt; Authentication &gt; Users &gt; Add User</strong> with the same email address. Then they can sign in at <strong>captain.html</strong>.
@@ -4468,6 +4471,83 @@ window.editCaptain = function(captainId) {
       renderCaptains();
     } catch(e) { toast('Failed: ' + e.message, 'error'); }
   })();
+};
+
+// ── Bulk import captains from the commissioner's sheet ────────────
+// Uses deterministic doc IDs (team_emaillocal / team_nameslug) so this is
+// idempotent — re-running overwrites existing rows instead of duplicating.
+window.bulkImportCaptains = async function() {
+  const TEAM_NAMES = {
+    aj:'Adath Jeshurun', ba:'Beth Am', bob:'Beth Or Blue', bor:'Beth Or Red',
+    bsb:'Beth Sholom Blue', bsmc:"Beth Sholom Men's Club",
+    btbj:"Beth Tikvah-B'Nai Jeshurun", cha:'Chabad', dn:'Darchei Noam Lightning',
+    gjc:'Germantown Jewish Centre', gold:"Goldstein's", ki:'Keneseth Israel',
+    oa:'Or Ami', sa:'Shir Ami', tsbka:'Temple Sinai Black/Kol Ami',
+    tsmc:"Temple Sinai Men's Club", tsg:'Temple Sinai Green',
+    tbimc:"Tifereth Bet Israel Men's Club", tbir:'Tifereth Bet Israel Royals',
+  };
+  const LIST = [
+    { team:'aj',    name:'Howard Koval',       phone:'215-620-0025', email:'hskoval@gmail.com' },
+    { team:'aj',    name:'Alan Resnick',       phone:'215-850-0933', email:'alan.resnick10@gmail.com' },
+    { team:'aj',    name:'Adam Finestone',     phone:'610-505-2420', email:'adamifinestone@gmail.com' },
+    { team:'ba',    name:'Bruce Klugman',      phone:'267-205-4771', email:'chiefyn1983@gmail.com' },
+    { team:'ba',    name:'Eric Felt',          phone:'',             email:'ericfeltromeo44@gmail.com' },
+    { team:'bob',   name:'Michael Demar',      phone:'267-240-1409', email:'mikedemar@comcast.net' },
+    { team:'bob',   name:'Craig Schulz',       phone:'215-360-2089', email:'2schulzcraig@gmail.com' },
+    { team:'bob',   name:'Michael Amerstein',  phone:'',             email:'mamerstein@gmail.com' },
+    { team:'bor',   name:'Jason Kundtz',       phone:'215-237-5749', email:'kundtz1@yahoo.com' },
+    { team:'bsb',   name:'Gary Kushner',       phone:'610-909-9301', email:'gary.kushner@jefferson.edu' },
+    { team:'bsmc',  name:'Max Miller',         phone:'215-605-3068', email:'maxwellmiller88@gmail.com' },
+    { team:'bsmc',  name:'Steve Pilchik',      phone:'267-738-0202', email:'shpilchik61@gmail.com' },
+    { team:'btbj',  name:'Michael Drossner',   phone:'215-514-6004', email:'michael@drossnerlaw.com' },
+    { team:'cha',   name:'Michael Cook',       phone:'267-254-3929', email:'mecooklaw@gmail.com' },
+    { team:'cha',   name:'Rick Rosenstein',    phone:'267-626-1125', email:'docdesi@gmail.com' },
+    { team:'dn',    name:'Aaron Mandelblott',  phone:'267-393-5717', email:'amondel2@gmail.com' },
+    { team:'dn',    name:'Neal Jacobs',        phone:'610-233-6222', email:'jacobsneal@yahoo.com' },
+    { team:'gjc',   name:'Joel Fish',          phone:'215-266-4350', email:'joelfish3@aol.com' },
+    { team:'gjc',   name:'Ned Kripke',         phone:'610-639-4119', email:'kripkefamily@comcast.net' },
+    { team:'gold',  name:'Mitch Pratta',       phone:'267-254-2845', email:'mitchpratta@gmail.com' },
+    { team:'ki',    name:'Ken Finklestein',    phone:'215-962-2630', email:'' },
+    { team:'ki',    name:'Jeff Orlin',         phone:'267-991-6193', email:'honeydude614@gmail.com' },
+    { team:'oa',    name:'Scott Lipner',       phone:'610-639-6671', email:'scottlipner@gmail.com' },
+    { team:'sa',    name:'Todd Leon',          phone:'609-792-3133', email:'TJLeon@mdwcg.com' },
+    { team:'sa',    name:'Rick Phillips',      phone:'609-651-6467', email:'mdniu@yahoo.com' },
+    { team:'tsbka', name:'Jason Smukler',      phone:'215-740-3085', email:'jsmukler@gmail.com' },
+    { team:'tsbka', name:'Jonathan Shandell',  phone:'215-360-3566', email:'jonathan.shandell@aya.yale.edu' },
+    { team:'tsmc',  name:'Jeff Workman',       phone:'267-307-1836', email:'jeffworkman11@gmail.com' },
+    { team:'tsmc',  name:'Ira Letofsky',       phone:'',             email:'iletofsky@yahoo.com' },
+    { team:'tsg',   name:'Zach Sheard',        phone:'609-923-3005', email:'zachsheard@gmail.com' },
+    { team:'tsg',   name:'Jesse Wexelblatt',   phone:'267-968-2481', email:'jwexelblatt@gmail.com' },
+    { team:'tbimc', name:'Matt Seltzer',       phone:'215-498-4766', email:'matthewjseltzer@gmail.com' },
+    { team:'tbimc', name:'Andy Siegel',        phone:'412-915-9731', email:'andrewjsiegel@gmail.com' },
+    { team:'tbimc', name:'Adam Schulang',      phone:'215-704-6932', email:'aschulang@gmail.com' },
+    { team:'tbir',  name:'Mark Schwartz',      phone:'917-751-5286', email:'markschwa@yahoo.com' },
+  ];
+  if (!confirm(`Import ${LIST.length} captains across ${Object.keys(TEAM_NAMES).length} teams?\n\nExisting captains with matching team+email will be overwritten. This cannot be undone.`)) return;
+  toast(`Importing ${LIST.length} captains…`);
+  let ok = 0, failed = 0;
+  for (const c of LIST) {
+    const team_name = TEAM_NAMES[c.team] || c.team;
+    const emailLocal = (c.email || '').toLowerCase().split('@')[0].replace(/[^a-z0-9]+/g, '');
+    const nameSlug   = c.name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const id = `${c.team}_${emailLocal || nameSlug}`;
+    try {
+      await setDoc(doc(db, 'captains', id), {
+        email: (c.email || '').toLowerCase(),
+        team_id: c.team,
+        team_name,
+        name: c.name,
+        phone: c.phone || '',
+      });
+      ok++;
+    } catch(e) {
+      console.error(`Failed ${id}:`, e);
+      failed++;
+    }
+  }
+  toast(`Done — ${ok} imported${failed ? `, ${failed} failed (see console)` : ''}`, failed ? 'error' : 'success');
+  await logActivity('Captains', `Bulk import from sheet: ${ok} captains written`);
+  await loadCaptains();
 };
 
 window.removeCaptain = async function(captainId, label) {
