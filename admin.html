@@ -439,9 +439,10 @@ select.form-input{cursor:pointer}
           <div class="main-title">Schedule</div>
           <div class="main-subtitle">Manage the game schedule</div>
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="openAddGame()">+ Add Game</button>
           <button class="btn btn-outline" onclick="openImportCsv()">📋 Import CSV</button>
+          <button class="btn btn-outline" onclick="openGcalSync()" title="Push current schedule to Google Calendars (one per team). Captains subscribed to those calendars will see updates.">🔄 Sync Google Calendars</button>
         </div>
       </div>
       <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
@@ -3928,6 +3929,13 @@ function populateTeamDropdowns() {
 // are not visible as global handlers).
 window.applyScoresFilter   = () => renderScores();
 window.applyScheduleFilter = () => renderSchedule();
+
+// Open the Google Calendar sync tool in a new tab. Commissioner-only; uses
+// Adam's personal OAuth to push games into the per-team calendars he owns.
+window.openGcalSync = function() {
+  window.open('gcal-sync.html', '_blank', 'noopener');
+  toast('Opened Google Calendar sync in a new tab. Sign in there to push updates.');
+};
 
 window.loadRoster = function() {
   const teamId = document.getElementById('roster-team-select').value;
