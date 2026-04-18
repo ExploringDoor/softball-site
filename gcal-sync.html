@@ -81,7 +81,7 @@ window.saveClientId = function() {
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, query, orderBy, doc, setDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, query, orderBy, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const app = initializeApp({
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -105,8 +105,30 @@ let TEAM_LIST = []; // array of {id, name, short}
 // specific events (delete matching + re-add), rather than clearing the whole
 // calendar. Kicked in when the commissioner edited a game and clicked Sync.
 const URL_PARAMS = new URLSearchParams(location.search);
-const TARGETED_GAME_IDS = (URL_PARAMS.get('games') || '').split(',').map(s => s.trim()).filter(Boolean);
+let TARGETED_GAME_IDS = (URL_PARAMS.get('games') || '').split(',').map(s => s.trim()).filter(Boolean);
 const PRESELECT_TEAM = URL_PARAMS.get('team') || '';
+
+// If no ?games= param was supplied, check Firestore for captain-queued edits
+// (pending_gcal_syncs collection). Admin.html's listener mirrors these to
+// localStorage, but we also read them directly here as the source of truth.
+async function loadPendingFromFirestore() {
+  try {
+    const pSnap = await getDocs(collection(db, 'pending_gcal_syncs'));
+    const ids = [];
+    pSnap.forEach(d => { const x = d.data() || {}; if (x.game_id) ids.push(x.game_id); else ids.push(d.id); });
+    return ids;
+  } catch(e) { out(`(Could not read pending_gcal_syncs: ${e.message})`); return []; }
+}
+
+// After a successful targeted sync, clear the server-side queue for the
+// games we handled.
+async function clearFirestorePending(syncedIds) {
+  let cleared = 0;
+  for (const id of syncedIds) {
+    try { await deleteDoc(doc(db, 'pending_gcal_syncs', id)); cleared++; } catch(_) {}
+  }
+  if (cleared) out(`Cleared ${cleared} server-side pending sync${cleared===1?'':'s'}.`);
+}
 
 window.loadGames = async function() {
   logEl.textContent = '';
@@ -126,6 +148,18 @@ window.loadGames = async function() {
     const gSnap = await getDocs(query(collection(db, 'games'), orderBy('wk')));
     GAMES = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     out(`Loaded ${GAMES.length} games\n`);
+
+    // If the admin didn't pass ?games=, look for captain-queued edits in
+    // Firestore (pending_gcal_syncs). This is how captain-portal edits get
+    // picked up automatically — admin just clicks Sync and we handle only
+    // the games that actually changed.
+    if (!TARGETED_GAME_IDS.length) {
+      const fromFs = await loadPendingFromFirestore();
+      if (fromFs.length) {
+        TARGETED_GAME_IDS = fromFs;
+        out(`Found ${fromFs.length} pending edit${fromFs.length===1?'':'s'} from captain portal.`);
+      }
+    }
 
     // ── Targeted single-game mode ─────────────────────────────────────
     // Triggered when admin passes ?games=id1,id2. Instead of showing the
@@ -426,6 +460,9 @@ async function syncTargetedGames(token, games) {
       out(`\nPending edit queue cleared.`);
     }
   } catch(_) {}
+
+  // Also clear from Firestore so the admin badge/banner goes away.
+  try { await clearFirestorePending(syncedGameIds); } catch(_) {}
 }
 
 async function syncTeamCalendars(token) {

@@ -443,7 +443,17 @@ select.form-input{cursor:pointer}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="openAddGame()">+ Add Game</button>
           <button class="btn btn-outline" onclick="openImportCsv()">📋 Import CSV</button>
-          <button class="btn btn-outline" onclick="openGcalSync()" title="Push current schedule to Google Calendars (one per team). Captains subscribed to those calendars will see updates.">🔄 Sync Google Calendars</button>
+          <button class="btn btn-outline" id="btn-gcal-sync" onclick="openGcalSync()" title="Push current schedule to Google Calendars (one per team). Captains subscribed to those calendars will see updates.">🔄 Sync Google Calendars <span id="gcal-pending-badge" style="display:none;background:#dc2626;color:#fff;font-size:11px;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">0</span></button>
+        </div>
+      </div>
+      <!-- Banner: captain-initiated schedule edits queued for calendar sync -->
+      <div id="gcal-pending-banner" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <div style="font-weight:800;color:#78350f;font-size:14px">⚠️ Google Calendar sync pending</div>
+            <div id="gcal-pending-list" style="font-size:12px;color:#78350f;margin-top:4px;line-height:1.5"></div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openGcalSync()">Sync Now</button>
         </div>
       </div>
       <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
@@ -944,7 +954,7 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, Timestamp, deleteField } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, Timestamp, deleteField, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
@@ -1221,12 +1231,55 @@ onAuthStateChanged(auth, async (user) => {
     document.getElementById('app').style.display = 'flex';
     document.getElementById('sidebar-user').textContent = user.email;
     await loadAllData();
+    startPendingGcalListener();
   } else {
     currentUser = null;
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
   }
 });
+
+// ───────────────────────────────────────────────────────────────────
+// Pending Google Calendar sync listener
+// Real-time count of captain-initiated schedule edits that haven't been
+// pushed to Google Calendar yet. Shows a badge on the Sync button and a
+// banner on the schedule page.
+// ───────────────────────────────────────────────────────────────────
+let _pendingGcalUnsub = null;
+function startPendingGcalListener() {
+  if (_pendingGcalUnsub) return; // already listening
+  try {
+    _pendingGcalUnsub = onSnapshot(collection(db, 'pending_gcal_syncs'), (snap) => {
+      const items = [];
+      snap.forEach(d => { const x = d.data() || {}; items.push({ id: d.id, ...x }); });
+      // Mirror to localStorage too so the existing gcal-sync flow picks them up
+      try {
+        const existing = JSON.parse(localStorage.getItem('dvsl_pending_gcal_games') || '[]');
+        const union = Array.from(new Set([...existing, ...items.map(i => i.game_id || i.id)]));
+        localStorage.setItem('dvsl_pending_gcal_games', JSON.stringify(union));
+      } catch(_) {}
+      const badge  = document.getElementById('gcal-pending-badge');
+      const banner = document.getElementById('gcal-pending-banner');
+      const list   = document.getElementById('gcal-pending-list');
+      const n = items.length;
+      if (badge) {
+        if (n > 0) { badge.style.display = 'inline-block'; badge.textContent = String(n); }
+        else       { badge.style.display = 'none'; }
+      }
+      if (banner) banner.style.display = n > 0 ? 'block' : 'none';
+      if (list) {
+        const lines = items.slice(0, 8).map(i => {
+          const who = i.edited_by || 'captain';
+          const tl  = i.teams_label || i.game_id;
+          const sm  = i.summary ? ` — ${i.summary}` : '';
+          return `<div>• <strong>${tl}</strong>${sm} <span style="opacity:.6">(${who})</span></div>`;
+        });
+        if (items.length > 8) lines.push(`<div>• …and ${items.length - 8} more</div>`);
+        list.innerHTML = lines.join('');
+      }
+    }, (err) => console.warn('pending_gcal_syncs listener error:', err));
+  } catch(e) { console.warn('Could not start pending gcal listener:', e.message); }
+}
 
 // Enter key on login
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') window.doLogin(); });

@@ -303,6 +303,16 @@ select.form-input{cursor:pointer}
     <div class="section" id="sec-schedule">
       <div class="section-title">Schedule</div>
       <div class="section-sub">Your team's upcoming and past games</div>
+      <div id="calendar-share-box" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin:8px 0 14px;display:none">
+        <div style="font-weight:700;color:#1e40af;margin-bottom:4px">📅 Share Calendar Subscription</div>
+        <div style="font-size:13px;color:#1e3a8a;margin-bottom:8px">Each player needs to click this link <em>on their own phone</em> to subscribe to your team's schedule. Copy it and share with your team.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="copyCalendarLink()">📋 Copy Link</button>
+          <button class="btn btn-outline btn-sm" onclick="shareCalendarLink()">📤 Share</button>
+          <a id="calendar-open-link" class="btn btn-outline btn-sm" href="#" target="_blank">🔗 Open</a>
+        </div>
+        <div id="calendar-share-status" style="font-size:12px;color:#059669;margin-top:6px;display:none"></div>
+      </div>
       <div id="schedule-content">
         <div class="loading"><div class="spinner"></div> Loading schedule...</div>
       </div>
@@ -834,6 +844,57 @@ window.emailAllCaptains = function() {
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// CALENDAR SHARE LINK — helps captains distribute the per-team webcal URL
+// so each player can subscribe on their own phone.
+// ═══════════════════════════════════════════════════════════════════
+function updateCalendarShareBox() {
+  const box = document.getElementById('calendar-share-box');
+  if (!box) return;
+  const url = window._myCalendarUrl;
+  if (!url) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const openLink = document.getElementById('calendar-open-link');
+  if (openLink) openLink.href = url.replace(/^https:\/\//, 'webcal://');
+}
+
+function _calendarShareText() {
+  const url = window._myCalendarUrl || '';
+  const teamName = MY_TEAM?.short || MY_TEAM?.name || 'our team';
+  return `Subscribe to ${teamName}'s DVSL schedule on your phone — tap this link on your own device and it'll add every game to your calendar automatically:\n\n${url}`;
+}
+
+window.copyCalendarLink = async function() {
+  const url = window._myCalendarUrl;
+  if (!url) { toast('No calendar URL available yet.', 'error'); return; }
+  const status = document.getElementById('calendar-share-status');
+  try {
+    await navigator.clipboard.writeText(url);
+    if (status) { status.textContent = '✓ Link copied to clipboard.'; status.style.display='block'; setTimeout(()=>{status.style.display='none';},3000); }
+    toast('Calendar link copied.', 'success');
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Calendar link copied.', 'success'); }
+    catch(_) { toast('Copy failed — link: ' + url, 'error'); }
+    document.body.removeChild(ta);
+  }
+};
+
+window.shareCalendarLink = async function() {
+  const url = window._myCalendarUrl;
+  if (!url) { toast('No calendar URL available yet.', 'error'); return; }
+  const text = _calendarShareText();
+  if (navigator.share) {
+    try { await navigator.share({ title: 'DVSL Team Calendar', text }); return; }
+    catch(_) { /* user cancelled — fall through to mailto */ }
+  }
+  const subject = encodeURIComponent('DVSL Team Calendar — subscribe on your phone');
+  const body = encodeURIComponent(text);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+};
+
+// ═══════════════════════════════════════════════════════════════════
 // TAB NAVIGATION
 // ═══════════════════════════════════════════════════════════════════
 window.showTab = function(name) {
@@ -873,7 +934,7 @@ async function fbFetch(coll, orderField) {
 
 async function loadAllData() {
   try {
-    const [teams, games, players, submissions, announcements, captains, payments] = await Promise.all([
+    const [teams, games, players, submissions, announcements, captains, payments, calendars] = await Promise.all([
       fbFetch('teams', 'name'),
       fbFetch('games', 'wk'),
       fbFetch('players').catch(() => []),
@@ -881,6 +942,7 @@ async function loadAllData() {
       fbFetch('announcements').catch(() => []),
       fbFetch('captains').catch(() => []),
       fbFetch('payments').catch(() => []),
+      fbFetch('team_calendars').catch(() => []),
     ]);
 
     ALL_TEAMS = teams.filter(t => t.active !== false).sort((a,b) => (b.pct||0) - (a.pct||0));
@@ -921,6 +983,13 @@ async function loadAllData() {
     payments.filter(p => p.team_id === captainData.team_id).forEach(p => {
       PAYMENT_DATA[p.player_id] = p;
     });
+
+    // Store my team's calendar URL for the Share Calendar Link feature
+    try {
+      const myCal = (calendars || []).find(c => c.id === captainData.team_id);
+      window._myCalendarUrl = (myCal && myCal.calendar_url) ? myCal.calendar_url : null;
+    } catch(_) { window._myCalendarUrl = null; }
+    updateCalendarShareBox();
 
     renderTeam();
     renderRoster();
@@ -1359,8 +1428,10 @@ window.saveEditGame = async function(gameId) {
     if (g) { g.date = dateDisplay; g.day = dayDisplay; g.time = timeDisplay; g.time_24 = time24||''; g.date_iso = dateIso||''; g.field = field||''; }
 
     // Build a human-readable diff for the commissioner.
+    let summary = '';
+    let teamsLabel = '';
     if (before) {
-      const teamsLabel = g ? `${getTeamName(g.away)} @ ${getTeamName(g.home)}` : '';
+      teamsLabel = g ? `${getTeamName(g.away)} @ ${getTeamName(g.home)}` : '';
       const diffs = [];
       const fmtDate = (d, iso) => iso ? `${d} (${iso})` : d;
       if (before.date_iso !== after.date_iso || before.date !== after.date) {
@@ -1368,12 +1439,29 @@ window.saveEditGame = async function(gameId) {
       }
       if (before.time !== after.time) diffs.push(`time ${before.time||'(none)'} → ${after.time||'(none)'}`);
       if (before.field !== after.field) diffs.push(`field ${before.field||'(none)'} → ${after.field||'(none)'}`);
-      const summary = diffs.length ? diffs.join('; ') : 'no visible field changes';
+      summary = diffs.length ? diffs.join('; ') : 'no visible field changes';
       await logActivity(
         'Schedule (Captain Edit)',
         `${captainData?.team_name || 'Captain'} edited ${teamsLabel}: ${summary}`
       );
     }
+
+    // Queue this game for Google Calendar re-push so the admin gets notified
+    // and the gcal-sync tool can pick it up. Doc id = game id so repeated
+    // edits coalesce into a single pending entry instead of spamming.
+    try {
+      await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
+        game_id: gameId,
+        teams_label: teamsLabel,
+        edited_by: captainData?.team_name || 'captain',
+        edited_by_id: captainData?.team_id || '',
+        edited_by_email: currentUser?.email || '',
+        summary: summary || 'game edited',
+        source: 'captain',
+        status: 'pending',
+        timestamp: serverTimestamp(),
+      });
+    } catch(e) { console.warn('Could not queue gcal sync:', e.message); }
 
     toast('Game updated!');
     renderSchedule();
