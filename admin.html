@@ -734,9 +734,11 @@ select.form-input{cursor:pointer}
           </div>
           <button class="btn btn-primary" onclick="emailTeamPlayers()">✉ Email All Players (this team)</button>
           <button class="btn btn-outline" onclick="emailAllManagers()">✉ Email All Managers</button>
+          <button class="btn btn-outline" onclick="copyAllManagerEmails()">📋 Copy Manager Emails</button>
           <button class="btn btn-outline" onclick="emailAllPlayers()">✉ Email Every Player</button>
+          <button class="btn btn-outline" onclick="copyAllPlayerEmails()">📋 Copy Player Emails</button>
         </div>
-        <div style="font-size:11px;color:var(--muted2);margin-top:8px">Buttons open your mail client with a pre-filled recipient list. Player emails come from their roster record — add email addresses in Rosters to see them here.</div>
+        <div style="font-size:11px;color:var(--muted2);margin-top:8px">✉ buttons open your mail client with recipients pre-filled as BCC (so captains/players can't see each other's addresses). 📋 buttons copy a comma-separated list to your clipboard so you can paste into Gmail, Outlook, or any other mail app.</div>
       </div>
 
       <!-- Directory -->
@@ -4777,16 +4779,54 @@ window.emailTeamPlayers = function() {
   window.location.href = 'mailto:' + emails.join(',');
 };
 
+// Gather unique, lowercase captain emails. BCC is the right channel so captains
+// don't see each other's addresses.
+function _captainEmailList() {
+  return [...new Set(CAPTAINS.map(c => (c.email || '').trim().toLowerCase()).filter(Boolean))];
+}
+function _playerEmailList() {
+  return [...new Set(PLAYERS.map(p => (p.email || '').trim().toLowerCase()).filter(Boolean))];
+}
+
 window.emailAllManagers = function() {
-  const emails = CAPTAINS.map(c => c.email).filter(Boolean);
+  const emails = _captainEmailList();
   if (!emails.length) { toast('No manager emails found. Add managers under Captains.', 'error'); return; }
-  window.location.href = 'mailto:' + emails.join(',');
+  window.location.href = 'mailto:?bcc=' + emails.join(',');
 };
 
 window.emailAllPlayers = function() {
-  const emails = PLAYERS.map(p => p.email).filter(Boolean);
+  const emails = _playerEmailList();
   if (!emails.length) { toast('No player emails found. Add emails via Rosters.', 'error'); return; }
-  window.location.href = 'mailto:' + emails.join(',');
+  window.location.href = 'mailto:?bcc=' + emails.join(',');
+};
+
+// Copy a comma+space-separated recipient list to the clipboard so Adam can
+// paste into Gmail/Outlook/whatever without launching a mailto: handler.
+async function _copyEmails(list, label) {
+  if (!list.length) { toast(`No ${label} emails found.`, 'error'); return; }
+  const text = list.join(', ');
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(`Copied ${list.length} ${label} email${list.length===1?'':'s'} to clipboard`);
+  } catch(e) {
+    // Fallback for older browsers or non-HTTPS contexts
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast(`Copied ${list.length} ${label} emails`); }
+    catch(_) { prompt('Copy these emails manually:', text); }
+    ta.remove();
+  }
+}
+
+window.copyAllManagerEmails = function() {
+  _copyEmails(_captainEmailList(), 'manager');
+};
+
+window.copyAllPlayerEmails = function() {
+  _copyEmails(_playerEmailList(), 'player');
 };
 
 window.editContact = function(playerId) {
