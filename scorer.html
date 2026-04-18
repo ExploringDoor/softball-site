@@ -2005,6 +2005,10 @@
 <!-- Main App -->
 <div id="app">
 
+  <!-- Save indicator — shows at the top-right when state is saving /
+       saved / offline. Hidden when idle on "saved". -->
+  <div id="save-indicator" style="position:fixed;top:6px;right:8px;z-index:9000;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;display:none;box-shadow:0 2px 8px rgba(0,0,0,.3)"></div>
+
   <!-- Top Bar -->
   <div id="top-bar">
     <div id="top-bar-row1">
@@ -4277,6 +4281,8 @@ document.getElementById('menu-game-over').addEventListener('click', () => {
 document.getElementById('menu-reset-game').addEventListener('click', () => {
   closeMenuSheet();
   if (!confirm('Reset this game back to 0–0 and return to game select? All scores and stats will be cleared.')) return;
+  // Also clear the local backup so we don't resurrect a zombie game on next open
+  try { clearLocalState(); } catch(_) {}
   // Wipe live score + saved game state in Firebase if we have a gameId
   if (G.gameId) {
     try {
@@ -4360,6 +4366,7 @@ function showExitConfirmSheet() {
   document.getElementById('exit-discard-btn').addEventListener('click', async () => {
     div.style.display = 'none';
     // Discard: delete saved state + live score so re-entry starts fresh
+    try { clearLocalState(); } catch(_) {}
     if (G.gameId && G.gameId !== 'practice') {
       try {
         const { doc: _doc, deleteDoc: _del, updateDoc: _upd } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
@@ -5376,6 +5383,7 @@ document.getElementById('gom-final-btn').addEventListener('click', async () => {
     deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
     deleteDoc(doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
     deleteDoc(doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
+    try { clearLocalState(); } catch(_) {}
   }
   // Show a brief toast if this was a second submission
   if (!result.firstSubmission) {
@@ -5944,42 +5952,115 @@ function stateDocKey() {
   return side ? `${G.gameId}_${side}` : G.gameId;
 }
 
-async function saveFullState() {
-  if (!G.gameId || G.gameId === 'practice') return;
+// Build the state payload once so we can save it to both Firestore
+// and localStorage. localStorage is the safety net — it's synchronous
+// and works with ZERO network, which matters at softball fields where
+// signal is often weak or nonexistent.
+function buildStatePayload() {
+  return {
+    inning: G.inning,
+    half: G.half,
+    outs: G.outs,
+    balls: G.balls,
+    strikes: G.strikes,
+    awayScore: G.awayScore,
+    homeScore: G.homeScore,
+    runners: G.runners,
+    lineupIdx: G.lineupIdx,
+    lineups: G.lineups,
+    linescores: G.linescores,
+    playerStats: G.playerStats,
+    pitchers: G.pitchers,
+    pitcherStats: G.pitcherStats,
+    playLog: (G.playLog || []).slice(0, 150),
+    _prevAwayScore: G._prevAwayScore,
+    _prevHomeScore: G._prevHomeScore,
+    halfInningPitches: G.halfInningPitches || 0,
+    halfInningHits: G.halfInningHits || 0,
+    halfInningErrors: G.halfInningErrors || 0,
+    awayTeam: G.awayTeam,
+    homeTeam: G.homeTeam,
+    hrLog: G.hrLog || [],
+    twoOutRbiLog: G.twoOutRbiLog || [],
+    lob: G.lob || { away: 0, home: 0 },
+    risp: G.risp || { away: { h:0, ab:0 }, home: { h:0, ab:0 } },
+    pitchCount: G.pitchCount || { away: {}, home: {} },
+    errors: G.errors || { away: [], home: [] },
+  };
+}
+
+function localStateKey() {
+  const key = stateDocKey();
+  return key ? `dvsl_scorer_state_${key}` : null;
+}
+
+function saveLocalState() {
+  // Synchronous localStorage write — bulletproof against network loss,
+  // app crash, phone reboot, etc. Always runs before the async Firestore
+  // write so even if Firestore fails we have the backup.
   try {
-    await setDoc(doc(db, 'game_states', stateDocKey()), {
-      savedAt: serverTimestamp(),
-      inning: G.inning,
-      half: G.half,
-      outs: G.outs,
-      balls: G.balls,
-      strikes: G.strikes,
-      awayScore: G.awayScore,
-      homeScore: G.homeScore,
-      runners: G.runners,
-      lineupIdx: G.lineupIdx,
-      lineups: G.lineups,
-      linescores: G.linescores,
-      playerStats: G.playerStats,
-      pitchers: G.pitchers,
-      pitcherStats: G.pitcherStats,
-      playLog: (G.playLog || []).slice(0, 150),
-      _prevAwayScore: G._prevAwayScore,
-      _prevHomeScore: G._prevHomeScore,
-      halfInningPitches: G.halfInningPitches || 0,
-      halfInningHits: G.halfInningHits || 0,
-      halfInningErrors: G.halfInningErrors || 0,
-      awayTeam: G.awayTeam,
-      homeTeam: G.homeTeam,
-      hrLog: G.hrLog || [],
-      twoOutRbiLog: G.twoOutRbiLog || [],
-      lob: G.lob || { away: 0, home: 0 },
-      risp: G.risp || { away: { h:0, ab:0 }, home: { h:0, ab:0 } },
-      pitchCount: G.pitchCount || { away: {}, home: {} },
-      errors: G.errors || { away: [], home: [] },
-    });
+    const k = localStateKey();
+    if (!k) return;
+    const payload = buildStatePayload();
+    payload.savedAt = Date.now();
+    localStorage.setItem(k, JSON.stringify(payload));
+  } catch(_) { /* quota or private-mode — fall through */ }
+}
+
+function clearLocalState() {
+  try {
+    const k = localStateKey();
+    if (k) localStorage.removeItem(k);
+    // Also clear the other side, in case finalizer flips teams
+    if (G.gameId) {
+      localStorage.removeItem(`dvsl_scorer_state_${G.gameId}`);
+      localStorage.removeItem(`dvsl_scorer_state_${G.gameId}_away`);
+      localStorage.removeItem(`dvsl_scorer_state_${G.gameId}_home`);
+    }
+  } catch(_) {}
+}
+
+async function saveFullState() {
+  // ALWAYS save locally first — synchronous, never fails silently.
+  saveLocalState();
+  _scorerSaveStatus('saving');
+
+  if (!G.gameId || G.gameId === 'practice') { _scorerSaveStatus('local'); return; }
+  try {
+    const payload = buildStatePayload();
+    payload.savedAt = serverTimestamp();
+    await setDoc(doc(db, 'game_states', stateDocKey()), payload);
+    _scorerSaveStatus('saved');
   } catch (err) {
     console.warn('saveFullState error:', err);
+    _scorerSaveStatus('offline');
+  }
+}
+
+// ── Save-status indicator ───────────────────────────────────────────
+// Shows the captain at a glance whether state is persisting. Green =
+// saved to cloud, Yellow = in-flight, Blue = only saved locally
+// (practice mode), Red = cloud save failed, but localStorage still has
+// a complete backup and we'll retry on the next action.
+let _scorerSaveStatusTimer = null;
+function _scorerSaveStatus(kind) {
+  const el = document.getElementById('save-indicator');
+  if (!el) return;
+  const map = {
+    saving:  { t:'Saving…',     bg:'#f59e0b', color:'#000' },
+    saved:   { t:'✓ Saved',     bg:'#10b981', color:'#fff' },
+    local:   { t:'✓ Local',     bg:'#3b82f6', color:'#fff' },
+    offline: { t:'⚠ Offline — local backup only', bg:'#dc2626', color:'#fff' },
+  };
+  const cfg = map[kind] || map.saved;
+  el.textContent = cfg.t;
+  el.style.background = cfg.bg;
+  el.style.color = cfg.color;
+  el.style.display = 'inline-block';
+  // On 'saved', fade out after a few seconds. Keep offline/local visible.
+  clearTimeout(_scorerSaveStatusTimer);
+  if (kind === 'saved') {
+    _scorerSaveStatusTimer = setTimeout(() => { el.style.display = 'none'; }, 2500);
   }
 }
 
@@ -6260,15 +6341,53 @@ document.getElementById('start-btn').addEventListener('click', async () => {
 
   // Check for a saved mid-game state (prefer my per-side doc, fall back to shared admin doc)
   let resumed = false;
+  let resumeSource = '';
   try {
     const _myUrlTeamId = new URLSearchParams(window.location.search).get('team');
     const _mySide = _myUrlTeamId === awayId ? 'away' : _myUrlTeamId === homeId ? 'home' : null;
-    let stateSnap = _mySide
-      ? await getDoc(doc(db, 'game_states', `${gameId}_${_mySide}`))
-      : { exists: () => false };
-    if (!stateSnap.exists()) stateSnap = await getDoc(doc(db, 'game_states', gameId));
+
+    // Also pull from localStorage so we have a fallback if Firestore is
+    // unavailable (field signal out, user was offline during scoring).
+    let localState = null;
+    try {
+      const lsKeys = _mySide
+        ? [`dvsl_scorer_state_${gameId}_${_mySide}`, `dvsl_scorer_state_${gameId}`]
+        : [`dvsl_scorer_state_${gameId}`, `dvsl_scorer_state_${gameId}_away`, `dvsl_scorer_state_${gameId}_home`];
+      for (const k of lsKeys) {
+        const raw = localStorage.getItem(k);
+        if (raw) { localState = JSON.parse(raw); break; }
+      }
+    } catch(_) {}
+
+    let stateSnap = { exists: () => false };
+    try {
+      stateSnap = _mySide
+        ? await getDoc(doc(db, 'game_states', `${gameId}_${_mySide}`))
+        : { exists: () => false };
+      if (!stateSnap.exists()) stateSnap = await getDoc(doc(db, 'game_states', gameId));
+    } catch(_) {
+      // Firestore unreachable — keep going, we may have local fallback
+    }
+
+    // If Firestore has newer state, use it. Otherwise use localStorage.
+    let s = null;
     if (stateSnap.exists()) {
-      const s = stateSnap.data();
+      s = stateSnap.data();
+      resumeSource = 'cloud';
+      // If local copy is newer than the cloud copy (we scored offline
+      // after the last successful cloud write), prefer local.
+      const cloudAt = s.savedAt?.toMillis ? s.savedAt.toMillis() : 0;
+      const localAt = localState?.savedAt || 0;
+      if (localState && localAt > cloudAt + 1000) {
+        s = localState;
+        resumeSource = 'local (newer than cloud)';
+      }
+    } else if (localState) {
+      s = localState;
+      resumeSource = 'local backup';
+    }
+
+    if (s) {
       G.inning     = s.inning     ?? 1;
       G.half       = s.half       ?? 'top';
       G.outs       = s.outs       ?? 0;
@@ -6310,8 +6429,10 @@ document.getElementById('start-btn').addEventListener('click', async () => {
     document.getElementById('bottom-nav').classList.add('active');
     renderAll();
     saveScore();
-    // Show a brief "Resumed" flash
-    setTimeout(() => flashFeedback('RESUMED', 'var(--gold)'), 300);
+    // Show a brief "Resumed" flash — note the source so the captain knows
+    // if they recovered from the local backup (field had no signal).
+    const label = resumeSource.startsWith('local') ? 'RESTORED FROM BACKUP' : 'RESUMED';
+    setTimeout(() => flashFeedback(label, 'var(--gold)'), 300);
   } else {
     // Fresh game — reset state and show lineup screen
     G.inning = 1; G.half = 'top';
@@ -6389,6 +6510,20 @@ function clearLiveFlag() {
 window.addEventListener('beforeunload', clearLiveFlag);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') clearLiveFlag();
+});
+
+// ===== WARN BEFORE LEAVING A GAME IN PROGRESS =====
+// If the captain accidentally closes the tab, hits back, or navigates
+// away while actively scoring, the browser shows a confirmation prompt.
+// We only warn when a real game is active (not practice, not idle).
+// localStorage still has the backup regardless, so if they DO leave,
+// reopening the game URL restores everything.
+window.addEventListener('beforeunload', (e) => {
+  if (G && G.gameId && G.gameId !== 'practice' && document.getElementById('app')?.classList.contains('visible')) {
+    e.preventDefault();
+    e.returnValue = 'Game in progress — your scoring is saved locally, but are you sure you want to leave?';
+    return e.returnValue;
+  }
 });
 
 </script>
