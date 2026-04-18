@@ -502,6 +502,59 @@ async function logActivity(action, details) {
   } catch(e) { console.error('Failed to log activity:', e); }
 }
 
+// Recompute standings (W/L/PCT/RS/RA/GB/STREAK) from all finalized games.
+// Must run after any captain action that marks a game done:true so team
+// records stay in sync with the source of truth.
+async function recalcStandingsFromAllGames() {
+  try {
+    const gamesSnap = await getDocs(query(collection(db, 'games'), where('done', '==', true)));
+    const teamsSnap = await getDocs(collection(db, 'teams'));
+    const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+    const stats = {};
+    allTeams.forEach(t => { stats[t.id] = { w:0, l:0, rs:0, ra:0, results:[] }; });
+
+    const doneGames = gamesSnap.docs.map(d => d.data()).sort((a,b) => (a.wk||0) - (b.wk||0));
+    doneGames.forEach(g => {
+      const as = g.away_score || 0, hs = g.home_score || 0;
+      if (stats[g.away]) {
+        stats[g.away].rs += as; stats[g.away].ra += hs;
+        if (as > hs) { stats[g.away].w++; stats[g.away].results.push('W'); }
+        else if (as < hs) { stats[g.away].l++; stats[g.away].results.push('L'); }
+      }
+      if (stats[g.home]) {
+        stats[g.home].rs += hs; stats[g.home].ra += as;
+        if (hs > as) { stats[g.home].w++; stats[g.home].results.push('W'); }
+        else if (hs < as) { stats[g.home].l++; stats[g.home].results.push('L'); }
+      }
+    });
+
+    let maxWinDiff = -Infinity;
+    Object.values(stats).forEach(s => {
+      s.pct = (s.w + s.l) > 0 ? (s.w / (s.w + s.l)) : 0;
+      const wd = s.w - s.l;
+      if (wd > maxWinDiff) maxWinDiff = wd;
+      const r = s.results;
+      if (r.length > 0) {
+        let last = r[r.length - 1], count = 0;
+        for (let i = r.length - 1; i >= 0 && r[i] === last; i--) count++;
+        s.streak = last + count;
+      } else { s.streak = '-'; }
+    });
+    Object.values(stats).forEach(s => {
+      const diff = maxWinDiff - (s.w - s.l);
+      s.gb = diff === 0 ? '-' : (diff / 2).toString();
+    });
+
+    for (const t of allTeams) {
+      const s = stats[t.id]; if (!s) continue;
+      await updateDoc(doc(db, 'teams', t.id), {
+        w: s.w, l: s.l, pct: parseFloat(s.pct.toFixed(3)),
+        rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
+      }).catch(() => {});
+    }
+  } catch(e) { console.warn('standings recalc failed:', e); }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEAM PICKER — shown on load, no login required
 // ═══════════════════════════════════════════════════════════════════
@@ -1753,6 +1806,7 @@ window.submitScoreOnly = async function(gameId) {
     await updateDoc(doc(db,'games',gameId), gameUpdate);
     const gObj = MY_GAMES.find(x=>x.id===gameId);
     if (gObj) Object.assign(gObj, gameUpdate);
+    if (gameUpdate.done) await recalcStandingsFromAllGames();
     document.getElementById('boxscore-entry-'+gameId).style.display='none';
     toast('Score submitted!','success');
     await loadAllData();
@@ -2425,15 +2479,21 @@ window.submitBoxScore = async function(gameId) {
     await submitBoxScoreUnified(gameId, boxScoreData, myRole);
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     Object.assign(g, gameUpdate);
+    if (gameUpdate.done) await recalcStandingsFromAllGames();
+    const subId = `${gameId}_${myRole}`;
     const subData = {
       game_id: gameId, away: g.away, home: g.home,
       away_score: awayFinal, home_score: homeFinal,
       submitted_by: captainData.team_name, team_id: captainData.team_id,
       team_name: captainData.team_name, wk: g.wk || 0,
-      timestamp: Timestamp.now(), status: finalStatus, has_boxscore: true
+      timestamp: Timestamp.now(), status: finalStatus, has_boxscore: true,
+      role: myRole
     };
-    const ref = await addDoc(collection(db, 'score_submissions'), subData);
-    subData.id = ref.id;
+    await setDoc(doc(db, 'score_submissions', subId), subData);
+    subData.id = subId;
+    // Replace any prior copy from this role to avoid duplicates in local state
+    const existingIdx = MY_SUBMISSIONS.findIndex(s => s.id === subId);
+    if (existingIdx >= 0) MY_SUBMISSIONS.splice(existingIdx, 1);
     MY_SUBMISSIONS.unshift(subData);
     toast(toastMsg, finalStatus === 'conflict' ? 'error' : 'success');
     await logActivity('Box Score (Captain)', `${captainData.team_name}: ${getTeamName(g.away)} ${awayFinal} - ${getTeamName(g.home)} ${homeFinal}`);
@@ -2616,8 +2676,13 @@ window.submitScore = async function(gameId) {
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     // Update local state
     Object.assign(g, gameUpdate);
-    const ref = await addDoc(collection(db, 'score_submissions'), subData);
-    subData.id = ref.id;
+    if (gameUpdate.done) await recalcStandingsFromAllGames();
+    const subId = `${gameId}_${myRole}`;
+    subData.role = myRole;
+    await setDoc(doc(db, 'score_submissions', subId), subData);
+    subData.id = subId;
+    const existingIdx = MY_SUBMISSIONS.findIndex(s => s.id === subId);
+    if (existingIdx >= 0) MY_SUBMISSIONS.splice(existingIdx, 1);
     MY_SUBMISSIONS.unshift(subData);
     toast(toastMsg, finalStatus === 'conflict' ? 'error' : 'success');
     await logActivity('Score Submission', `${captainData.team_name}: ${getTeamName(g.away)} ${awayScore} – ${getTeamName(g.home)} ${homeScore}`);

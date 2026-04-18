@@ -1421,10 +1421,18 @@ window.adminSubmitScoreOnly = async function(gameId) {
       away_errors: awayErrors, home_errors: homeErrors,
       status: 'final'
     };
-    const q2 = query(collection(db, 'box_scores'), where('game_id', '==', gameId));
-    const snap = await getDocs(q2);
-    if (!snap.empty) await updateDoc(doc(db, 'box_scores', snap.docs[0].id), boxData);
-    else await addDoc(collection(db, 'box_scores'), boxData);
+    // Prefer the gameId-keyed doc (unified path); fall back to legacy auto-ID
+    // lookup so old captain submissions don't cause duplicate docs.
+    const primaryRef = doc(db, 'box_scores', gameId);
+    const primarySnap = await getDoc(primaryRef);
+    if (primarySnap.exists()) {
+      await updateDoc(primaryRef, boxData);
+    } else {
+      const q2 = query(collection(db, 'box_scores'), where('game_id', '==', gameId));
+      const snap = await getDocs(q2);
+      if (!snap.empty) await updateDoc(doc(db, 'box_scores', snap.docs[0].id), boxData);
+      else await setDoc(primaryRef, boxData);
+    }
     await updateDoc(doc(db, 'games', gameId), {
       away_score: awayFinal, home_score: homeFinal, done: true,
       score_conflict: false, score_pending: false, score_confirmed: true
@@ -2867,10 +2875,16 @@ window.saveBoxScore = async function(markFinal) {
     potg_team: bsPotgTeam||''
   };
   try {
-    const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
-    const snap = await getDocs(q2);
-    if(!snap.empty) await updateDoc(doc(db,'box_scores',snap.docs[0].id), boxData);
-    else await addDoc(collection(db,'box_scores'), boxData);
+    const primaryRef = doc(db, 'box_scores', bsGameId);
+    const primarySnap = await getDoc(primaryRef);
+    if (primarySnap.exists()) {
+      await updateDoc(primaryRef, boxData);
+    } else {
+      const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
+      const snap = await getDocs(q2);
+      if(!snap.empty) await updateDoc(doc(db,'box_scores',snap.docs[0].id), boxData);
+      else await setDoc(primaryRef, boxData);
+    }
     await updateDoc(doc(db,'games',bsGameId), {away_score:awayR, home_score:homeR, done:markFinal});
     const g = GAMES.find(x=>x.id===bsGameId);
     if(g){g.away_score=awayR;g.home_score=homeR;g.done=markFinal;}
