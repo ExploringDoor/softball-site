@@ -53,42 +53,28 @@
       // backgrounded.
       async function _dvslCheckPendingNav() {
         try {
-          if (!('caches' in self)) {
-            _dvslDiag('nocache');
-            return;
-          }
+          if (!('caches' in self)) { _dvslDiag('nocache'); return; }
           const cache = await caches.open('dvsl-pending-nav');
-          const [urlResp, pushTsResp] = await Promise.all([
-            cache.match('/__dvsl_pending_nav'),
-            cache.match('/__dvsl_push_ts'),
-          ]);
-          const url     = urlResp ? (await urlResp.text()).trim() : '';
-          const pushTs  = pushTsResp ? parseInt((await pushTsResp.text()).trim(), 10) : 0;
-          const ageSec  = pushTs ? Math.round((Date.now() - pushTs) / 1000) : -1;
-          _dvslDiag((url ? ('url:' + url.replace(location.origin,'')) : 'url:none') + ' age:' + ageSec + 's');
-          if (!url) return;
-          // Only navigate if the push arrived in the last 60s — otherwise
-          // this is just the user manually reopening the app hours later
-          // and we'd send them somewhere they don't want to go.
-          if (ageSec < 0 || ageSec > 60) {
-            await cache.delete('/__dvsl_pending_nav');
-            await cache.delete('/__dvsl_push_ts');
-            return;
-          }
-          const t = new URL(url, location.origin);
+          const resp = await cache.match('/__dvsl_push_info');
+          if (!resp) { _dvslDiag('no-info'); return; }
+          let info = null;
+          try { info = await resp.json(); } catch(_) {}
+          if (!info) { _dvslDiag('bad-json'); return; }
+          const ageSec = Math.round((Date.now() - (info.ts||0)) / 1000);
+          const urlStr = info.url || '';
+          _dvslDiag('url:' + (urlStr || 'null') + ' age:' + ageSec + 's keys:' + (info.keys||[]).join(','));
+          // Stale push (user manually opened app hours later)
+          if (ageSec > 60) { await cache.delete('/__dvsl_push_info'); return; }
+          if (!urlStr) return;
+          const t = new URL(urlStr, location.origin);
           const sameHere =
             t.origin === location.origin &&
             t.pathname === location.pathname &&
             t.search === location.search &&
             t.hash === location.hash;
-          if (sameHere) {
-            await cache.delete('/__dvsl_pending_nav');
-            await cache.delete('/__dvsl_push_ts');
-            return;
-          }
-          await cache.delete('/__dvsl_pending_nav');
-          await cache.delete('/__dvsl_push_ts');
-          _dvslDiag('→ navigating to ' + t.pathname + t.search);
+          if (sameHere) { await cache.delete('/__dvsl_push_info'); return; }
+          await cache.delete('/__dvsl_push_info');
+          _dvslDiag('→ nav ' + t.pathname + t.search);
           window.location.href = t.href;
         } catch(e) {
           _dvslDiag('err:' + (e && e.message ? e.message.slice(0,40) : 'unknown'));

@@ -34,23 +34,26 @@ firebase.initializeApp({
 const _messaging = firebase.messaging();
 _messaging.onBackgroundMessage(async (payload) => {
   const d = (payload && payload.data) || {};
+  const rawUrl = d.url;                        // preserve undefined-ness for diag
   const title = d.title || 'DVSL';
   const body = d.body || '';
-  const url = d.url || '/';
+  const url = rawUrl || '/';
 
-  // KEY FIX: write the URL to cache HERE (when the push arrives), not in
-  // notificationclick. iOS PWAs don't reliably fire notificationclick when
-  // the PWA is backgrounded-but-alive — iOS just refocuses the window. So
-  // we stash the URL now; the page polls for it and navigates on resume.
+  // Single-entry JSON write — no race between two cache.put calls — and
+  // also stash diagnostic info so the page can tell us what FCM actually
+  // delivered in payload.data.
   try {
     const cache = await caches.open('dvsl-pending-nav');
+    const info = {
+      url: rawUrl == null ? null : String(rawUrl),
+      ts: Date.now(),
+      keys: Object.keys(d),
+      title: d.title || null,
+      body: d.body || null,
+    };
     await cache.put(
-      new Request('/__dvsl_pending_nav'),
-      new Response(url, { headers: { 'content-type': 'text/plain' } })
-    );
-    await cache.put(
-      new Request('/__dvsl_push_ts'),
-      new Response(String(Date.now()), { headers: { 'content-type': 'text/plain' } })
+      new Request('/__dvsl_push_info'),
+      new Response(JSON.stringify(info), { headers: { 'content-type': 'application/json' } })
     );
   } catch (_) {}
 
@@ -138,7 +141,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v17-pusharrival';
+const VERSION = 'dvsl-v18-json';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
