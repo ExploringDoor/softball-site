@@ -74,12 +74,17 @@ export default async function handler(req, res) {
 
   // 3. Fan out FCM sends. We use the send endpoint (one call per token) —
   //    simple and reliable, fine up to a few hundred tokens.
-  const results = await Promise.all(tokens.map(tok =>
-    fcmSend({ projectId: PROJECT_ID, accessToken, token: tok, title, body, url }).catch(e => ({ error: e.message }))
-  ));
-  const sent = results.filter(r => !r.error).length;
+  const results = await Promise.all(tokens.map(async tok => {
+    try {
+      const r = await fcmSend({ projectId: PROJECT_ID, accessToken, token: tok, title, body, url });
+      return { tokenPrefix: tok.slice(0, 24) + '...', ok: true, messageName: r?.name || null };
+    } catch(e) {
+      return { tokenPrefix: tok.slice(0, 24) + '...', ok: false, error: e.message };
+    }
+  }));
+  const sent = results.filter(r => r.ok).length;
   const failed = results.length - sent;
-  return res.status(200).json({ sent, failed, total: results.length });
+  return res.status(200).json({ sent, failed, total: results.length, results });
 }
 
 // ── helpers ────────────────────────────────────────────────────────────
