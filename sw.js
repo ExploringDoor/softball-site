@@ -26,18 +26,12 @@ firebase.initializeApp({
   appId: "1:145862305559:web:153ec455bad57e17517952"
 });
 
-const messaging = firebase.messaging();
-
-messaging.onBackgroundMessage(function(payload) {
-  const title = payload.notification?.title || payload.data?.title || 'DVSL Update';
-  const options = {
-    body: payload.notification?.body || payload.data?.body || '',
-    icon: '/dvsl-logo-dark.png',
-    badge: '/dvsl-logo-dark.png',
-    data: payload.data || {},
-  };
-  self.registration.showNotification(title, options);
-});
+// Calling firebase.messaging() is required so FCM wires up its push event
+// listener inside this SW. We intentionally do NOT define onBackgroundMessage
+// here — when the FCM payload contains a top-level `notification` block, the
+// SDK auto-displays it once. Adding onBackgroundMessage caused a duplicate
+// banner. One banner = the right behavior.
+firebase.messaging();
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
@@ -45,7 +39,7 @@ self.addEventListener('notificationclick', function(event) {
   event.waitUntil(clients.openWindow(url));
 });
 
-const VERSION = 'dvsl-v6-push';
+const VERSION = 'dvsl-v7-push';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

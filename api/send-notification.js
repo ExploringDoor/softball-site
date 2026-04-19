@@ -148,13 +148,6 @@ async function fcmSend({ projectId, accessToken, token, title, body, url }) {
         Urgency: 'high',
         TTL: '86400',
       },
-      notification: {
-        title,
-        body,
-        icon: '/dvsl-logo-dark.png',
-        badge: '/dvsl-logo-dark.png',
-        requireInteraction: false,
-      },
       fcm_options: { link: url || '/' },
     },
   };
