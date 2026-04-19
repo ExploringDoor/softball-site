@@ -164,20 +164,26 @@
               box-sizing: border-box;
               transition: color 160ms ease, transform 160ms ease;
             }
-            /* Active tab: vivid navy, bolder label, gentle glow on the icon so
-               it's obvious at a glance which section you're viewing. */
-            #dvsl-tabbar > *.active { color: #0046B4; }
+            /* Active tab: vivid blue, bolder label, STRONG glow on the icon.
+               The old top-of-bar chip indicator has been removed — Adam said
+               the line above the icon read awkwardly, and amping up the glow
+               on the icon / label alone is a cleaner "this is where you are"
+               cue. Triple layered box-less text-shadow gives the icon a halo
+               without needing extra DOM. */
+            #dvsl-tabbar > *.active { color: #0057ff; }
             #dvsl-tabbar > *.active .dt-ico {
-              text-shadow: 0 0 14px rgba(0,70,180,.55), 0 0 4px rgba(0,70,180,.35);
-              transform: translateY(-1px) scale(1.06);
+              text-shadow:
+                0 0 4px rgba(0,87,255,.95),
+                0 0 12px rgba(0,87,255,.75),
+                0 0 24px rgba(0,87,255,.55),
+                0 0 40px rgba(0,87,255,.35);
+              transform: translateY(-1px) scale(1.1);
             }
             #dvsl-tabbar > *.active .dt-label {
               font-weight: 900 !important;
-              letter-spacing: .04em !important;
-            }
-            #dvsl-tabbar > *.active::before {
-              content: ''; position: absolute; top: 0; left: 20%; right: 20%;
-              height: 3px; background: #0046B4; border-radius: 0 0 3px 3px;
+              letter-spacing: .05em !important;
+              color: #0046B4 !important;
+              text-shadow: 0 0 6px rgba(0,70,180,.35);
             }
             #dvsl-tabbar .dt-ico {
               font-size: 20px; line-height: 1;
@@ -814,6 +820,7 @@ select.form-input{cursor:pointer}
     </div>
     <nav class="sidebar-nav">
       <div class="nav-item active" data-section="dashboard" data-sec="dashboard" onclick="showSection('dashboard')"><span class="icon">&#128202;</span> Dashboard</div>
+      <div class="nav-item" data-section="notifications" data-sec="notifications" onclick="showSection('notifications')"><span class="icon">&#128276;</span> Notifications<span id="notif-nav-badge" style="display:none;margin-left:6px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px;vertical-align:middle">0</span></div>
       <div class="nav-item" data-section="scores" data-sec="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
       <div class="nav-item" data-section="schedule" data-sec="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
       <div class="nav-item" data-section="rosters" data-sec="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
@@ -874,6 +881,29 @@ select.form-input{cursor:pointer}
         </div>
         <div id="captain-chat-preview" style="font-size:13px;color:var(--muted)">
           <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ NOTIFICATIONS ═══ -->
+    <!-- Full list counterpart to the Dashboard's "Notifications" panel.
+         The panel on Dashboard only shows the latest 10; this section lists
+         ALL activity_log entries with the same per-row ✕ dismiss affordance. -->
+    <div class="section" id="sec-notifications">
+      <div class="main-header">
+        <div class="main-title">Notifications</div>
+        <div class="main-subtitle">All activity across the league</div>
+      </div>
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div class="panel-title" style="margin:0">All Notifications</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="loadAllNotifications()">↻ Refresh</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="clearActivityLog()">Clear All</button>
+          </div>
+        </div>
+        <div id="notifications-list-full">
+          <div class="loading"><div class="spinner"></div> Loading notifications...</div>
         </div>
       </div>
     </div>
@@ -1757,8 +1787,40 @@ async function logActivity(action, details) {
 }
 window.logActivity = logActivity;
 
+// Render a single activity row. Used by both the dashboard panel (latest 10)
+// and the full Notifications section. Row IDs are suffixed with the container
+// key so the same doc can appear in both lists without colliding.
+function _renderActivityRow(a, containerKey) {
+  const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
+  const isCaptainEdit = a.action === 'Schedule (Captain Edit)';
+  const rowStyle = isCaptainEdit
+    ? 'background:#fff7ed;border-left:3px solid #ea580c;padding-left:10px;position:relative'
+    : 'position:relative';
+  const dotStyle = isCaptainEdit ? 'background:#ea580c' : '';
+  return `<div class="activity-item" data-act-id="${a.id}" id="act-row-${containerKey}-${a.id}" style="${rowStyle};display:flex;align-items:flex-start;gap:8px;padding-right:32px">
+    <div class="activity-dot" style="${dotStyle}"></div>
+    <div style="flex:1;min-width:0">
+      <div class="activity-text"><strong>${esc(a.action)}</strong> &mdash; ${esc(a.details)}</div>
+      <div class="activity-time">${t.toLocaleDateString()} ${t.toLocaleTimeString()} &bull; ${esc(a.user||'')}</div>
+    </div>
+    <button onclick="dismissActivity('${a.id}')" title="Dismiss this notification" aria-label="Dismiss"
+      style="position:absolute;top:8px;right:8px;width:24px;height:24px;border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;border-radius:4px;padding:0">&times;</button>
+  </div>`;
+}
+
+// Keep the sidebar nav badge in sync with the total notification count.
+// >99 caps at "99+" so the badge never stretches the nav item.
+function updateNotifNavBadge(n) {
+  const badge = document.getElementById('notif-nav-badge');
+  if (!badge) return;
+  if (!n || n <= 0) { badge.style.display = 'none'; return; }
+  badge.style.display = '';
+  badge.textContent = n > 99 ? '99+' : String(n);
+}
+
 async function loadActivityLog() {
   const el = document.getElementById('activity-log');
+  const elFull = document.getElementById('notifications-list-full');
   try {
     const q2 = query(collection(db, 'activity_log'), orderBy('timestamp', 'desc'));
     const snap = await getDocs(q2);
@@ -1776,31 +1838,27 @@ async function loadActivityLog() {
     });
     renderCaptainEditAlert(recentCaptainEdits);
 
-    if (!items.length) { el.innerHTML = '<div class="empty">No notifications</div>'; return; }
-    // Treat this list as a notifications inbox: each row has its own
-    // dismiss (✕) button so Adam can tick them off individually
-    // instead of nuking the whole log or letting them pile up.
-    el.innerHTML = items.map(a => {
-      const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
-      const isCaptainEdit = a.action === 'Schedule (Captain Edit)';
-      const rowStyle = isCaptainEdit
-        ? 'background:#fff7ed;border-left:3px solid #ea580c;padding-left:10px;position:relative'
-        : 'position:relative';
-      const dotStyle = isCaptainEdit ? 'background:#ea580c' : '';
-      return `<div class="activity-item" id="act-row-${a.id}" style="${rowStyle};display:flex;align-items:flex-start;gap:8px;padding-right:32px">
-        <div class="activity-dot" style="${dotStyle}"></div>
-        <div style="flex:1;min-width:0">
-          <div class="activity-text"><strong>${esc(a.action)}</strong> &mdash; ${esc(a.details)}</div>
-          <div class="activity-time">${t.toLocaleDateString()} ${t.toLocaleTimeString()} &bull; ${esc(a.user||'')}</div>
-        </div>
-        <button onclick="dismissActivity('${a.id}')" title="Dismiss this notification" aria-label="Dismiss"
-          style="position:absolute;top:8px;right:8px;width:24px;height:24px;border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;border-radius:4px;padding:0">&times;</button>
-      </div>`;
-    }).join('');
+    // Update sidebar count badge.
+    updateNotifNavBadge(allItems.length);
+
+    // Dashboard panel: latest 10 only.
+    if (el) {
+      if (!items.length) el.innerHTML = '<div class="empty">No notifications</div>';
+      else el.innerHTML = items.map(a => _renderActivityRow(a, 'dash')).join('');
+    }
+    // Full Notifications section: everything.
+    if (elFull) {
+      if (!allItems.length) elFull.innerHTML = '<div class="empty">No notifications</div>';
+      else elFull.innerHTML = allItems.map(a => _renderActivityRow(a, 'full')).join('');
+    }
   } catch(e) {
-    el.innerHTML = '<div class="empty">Could not load notifications</div>';
+    if (el) el.innerHTML = '<div class="empty">Could not load notifications</div>';
+    if (elFull) elFull.innerHTML = '<div class="empty">Could not load notifications</div>';
   }
 }
+
+// Exposed so the Refresh button on the Notifications section can call it.
+window.loadAllNotifications = loadActivityLog;
 
 // Dismiss a single notification row. We delete the Firestore doc so
 // it doesn't come back on the next page load (matches how
@@ -1809,17 +1867,29 @@ async function loadActivityLog() {
 // empty-state message instead of leaving a blank panel.
 window.dismissActivity = async function(id) {
   if (!id) return;
-  const row = document.getElementById('act-row-' + id);
-  if (row) row.style.opacity = '0.35';
+  // The same doc id may be rendered in two places (dashboard panel + full
+  // notifications section), so fade/remove every row with that data-act-id.
+  const rows = document.querySelectorAll(`[data-act-id="${id}"]`);
+  rows.forEach(r => { r.style.opacity = '0.35'; });
   try {
     await deleteDoc(doc(db, 'activity_log', id));
-    if (row) row.remove();
-    const container = document.getElementById('activity-log');
-    if (container && !container.querySelector('.activity-item')) {
-      container.innerHTML = '<div class="empty">No notifications</div>';
-    }
+    rows.forEach(r => r.remove());
+    // If either container is now empty, show the empty state.
+    ['activity-log', 'notifications-list-full'].forEach(cid => {
+      const c = document.getElementById(cid);
+      if (c && !c.querySelector('.activity-item')) {
+        c.innerHTML = '<div class="empty">No notifications</div>';
+      }
+    });
+    // Decrement the badge by counting remaining rows in the full list
+    // (falls back to the dashboard list if the full section hasn't rendered).
+    const full = document.getElementById('notifications-list-full');
+    const dash = document.getElementById('activity-log');
+    const host = (full && full.querySelectorAll('.activity-item').length >= 0) ? full : dash;
+    const remaining = host ? host.querySelectorAll('.activity-item').length : 0;
+    updateNotifNavBadge(remaining);
   } catch(e) {
-    if (row) row.style.opacity = '';
+    rows.forEach(r => { r.style.opacity = ''; });
     toast('Failed to dismiss: ' + e.message, 'error');
   }
 };
@@ -1860,7 +1930,12 @@ window.clearActivityLog = async function() {
     const snap = await getDocs(collection(db, 'activity_log'));
     const deletions = snap.docs.map(d => deleteDoc(doc(db, 'activity_log', d.id)));
     await Promise.all(deletions);
-    document.getElementById('activity-log').innerHTML = '<div class="empty">Activity log cleared</div>';
+    const emptyHtml = '<div class="empty">Activity log cleared</div>';
+    const dash = document.getElementById('activity-log');
+    const full = document.getElementById('notifications-list-full');
+    if (dash) dash.innerHTML = emptyHtml;
+    if (full) full.innerHTML = emptyHtml;
+    updateNotifNavBadge(0);
     toast('Activity log cleared');
   } catch(e) {
     toast('Failed to clear activity log: ' + e.message, 'error');
@@ -2174,6 +2249,9 @@ window.showSection = function(name) {
   if (name === 'pages') loadPageEditor();
   if (name === 'waivers') initWaiversSection();
   if (name === 'media') loadAdminMedia();
+  // Notifications section lazy-loads the full list on first open; if the
+  // dashboard already fetched activity_log its render is reused.
+  if (name === 'notifications') loadActivityLog();
 };
 
 window.toggleSidebar = function() {
@@ -2289,6 +2367,16 @@ function renderScores() {
   });
   const weeks = Object.keys(byWeek).sort((a,b) => a - b);
   if (!weeks.length) { el.innerHTML = '<div class="empty">No games found</div>'; return; }
+
+  // Sort games within each week by actual date/time so rows render
+  // chronologically (Fri before Sat, 6pm before 7pm) instead of Firestore's
+  // arbitrary insertion order.
+  Object.keys(byWeek).forEach(w => {
+    byWeek[w].sort((a, b) =>
+      (a.date_iso || '').localeCompare(b.date_iso || '') ||
+      (a.time_24 || '').localeCompare(b.time_24 || '')
+    );
+  });
 
   el.innerHTML = weeks.map(w => `
     <div class="week-group">
@@ -4533,9 +4621,16 @@ function renderSchedule() {
   if (!GAMES.length) { el.innerHTML = '<div class="empty">No games in schedule</div>'; return; }
 
   const filterTeam = document.getElementById('schedule-team-filter')?.value || 'all';
-  const visibleGames = filterTeam === 'all'
-    ? GAMES
-    : GAMES.filter(g => g.away === filterTeam || g.home === filterTeam);
+  const visibleGames = (filterTeam === 'all'
+    ? GAMES.slice()
+    : GAMES.filter(g => g.away === filterTeam || g.home === filterTeam)
+  ).sort((a, b) =>
+    // Sort by week first, then by ISO date, then by 24h time — so within a week
+    // the rows go earliest-to-latest instead of whatever order Firestore returned.
+    (a.wk || 0) - (b.wk || 0) ||
+    (a.date_iso || '').localeCompare(b.date_iso || '') ||
+    (a.time_24 || '').localeCompare(b.time_24 || '')
+  );
   if (!visibleGames.length) {
     const teamLabel = TEAMS.find(t => t.id === filterTeam)?.name || filterTeam;
     el.innerHTML = `<div class="empty">No games scheduled for ${esc(teamLabel)}</div>`;

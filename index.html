@@ -164,20 +164,26 @@
               box-sizing: border-box;
               transition: color 160ms ease, transform 160ms ease;
             }
-            /* Active tab: vivid navy, bolder label, gentle glow on the icon so
-               it's obvious at a glance which section you're viewing. */
-            #dvsl-tabbar > *.active { color: #0046B4; }
+            /* Active tab: vivid blue, bolder label, STRONG glow on the icon.
+               The old top-of-bar chip indicator has been removed — Adam said
+               the line above the icon read awkwardly, and amping up the glow
+               on the icon / label alone is a cleaner "this is where you are"
+               cue. Triple layered box-less text-shadow gives the icon a halo
+               without needing extra DOM. */
+            #dvsl-tabbar > *.active { color: #0057ff; }
             #dvsl-tabbar > *.active .dt-ico {
-              text-shadow: 0 0 14px rgba(0,70,180,.55), 0 0 4px rgba(0,70,180,.35);
-              transform: translateY(-1px) scale(1.06);
+              text-shadow:
+                0 0 4px rgba(0,87,255,.95),
+                0 0 12px rgba(0,87,255,.75),
+                0 0 24px rgba(0,87,255,.55),
+                0 0 40px rgba(0,87,255,.35);
+              transform: translateY(-1px) scale(1.1);
             }
             #dvsl-tabbar > *.active .dt-label {
               font-weight: 900 !important;
-              letter-spacing: .04em !important;
-            }
-            #dvsl-tabbar > *.active::before {
-              content: ''; position: absolute; top: 0; left: 20%; right: 20%;
-              height: 3px; background: #0046B4; border-radius: 0 0 3px 3px;
+              letter-spacing: .05em !important;
+              color: #0046B4 !important;
+              text-shadow: 0 0 6px rgba(0,70,180,.35);
             }
             #dvsl-tabbar .dt-ico {
               font-size: 20px; line-height: 1;
@@ -2690,7 +2696,14 @@ thead th.sorted-col .sarrow{opacity:1}
     </li>
   </ul>
   <div class="nav-right">
-    <button class="nav-signup-btn" onclick="window.location='notifications.html'">🔔 Alerts</button>
+    <!-- Desktop doesn't have the mobile bottom tab bar, so the only
+         way into Inbox was via the mobile UI. This button now points
+         at /inbox.html (the actual inbox of received notifications)
+         instead of /notifications.html (just the subscription
+         settings page). Inbox still has a ⚙ Settings link at the
+         top to get to notifications.html when you want to toggle
+         categories. -->
+    <button class="nav-signup-btn" onclick="window.location='inbox.html'">🔔 Inbox</button>
     <button id="darkToggle" onclick="toggleDarkMode()" style="background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;transition:all .2s" title="Toggle dark mode">🌙</button>
   </div>
 </nav>
@@ -7621,11 +7634,23 @@ function renderStats(){
   const isHist = year !== '2026' && TBIR_SEASONS[year];
   document.getElementById('statsFoot').innerHTML = `<tr><td colspan="${cols.length}">Sorted by ${col?.label||sk} · ${rows.length} players · ${isHist?`${year} TBIR Season`:(split==='all'?'2026 Year to Date':SPLITS.find(s=>s.val===split)?.label||split)}</td></tr>`;
 
-  // Hide pitching button for historical years (no pitching data)
+  // Pitching stats: historical years don't have archived pitching
+  // data. Previously we hid the Pitching button on historical years
+  // entirely, which meant Adam thought pitching history was just
+  // broken ("why can't I see stats from previous years"). Keep the
+  // Pitching button visible on historical years and, if the user
+  // has it selected, overwrite the body with a helpful empty-state
+  // explaining that only batting is archived. That way the UI is
+  // explicit instead of silently kicking back to Hitting.
   const pitchBtn = document.getElementById('btn-pitching');
-  if (pitchBtn) {
-    pitchBtn.style.display = isHist ? 'none' : '';
-    if (isHist && type === 'pitching') { type = 'hitting'; }
+  if (pitchBtn) pitchBtn.style.display = '';
+  if (isHist && type === 'pitching') {
+    const cols = getCols();
+    document.getElementById('statsBody').innerHTML = `<tr><td colspan="${cols.length}" style="padding:40px 16px;text-align:center;color:#666">
+      <div style="font-weight:700;font-size:15px;color:#333;margin-bottom:6px">No ${year} pitching stats archived</div>
+      <div style="font-size:13px;line-height:1.5">Pitcher-level stats (IP, WHIP, K, etc.) have only been kept since 2026.<br>Historical ${year} batting stats are still available — tap <b>Hitting</b> above.</div>
+    </td></tr>`;
+    document.getElementById('statsFoot').innerHTML = `<tr><td colspan="${cols.length}">Pitching history not available for ${year}</td></tr>`;
   }
 
   // Column-hover highlight: when the user hovers a header, light up every
