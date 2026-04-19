@@ -191,6 +191,10 @@ select.form-input{cursor:pointer}
 .chat-msg.mine .chat-bubble{background:var(--navy);color:#fff;border-bottom-right-radius:4px}
 .chat-msg.theirs .chat-bubble{background:rgba(0,0,0,.07);color:var(--text);border-bottom-left-radius:4px}
 .chat-meta{font-size:11px;color:var(--muted2);padding:0 4px}
+.chat-bubble{position:relative}
+.chat-del{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;font-size:11px;line-height:1;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;opacity:0;transition:opacity .15s}
+.chat-msg:hover .chat-del,.chat-msg.mine .chat-del{opacity:1}
+.chat-del:hover{transform:scale(1.1)}
 .chat-input-row{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border);background:#fafafa}
 .chat-input{flex:1;padding:10px 16px;font-size:14px;font-family:'Inter',sans-serif;border:1px solid var(--border);border-radius:22px;outline:none;transition:border-color .2s;background:#fff}
 .chat-input:focus{border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-light)}
@@ -386,8 +390,13 @@ select.form-input{cursor:pointer}
 
     <!-- TEAM CHAT -->
     <div class="section" id="sec-teamchat">
-      <div class="section-title">Team Chat</div>
-      <div class="section-sub">Send messages to your team. Players with an email on file will be notified.</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div>
+          <div class="section-title">Team Chat</div>
+          <div class="section-sub">Send messages to your team. Players with an email on file will be notified.</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="window.resetTeamChat()" style="color:var(--red);border-color:var(--red);white-space:nowrap">Reset chat</button>
+      </div>
       <div class="chat-wrap">
         <div class="chat-messages" id="teamchat-messages"><div class="empty">No messages yet.</div></div>
         <div class="chat-input-row">
@@ -401,7 +410,7 @@ select.form-input{cursor:pointer}
     <!-- CAPTAINS CHAT -->
     <div class="section" id="sec-captchat">
       <div class="section-title">Captains Chat</div>
-      <div class="section-sub">Private group chat — only team captains can read and post here</div>
+      <div class="section-sub">Private group chat — only team captains can read and post here. Tap × to delete your own messages.</div>
       <div class="chat-wrap">
         <div class="chat-messages" id="captchat-messages"><div class="empty">No messages yet.</div></div>
         <div class="chat-input-row">
@@ -636,7 +645,7 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -3593,20 +3602,79 @@ function fmtChatTime(ts) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + time;
 }
 
+// Cache for delete lookup, keyed by container so team vs captains chat
+// messages don't collide.
+const CHAT_CACHE = { 'teamchat-messages': {}, 'captchat-messages': {} };
+
 function renderChatMessages(msgs, containerId, myEmail) {
   const el = document.getElementById(containerId);
   if (!el) return;
-  if (!msgs.length) { el.innerHTML = '<div class="empty">No messages yet. Say hello!</div>'; return; }
+  if (!msgs.length) { el.innerHTML = '<div class="empty">No messages yet. Say hello!</div>'; CHAT_CACHE[containerId] = {}; return; }
+  // Which Firestore collection are these messages in? Team chat uses
+  // team_messages; captains chat uses captain_chat. We need this for the
+  // delete call to target the right doc.
+  const collName = containerId === 'teamchat-messages' ? 'team_messages' : 'captain_chat';
+  // Captains moderate their own team chat — they can delete anyone's
+  // message in team chat. In captains chat, they can only delete their own.
+  const canModerateOthers = containerId === 'teamchat-messages';
+  CHAT_CACHE[containerId] = {};
+  msgs.forEach(m => { CHAT_CACHE[containerId][m.id] = m; });
   el.innerHTML = msgs.map(m => {
     const mine = m.author_email === myEmail;
+    const canDelete = mine || canModerateOthers;
+    const delBtn = canDelete
+      ? `<button class="chat-del" data-cid="${containerId}" data-coll="${collName}" data-mid="${esc(m.id)}" title="Delete">×</button>`
+      : '';
     return `<div class="chat-msg ${mine ? 'mine' : 'theirs'}">
       ${!mine ? `<div class="chat-meta">${esc(m.team_name || m.author_email)}</div>` : ''}
-      <div class="chat-bubble">${esc(m.text)}</div>
+      <div class="chat-bubble">${esc(m.text)}${delBtn}</div>
       <div class="chat-meta">${fmtChatTime(m.timestamp)}</div>
     </div>`;
   }).join('');
+  el.querySelectorAll('.chat-del').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      deleteChatMessage(btn.dataset.cid, btn.dataset.coll, btn.dataset.mid);
+    });
+  });
   el.scrollTop = el.scrollHeight;
 }
+
+async function deleteChatMessage(containerId, collName, mid) {
+  const m = CHAT_CACHE[containerId]?.[mid];
+  if (!m) return;
+  const preview = (m.text || '').slice(0, 60);
+  if (!confirm(`Delete this message?\n\n"${preview}${m.text?.length > 60 ? '…' : ''}"`)) return;
+  try {
+    await deleteDoc(doc(db, collName, mid));
+    // onSnapshot listener will re-render
+  } catch(e) {
+    alert('Could not delete: ' + e.message);
+  }
+}
+
+// Captain-only: nuke every message in this team's chat. Batched in 400s
+// to stay under Firestore's 500-op writeBatch limit.
+window.resetTeamChat = async function() {
+  const teamName = captainData?.team_name || captainData?.team_id || 'your team';
+  if (!confirm(`Reset the entire Team Chat for ${teamName}?\n\nThis deletes ALL messages permanently. This cannot be undone.`)) return;
+  if (!confirm('Are you absolutely sure? Last chance to back out.')) return;
+  try {
+    const q = query(collection(db, 'team_messages'), where('team_id', '==', captainData.team_id));
+    const snap = await getDocs(q);
+    if (!snap.docs.length) { alert('Chat is already empty.'); return; }
+    let remaining = snap.docs.slice();
+    while (remaining.length) {
+      const chunk = remaining.splice(0, 400);
+      const batch = writeBatch(db);
+      chunk.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    alert(`Deleted ${snap.docs.length} message(s).`);
+  } catch(e) {
+    alert('Reset failed: ' + e.message);
+  }
+};
 
 function updateBadge(badgeId, lastReadKey) {
   // Badge is set by the onSnapshot handler when new messages arrive
