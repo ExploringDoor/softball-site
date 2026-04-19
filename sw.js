@@ -138,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v23-dropdown';
+const VERSION = 'dvsl-v24-bell';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
@@ -171,6 +171,7 @@ const CORE_URLS = [
   '/rules.html',
   '/photos.html',
   '/watch.html',
+  '/inbox.html',
   '/manifest.json',
   '/offline.html',
   '/icons/icon-192.png',

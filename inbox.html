@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#002D72">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DVSL">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script>
+    // Inbox page shares the bell scaffold from other pages but ALSO owns
+    // the main list on the page itself. On load (and visibility) we fetch
+    // /api/check-pending-nav and render the full card list. The bell in
+    // the corner is redundant here (we're already looking at the list)
+    // but left in for consistency.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(r => { try { r.update(); } catch(_){} }).catch(() => {});
+        let _dvslReloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (_dvslReloaded) return;
+          _dvslReloaded = true;
+          window.location.reload();
+        });
+      });
+    }
+  </script>
+<title>Notifications — DVSL Softball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff; --card:#ffffff; --card2:#f8f8f8; --card3:#f0f0f0;
+  --border:rgba(0,0,0,0.1); --border2:rgba(0,0,0,0.18);
+  --text:#1a1a1a; --muted:rgba(0,0,0,0.5); --muted2:rgba(0,0,0,0.35);
+  --navy:#002D72; --navy-dim:rgba(0,45,114,.08); --navy-hover:rgba(0,45,114,.05);
+  --red:#c8102e; --green:#22c55e;
+}
+html,body{overflow-x:hidden}
+body{
+  background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;
+  min-height:100vh;padding-top:env(safe-area-inset-top);
+  padding-bottom:calc(60px + env(safe-area-inset-bottom));
+}
+a{color:inherit;text-decoration:none}
+
+/* top bar */
+.topbar{
+  position:sticky;top:0;z-index:10;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+  border-bottom:1px solid var(--border);
+  padding:12px 20px;display:flex;align-items:center;gap:14px;
+  padding-top:calc(12px + env(safe-area-inset-top));
+}
+.topbar-back{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;font-size:13px;color:var(--navy);
+  padding:6px 2px;
+}
+.topbar-back:hover{opacity:.7}
+.topbar-sep{flex:1 1 auto}
+.topbar-clear{
+  background:transparent;border:1px solid var(--border2);color:var(--navy);
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;
+  letter-spacing:.08em;text-transform:uppercase;
+  padding:8px 14px;border-radius:100px;cursor:pointer;transition:all .2s;
+}
+.topbar-clear:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
+.topbar-clear:disabled{opacity:.35;cursor:not-allowed}
+
+/* page header */
+.page-head{padding:28px 20px 8px}
+.page-title{
+  font-family:'Barlow Condensed',sans-serif;font-weight:900;
+  font-size:clamp(32px,7vw,48px);text-transform:uppercase;line-height:.95;
+}
+.page-title span{color:var(--navy)}
+.page-sub{font-size:13px;color:var(--muted);margin-top:6px;font-weight:500}
+
+/* list */
+.list{padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px}
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:16px 18px;display:flex;align-items:flex-start;gap:12px;
+  cursor:pointer;transition:all .15s;
+}
+.card:hover{border-color:rgba(0,45,114,.35);box-shadow:0 4px 16px rgba(0,0,0,.06);transform:translateY(-1px)}
+.card:active{transform:translateY(0)}
+.card-dot{
+  flex:0 0 auto;width:10px;height:10px;border-radius:50%;
+  background:var(--navy);margin-top:7px;
+  box-shadow:0 0 0 3px rgba(0,45,114,.12);
+}
+.card-body{flex:1 1 auto;min-width:0}
+.card-title{
+  font-family:'Barlow',sans-serif;font-weight:700;font-size:15px;
+  color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.card-msg{font-size:14px;color:var(--muted);margin-top:3px;line-height:1.4}
+.card-meta{
+  display:flex;align-items:center;gap:8px;margin-top:8px;
+  font-size:11px;color:var(--muted2);font-weight:600;letter-spacing:.04em;
+}
+.card-cat{
+  display:inline-block;padding:2px 8px;background:var(--navy-dim);
+  color:var(--navy);border-radius:100px;font-size:10px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.card-x{
+  flex:0 0 auto;background:transparent;border:0;color:var(--muted);
+  width:32px;height:32px;border-radius:8px;cursor:pointer;font:400 22px/1 system-ui,sans-serif;
+  padding:0;transition:all .15s;
+}
+.card-x:hover{background:var(--card3);color:var(--red)}
+
+/* empty state */
+.empty{
+  text-align:center;padding:64px 20px;color:var(--muted);
+}
+.empty-icon{font-size:48px;margin-bottom:12px;opacity:.4}
+.empty-title{
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;
+  text-transform:uppercase;color:var(--text);margin-bottom:6px;letter-spacing:.02em;
+}
+.empty-sub{font-size:13px;color:var(--muted);max-width:320px;margin:0 auto}
+.empty-link{
+  display:inline-block;margin-top:20px;padding:10px 22px;
+  background:var(--navy);color:#fff;border-radius:100px;
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.empty-link:hover{background:#001a4a}
+
+/* loading */
+.loading{text-align:center;padding:48px;color:var(--muted);font-size:13px}
+
+/* Hide the floating bell on this page — it's redundant here. */
+#dvsl-bell,#dvsl-bell-panel,#dvsl-bell-backdrop{display:none !important}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="/" class="topbar-back">← DVSL</a>
+  <div class="topbar-sep"></div>
+  <button id="clearAllBtn" class="topbar-clear" disabled>Clear all</button>
+</header>
+
+<section class="page-head">
+  <h1 class="page-title">Notifi<span>cations</span></h1>
+  <div class="page-sub" id="pageSub">Recent alerts from DVSL</div>
+</section>
+
+<div id="list" class="list">
+  <div class="loading">Loading…</div>
+</div>
+
+<script>
+// /api bindings — the same endpoints the chip uses. This page only
+// reads the unread list and lets the user dismiss or navigate. No
+// localStorage access beyond the FCM token (written elsewhere when the
+// user opts into pushes).
+const TOKEN = localStorage.getItem('dvsl-notif-token');
+const listEl = document.getElementById('list');
+const clearBtn = document.getElementById('clearAllBtn');
+const pageSub = document.getElementById('pageSub');
+
+function ago(ts) {
+  const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+async function fetchItems() {
+  if (!TOKEN) return [];
+  try {
+    const resp = await fetch('/api/check-pending-nav', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return Array.isArray(data && data.items) ? data.items : [];
+  } catch (_) { return []; }
+}
+
+function dismiss(item) {
+  if (!TOKEN || !item || !item.id) return;
+  fetch('/api/dismiss-pending-nav', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: TOKEN, id: item.id }),
+  }).catch(() => {});
+}
+
+function dismissAll() {
+  if (!TOKEN) return;
+  fetch('/api/dismiss-pending-nav', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: TOKEN, dismissAll: true }),
+  }).catch(() => {});
+}
+
+function render(items) {
+  listEl.innerHTML = '';
+  if (!TOKEN) {
+    listEl.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">🔕</div>
+        <div class="empty-title">Push notifications off</div>
+        <div class="empty-sub">Enable notifications from the bell button on the home page to see alerts here.</div>
+        <a class="empty-link" href="/">Back to home</a>
+      </div>`;
+    clearBtn.disabled = true;
+    pageSub.textContent = 'Not subscribed to pushes on this device';
+    return;
+  }
+  if (!items.length) {
+    listEl.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        <div class="empty-title">No new notifications</div>
+        <div class="empty-sub">You're all caught up. New score updates and chat messages will show up here.</div>
+        <a class="empty-link" href="/">Back to home</a>
+      </div>`;
+    clearBtn.disabled = true;
+    pageSub.textContent = 'All caught up';
+    return;
+  }
+  clearBtn.disabled = false;
+  pageSub.textContent = items.length + ' unread ' + (items.length === 1 ? 'alert' : 'alerts');
+
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const dot = document.createElement('div');
+    dot.className = 'card-dot';
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    const title = document.createElement('div');
+    title.className = 'card-title';
+    title.textContent = item.title || 'DVSL';
+    body.appendChild(title);
+
+    if (item.body) {
+      const msg = document.createElement('div');
+      msg.className = 'card-msg';
+      msg.textContent = item.body;
+      body.appendChild(msg);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'card-meta';
+    if (item.category) {
+      const cat = document.createElement('span');
+      cat.className = 'card-cat';
+      cat.textContent = item.category;
+      meta.appendChild(cat);
+    }
+    const when = document.createElement('span');
+    when.textContent = ago(item.ts);
+    meta.appendChild(when);
+    body.appendChild(meta);
+
+    const x = document.createElement('button');
+    x.className = 'card-x';
+    x.setAttribute('aria-label', 'Dismiss');
+    x.textContent = '×';
+    x.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dismiss(item);
+      card.style.transition = 'all .2s';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(20px)';
+      setTimeout(() => {
+        card.remove();
+        // If the list is now empty, reload the render for the empty state.
+        if (!listEl.querySelector('.card')) render([]);
+        else {
+          const remaining = listEl.querySelectorAll('.card').length;
+          pageSub.textContent = remaining + ' unread ' + (remaining === 1 ? 'alert' : 'alerts');
+        }
+      }, 200);
+    });
+
+    card.addEventListener('click', () => {
+      dismiss(item);
+      try {
+        const t = new URL(item.url || '/', location.origin);
+        window.location.href = t.href;
+      } catch (_) { window.location.href = '/'; }
+    });
+
+    card.appendChild(dot);
+    card.appendChild(body);
+    card.appendChild(x);
+    listEl.appendChild(card);
+  });
+}
+
+clearBtn.addEventListener('click', () => {
+  dismissAll();
+  render([]);
+});
+
+async function refresh() {
+  const items = await fetchItems();
+  render(items);
+}
+
+refresh();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refresh();
+});
+window.addEventListener('pageshow', refresh);
+window.addEventListener('focus', refresh);
+</script>
+
+</body>
+</html>
