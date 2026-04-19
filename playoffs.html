@@ -33,14 +33,16 @@
         navigator.serviceWorker.addEventListener('message', (e) => {
           if (!e.data) return;
           if (e.data.type === 'VERSION' && typeof e.data.version === 'string') {
+            // Only render the build tag on /rules.html, and only in the
+            // normal document flow (not a fixed overlay). User wants a single
+            // place to check which build is live without the chip cluttering
+            // every page.
+            if (location.pathname !== '/rules.html') return;
             let b = document.getElementById('dvsl-sw-version');
             if (!b) {
               b = document.createElement('div');
               b.id = 'dvsl-sw-version';
-              // Tiny top-right tag. Doesn't collide with the tab bar (bottom)
-              // or the ticker (most pages don't have one; index.html's ticker
-              // sits below it).
-              b.style.cssText = 'position:fixed;top:2px;right:4px;font:9px/1 ui-monospace,monospace;color:rgba(0,0,0,.25);z-index:99999;pointer-events:none;user-select:none';
+              b.style.cssText = 'text-align:center;padding:24px 0 8px;font:11px/1.2 ui-monospace,monospace;color:rgba(0,0,0,.35);user-select:none;';
               document.body.appendChild(b);
             }
             b.textContent = e.data.version;
@@ -69,20 +71,20 @@
             ],
           },
           {
-            label: 'Content',
-            items: [
-              { icon: '📝', label: 'Recaps',      href: '/#recaps' },
-              { icon: '📸', label: 'Gallery',     href: '/photos.html' },
-              { icon: '🎥', label: 'Watch Live',  href: '/watch.html' },
-              { icon: '📋', label: 'Rules',       href: '/rules.html' },
-            ],
-          },
-          {
             label: 'Account',
             items: [
               { icon: '👤', label: 'Player Portal',     href: '/player.html' },
               { icon: '⚾', label: 'Captain Dashboard', href: '/captain.html' },
               { icon: '✍️', label: 'Player Sign-Up',    href: '/registration.html' },
+              { icon: '🛠️', label: 'Admin Access',      href: '/admin.html' },
+            ],
+          },
+          {
+            label: 'Content',
+            items: [
+              { icon: '📸', label: 'Gallery',     href: '/photos.html' },
+              { icon: '🎥', label: 'Watch Live',  href: '/watch.html' },
+              { icon: '📋', label: 'Rules',       href: '/rules.html' },
             ],
           },
         ];
@@ -142,16 +144,23 @@
               font: 600 10px/1.1 system-ui,-apple-system,Segoe UI,Inter,sans-serif !important;
             }
             #dvsl-tabbar > * {
-              flex: 1 1 0; display: flex; flex-direction: column;
+              flex: 1 1 0; min-width: 0;
+              display: flex; flex-direction: column;
               align-items: center; justify-content: center;
-              gap: 3px; padding: 4px 0;
+              gap: 3px; padding: 4px 4px;
               background: transparent; border: 0;
               color: #8b8b8b; text-decoration: none; cursor: pointer;
               position: relative; -webkit-tap-highlight-color: transparent;
+              overflow: visible;
             }
             #dvsl-tabbar > *.active { color: #002D72; }
             #dvsl-tabbar .dt-ico { font-size: 20px; line-height: 1; }
-            #dvsl-tabbar .dt-label { letter-spacing: .02em; text-transform: uppercase; }
+            #dvsl-tabbar .dt-label {
+              letter-spacing: 0; text-transform: uppercase;
+              white-space: nowrap;
+              max-width: 100%;
+              text-align: center;
+            }
             #dvsl-tabbar .dt-badge {
               position: absolute; top: 4px; right: calc(50% - 20px);
               background: #e53935; color: #fff;
@@ -472,6 +481,44 @@ nav{position:fixed;top:48px;left:0;right:0;z-index:300;height:62px;display:flex;
 }
 .b-tab.active { background: var(--gold); color: #fff; }
 
+/* YEAR TABS (season selector) */
+.year-tabs {
+  display: flex; gap: 4px; margin: 0 48px 20px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px; width: fit-content;
+}
+.y-tab {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
+  font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 9px 22px; border-radius: 5px; border: none;
+  background: transparent; color: var(--muted); cursor: pointer; transition: all 0.2s;
+}
+.y-tab.active { background: var(--navy, #002D72); color: #fff; }
+.year-pane { display: none; }
+.year-pane.active { display: block; }
+
+/* 2026 TBD placeholder card */
+.tbd-card {
+  margin: 0 48px 20px; padding: 56px 32px;
+  background: var(--card); border: 1px dashed rgba(0,45,114,.25);
+  border-radius: 16px; text-align: center;
+}
+.tbd-emoji { font-size: 56px; line-height: 1; margin-bottom: 16px; }
+.tbd-title {
+  font-family: 'Barlow Condensed', sans-serif; font-weight: 900;
+  font-size: 28px; text-transform: uppercase; letter-spacing: .02em;
+  color: var(--navy, #002D72);
+  margin-bottom: 10px;
+}
+.tbd-sub {
+  font-size: 14px; color: var(--muted); max-width: 420px;
+  margin: 0 auto; line-height: 1.5;
+}
+@media (max-width: 640px) {
+  .year-tabs, .tbd-card { margin-left: 20px; margin-right: 20px; }
+  .tbd-card { padding: 40px 20px; }
+}
+
 /* BRACKET WRAPPER */
 .bracket-scroll { overflow-x: auto; padding: 0 48px 24px; scrollbar-width: thin; }
 .bracket-scroll::-webkit-scrollbar { height: 4px; }
@@ -731,7 +778,7 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
 <div class="playoffs-hero">
   <div class="playoffs-hero-bg"></div>
   <div class="hero-grid"></div>
-  <div class="hero-eyebrow" style="position:relative;z-index:2"><span class="trophy-icon">🏆</span> DVSL · 2026 Postseason</div>
+  <div class="hero-eyebrow" style="position:relative;z-index:2"><span class="trophy-icon">🏆</span> DVSL Postseason</div>
   <h1>Playoff <span class="gold">Brackets</span></h1>
   <p>8-team double-elimination tournament. Winner's bracket, loser's bracket, and championship path.</p>
 </div>
@@ -739,9 +786,28 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
 <!-- BRACKET SECTION -->
 <div class="bracket-section">
   <div class="section-header">
-    <div class="section-label">2026 Tournament</div>
+    <div class="section-label" id="seasonLabel">2026 Tournament</div>
     <div class="section-title">Interactive Bracket</div>
   </div>
+
+  <!-- Year selector: default to 2026 (TBD). Switch to 2025 to see the
+       completed bracket from last season. -->
+  <div class="year-tabs" role="tablist" aria-label="Season">
+    <button class="y-tab active" data-year="2026" role="tab" aria-selected="true">2026</button>
+    <button class="y-tab" data-year="2025" role="tab" aria-selected="false">2025</button>
+  </div>
+
+  <!-- 2026 PANE: placeholder until seeding is set -->
+  <div class="year-pane active" id="year-2026" role="tabpanel" aria-labelledby="2026">
+    <div class="tbd-card">
+      <div class="tbd-emoji">🏟️</div>
+      <div class="tbd-title">2026 Brackets — TBD</div>
+      <div class="tbd-sub">The 2026 tournament hasn't been played yet. Brackets and seeding will appear here once the regular season wraps.</div>
+    </div>
+  </div>
+
+  <!-- 2025 PANE: the actual completed bracket from last season -->
+  <div class="year-pane" id="year-2025" role="tabpanel" aria-labelledby="2025">
 
   <div class="bracket-tabs">
     <button class="b-tab active" data-bracket="gold">Gold Bracket</button>
@@ -944,7 +1010,7 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
     <div class="bracket-canvas" id="bracket-silver" style="display:none">
     <div class="bracket-scroll">
 
-      <div style="padding:20px 0 4px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#002D72;">Silver Cup · 2026 Playoffs</div>
+      <div style="padding:20px 0 4px;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#002D72;">Silver Cup · 2025 Playoffs</div>
 
       <div class="bracket-wrap">
 
@@ -1036,7 +1102,7 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
           <div style="width:1px;height:40px;background:rgba(0,45,114,.3);margin-bottom:16px;"></div>
           <div style="background:linear-gradient(135deg,rgba(0,45,114,.12),rgba(0,45,114,.04));border:1px solid rgba(0,45,114,.4);border-radius:12px;padding:20px 28px;text-align:center;min-width:140px;">
             <div style="font-size:24px;margin-bottom:8px;">🥈</div>
-            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#002D72;margin-bottom:6px;">2026 Silver Cup</div>
+            <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#002D72;margin-bottom:6px;">2025 Silver Cup</div>
             <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:#4ade80;letter-spacing:.04em;">SA</div>
             <div style="font-size:11px;color:rgba(0,0,0,.5);margin-top:4px;">Shir Ami</div>
             <div style="font-size:10px;color:rgba(0,0,0,.35);margin-top:2px;">11 – 8</div>
@@ -1048,6 +1114,7 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
   </div>
     </div>
   </div>
+  </div><!-- /#year-2025 pane -->
 </div>
 
 <!-- CHAMPION SECTION -->
@@ -1150,6 +1217,26 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
   const mm = document.getElementById('mobMenu');
   if(hb) hb.addEventListener('click', () => { hb.classList.toggle('open'); mm.classList.toggle('open'); });
   if(mm) mm.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hb.classList.remove('open'); mm.classList.remove('open'); }));
+
+  // Year (season) tabs — swap between 2026 TBD placeholder and the
+  // completed 2025 bracket. Default state (2026 active) is set in HTML
+  // so the page renders correctly before JS runs.
+  document.querySelectorAll('.y-tab').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var y = btn.dataset.year;
+      document.querySelectorAll('.y-tab').forEach(function(b){
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      document.querySelectorAll('.year-pane').forEach(function(p){ p.classList.remove('active'); });
+      var pane = document.getElementById('year-' + y);
+      if(pane){ pane.classList.add('active'); }
+      var lbl = document.getElementById('seasonLabel');
+      if(lbl){ lbl.textContent = y + ' Tournament'; }
+    });
+  });
 
   // Bracket tabs - bulletproof version
   document.querySelectorAll('.b-tab').forEach(function(btn){

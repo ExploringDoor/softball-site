@@ -35,14 +35,16 @@
         navigator.serviceWorker.addEventListener('message', (e) => {
           if (!e.data) return;
           if (e.data.type === 'VERSION' && typeof e.data.version === 'string') {
+            // Only render the build tag on /rules.html, and only in the
+            // normal document flow (not a fixed overlay). User wants a single
+            // place to check which build is live without the chip cluttering
+            // every page.
+            if (location.pathname !== '/rules.html') return;
             let b = document.getElementById('dvsl-sw-version');
             if (!b) {
               b = document.createElement('div');
               b.id = 'dvsl-sw-version';
-              // Tiny top-right tag. Doesn't collide with the tab bar (bottom)
-              // or the ticker (most pages don't have one; index.html's ticker
-              // sits below it).
-              b.style.cssText = 'position:fixed;top:2px;right:4px;font:9px/1 ui-monospace,monospace;color:rgba(0,0,0,.25);z-index:99999;pointer-events:none;user-select:none';
+              b.style.cssText = 'text-align:center;padding:24px 0 8px;font:11px/1.2 ui-monospace,monospace;color:rgba(0,0,0,.35);user-select:none;';
               document.body.appendChild(b);
             }
             b.textContent = e.data.version;
@@ -71,20 +73,20 @@
             ],
           },
           {
-            label: 'Content',
-            items: [
-              { icon: '📝', label: 'Recaps',      href: '/#recaps' },
-              { icon: '📸', label: 'Gallery',     href: '/photos.html' },
-              { icon: '🎥', label: 'Watch Live',  href: '/watch.html' },
-              { icon: '📋', label: 'Rules',       href: '/rules.html' },
-            ],
-          },
-          {
             label: 'Account',
             items: [
               { icon: '👤', label: 'Player Portal',     href: '/player.html' },
               { icon: '⚾', label: 'Captain Dashboard', href: '/captain.html' },
               { icon: '✍️', label: 'Player Sign-Up',    href: '/registration.html' },
+              { icon: '🛠️', label: 'Admin Access',      href: '/admin.html' },
+            ],
+          },
+          {
+            label: 'Content',
+            items: [
+              { icon: '📸', label: 'Gallery',     href: '/photos.html' },
+              { icon: '🎥', label: 'Watch Live',  href: '/watch.html' },
+              { icon: '📋', label: 'Rules',       href: '/rules.html' },
             ],
           },
         ];
@@ -144,16 +146,23 @@
               font: 600 10px/1.1 system-ui,-apple-system,Segoe UI,Inter,sans-serif !important;
             }
             #dvsl-tabbar > * {
-              flex: 1 1 0; display: flex; flex-direction: column;
+              flex: 1 1 0; min-width: 0;
+              display: flex; flex-direction: column;
               align-items: center; justify-content: center;
-              gap: 3px; padding: 4px 0;
+              gap: 3px; padding: 4px 4px;
               background: transparent; border: 0;
               color: #8b8b8b; text-decoration: none; cursor: pointer;
               position: relative; -webkit-tap-highlight-color: transparent;
+              overflow: visible;
             }
             #dvsl-tabbar > *.active { color: #002D72; }
             #dvsl-tabbar .dt-ico { font-size: 20px; line-height: 1; }
-            #dvsl-tabbar .dt-label { letter-spacing: .02em; text-transform: uppercase; }
+            #dvsl-tabbar .dt-label {
+              letter-spacing: 0; text-transform: uppercase;
+              white-space: nowrap;
+              max-width: 100%;
+              text-align: center;
+            }
             #dvsl-tabbar .dt-badge {
               position: absolute; top: 4px; right: calc(50% - 20px);
               background: #e53935; color: #fff;
