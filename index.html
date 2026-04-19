@@ -3158,16 +3158,32 @@ async function loadAllData() {
   }
 }
 
-// ── Refresh volatile data (games, teams, box_scores) every 60 seconds ──────
+// ── Refresh volatile data (games, teams, box_scores) ──────
+// Firestore-read budget: skip entirely when tab is hidden, and only
+// refetch box_scores every few cycles (they only change post-game).
+let _lastBoxScoresFetch = 0;
+let _cachedBoxScoresSnap = null;
+const _BOX_SCORES_TTL_MS = 10 * 60 * 1000; // re-read box_scores at most every 10 min
 async function refreshVolatileData() {
+  // Don't burn reads on background tabs
+  if (typeof document !== 'undefined' && document.hidden) return;
   try {
     const db = await getDb();
     const { collection, getDocs, query, orderBy } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
-    const [teamsSnap, gamesSnap, bsSnap] = await Promise.all([
+    const needBoxScores = !_cachedBoxScoresSnap || (Date.now() - _lastBoxScoresFetch) > _BOX_SCORES_TTL_MS;
+    const fetches = [
       getDocs(query(collection(db, 'teams'), orderBy('name'))),
       getDocs(query(collection(db, 'games'), orderBy('wk'))),
-      getDocs(collection(db, 'box_scores'))
-    ]);
+    ];
+    if (needBoxScores) fetches.push(getDocs(collection(db, 'box_scores')));
+    const results = await Promise.all(fetches);
+    const teamsSnap = results[0];
+    const gamesSnap = results[1];
+    if (needBoxScores) {
+      _cachedBoxScoresSnap = results[2];
+      _lastBoxScoresFetch = Date.now();
+    }
+    const bsSnap = _cachedBoxScoresSnap;
 
     // Rebuild TEAMS
     const freshTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
@@ -4919,8 +4935,20 @@ window._dataPromise.then(() => {
   loadSiteBanner();
   setTimeout(checkActiveAlert, 800);
   setTimeout(observeAll, 100);
-  // Refresh volatile data (scores, standings, schedule) every 60 seconds
-  setInterval(refreshVolatileData, 60000);
+  // Refresh volatile data (scores, standings, schedule) every 3 minutes.
+  // Refresh fires only while the tab is visible; we also force an immediate
+  // refresh when the user brings the tab back after a longer absence.
+  setInterval(refreshVolatileData, 180000);
+  let _lastVisibleAt = Date.now();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      // If the tab was hidden for >2 min, fetch once immediately on return
+      if (Date.now() - _lastVisibleAt > 120000) refreshVolatileData();
+      _lastVisibleAt = Date.now();
+    } else {
+      _lastVisibleAt = Date.now();
+    }
+  });
 });
 
 async function checkActiveAlert(){
