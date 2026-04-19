@@ -1,4 +1,4 @@
-// DVSL Service Worker — Step 2 (offline mode for public pages)
+// DVSL Service Worker — offline mode + push notifications
 //
 // Strategy:
 //   - Firestore / Firebase API calls  → network-only, never cache (live data)
@@ -8,16 +8,44 @@
 //                                        (logos, icons, manifest, etc.)
 //   - Cross-origin (gstatic, etc.)    → stale-while-revalidate
 //
-// What this gives the user:
-//   - At the field with no signal, schedule / standings / stats / rosters
-//     still load (they'll just show the last version they saw).
-//   - Live scorer + captain + admin always hit the network first so their
-//     data is fresh. If offline, they show the last cached HTML shell but
-//     the dynamic data obviously won't load until signal returns.
-//
-// Phase 3 (future): push notifications will live here too.
+// IMPORTANT: This SW also handles FCM push notifications. We do this in ONE
+// SW (rather than a separate firebase-messaging-sw.js) because on iOS PWA,
+// two SWs competing at scope "/" cause the push subscription to be silently
+// invalidated on each page load. One SW = stable push subscription.
 
-const VERSION = 'dvsl-v5';
+// ── FCM push handling (loaded at top so install event can reference it) ──
+importScripts('https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js');
+importScripts('https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging-compat.js');
+
+firebase.initializeApp({
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+});
+
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage(function(payload) {
+  const title = payload.notification?.title || payload.data?.title || 'DVSL Update';
+  const options = {
+    body: payload.notification?.body || payload.data?.body || '',
+    icon: '/dvsl-logo-dark.png',
+    badge: '/dvsl-logo-dark.png',
+    data: payload.data || {},
+  };
+  self.registration.showNotification(title, options);
+});
+
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(clients.openWindow(url));
+});
+
+const VERSION = 'dvsl-v6-push';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
