@@ -495,10 +495,11 @@ select.form-input{cursor:pointer}
 
       <!-- 1. LOGIN -->
       <details>
-        <summary>1. Logging In <span class="help-tag soon">Coming Soon</span></summary>
+        <summary>1. Logging In</summary>
         <div class="help-body">
-          <p>Right now you just click your team from the list on the login screen. That's it.</p>
-          <p><strong>Soon</strong> I'll add a per-team password so only real captains can log in as their team — when that's ready I'll send everyone their password directly. Until then, please don't edit other teams' data even though the site lets you.</p>
+          <p>Open <a href="captain.html">captain.html</a> and tap your team from the list — that drops you straight into your dashboard. The big tile shows your team abbreviation (DN, TBIR, etc) so it's easy to find on the grid.</p>
+          <p>If you use this page a lot, tap "Add to Home Screen" on your phone so it lives next to your other apps. When I push an update, you'll get it automatically.</p>
+          <p>Please don't edit another team's data even though the page will let you. Only one captain edits a team.</p>
         </div>
       </details>
 
@@ -593,7 +594,7 @@ select.form-input{cursor:pointer}
 
       <!-- 8. PAYMENTS -->
       <details>
-        <summary>7. Tracking Payments</summary>
+        <summary>8. Tracking Payments</summary>
         <div class="help-body">
           <p>The <strong>Payments</strong> tab shows each player on your roster and whether they've paid league fees for the season.</p>
           <ul>
@@ -604,17 +605,48 @@ select.form-input{cursor:pointer}
         </div>
       </details>
 
-      <!-- 8. CAPTAINS CHAT / EMAIL ALL -->
+      <!-- 9. TEAM CHAT -->
       <details>
-        <summary>8. Reaching Other Captains <span class="help-tag soon">Chat Coming Soon</span></summary>
+        <summary>9. Team Chat <span class="help-tag new">New</span></summary>
         <div class="help-body">
-          <p>The <strong>Captains Chat</strong> tab isn't fully wired up yet. In the meantime, you have two quick ways to reach all the other captains:</p>
+          <p>The <strong>Team Chat</strong> tab is a group conversation with everyone on your roster. Any player who signs in through the Player Portal on their phone can read and post here. Great for field changes, sub requests, or "who's bringing the cooler."</p>
+          <ul>
+            <li><strong>Send a message</strong> — type in the box, hit Send. Players with push notifications turned on get pinged instantly.</li>
+            <li><strong>Delete a message</strong> — tap the red <strong>×</strong> on any message bubble. As captain you can delete anyone's message.</li>
+            <li><strong>Reset chat</strong> — the red "Reset chat" button in the header wipes every message for your team. Double-confirms first. Useful between seasons.</li>
+          </ul>
+          <p><em>Tip:</em> Pin the Player Portal link in your chat so new players know where to sign in.</p>
+        </div>
+      </details>
+
+      <!-- 10. CAPTAINS CHAT -->
+      <details>
+        <summary>10. Captains Chat <span class="help-tag new">New</span></summary>
+        <div class="help-body">
+          <p>The <strong>Captains Chat</strong> tab is a private group chat between every team captain and the commissioner. Players can't see it. Sender labels show team abbreviations (DN, TBIR, etc) so you always know who's talking.</p>
+          <ul>
+            <li><strong>Send</strong> — type and hit Send. Every other captain with notifications on gets a ping.</li>
+            <li><strong>Delete</strong> — tap the × on your own messages to delete them. You can't delete other captains' messages.</li>
+          </ul>
+          <p>You can also reach captains outside the app if needed:</p>
           <div class="help-btn-row">
             <button class="btn btn-outline btn-sm" onclick="window.copyAllCaptainEmails()">📋 Copy All Captain Emails</button>
             <button class="btn btn-primary btn-sm" onclick="window.emailAllCaptains()">✉️ Email All Captains</button>
           </div>
-          <p style="margin-top:12px"><strong>Copy All</strong> puts every captain's email on your clipboard — paste into the BCC field of a new email. <strong>Email All</strong> opens your email app with all captains pre-filled in the recipients.</p>
-          <p>Once the in-app Captains Chat goes live, you'll be able to message everyone right here (with email notifications to anyone offline). I'll announce it in the Announcements tab when it's ready.</p>
+        </div>
+      </details>
+
+      <!-- 11. NOTIFICATIONS -->
+      <details>
+        <summary>11. Push Notifications <span class="help-tag new">New</span></summary>
+        <div class="help-body">
+          <p>Push notifications let the site ping you instantly when something happens — no need to check the app.</p>
+          <ul>
+            <li><strong>Turn them on</strong> — on the main site, open the hamburger menu → <strong>Notifications</strong>. Tap "Enable notifications" and accept the browser prompt.</li>
+            <li><strong>Pick categories</strong> — Team Chat, Captains Chat, Live game scores, Schedule changes, Pregame reminders (1 hour before your games), Photo uploads, and Commissioner announcements. Toggle what you want.</li>
+            <li><strong>iPhone only works if installed to home screen</strong> — Safari doesn't allow push unless the PWA is added to your home screen. Android works either way.</li>
+          </ul>
+          <p>If notifications ever stop coming through, re-open Notifications and tap "Enable" again — sometimes iOS quietly drops the subscription.</p>
         </div>
       </details>
 
@@ -855,7 +887,8 @@ async function initTeamPicker() {
           <img src="logos/${t.id}.png" style="max-width:52px;max-height:52px;object-fit:contain" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
           <div style="display:none;width:52px;height:52px;border-radius:50%;background:${t.color||'#002D72'};color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;align-items:center;justify-content:center">${(t.short||t.name||'?').slice(0,3)}</div>
         </div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;text-transform:uppercase;color:${t.color||'#002D72'};line-height:1.2">${t.short||t.name}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;color:#0a0a0a;line-height:1.15;letter-spacing:.02em">${t.short||t.name}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;text-transform:uppercase;color:${t.color||'#002D72'};line-height:1.15;margin-top:3px;letter-spacing:.06em">${t.name!==(t.short||t.name)?t.name:''}</div>
       </div>`).join('');
   } catch(e) {
     document.getElementById('team-picker-grid').innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--red);padding:40px">Failed to load teams: ${e.message}</div>`;
@@ -3619,14 +3652,28 @@ function renderChatMessages(msgs, containerId, myEmail) {
   const canModerateOthers = containerId === 'teamchat-messages';
   CHAT_CACHE[containerId] = {};
   msgs.forEach(m => { CHAT_CACHE[containerId][m.id] = m; });
+  // For Captains Chat, prefer team abbreviation (e.g. "DN", "TBIR") over
+  // full team name — keeps bubbles tight and readable on mobile. We look up
+  // the short from the ALL_TEAMS list by team_id first (most reliable),
+  // then by team_name for older messages that predate team_short being
+  // stored on the doc.
+  const preferShort = containerId === 'captchat-messages';
   el.innerHTML = msgs.map(m => {
     const mine = m.author_email === myEmail;
     const canDelete = mine || canModerateOthers;
     const delBtn = canDelete
       ? `<button class="chat-del" data-cid="${containerId}" data-coll="${collName}" data-mid="${esc(m.id)}" title="Delete">×</button>`
       : '';
+    let label;
+    if (preferShort) {
+      const byId = m.team_id ? ALL_TEAMS.find(t => t.id === m.team_id) : null;
+      const byName = !byId && m.team_name ? ALL_TEAMS.find(t => t.name === m.team_name) : null;
+      label = m.team_short || byId?.short || byName?.short || m.team_name || m.author_email || 'Unknown';
+    } else {
+      label = m.team_name || m.author_email;
+    }
     return `<div class="chat-msg ${mine ? 'mine' : 'theirs'}">
-      ${!mine ? `<div class="chat-meta">${esc(m.team_name || m.author_email)}</div>` : ''}
+      ${!mine ? `<div class="chat-meta">${esc(label)}</div>` : ''}
       <div class="chat-bubble">${esc(m.text)}${delBtn}</div>
       <div class="chat-meta">${fmtChatTime(m.timestamp)}</div>
     </div>`;
@@ -3801,6 +3848,7 @@ window.sendCaptMsg = async function() {
       author_email: currentUser.email,
       team_id: captainData.team_id,
       team_name: MY_TEAM?.name || captainData.team_name,
+      team_short: MY_TEAM?.short || captainData.team_id || '',
       team_color: MY_TEAM?.color || '#002D72',
       timestamp: serverTimestamp(),
     });
