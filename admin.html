@@ -2647,11 +2647,12 @@ window.resetGame = async function(gameId) {
       await Promise.all(subsSnap.docs.map(d => deleteDoc(doc(db, 'score_submissions', d.id)).catch(() => {})));
     } catch(subErr) { console.warn('Could not delete submissions:', subErr); }
 
-    // Wipe in-progress scorer state so re-entry starts clean (shared + per-side)
+    // Wipe in-progress scorer state so re-entry starts clean (shared + per-side).
+    // Note: live_scores is a dead collection (watch.html reads game_states) so
+    // we skip it — deleting would just trip permission-denied.
     try { await deleteDoc(doc(db, 'game_states', gameId)).catch(() => {}); } catch(e) {}
     try { await deleteDoc(doc(db, 'game_states', `${gameId}_away`)).catch(() => {}); } catch(e) {}
     try { await deleteDoc(doc(db, 'game_states', `${gameId}_home`)).catch(() => {}); } catch(e) {}
-    try { await deleteDoc(doc(db, 'live_scores', gameId)).catch(() => {}); } catch(e) {}
 
     toast('Game reset — enter box score fresh from lineup picker');
     await logActivity('Score Entry', `Reset game to in-progress: ${awayName} vs ${homeName}`);
@@ -4153,11 +4154,11 @@ window.bsReopenGame = async function() {
       const subsSnap = await getDocs(query(collection(db, 'score_submissions'), where('game_id', '==', bsGameId)));
       await Promise.all(subsSnap.docs.map(d => deleteDoc(doc(db, 'score_submissions', d.id)).catch(() => {})));
     } catch(subErr) { console.warn('Could not delete submissions:', subErr); }
-    // Wipe in-progress scorer state so re-entry starts clean (shared + per-side)
+    // Wipe in-progress scorer state so re-entry starts clean (shared + per-side).
+    // live_scores skipped — dead collection (see note in resetGame above).
     try { await deleteDoc(doc(db, 'game_states', bsGameId)).catch(() => {}); } catch(e) {}
     try { await deleteDoc(doc(db, 'game_states', `${bsGameId}_away`)).catch(() => {}); } catch(e) {}
     try { await deleteDoc(doc(db, 'game_states', `${bsGameId}_home`)).catch(() => {}); } catch(e) {}
-    try { await deleteDoc(doc(db, 'live_scores', bsGameId)).catch(() => {}); } catch(e) {}
 
     toast('Game reopened — enter lineup and box score fresh');
     await logActivity('Box Score', `Reopened game: ${getTeamName(bsGameData.away)} vs ${getTeamName(bsGameData.home)}`);

@@ -4977,7 +4977,9 @@ function showExitConfirmSheet() {
         await _del(_doc(db, 'game_states', G.gameId)).catch(() => {});
         await _del(_doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
         await _del(_doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
-        await _del(_doc(db, 'live_scores', G.gameId)).catch(() => {});
+        // live_scores is a dead collection — watch.html listens to game_states
+        // instead, and nothing writes to live_scores. Deleting from it just
+        // trips Firestore rules with permission-denied.
         await _upd(_doc(db, 'games', G.gameId), { live: false, away_score: 0, home_score: 0 }).catch(() => {});
       } catch(e) {}
     }
