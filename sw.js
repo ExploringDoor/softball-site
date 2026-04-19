@@ -138,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v19-rawpush';
+const VERSION = 'dvsl-v20-firestorenav';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
@@ -198,13 +198,19 @@ self.addEventListener('install', (event) => {
 });
 
 // ---- activate: wipe old caches --------------------------------------------
+// Only delete caches that are OLD versions of ours (prefix dvsl-core- or
+// dvsl-runtime-) — NEVER touch ancillary caches like dvsl-pending-nav that
+// other parts of the SW may rely on across version changes.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k !== CORE_CACHE && k !== RUNTIME_CACHE)
+            .filter((k) =>
+              (k.startsWith('dvsl-core-') || k.startsWith('dvsl-runtime-')) &&
+              k !== CORE_CACHE && k !== RUNTIME_CACHE
+            )
             .map((k) => caches.delete(k))
         )
       )

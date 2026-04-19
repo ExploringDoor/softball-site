@@ -86,8 +86,25 @@ export default async function handler(req, res) {
 
   // 3. Fan out FCM sends. We use the send endpoint (one call per token) —
   //    simple and reliable, fine up to a few hundred tokens.
+  //
+  //    For each recipient we ALSO write a pending_nav/{tokenHash} doc with
+  //    {url, ts}. The page polls /api/check-pending-nav on resume to retrieve
+  //    it — this is the bulletproof deep-link path that doesn't depend on
+  //    iOS Safari / FCM service-worker behavior.
+  const clickUrlForNav = url || '/';
   const deadDocIds = []; // tokens to prune (FCM 404/UNREGISTERED)
   const results = await Promise.all(tokenRows.map(async row => {
+    // Write pending_nav doc BEFORE the push — so by the time the banner
+    // shows and the user taps, Firestore already has the answer. Await
+    // this write so there's no race: the doc exists before the push goes
+    // out. If the write fails, we still send the push (user just won't
+    // get deep-linked this time — strictly better than skipping the push).
+    try {
+      await writePendingNav({
+        projectId: PROJECT_ID, accessToken,
+        token: row.token, url: clickUrlForNav, title, body,
+      });
+    } catch (_) {}
     try {
       const r = await fcmSend({ projectId: PROJECT_ID, accessToken, token: row.token, title, body, url });
       return { tokenPrefix: row.token.slice(0, 24) + '...', ok: true, messageName: r?.name || null };
@@ -226,6 +243,31 @@ async function fcmSend({ projectId, accessToken, token, title, body, url }) {
     throw new Error(`FCM ${resp.status}: ${text.slice(0,200)}`);
   }
   return await resp.json();
+}
+
+// Write pending_nav/{tokenHash} = {url, ts, title, body} so the recipient's
+// page can retrieve the deep-link target via /api/check-pending-nav when
+// they resume the PWA. This is the primary deep-link delivery path — the
+// SW push event is unreliable on iOS PWAs.
+async function writePendingNav({ projectId, accessToken, token, url, title, body }) {
+  const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
+  const endpoint = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/pending_nav/${tokenHash}`;
+  const fields = {
+    url:   { stringValue: String(url || '/') },
+    ts:    { integerValue: String(Date.now()) },
+    title: { stringValue: String(title || '').slice(0, 200) },
+    body:  { stringValue: String(body || '').slice(0, 400) },
+  };
+  // PATCH upserts the doc (create if missing, replace if exists).
+  const resp = await fetch(endpoint, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => '');
+    throw new Error(`pending_nav write ${resp.status}: ${text.slice(0,120)}`);
+  }
 }
 
 // Delete notification_tokens docs whose FCM tokens returned UNREGISTERED.

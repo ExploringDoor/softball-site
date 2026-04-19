@@ -11,79 +11,64 @@
   <meta name="apple-mobile-web-app-title" content="DVSL">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <script>
+    // Register the SW (offline shell + FCM push). Auto-reload on SW takeover
+    // so iOS-PWA users always get the latest build. Deep-link routing goes
+    // through Firestore via /api/check-pending-nav — the iOS SW push event
+    // is unreliable, so we route the target URL server-side via Firestore
+    // the moment /api/send-notification fires, and the page retrieves it
+    // on resume. No cache API, no postMessage, no SW events required.
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(r => { try { r.update(); } catch(_){} }).catch(() => {});
-        // Auto-reload on SW takeover so new code activates without a manual
-        // refresh — fixes the iOS-PWA "I pushed an update but the phone
-        // keeps running the old SW" trap.
         let _dvslReloaded = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
           if (_dvslReloaded) return;
           _dvslReloaded = true;
           window.location.reload();
         });
-        // Ask the active SW for its version → tiny badge bottom-right.
         navigator.serviceWorker.ready.then(r => {
           if (r.active) r.active.postMessage({ type: 'GET_VERSION' });
         }).catch(() => {});
-        // Messages from sw.js: NAVIGATE (deep-link) + VERSION (badge).
         navigator.serviceWorker.addEventListener('message', (e) => {
           if (!e.data) return;
-          if (e.data.type === 'NAVIGATE' && typeof e.data.url === 'string') {
-            window.location.href = e.data.url;
-          }
           if (e.data.type === 'VERSION' && typeof e.data.version === 'string') {
             let b = document.getElementById('dvsl-sw-version');
             if (!b) {
               b = document.createElement('div');
               b.id = 'dvsl-sw-version';
-              b.style.cssText = 'position:fixed;bottom:4px;left:6px;right:6px;font:11px/1.3 ui-monospace,monospace;color:#b91c1c;background:rgba(255,255,0,.95);padding:4px 8px;border-radius:4px;z-index:99999;pointer-events:none;user-select:none;border:1px solid rgba(0,0,0,.2);text-align:center;word-break:break-all';
+              b.style.cssText = 'position:fixed;bottom:2px;right:4px;font:9px/1 ui-monospace,monospace;color:rgba(0,0,0,.25);z-index:99999;pointer-events:none;user-select:none';
               document.body.appendChild(b);
             }
             b.textContent = e.data.version;
           }
         });
-        // Pending-nav check: sw.js stashes a target URL in Cache API when a
-        // push is tapped. We read it whenever the page becomes visible or
-        // loads — survives iOS PWA freezing postMessage delivery while
-        // backgrounded.
+        // Deep-link via Firestore. /api/send-notification wrote
+        // pending_nav/{tokenHash} just before sending the push. We fetch it
+        // on resume and navigate if fresh (< 2 min) and not already there.
+        let _dvslLastCheck = 0;
         async function _dvslCheckPendingNav() {
+          const now = Date.now();
+          if (now - _dvslLastCheck < 3000) return;  // throttle
+          _dvslLastCheck = now;
+          const token = localStorage.getItem('dvsl-notif-token');
+          if (!token) return;
           try {
-            if (!('caches' in self)) { _dvslDiag('nocache'); return; }
-            const cache = await caches.open('dvsl-pending-nav');
-            const resp = await cache.match('/__dvsl_push_info');
-            if (!resp) { _dvslDiag('no-info'); return; }
-            let info = null;
-            try { info = await resp.json(); } catch(_) {}
-            if (!info) { _dvslDiag('bad-json'); return; }
-            const ageSec = Math.round((Date.now() - (info.ts||0)) / 1000);
-            const urlStr = info.url || '';
-            _dvslDiag('url:' + (urlStr || 'null') + ' age:' + ageSec + 's keys:' + (info.keys||[]).join(','));
-            // Stale push (user manually opened app hours later)
-            if (ageSec > 60) { await cache.delete('/__dvsl_push_info'); return; }
-            if (!urlStr) return;
-            const t = new URL(urlStr, location.origin);
+            const resp = await fetch('/api/check-pending-nav', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token }),
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (!data || !data.url) return;
+            const t = new URL(data.url, location.origin);
             const sameHere =
               t.origin === location.origin &&
               t.pathname === location.pathname &&
-              t.search === location.search &&
-              t.hash === location.hash;
-            if (sameHere) { await cache.delete('/__dvsl_push_info'); return; }
-            await cache.delete('/__dvsl_push_info');
-            _dvslDiag('→ nav ' + t.pathname + t.search);
+              t.search === location.search;
+            if (sameHere) return;
             window.location.href = t.href;
-          } catch(e) {
-            _dvslDiag('err:' + (e && e.message ? e.message.slice(0,40) : 'unknown'));
-          }
-        }
-        function _dvslDiag(msg) {
-          const b = document.getElementById('dvsl-sw-version');
-          if (!b) return;
-          // Preserve the version prefix, replace the diagnostic tail.
-          const ver = b.dataset.version || b.textContent.split(' | ')[0];
-          b.dataset.version = ver;
-          b.textContent = ver + ' | ' + msg;
+          } catch(_) {}
         }
         _dvslCheckPendingNav();
         document.addEventListener('visibilitychange', () => {
@@ -91,20 +76,15 @@
         });
         window.addEventListener('pageshow', _dvslCheckPendingNav);
         window.addEventListener('focus', _dvslCheckPendingNav);
-        // Nuclear option: iOS PWA sometimes doesn't fire visibilitychange /
-        // focus / pageshow when resuming from a notification tap. Poll every
-        // 1s while the page thinks it's visible — if JS is running at all,
-        // we'll catch the pending URL within a second of resume.
+        // Safety net for iOS PWAs that don't fire the above on notification
+        // resume: poll every 5s while visible. Cheap (1 POST per 5s max, and
+        // only when token exists).
         setInterval(() => {
           if (document.visibilityState === 'visible') _dvslCheckPendingNav();
-        }, 1000);
-        // First user interaction after resume will always fire these too.
-        window.addEventListener('touchstart', _dvslCheckPendingNav, { passive: true, once: false });
-        window.addEventListener('click', _dvslCheckPendingNav);
+        }, 5000);
       });
     }
   </script>
-  <!-- /PWA -->
 <title>DVSL Captain Portal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
