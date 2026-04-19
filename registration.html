@@ -546,6 +546,22 @@ window.submitRegistration = async () => {
       added_at:         now,
     });
 
+    // Admin-only push alert so Adam knows someone signed up without having
+    // to check the dashboard. Best-effort; silently swallows failures.
+    try {
+      await fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': 'dvsl-push-2026-rkj3849f' },
+        body: JSON.stringify({
+          title: `🔔 New signup: ${name}`,
+          body: `${teamName} · #${numVal || '?'} ${pos || ''} · ${email || 'no email'}`.trim(),
+          category: 'admin',
+          adminOnly: true,
+          url: '/admin.html',
+        }),
+      });
+    } catch(_e) { /* non-blocking */ }
+
     // MailerLite sync (best-effort)
     if (email) {
       try {

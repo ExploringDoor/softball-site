@@ -623,6 +623,23 @@ window.playerSendChat = async function() {
   input.focus();
 };
 
+// Fire-and-forget push to team when someone adds a new photo/video. The
+// uploader is excluded from their own push via excludeToken.
+function sendPhotoPush({ title, body, teamId }) {
+  if (!teamId) return;
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PLAYER_PUSH_SECRET },
+    body: JSON.stringify({
+      title, body,
+      category: 'photos',
+      team: teamId,
+      url: '/player.html',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Photo push failed:', e));
+}
+
 // ── Media helpers ─────────────────────────────────────────────────
 function extractYouTubeId(url) {
   const m = url.match(/[?&]v=([^&#]+)/) || url.match(/youtu\.be\/([^?&/]+)/) || url.match(/embed\/([^?&]+)/);
@@ -727,6 +744,7 @@ window.uploadMedia = async function() {
   btn.disabled = true; btn.textContent = 'Working…';
 
   try {
+    let pushedPhoto = false, pushedVideo = false;
     if (fileInput.files.length > 0) {
       const file = fileInput.files[0];
       btn.textContent = 'Compressing…';
@@ -738,6 +756,7 @@ window.uploadMedia = async function() {
         caption, created_at:new Date().toISOString()
       });
       toast('Photo shared! ⚾');
+      pushedPhoto = true;
     }
     if (ytUrl) {
       const ytId = extractYouTubeId(ytUrl);
@@ -747,7 +766,21 @@ window.uploadMedia = async function() {
         caption, created_at:new Date().toISOString()
       });
       toast('Video saved! 🎬');
+      pushedVideo = true;
     }
+    // Push to teammates that someone added new media. Best-effort.
+    try {
+      if (pushedPhoto || pushedVideo) {
+        const kind = pushedPhoto && pushedVideo ? 'photo & video'
+                   : pushedPhoto ? 'photo'
+                   : 'video';
+        sendPhotoPush({
+          title: `📸 ${player?.name || 'A teammate'} added a ${kind}`,
+          body: caption || `${MY_TEAM.name || 'Your team'} · ${new Date().toLocaleDateString()}`,
+          teamId: MY_TEAM.id,
+        });
+      }
+    } catch(e) { console.warn('Photo push skipped:', e); }
     fileInput.value = '';
     document.getElementById('media-yt').value = '';
     document.getElementById('media-caption').value = '';

@@ -194,6 +194,63 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
           <span class="slider"></span>
         </label>
       </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">League Announcements</div>
+          <div class="cat-desc">Commissioner updates and league-wide news</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="announcements" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">Live Games</div>
+          <div class="cat-desc">When a game you follow goes live</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="live" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">Pre-Game Reminder</div>
+          <div class="cat-desc">One-hour heads-up before your game</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="pregame" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">Team Photos</div>
+          <div class="cat-desc">When teammates share photos or videos</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="photos" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Commissioner-only row: visible only when ?admin=1 is passed in the URL.
+           Lets Adam flag his device as an admin-alert recipient. -->
+      <div class="cat-item hidden" id="admin-toggle-row">
+        <div class="cat-info">
+          <div class="cat-name">Commissioner Alerts</div>
+          <div class="cat-desc">Score conflicts, new signups, admin-only alerts</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="admin-flag-toggle" onchange="updateAdminFlag()">
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
 
     <!-- Favorite teams: gate notifications to chosen teams -->
@@ -291,6 +348,8 @@ function init() {
 
   // Populate the team-preferences list regardless of subscription state
   loadTeamPrefs();
+  // Show + load commissioner-only toggle when ?admin=1 is passed.
+  initAdminToggle();
 
   // Listen for foreground messages
   onMessage(messaging, (payload) => {
@@ -320,26 +379,31 @@ function updateUI(enabled) {
 }
 
 async function migrateAddTeamChatCategory(token) {
+  // Add any categories to existing subscribers' docs that didn't exist when
+  // they first enabled notifications. Opt-out for them means unchecking
+  // later — opt-in-by-default keeps them in the loop for new features.
+  const NEW_CATS = ['team_chat', 'announcements', 'live', 'pregame', 'photos'];
   try {
     const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
     const snap = await getDocs(q);
     for (const d of snap.docs) {
       const cats = d.data().categories || [];
-      if (!cats.includes('team_chat')) {
-        await updateDoc(doc(db, 'notification_tokens', d.id), {
-          categories: [...cats, 'team_chat'],
-        });
-        // Keep localStorage in sync so the checkbox reflects actual state.
+      const missing = NEW_CATS.filter(c => !cats.includes(c));
+      if (missing.length) {
+        const merged = [...cats, ...missing];
+        await updateDoc(doc(db, 'notification_tokens', d.id), { categories: merged });
+        // Keep localStorage in sync so the checkboxes reflect actual state.
         try {
           const saved = JSON.parse(localStorage.getItem('dvsl-notif-categories') || '[]');
-          if (!saved.includes('team_chat')) {
-            localStorage.setItem('dvsl-notif-categories', JSON.stringify([...saved, 'team_chat']));
-            document.querySelectorAll('[data-cat="team_chat"]').forEach(cb => cb.checked = true);
-          }
+          const mergedSaved = [...new Set([...saved, ...missing])];
+          localStorage.setItem('dvsl-notif-categories', JSON.stringify(mergedSaved));
+          missing.forEach(c => {
+            document.querySelectorAll(`[data-cat="${c}"]`).forEach(cb => cb.checked = true);
+          });
         } catch(e) {}
       }
     }
-  } catch(e) { console.warn('team_chat migration skipped:', e); }
+  } catch(e) { console.warn('category migration skipped:', e); }
 }
 
 function loadSavedCategories() {
@@ -427,7 +491,7 @@ window.enableNotifications = async function() {
       throw new Error('No token received');
     }
 
-    const categories = ['scores', 'rainouts', 'schedule', 'playoffs', 'team_chat'];
+    const categories = ['scores', 'rainouts', 'schedule', 'playoffs', 'team_chat', 'announcements', 'live', 'pregame', 'photos'];
     const teams = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
 
     // Save token to Firestore — backend filters on (categories, teams)
@@ -479,6 +543,39 @@ window.disableNotifications = async function() {
     localStorage.removeItem('dvsl-notif-categories');
     updateUI(false);
   }
+};
+
+// Show the commissioner-only toggle when the URL has ?admin=1, and load the
+// current value of the is_admin flag on this token's Firestore doc.
+async function initAdminToggle() {
+  const wantsAdmin = new URLSearchParams(window.location.search).get('admin') === '1';
+  if (!wantsAdmin) return;
+  const row = document.getElementById('admin-toggle-row');
+  if (row) row.classList.remove('hidden');
+  const token = localStorage.getItem('dvsl-notif-token');
+  if (!token) return;
+  try {
+    const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      const isAdmin = d.data().is_admin === true;
+      const cb = document.getElementById('admin-flag-toggle');
+      if (cb) cb.checked = isAdmin;
+    }
+  } catch(e) { console.warn('Admin flag load failed:', e); }
+}
+
+window.updateAdminFlag = async function() {
+  const token = localStorage.getItem('dvsl-notif-token');
+  if (!token) return;
+  const checked = !!document.getElementById('admin-flag-toggle')?.checked;
+  try {
+    const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      await updateDoc(doc(db, 'notification_tokens', d.id), { is_admin: checked });
+    }
+  } catch(e) { console.warn('Admin flag update failed:', e); }
 };
 
 window.updateCategories = async function() {

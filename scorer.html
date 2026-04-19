@@ -6485,8 +6485,40 @@ document.getElementById('start-btn').addEventListener('click', async () => {
 
     document.getElementById('setup-screen').style.display = 'none';
     showLineupScreen();
+    // Notify subscribers that the game just went live — but only once per
+    // game. We check game.live first: if the other captain already started
+    // scoring, their session already sent the push.
+    try {
+      if (!game._alreadyFinal && !game.live && G.awayTeam?.id && G.homeTeam?.id) {
+        sendLiveGamePush(game, G.awayTeam, G.homeTeam);
+      }
+    } catch(e) { console.warn('Live push skipped:', e); }
   }
 });
+
+// Fire-and-forget "game is live" push. Deep-links to the watch page so
+// followers can jump into live scoring. Uses the shared admin secret so
+// the endpoint accepts the request.
+const SCORER_PUSH_SECRET = 'dvsl-push-2026-rkj3849f';
+function sendLiveGamePush(game, awayTeam, homeTeam) {
+  const url = `/watch.html?game=${encodeURIComponent(game.id)}`;
+  const parts = [];
+  if (game.wk) parts.push(`Week ${game.wk}`);
+  if (game.time) parts.push(game.time);
+  if (game.field) parts.push(game.field);
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': SCORER_PUSH_SECRET },
+    body: JSON.stringify({
+      title: `⚾ LIVE: ${awayTeam.short || awayTeam.name} @ ${homeTeam.short || homeTeam.name}`,
+      body: parts.join(' · ') || 'Follow along live now',
+      category: 'live',
+      teams: [awayTeam.id, homeTeam.id],
+      url,
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Live push failed:', e));
+}
 
 // ===== PRACTICE MODE =====
 document.getElementById('practice-btn').addEventListener('click', () => {

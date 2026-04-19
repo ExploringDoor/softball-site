@@ -20,9 +20,12 @@
 // Request body (JSON):
 //   title: string                — notification headline
 //   body: string                 — notification body text
-//   category: "scores"|"rainouts"|"schedule"|"playoffs"
+//   category: "scores"|"rainouts"|"schedule"|"playoffs"|"team_chat"|"announcements"|"photos"|"admin"
 //   team?: string                — team id; omit to target all teams
+//   teams?: string[]             — multi-team target (wins over team)
 //   url?: string                 — deep-link url on notification click
+//   adminOnly?: boolean          — only push to tokens flagged is_admin:true
+//   excludeToken?: string        — don't push to this token (sender)
 //
 // If env vars are missing, returns 503 with a clear message so the admin UI
 // can surface the setup requirement to Adam.
@@ -50,7 +53,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, category, team, teams, url, excludeToken } = req.body || {};
+  const { title, body, category, team, teams, url, excludeToken, adminOnly } = req.body || {};
   // `team` (single) and `teams` (array) are both supported. `teams` wins when
   // present — use it for schedule changes that affect multiple teams.
   if (!title || !body || !category) {
@@ -68,29 +71,56 @@ export default async function handler(req, res) {
 
   // 2. Pull matching tokens out of the notification_tokens collection via
   //    the Firestore REST API (reuses same service-account auth).
-  let tokens = [];
-  try { tokens = await listMatchingTokens({ projectId: PROJECT_ID, accessToken, category, team, teams }); }
+  let tokenRows = [];
+  try { tokenRows = await listMatchingTokens({ projectId: PROJECT_ID, accessToken, category, team, teams, adminOnly }); }
   catch(e) { return res.status(500).json({ error: 'Failed to read tokens', detail: e.message }); }
 
   // Exclude sender's own token so people don't get pinged for their own chat
   // messages. Callers pass their localStorage 'dvsl-notif-token' here.
-  if (excludeToken) tokens = tokens.filter(t => t !== excludeToken);
+  if (excludeToken) tokenRows = tokenRows.filter(r => r.token !== excludeToken);
 
-  if (!tokens.length) return res.status(200).json({ sent: 0, note: 'No matching subscribers' });
+  if (!tokenRows.length) {
+    await logPush({ projectId: PROJECT_ID, accessToken, title, body, category, team, teams, adminOnly, sent: 0, failed: 0, total: 0, note: 'No matching subscribers' }).catch(()=>{});
+    return res.status(200).json({ sent: 0, note: 'No matching subscribers' });
+  }
 
   // 3. Fan out FCM sends. We use the send endpoint (one call per token) —
   //    simple and reliable, fine up to a few hundred tokens.
-  const results = await Promise.all(tokens.map(async tok => {
+  const deadDocIds = []; // tokens to prune (FCM 404/UNREGISTERED)
+  const results = await Promise.all(tokenRows.map(async row => {
     try {
-      const r = await fcmSend({ projectId: PROJECT_ID, accessToken, token: tok, title, body, url });
-      return { tokenPrefix: tok.slice(0, 24) + '...', ok: true, messageName: r?.name || null };
+      const r = await fcmSend({ projectId: PROJECT_ID, accessToken, token: row.token, title, body, url });
+      return { tokenPrefix: row.token.slice(0, 24) + '...', ok: true, messageName: r?.name || null };
     } catch(e) {
-      return { tokenPrefix: tok.slice(0, 24) + '...', ok: false, error: e.message };
+      // Detect dead-token signals from FCM so we can prune them. The string
+      // "UNREGISTERED" or an HTTP 404 means this device is gone (app deleted,
+      // uninstalled PWA, revoked permission, etc).
+      const msg = String(e.message || '');
+      const isDead = msg.includes('UNREGISTERED') || msg.includes('registration-token-not-registered') || /FCM\s+404/.test(msg);
+      if (isDead && row.docId) deadDocIds.push(row.docId);
+      return { tokenPrefix: row.token.slice(0, 24) + '...', ok: false, error: msg, dead: isDead };
     }
   }));
   const sent = results.filter(r => r.ok).length;
   const failed = results.length - sent;
-  return res.status(200).json({ sent, failed, total: results.length, results });
+
+  // 4. Prune dead tokens — fire and forget, don't block the response.
+  if (deadDocIds.length) {
+    pruneDeadTokens({ projectId: PROJECT_ID, accessToken, docIds: deadDocIds })
+      .catch(e => console.warn('Prune failed:', e.message));
+  }
+
+  // 5. Log this push attempt to the push_log collection so Adam can audit
+  //    why certain devices didn't receive pushes. Fire-and-forget.
+  logPush({
+    projectId: PROJECT_ID, accessToken,
+    title, body, category, team, teams, adminOnly,
+    sent, failed, total: results.length,
+    pruned: deadDocIds.length,
+    sampleErrors: results.filter(r => !r.ok).slice(0, 3).map(r => r.error),
+  }).catch(() => {});
+
+  return res.status(200).json({ sent, failed, total: results.length, pruned: deadDocIds.length, results });
 }
 
 // ── helpers ────────────────────────────────────────────────────────────
@@ -122,7 +152,7 @@ async function getAccessToken(svc) {
   return data.access_token;
 }
 
-async function listMatchingTokens({ projectId, accessToken, category, team, teams }) {
+async function listMatchingTokens({ projectId, accessToken, category, team, teams, adminOnly }) {
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/notification_tokens?pageSize=300`;
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }});
   const data = await resp.json();
@@ -136,13 +166,17 @@ async function listMatchingTokens({ projectId, accessToken, category, team, team
     const f = d.fields || {};
     const tok = f.token?.stringValue;
     if (!tok) continue;
+    // adminOnly filter: only tokens where is_admin === true
+    if (adminOnly && f.is_admin?.booleanValue !== true) continue;
     const cats = (f.categories?.arrayValue?.values || []).map(v => v.stringValue);
     if (cats.length && !cats.includes(category)) continue;
     const tokTeams = (f.teams?.arrayValue?.values || []).map(v => v.stringValue);
     // Empty subscriber teams = "all teams" (always match). Otherwise we need
     // at least one overlap between what we're targeting and what they follow.
     if (teamWanted.length && tokTeams.length && !teamWanted.some(t => tokTeams.includes(t))) continue;
-    out.push(tok);
+    // Extract the doc ID from the REST path ("projects/.../documents/notification_tokens/{docId}").
+    const docId = d.name ? d.name.split('/').pop() : null;
+    out.push({ token: tok, docId });
   }
   return out;
 }
@@ -172,4 +206,55 @@ async function fcmSend({ projectId, accessToken, token, title, body, url }) {
     throw new Error(`FCM ${resp.status}: ${text.slice(0,200)}`);
   }
   return await resp.json();
+}
+
+// Delete notification_tokens docs whose FCM tokens returned UNREGISTERED.
+// Firestore REST ":commit" with delete operations — one round-trip deletes
+// the whole batch. We don't care about per-doc failures; pruning is best-effort.
+async function pruneDeadTokens({ projectId, accessToken, docIds }) {
+  if (!docIds.length) return;
+  const endpoint = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents:commit`;
+  const writes = docIds.map(id => ({
+    delete: `projects/${projectId}/databases/(default)/documents/notification_tokens/${id}`,
+  }));
+  await fetch(endpoint, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ writes }),
+  });
+}
+
+// Write a compact record of every push attempt to the push_log collection.
+// Lets Adam audit delivery from the admin UI: "why didn't Mike get that push?"
+async function logPush({ projectId, accessToken, title, body, category, team, teams, adminOnly, sent, failed, total, pruned, note, sampleErrors }) {
+  try {
+    const endpoint = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/push_log`;
+    const nowIso = new Date().toISOString();
+    const fields = {
+      timestamp: { timestampValue: nowIso },
+      title: { stringValue: String(title || '').slice(0, 200) },
+      body: { stringValue: String(body || '').slice(0, 400) },
+      category: { stringValue: String(category || '') },
+      sent: { integerValue: String(sent || 0) },
+      failed: { integerValue: String(failed || 0) },
+      total: { integerValue: String(total || 0) },
+    };
+    if (typeof pruned === 'number') fields.pruned = { integerValue: String(pruned) };
+    if (team) fields.team = { stringValue: String(team) };
+    if (Array.isArray(teams) && teams.length) {
+      fields.teams = { arrayValue: { values: teams.map(t => ({ stringValue: String(t) })) } };
+    }
+    if (adminOnly) fields.adminOnly = { booleanValue: true };
+    if (note) fields.note = { stringValue: String(note).slice(0, 200) };
+    if (Array.isArray(sampleErrors) && sampleErrors.length) {
+      fields.sampleErrors = { arrayValue: { values: sampleErrors.map(e => ({ stringValue: String(e).slice(0, 300) })) } };
+    }
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    });
+  } catch(e) {
+    console.warn('logPush failed:', e.message);
+  }
 }

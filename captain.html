@@ -683,6 +683,28 @@ let captainData = null;  // { team_id, team_name, email }
 // captain score-submit paths when both captains' submissions align and
 // `done` flips to true. Silently ignores failures.
 const CAPTAIN_PUSH_SECRET = 'dvsl-push-2026-rkj3849f';
+
+// Fire an admin-only push when two captains disagree on a score. Keeps
+// Adam in the loop without spamming the league with "stats differ" pings.
+function sendScoreConflictAlert(g, awayFinal, homeFinal, otherAway, otherHome) {
+  try {
+    const awayName = ALL_TEAMS.find(t => t.id === g.away)?.name || g.away;
+    const homeName = ALL_TEAMS.find(t => t.id === g.home)?.name || g.home;
+    return fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': CAPTAIN_PUSH_SECRET },
+      body: JSON.stringify({
+        title: `🔔 Score conflict: ${awayName} @ ${homeName}`,
+        body: `Captains disagree — one says ${awayFinal}-${homeFinal}, other says ${otherAway}-${otherHome}. Review on admin.`,
+        category: 'admin',
+        adminOnly: true,
+        url: '/admin.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    }).catch(e => console.warn('Conflict alert failed:', e));
+  } catch(e) { console.warn('Conflict alert skipped:', e); }
+}
+
 function sendFinalScorePush(g, awayScore, homeScore) {
   if (!g || !g.away || !g.home) return;
   const awayName = ALL_TEAMS.find(t => t.id === g.away)?.name || g.away;
@@ -2952,6 +2974,7 @@ window.submitBoxScore = async function(gameId) {
       finalStatus = 'conflict';
       toastMsg = `Scores differ — using ${getTeamName(g.away)} ${finalAway}–${getTeamName(g.home)} ${finalHome} (each captain authoritative for their own team).`;
       await logActivity('Score Conflict', `Auto-resolved via per-side authority on game ${gameId}: final ${getTeamName(g.away)} ${finalAway}–${getTeamName(g.home)} ${finalHome}. ${captainData.team_name} said ${awayFinal}–${homeFinal}; other captain said ${otherAway}–${otherHome}`);
+      sendScoreConflictAlert(g, awayFinal, homeFinal, otherAway, otherHome);
     }
   }
 
@@ -3142,6 +3165,7 @@ window.submitScore = async function(gameId) {
       finalStatus = 'conflict';
       toastMsg = `Scores differ — using ${getTeamName(g.away)} ${finalAway}–${getTeamName(g.home)} ${finalHome} (each captain authoritative for their own team).`;
       await logActivity('Score Conflict', `Auto-resolved via per-side authority on game ${gameId}: final ${getTeamName(g.away)} ${finalAway}–${getTeamName(g.home)} ${finalHome}. ${captainData.team_name} said ${awayScore}–${homeScore}; other captain said ${otherAway}–${otherHome}`);
+      sendScoreConflictAlert(g, awayScore, homeScore, otherAway, otherHome);
     }
   }
 

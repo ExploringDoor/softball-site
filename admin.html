@@ -724,6 +724,17 @@ select.form-input{cursor:pointer}
 
       <div id="push-setup-warning" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 14px;margin-bottom:14px;color:#78350f;font-size:13px"></div>
 
+      <!-- Deep-link to notifications.html with ?admin=1 so Adam can flag his
+           PWA token as is_admin:true. Installed PWAs have no address bar,
+           so this button is the only way to reach that URL from the app. -->
+      <div class="panel" style="margin-bottom:16px;background:#fff3cd;border:1px solid #f59e0b">
+        <div class="panel-title" style="margin-bottom:8px;color:#78350f">🔔 Your notification preferences</div>
+        <div style="font-size:13px;color:#78350f;margin-bottom:12px;line-height:1.5">
+          Configure which pushes your device receives, and flip on <strong>Commissioner Alerts</strong> to get admin-only pings (score conflicts, new signups).
+        </div>
+        <a href="/notifications.html?admin=1" class="btn btn-primary" style="text-decoration:none;display:inline-block">Open Notification Settings (Admin)</a>
+      </div>
+
       <div class="panel" style="margin-bottom:16px">
         <div class="panel-title" style="margin-bottom:12px">New Notification</div>
         <div class="form-row">
@@ -743,6 +754,12 @@ select.form-input{cursor:pointer}
               <option value="rainouts">Rainouts</option>
               <option value="schedule">Schedule changes</option>
               <option value="playoffs">Playoffs</option>
+              <option value="announcements">Announcements</option>
+              <option value="live">Live games</option>
+              <option value="pregame">Pre-game reminder</option>
+              <option value="photos">Team photos</option>
+              <option value="team_chat">Team chat</option>
+              <option value="admin">Admin only</option>
             </select>
           </div>
           <div class="form-col" style="max-width:260px"><label class="form-label">Team (optional)</label>
@@ -3852,6 +3869,12 @@ window.openAddGame = function() {
       <div class="form-col"><label class="form-label">Address</label><input type="text" class="form-input" id="ag-addr" placeholder="e.g. 1451 Dillon Rd, Ambler PA"></div>
     </div>
     <div class="form-row">
+      <label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);cursor:pointer">
+        <input type="checkbox" id="ag-notify" style="cursor:pointer">
+        Push notification to both teams about the new game
+      </label>
+    </div>
+    <div class="form-row">
       <button class="btn btn-success" onclick="saveNewGame()">Save Game</button>
       <button class="btn btn-outline" onclick="document.getElementById('add-game-form').style.display='none'">Cancel</button>
     </div>
@@ -3888,9 +3911,19 @@ window.saveNewGame = async function() {
     data.id = ref.id;
     GAMES.push(data);
     GAMES.sort((a,b) => (a.wk||0) - (b.wk||0));
+    const wantsNotify = !!document.getElementById('ag-notify')?.checked;
     document.getElementById('add-game-form').style.display = 'none';
     toast('Game added!');
     await logActivity('Schedule', `Added game: ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk}`);
+    if (wantsNotify) {
+      try {
+        sendSchedulePush({
+          title: `New game: ${getTeamName(data.away)} @ ${getTeamName(data.home)}`,
+          body: `Week ${data.wk} · ${data.date||''} ${data.time||''} @ ${data.field||'TBD'}`,
+          teams: [data.away, data.home].filter(Boolean),
+        });
+      } catch(e) { console.warn('New-game push skipped:', e); }
+    }
     renderSchedule();
     renderScores();
     renderDashboard();
@@ -4095,8 +4128,43 @@ window.editGame = function(gameId) {
       <div class="form-row">
         <button class="btn btn-success btn-sm" onclick="saveEditGame('${gameId}')">Save</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('sched-edit-${gameId}').style.display='none'">Cancel</button>
+        <button class="btn btn-sm" style="background:#64748b;color:#fff" onclick="toggleRainout('${gameId}')" title="Mark this game as rained out and push a rainout alert to subscribers">🌧 ${g.rained_out ? 'Un-Rainout' : 'Mark Rainout'}</button>
       </div>
     </div>`;
+};
+
+// Mark a game as rained out (or un-mark it). Toggles g.rained_out and fires
+// a push under the `rainouts` category the first time it flips on.
+window.toggleRainout = async function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const nextVal = !g.rained_out;
+  if (nextVal && !confirm(`Mark "${getTeamName(g.away)} @ ${getTeamName(g.home)}" as RAINED OUT and push a notification to both teams?`)) return;
+  try {
+    await updateDoc(doc(db, 'games', gameId), { rained_out: nextVal });
+    g.rained_out = nextVal;
+    toast(nextVal ? 'Marked rainout' : 'Rainout cleared');
+    await logActivity('Schedule', `${nextVal ? 'Marked' : 'Cleared'} rainout: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk||'?'}`);
+    if (nextVal) {
+      fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
+        body: JSON.stringify({
+          title: `🌧 Rainout: ${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
+          body: `Week ${g.wk||'?'} · ${g.date||''} ${g.time||''} @ ${g.field||''} is canceled due to weather.`,
+          category: 'rainouts',
+          teams: [g.away, g.home].filter(Boolean),
+          url: '/schedule.html',
+          excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+        }),
+      }).catch(e => console.warn('Rainout push failed:', e));
+    }
+    renderSchedule();
+    renderDashboard();
+    // Close the edit row so the status change is obvious on the list.
+    const row = document.getElementById('sched-edit-' + gameId);
+    if (row) row.style.display = 'none';
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 
 window.saveEditGame = async function(gameId) {
@@ -4726,7 +4794,33 @@ window.sendAnnouncement = async function() {
     document.getElementById('email-subject').value = '';
     document.getElementById('email-body').value = '';
     loadAnnouncements();
+    // Push to subscribers of the targeted team (or everyone if "all").
+    try {
+      sendAnnouncementPush({
+        title: subject,
+        body: body.length > 160 ? body.slice(0, 157) + '...' : body,
+        teams: to === 'all' ? [] : [to],
+      });
+    } catch(e) { console.warn('Announcement push skipped:', e); }
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// Fire-and-forget league-announcement push. When `teams` is an empty array
+// we omit the teams param entirely so the backend treats it as "all teams".
+window.sendAnnouncementPush = function({ title, body, teams }) {
+  const payload = {
+    title: `📣 ${title}`,
+    body,
+    category: 'announcements',
+    url: '/index.html',
+    excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+  };
+  if (Array.isArray(teams) && teams.length) payload.teams = teams;
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
+    body: JSON.stringify(payload),
+  }).catch(e => console.warn('Announcement push failed:', e));
 };
 
 async function loadAnnouncements() {
@@ -5921,18 +6015,45 @@ window.sendScorePush = function(g, awayScore, homeScore) {
   const parts = [];
   if (g.wk) parts.push(`Week ${g.wk}`);
   if (g.date) parts.push(g.date);
-  return fetch('/api/send-notification', {
+  const sendOne = (category, url) => fetch('/api/send-notification', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
     body: JSON.stringify({
       title,
       body: parts.join(' · ') || 'Game final',
-      category: 'scores',
+      category,
       teams: [g.away, g.home],
-      url: '/index.html',
+      url,
       excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
     }),
-  }).catch(e => console.warn('Score push failed:', e));
+  }).catch(e => console.warn(`${category} push failed:`, e));
+  sendOne('scores', '/index.html');
+  // Also fire a playoff-bracket push if this is a playoff-round game.
+  // Detects week values like "PL1", "PL2", "PLAYOFF", etc. so Adam doesn't
+  // have to remember to flip a separate flag.
+  const wkStr = String(g.wk || '').toUpperCase();
+  const isPlayoff = g.playoff === true || wkStr.startsWith('PL') || wkStr.includes('PLAYOFF') || wkStr.includes('CHAMP') || wkStr.includes('SEMI') || wkStr.includes('QUARTER');
+  if (isPlayoff) {
+    sendOne('playoffs', '/playoffs.html');
+  }
+};
+
+// Fire an admin-only alert to tokens flagged is_admin:true. Used for score
+// discrepancies, new player registrations, and other "hey Adam, handle this"
+// signals that shouldn't go to the whole league.
+window.sendAdminAlert = function({ title, body, url }) {
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
+    body: JSON.stringify({
+      title: `🔔 ${title}`,
+      body,
+      category: 'admin',
+      adminOnly: true,
+      url: url || '/admin.html',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Admin alert failed:', e));
 };
 
 window.refreshSubscriberCount = async function() {
@@ -5986,7 +6107,7 @@ window.sendPushNotification = async function() {
         'Content-Type': 'application/json',
         ...(PUSH_ADMIN_SECRET ? { 'X-Admin-Secret': PUSH_ADMIN_SECRET } : {}),
       },
-      body: JSON.stringify({ title, body, category, team, url }),
+      body: JSON.stringify({ title, body, category, team, url, adminOnly: category === 'admin' || undefined }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
