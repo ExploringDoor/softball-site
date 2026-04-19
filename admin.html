@@ -482,12 +482,15 @@ select.form-input{cursor:pointer}
       </div>
       <!-- Banner: captain-initiated schedule edits queued for calendar sync -->
       <div id="gcal-pending-banner" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 14px;margin-bottom:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-          <div>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:240px">
             <div style="font-weight:800;color:#78350f;font-size:14px">⚠️ Google Calendar sync pending</div>
-            <div id="gcal-pending-list" style="font-size:12px;color:#78350f;margin-top:4px;line-height:1.5"></div>
+            <div id="gcal-pending-list" style="font-size:12px;color:#78350f;margin-top:4px;line-height:1.7"></div>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="openGcalSync()">Sync Now</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="dismissAllGcalPending()" title="Clear the queue without syncing — use when changes don't need to hit Google Calendar">Dismiss all</button>
+            <button class="btn btn-primary btn-sm" onclick="openGcalSync()">Sync Now</button>
+          </div>
         </div>
       </div>
       <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
@@ -1641,18 +1644,61 @@ function startPendingGcalListener() {
       }
       if (banner) banner.style.display = n > 0 ? 'block' : 'none';
       if (list) {
+        // Cache the ids we showed so the dismiss helpers can also strip
+        // them from localStorage's dvsl_pending_gcal_games mirror — the
+        // ?games=... URL for gcal-sync.html reads from that mirror.
+        window._gcalPendingCache = items.map(i => ({ docId: i.id, gameId: i.game_id || i.id }));
         const lines = items.slice(0, 8).map(i => {
           const who = i.edited_by || 'captain';
           const tl  = i.teams_label || i.game_id;
           const sm  = i.summary ? ` — ${i.summary}` : '';
-          return `<div>• <strong>${tl}</strong>${sm} <span style="opacity:.6">(${who})</span></div>`;
+          return `<div style="display:flex;align-items:center;gap:6px">
+            <button onclick="dismissGcalPending('${i.id}','${i.game_id||i.id}')" title="Ignore this change — won't push to Google Calendar"
+              style="background:none;border:1px solid #f59e0b;color:#b45309;width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:11px;line-height:1;font-weight:800;padding:0;flex-shrink:0">×</button>
+            <span>• <strong>${tl}</strong>${sm} <span style="opacity:.6">(${who})</span></span>
+          </div>`;
         });
-        if (items.length > 8) lines.push(`<div>• …and ${items.length - 8} more</div>`);
+        if (items.length > 8) lines.push(`<div style="margin-left:26px">• …and ${items.length - 8} more</div>`);
         list.innerHTML = lines.join('');
       }
     }, (err) => console.warn('pending_gcal_syncs listener error:', err));
   } catch(e) { console.warn('Could not start pending gcal listener:', e.message); }
 }
+
+// Ignore a single queued sync. Happens when a captain made an edit we don't
+// want to push to Google Calendar (e.g. the time was rolled BACK after a
+// mistaken earlier edit, so Google already has the right data). Removes
+// the Firestore doc AND strips the game id from the localStorage mirror
+// so the ?games=... URL doesn't silently re-target it on next sync.
+window.dismissGcalPending = async function(docId, gameId) {
+  try {
+    await deleteDoc(doc(db, 'pending_gcal_syncs', docId));
+  } catch(e) {
+    toast('Could not dismiss: ' + e.message, 'error');
+    return;
+  }
+  // Strip from localStorage mirror too
+  try {
+    const arr = JSON.parse(localStorage.getItem('dvsl_pending_gcal_games') || '[]');
+    const next = arr.filter(id => id !== gameId && id !== docId);
+    localStorage.setItem('dvsl_pending_gcal_games', JSON.stringify(next));
+  } catch(_) {}
+  toast('Ignored — change will not sync to Google Calendar');
+};
+
+// Clear the whole queue. Same deal, just batched.
+window.dismissAllGcalPending = async function() {
+  const cache = Array.isArray(window._gcalPendingCache) ? window._gcalPendingCache : [];
+  if (!cache.length) return;
+  if (!confirm(`Ignore all ${cache.length} pending calendar change${cache.length===1?'':'s'}? They won't be pushed to Google Calendar.`)) return;
+  try {
+    await Promise.all(cache.map(c => deleteDoc(doc(db, 'pending_gcal_syncs', c.docId)).catch(() => {})));
+    localStorage.setItem('dvsl_pending_gcal_games', '[]');
+    toast(`Cleared ${cache.length} pending sync${cache.length===1?'':'s'}`);
+  } catch(e) {
+    toast('Could not clear: ' + e.message, 'error');
+  }
+};
 
 // Enter key on login
 document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') window.doLogin(); });
@@ -5617,7 +5663,7 @@ async function loadRegistrations() {
     const snap = await getDocs(query(collection(db, 'player_signups'), orderBy('signed_up_at', 'desc')));
     const regs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (!regs.length) {
-      el.innerHTML = '<div class="empty">No signups yet. They will appear here once someone submits the form at <strong>registration.html</strong>.</div>';
+      el.innerHTML = `<div class="empty">No signups yet. They will appear here once someone submits the form at <a href="registration.html" target="_blank" style="color:var(--navy);font-weight:700;text-decoration:underline">registration.html</a>. <span style="display:block;margin-top:6px;font-size:12px;color:var(--muted2)">Share that link (or the "Register" link in the main site's menu) with prospective players.</span></div>`;
       return;
     }
     el.innerHTML = `
