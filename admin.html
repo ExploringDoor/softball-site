@@ -1243,11 +1243,13 @@ select.form-input{cursor:pointer}
             <input type="text" class="form-input" id="push-url" placeholder="/schedule.html">
           </div>
         </div>
-        <div style="display:flex;gap:10px;margin-top:12px">
+        <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-primary" onclick="sendPushNotification()">🔔 Send Notification</button>
           <button class="btn btn-outline" onclick="refreshSubscriberCount()">Refresh Subscriber Count</button>
+          <button type="button" id="push-toggle-list" onclick="togglePushSubscriberList()" style="background:none;border:none;color:var(--blue);font-size:12px;cursor:pointer;padding:0;text-decoration:underline">View subscribers</button>
           <span id="push-sub-count" style="align-self:center;color:var(--muted2);font-size:13px"></span>
         </div>
+        <div id="push-subscriber-list" style="display:none;margin-top:10px;max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px 12px;background:var(--bg2);font-size:12px;line-height:1.55"></div>
         <div id="push-result" style="margin-top:10px;font-size:13px"></div>
       </div>
 
@@ -6821,6 +6823,97 @@ window.refreshSubscriberCount = async function() {
     const snap = await getDocs(collection(db, 'notification_tokens'));
     el.textContent = `${snap.size} subscriber${snap.size===1?'':'s'}`;
   } catch(e) { el.textContent = 'Subscriber count unavailable'; }
+};
+
+// notification_tokens docs are anonymous — no email/name, just
+// { token, categories[], teams[], timestamp, is_admin? }. This view
+// gives Adam per-phone visibility into what each subscription opted
+// into: which teams they follow (empty = all), which categories are
+// on, admin flag, when they enabled, and the last 6 chars of the FCM
+// token as a disambiguator across otherwise-identical rows.
+let _pushSubsLoaded = false;
+window.togglePushSubscriberList = async function() {
+  const list = document.getElementById('push-subscriber-list');
+  const btn  = document.getElementById('push-toggle-list');
+  if (!list || !btn) return;
+  if (list.style.display === 'none') {
+    list.style.display = 'block';
+    btn.textContent = 'Hide subscribers';
+    if (!_pushSubsLoaded) {
+      list.innerHTML = '<div style="color:var(--muted2)">Loading subscribers…</div>';
+      try {
+        const snap = await getDocs(collection(db, 'notification_tokens'));
+        if (snap.empty) {
+          list.innerHTML = '<div style="color:var(--muted2)">No subscribers yet.</div>';
+        } else {
+          // Sort newest-first by timestamp.
+          const rows = [];
+          snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
+          rows.sort((a, b) => {
+            const ta = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds*1000 : 0);
+            const tb = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds*1000 : 0);
+            return tb - ta;
+          });
+          const fmt = (ts) => {
+            try {
+              const ms = ts?.toMillis ? ts.toMillis() : (ts?.seconds ? ts.seconds*1000 : 0);
+              if (!ms) return '—';
+              const d = new Date(ms);
+              return d.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+            } catch(_) { return '—'; }
+          };
+          // Summary header: how many opted into each category / each team.
+          const catCounts = {};
+          const teamCounts = {};
+          let adminN = 0, allTeamsN = 0;
+          rows.forEach(r => {
+            (r.categories || []).forEach(c => { catCounts[c] = (catCounts[c]||0)+1; });
+            if (!r.teams || r.teams.length === 0) allTeamsN++;
+            (r.teams || []).forEach(t => { teamCounts[t] = (teamCounts[t]||0)+1; });
+            if (r.is_admin) adminN++;
+          });
+          const catSummary = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])
+            .map(([c,n]) => `<span style="display:inline-block;padding:1px 6px;margin:0 3px 3px 0;background:#e0e7ff;color:#1e3a8a;border-radius:10px;font-size:11px">${c}: ${n}</span>`).join('');
+          const teamSummary = Object.entries(teamCounts).sort((a,b)=>b[1]-a[1])
+            .map(([t,n]) => `<span style="display:inline-block;padding:1px 6px;margin:0 3px 3px 0;background:#fef3c7;color:#92400e;border-radius:10px;font-size:11px">${getTeamName(t)}: ${n}</span>`).join('');
+          const summary = `
+            <div style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:10px">
+              <div style="font-weight:700;color:var(--navy);margin-bottom:4px">${rows.length} total · ${allTeamsN} follow all teams · ${adminN} admin</div>
+              ${catSummary ? `<div style="margin-top:4px"><strong style="font-size:11px;color:var(--muted2)">CATEGORIES:</strong> ${catSummary}</div>` : ''}
+              ${teamSummary ? `<div style="margin-top:4px"><strong style="font-size:11px;color:var(--muted2)">TEAM FOLLOWS:</strong> ${teamSummary}</div>` : ''}
+            </div>`;
+          const rowsHtml = rows.map(r => {
+            const teams = (r.teams && r.teams.length)
+              ? r.teams.map(t => `<span style="display:inline-block;padding:0 5px;margin-right:3px;background:#fef3c7;color:#92400e;border-radius:8px;font-size:11px">${getTeamName(t)}</span>`).join('')
+              : '<span style="color:var(--muted2);font-style:italic">all teams</span>';
+            const cats = (r.categories || []).length
+              ? r.categories.map(c => `<span style="display:inline-block;padding:0 5px;margin-right:3px;background:#e0e7ff;color:#1e3a8a;border-radius:8px;font-size:11px">${c}</span>`).join('')
+              : '<span style="color:var(--muted2);font-style:italic">none</span>';
+            const tokenTail = (r.token || '').slice(-6) || '—';
+            const adminBadge = r.is_admin
+              ? '<span style="display:inline-block;padding:0 5px;margin-right:4px;background:#fecaca;color:#991b1b;border-radius:8px;font-size:11px;font-weight:700">ADMIN</span>'
+              : '';
+            return `
+              <div style="padding:6px 0;border-bottom:1px solid var(--border)">
+                <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                  <div><strong>#${tokenTail}</strong> ${adminBadge}</div>
+                  <div style="color:var(--muted2);font-size:11px">${fmt(r.timestamp)}</div>
+                </div>
+                <div style="margin-top:3px"><strong style="font-size:11px;color:var(--muted2)">TEAMS:</strong> ${teams}</div>
+                <div style="margin-top:3px"><strong style="font-size:11px;color:var(--muted2)">ALERTS:</strong> ${cats}</div>
+              </div>`;
+          }).join('');
+          list.innerHTML = summary + rowsHtml;
+        }
+        _pushSubsLoaded = true;
+      } catch(e) {
+        list.innerHTML = `<div style="color:var(--red,#c00)">Could not load subscribers: ${e.message}</div>`;
+      }
+    }
+  } else {
+    list.style.display = 'none';
+    btn.textContent = 'View subscribers';
+  }
 };
 
 // Populate team dropdown when the push section is first shown
