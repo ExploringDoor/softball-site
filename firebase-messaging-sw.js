@@ -24,8 +24,6 @@ messaging.onBackgroundMessage(function(payload) {
     icon: '/dvsl-logo-dark.png',
     badge: '/dvsl-logo-dark.png',
     data: payload.data || {},
-    // Tag dedupes if Firebase's SDK also auto-displays — same tag → one banner
-    tag: 'dvsl-push'
   };
   self.registration.showNotification(title, options);
 });
