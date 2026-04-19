@@ -477,6 +477,7 @@ select.form-input{cursor:pointer}
           <button class="btn btn-outline" onclick="exportSchedulePDF()" title="Download schedule as PDF">📄 Export PDF</button>
           <button class="btn btn-primary" onclick="openAddGame()">+ Add Game</button>
           <button class="btn btn-outline" onclick="openImportCsv()">📋 Import CSV</button>
+          <button class="btn btn-outline" style="color:#b45309;border-color:#f59e0b" onclick="openRainOutDay()" title="Mark every game on a single date as rained out — one click, one notification.">🌧️ Rain Out Day</button>
           <button class="btn btn-outline" id="btn-gcal-sync" onclick="openGcalSync()" title="Push current schedule to Google Calendars (one per team). Captains subscribed to those calendars will see updates.">🔄 Sync Google Calendars <span id="gcal-pending-badge" style="display:none;background:#dc2626;color:#fff;font-size:11px;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:6px;vertical-align:middle">0</span></button>
         </div>
       </div>
@@ -1041,12 +1042,13 @@ select.form-input{cursor:pointer}
       <details open>
         <summary>1. Weekly Rhythm (the punch list)</summary>
         <div class="help-body">
-          <p>For a normal league week, here's the minimum you do as commissioner:</p>
+          <p>For a normal league week, the core job is <strong>keeping the Scores tab clean</strong>. Here's the rhythm:</p>
           <ul>
-            <li><strong>Monday/Tuesday:</strong> check <strong>Scores</strong> — any games flagged "stats differ"? Click in and resolve. Any games missing a box score? Ping the captain.</li>
-            <li><strong>Before each game day:</strong> scan the <strong>Schedule</strong> — anything need a rainout flag or field move? Rain? Hit "Banner / Alerts" and publish a heads-up alert.</li>
-            <li><strong>After the week:</strong> skim <strong>Standings</strong>, run <strong>Recaps</strong> if you want the AI to draft a league recap.</li>
-            <li><strong>Payments:</strong> peek at <strong>Financials</strong> once a week — captains update payments on their end, you just see the roll-up.</li>
+            <li><strong>Morning after games:</strong> open <strong>Scores</strong>. Look for any game flagged <em>"stats differ"</em> — that means the two captains submitted different final scores. Click in, pick which number is right (or edit manually), hit Save. That locks the official score and pushes an updated Live notification.</li>
+            <li><strong>Mid-week check:</strong> any completed game still showing "No score submitted"? Ping the captain. Scores drive Standings and Stats, so missing ones leave the leaderboards wrong.</li>
+            <li><strong>Before each game day:</strong> scan the <strong>Schedule</strong> for anything that needs a rainout flag, field move, or time change. If it's going to rain, hit <strong>Banner / Alerts</strong> and publish a heads-up.</li>
+            <li><strong>On game day rainouts:</strong> use the <strong>"🌧️ Rain Out Day"</strong> button at the top of the Schedule tab to mark every game on a single date as rained out in one click — no need to edit games one by one.</li>
+            <li><strong>After the week:</strong> skim <strong>Standings</strong> to make sure they look right.</li>
           </ul>
           <p>Everything below is the "when I need it" reference.</p>
         </div>
@@ -1115,8 +1117,8 @@ select.form-input{cursor:pointer}
         <summary>7. Standings &amp; Recaps</summary>
         <div class="help-body">
           <ul>
-            <li><strong>Standings</strong> — auto-computed from submitted scores. Shows W/L, run diff, win pct. Re-sort as needed.</li>
-            <li><strong>Recaps</strong> — click "Generate Recap" to have the AI draft a week-in-review article. Review, edit if you want, then publish. Goes live on the Recaps page of the main site.</li>
+            <li><strong>Standings</strong> — auto-computed from submitted scores. Shows W/L, run diff, win pct. You can also set/rotate each team's <em>player password</em> inline here (that's the password players type on the Player Portal to unlock their team).</li>
+            <li><strong>Recaps</strong> — one row per completed game. Click a game to open the editor and write a recap, pick a Player of the Game, and name up to 3 stars. Save → it goes live on the Recaps page of the main site. This is manual writing (not AI-generated).</li>
           </ul>
         </div>
       </details>
@@ -1238,19 +1240,6 @@ select.form-input{cursor:pointer}
       </details>
 
       <details>
-        <summary>17. Deploys &amp; breaking things</summary>
-        <div class="help-body">
-          <p>The site auto-deploys from GitHub → Vercel. If a push to <code>main</code> doesn't show up live:</p>
-          <ul>
-            <li>Check <strong>vercel.com/dashboard</strong> for the latest deploy status. If a build failed, it'll say why.</li>
-            <li>Force-deploy from your terminal with <code>npx vercel@latest --prod --yes</code> (requires the Vercel CLI and a login on first run).</li>
-            <li>If the PWA on your phone looks stale, the service worker cached the old version — close the app, re-open, sometimes need a hard refresh.</li>
-          </ul>
-          <p><strong>Anything you break can be reverted via git.</strong> GitHub keeps full history; Vercel lets you one-click promote any past deploy back to production.</p>
-        </div>
-      </details>
-
-      <details>
         <summary>Emergency playbook</summary>
         <div class="help-body">
           <p><strong>Captain reports wrong score posted.</strong><br>
@@ -1258,13 +1247,21 @@ select.form-input{cursor:pointer}
           <p><strong>Wrong player on wrong team.</strong><br>
           Rosters → remove from wrong team → add to right team. Their stats travel with them automatically since stats key off player ID, not team.</p>
           <p><strong>Rain cancels the whole night.</strong><br>
-          Schedule → ✏️ each affected game → toggle "Rained out" → Save.<br>
-          Banner / Alerts → publish red banner "All games rained out tonight." <br>
+          Schedule → hit the <strong>"🌧️ Rain Out Day"</strong> button up top → pick the date → confirm. Every game that day gets flagged rained-out in one shot.<br>
+          Banner / Alerts → publish red banner "All games rained out tonight."<br>
           Push Notifications → Announcement category, body "All games cancelled — rain." Send to all.</p>
           <p><strong>Someone's harassing in Team Chat.</strong><br>
           Open <code>team-chat.html?team=&lt;teamid&gt;&amp;admin=1</code> → × the offending messages or Reset chat.</p>
-          <p><strong>Site is down.</strong><br>
-          Check Vercel dashboard. If a recent deploy broke it, promote the previous deploy back to production from the Vercel Deployments page.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Any questions at all? Contact Adam Miller</summary>
+        <div class="help-body">
+          <p>If anything's broken, confusing, or you want a new feature — text, call, or email me. I push fixes fast, usually the same day.</p>
+          <p><strong>Adam Miller</strong> (Commissioner / site builder)<br>
+          Email: <a href="mailto:adam.miller.22@gmail.com" style="color:var(--navy);font-weight:700">adam.miller.22@gmail.com</a></p>
+          <p>No question is too small. If something feels off, just tell me.</p>
         </div>
       </details>
     </div>
@@ -4429,6 +4426,102 @@ window.toggleRainout = async function(gameId) {
     const row = document.getElementById('sched-edit-' + gameId);
     if (row) row.style.display = 'none';
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// Bulk rainout — mark every game on a single date as rained out. Used when
+// the weather kills the whole night. Opens an inline panel at the top of
+// the schedule showing dates that have games, pick one, confirm, done.
+// Fires ONE push per affected game (to each team's subscribers) but
+// serially so we don't overwhelm the notification endpoint.
+window.openRainOutDay = function() {
+  // Build a list of upcoming dates that still have non-finalized, non-rained
+  // games — past and finalized games aren't candidates for rainout.
+  const today = new Date(); today.setHours(0,0,0,0);
+  const bucket = {};
+  (GAMES || []).forEach(g => {
+    if (g.done || g.rained_out) return;
+    const iso = g.date_iso || '';
+    if (!iso) return;
+    const d = new Date(iso + 'T12:00:00');
+    if (isNaN(d) || d < today) return;
+    (bucket[iso] = bucket[iso] || []).push(g);
+  });
+  const dates = Object.keys(bucket).sort();
+  const host = document.getElementById('add-game-form');
+  if (!host) return;
+  if (!dates.length) {
+    host.style.display = 'block';
+    host.innerHTML = `<div class="panel" style="border:1px solid #f59e0b;background:#fef3c7">
+      <div class="panel-title" style="color:#78350f">🌧️ Rain Out a Day</div>
+      <p style="font-size:13px;color:#78350f;margin:0 0 12px">No upcoming non-rained games found. Nothing to do.</p>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('add-game-form').style.display='none';document.getElementById('add-game-form').innerHTML=''">Close</button>
+    </div>`;
+    return;
+  }
+  const opts = dates.map(d => {
+    const dt = new Date(d + 'T12:00:00');
+    const label = dt.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+    return `<option value="${d}">${label} — ${bucket[d].length} game${bucket[d].length===1?'':'s'}</option>`;
+  }).join('');
+  host.style.display = 'block';
+  host.innerHTML = `<div class="panel" style="border:1px solid #f59e0b;background:#fef3c7">
+    <div class="panel-title" style="color:#78350f">🌧️ Rain Out a Day</div>
+    <p style="font-size:13px;color:#78350f;margin:0 0 12px">Mark <strong>every scheduled game</strong> on the chosen date as rained out. Already-finalized games are skipped. One rainout notification fires per affected game to both team's subscribers.</p>
+    <div class="form-row">
+      <div class="form-col" style="max-width:320px">
+        <label class="form-label">Date</label>
+        <select id="rainout-day-date" class="form-input">${opts}</select>
+      </div>
+    </div>
+    <div class="form-row" style="gap:8px;margin-top:8px">
+      <button class="btn btn-primary" style="background:#b45309;border-color:#b45309" onclick="confirmRainOutDay()">Rain Out Day</button>
+      <button class="btn btn-outline" onclick="document.getElementById('add-game-form').style.display='none';document.getElementById('add-game-form').innerHTML=''">Cancel</button>
+    </div>
+  </div>`;
+  host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+window.confirmRainOutDay = async function() {
+  const date = document.getElementById('rainout-day-date')?.value;
+  if (!date) return;
+  const affected = (GAMES || []).filter(g => g.date_iso === date && !g.done && !g.rained_out);
+  if (!affected.length) { toast('No games to rain out on that date'); return; }
+  const dt = new Date(date + 'T12:00:00');
+  const human = dt.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+  if (!confirm(`Rain out ALL ${affected.length} game${affected.length===1?'':'s'} on ${human}?\n\nEach game will be marked rained-out and push a notification to both teams' subscribers. This cannot be undone in bulk — you'd need to un-rainout games individually.`)) return;
+
+  let ok = 0, fail = 0;
+  for (const g of affected) {
+    try {
+      await updateDoc(doc(db, 'games', g.id), { rained_out: true });
+      g.rained_out = true;
+      // Fire push — fire-and-forget since we'd rather finish the loop than
+      // abort on a single push failure. /api/send-notification internally
+      // prunes dead tokens.
+      fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
+        body: JSON.stringify({
+          title: `🌧 Rainout: ${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
+          body: `Week ${g.wk||'?'} · ${g.date||''} ${g.time||''} @ ${g.field||''} is canceled due to weather.`,
+          category: 'rainouts',
+          teams: [g.away, g.home].filter(Boolean),
+          url: '/schedule.html',
+          excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+        }),
+      }).catch(e => console.warn('Rainout push failed for', g.id, e));
+      ok++;
+    } catch(e) {
+      console.warn('Rainout failed for', g.id, e);
+      fail++;
+    }
+  }
+  await logActivity('Schedule', `Bulk rainout: ${ok} game${ok===1?'':'s'} on ${human}`);
+  toast(fail ? `Rained out ${ok} of ${affected.length} (${fail} failed)` : `Rained out all ${ok} games on ${human}`, fail ? 'error' : 'success');
+  document.getElementById('add-game-form').style.display = 'none';
+  document.getElementById('add-game-form').innerHTML = '';
+  renderSchedule();
+  renderDashboard();
 };
 
 window.saveEditGame = async function(gameId) {
