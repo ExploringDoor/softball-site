@@ -41,7 +41,7 @@
             if (!b) {
               b = document.createElement('div');
               b.id = 'dvsl-sw-version';
-              b.style.cssText = 'position:fixed;bottom:4px;right:6px;font:10px/1.2 ui-monospace,monospace;color:rgba(0,0,0,.4);background:rgba(255,255,255,.75);padding:2px 6px;border-radius:4px;z-index:99999;pointer-events:none;user-select:none;border:1px solid rgba(0,0,0,.08)';
+              b.style.cssText = 'position:fixed;bottom:4px;left:6px;right:6px;font:11px/1.3 ui-monospace,monospace;color:#b91c1c;background:rgba(255,255,0,.95);padding:4px 8px;border-radius:4px;z-index:99999;pointer-events:none;user-select:none;border:1px solid rgba(0,0,0,.2);text-align:center;word-break:break-all';
               document.body.appendChild(b);
             }
             b.textContent = e.data.version;
@@ -53,12 +53,18 @@
       // backgrounded.
       async function _dvslCheckPendingNav() {
         try {
-          if (!('caches' in self)) return;
+          if (!('caches' in self)) {
+            _dvslDiag('nocache');
+            return;
+          }
           const cache = await caches.open('dvsl-pending-nav');
-          const resp = await cache.match('/__dvsl_pending_nav');
-          if (!resp) return;
-          const url = (await resp.text()).trim();
-          await cache.delete('/__dvsl_pending_nav');
+          const [clickResp, urlResp] = await Promise.all([
+            cache.match('/__dvsl_click_count'),
+            cache.match('/__dvsl_pending_nav'),
+          ]);
+          const clicks = clickResp ? (await clickResp.text()).trim() : '0';
+          const url    = urlResp ? (await urlResp.text()).trim() : '';
+          _dvslDiag('clk:' + clicks + ' ' + (url ? ('url:' + url.replace(location.origin,'')) : 'url:none'));
           if (!url) return;
           const t = new URL(url, location.origin);
           const sameHere =
@@ -66,8 +72,26 @@
             t.pathname === location.pathname &&
             t.search === location.search &&
             t.hash === location.hash;
-          if (!sameHere) window.location.href = t.href;
-        } catch(_) {}
+          if (sameHere) {
+            // Clear so we don't keep retrying.
+            await cache.delete('/__dvsl_pending_nav');
+            return;
+          }
+          // NAVIGATE! Clear cache AFTER to be safe.
+          await cache.delete('/__dvsl_pending_nav');
+          _dvslDiag('→ navigating to ' + t.pathname + t.search);
+          window.location.href = t.href;
+        } catch(e) {
+          _dvslDiag('err:' + (e && e.message ? e.message.slice(0,40) : 'unknown'));
+        }
+      }
+      function _dvslDiag(msg) {
+        const b = document.getElementById('dvsl-sw-version');
+        if (!b) return;
+        // Preserve the version prefix, replace the diagnostic tail.
+        const ver = b.dataset.version || b.textContent.split(' | ')[0];
+        b.dataset.version = ver;
+        b.textContent = ver + ' | ' + msg;
       }
       _dvslCheckPendingNav();
       document.addEventListener('visibilitychange', () => {

@@ -67,6 +67,32 @@ self.addEventListener('notificationclick', function(event) {
   const target = new URL(rawUrl, self.location.origin);
 
   event.waitUntil((async () => {
+    // DIAGNOSTIC: write click count + URL + timestamp to cache EVERY time.
+    // The page polls this and renders it in the version badge so we can
+    // see from the phone whether this handler is even firing.
+    try {
+      const cache = await caches.open('dvsl-pending-nav');
+      // Read existing counter
+      let n = 0;
+      try {
+        const prev = await cache.match('/__dvsl_click_count');
+        if (prev) n = parseInt(await prev.text(), 10) || 0;
+      } catch (_) {}
+      n += 1;
+      await cache.put(
+        new Request('/__dvsl_click_count'),
+        new Response(String(n), { headers: { 'content-type': 'text/plain' } })
+      );
+      await cache.put(
+        new Request('/__dvsl_pending_nav'),
+        new Response(target.href, { headers: { 'content-type': 'text/plain' } })
+      );
+      await cache.put(
+        new Request('/__dvsl_last_click_ts'),
+        new Response(String(Date.now()), { headers: { 'content-type': 'text/plain' } })
+      );
+    } catch (_) {}
+
     const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
 
     // 1. If a tab is already open at the exact target URL → just focus it.
@@ -79,22 +105,7 @@ self.addEventListener('notificationclick', function(event) {
       } catch (_) {}
     }
 
-    // 2. Stash the target URL in the Cache API so the page can pick it up
-    //    when it becomes visible. This is the ONLY approach that survives
-    //    iOS PWA quirks — postMessage gets dropped if the page is frozen
-    //    while backgrounded, and client.navigate() + openWindow() both
-    //    silently no-op on iOS. Cache API writes are persistent and the
-    //    page reads them on visibilitychange/pageshow.
-    try {
-      const cache = await caches.open('dvsl-pending-nav');
-      await cache.put(
-        new Request('/__dvsl_pending_nav'),
-        new Response(target.href, { headers: { 'content-type': 'text/plain' } })
-      );
-    } catch (_) {}
-
-    // 3. Also postMessage every in-scope client as a best-effort fast path
-    //    (works on Chrome/Android and on iOS when the page isn't frozen).
+    // 2. postMessage every in-scope client as a fast path.
     for (const c of allClients) {
       try {
         const cu = new URL(c.url);
@@ -104,15 +115,13 @@ self.addEventListener('notificationclick', function(event) {
       } catch (_) {}
     }
 
-    // 4. openWindow brings the PWA to foreground. The visibilitychange
-    //    handler on the page then reads the pending URL from Cache API and
-    //    navigates. On Chrome/Android this also opens a fresh window when
-    //    none is open.
+    // 3. openWindow brings the PWA to foreground. Page polling picks up
+    //    the pending URL from Cache API and navigates there.
     return clients.openWindow(target.href);
   })());
 });
 
-const VERSION = 'dvsl-v15-dataonly';
+const VERSION = 'dvsl-v16-diag';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
