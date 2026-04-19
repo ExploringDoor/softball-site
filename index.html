@@ -3475,7 +3475,7 @@ function goPage(name,extra,skipHistory){
   }
   if(name==='leaders') buildLeadersPage();
   if(name==='scores'){
-    const doScores=()=>{try{if(!extra)setView('scores');buildScoresNav();renderScores();}catch(e){console.error(e);}};
+    const doScores=()=>{try{setView(extra==='schedule'?'schedule':'scores');buildScoresNav();renderScores();}catch(e){console.error(e);}};
     if(SCHEDULE_PREVIEW.length) setTimeout(doScores,50);
     else if(window._dataPromise) window._dataPromise.then(()=>setTimeout(doScores,50));
   }
@@ -3487,7 +3487,11 @@ function goPage(name,extra,skipHistory){
   if(name==='standings') setTimeout(()=>{try{buildStand2026();var p=document.getElementById('yr-2026');if(p){document.querySelectorAll('#pg-standings .yr-panel').forEach(x=>x.classList.remove('show'));p.classList.add('show');}var b=document.querySelector('#pg-standings .yr-tab');if(b){document.querySelectorAll('#pg-standings .yr-tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');}}catch(e){console.error(e);}},50);
   if(!skipHistory){
     const state={page:name,extra:extra||null};
-    const url='#'+name+(extra?'/'+extra:'');
+    // Special-case: scores page with schedule view gets its own top-level hash
+    // so the URL shows #schedule when viewing the schedule tab.
+    let url;
+    if(name==='scores' && extra==='schedule') url='#schedule';
+    else url='#'+name+(extra?'/'+extra:'');
     history.pushState(state,'',(name==='home'?window.location.pathname:url));
   }
 }
@@ -4995,9 +4999,22 @@ async function loadSiteBanner(){
   var hash = parts[0];
   var hashExtra = parts[1]||null;
   var valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings'];
-  if(hash && valid.includes(hash)){
+  // #schedule is a top-level alias for the scores page in schedule-tab view
+  if(hash === 'schedule'){
+    goPage('scores', 'schedule');
+  } else if(hash && valid.includes(hash)){
     goPage(hash, hashExtra);
   }
+  // Re-route when URL hash changes after load (e.g. redirects from
+  // /schedule.html, /stats.html, /standings-history.html landing here).
+  window.addEventListener('hashchange', () => {
+    const hf = window.location.hash.replace('#','');
+    const pp = hf.split('/');
+    const h = pp[0];
+    const ex = pp[1]||null;
+    if(h === 'schedule') goPage('scores', 'schedule');
+    else if(h && valid.includes(h)) goPage(h, ex);
+  });
   // Data already loaded above by loadAllData()
 })();
 </script>
