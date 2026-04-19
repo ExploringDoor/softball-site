@@ -14,6 +14,14 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
+        // Deep-link navigate from sw.js postMessage — iOS PWA's focus() wins
+        // over client.navigate() when the app is already backgrounded, so the
+        // SW tells us the target URL and the page navigates itself.
+        navigator.serviceWorker.addEventListener('message', (e) => {
+          if (e.data && e.data.type === 'NAVIGATE' && typeof e.data.url === 'string') {
+            window.location.href = e.data.url;
+          }
+        });
       });
     }
   </script>

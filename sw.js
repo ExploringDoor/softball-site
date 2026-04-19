@@ -62,15 +62,23 @@ self.addEventListener('notificationclick', function(event) {
       } catch (_) {}
     }
 
-    // 2. If any DVSL tab is open → navigate it to the target and focus it.
-    //    This avoids spawning a second PWA window on iOS.
+    // 2. If any DVSL tab is open → navigate it to the target.
+    //
+    // client.navigate() is unreliable on iOS standalone PWAs — it silently
+    // does nothing while focus() still succeeds, which is why tapping a
+    // notification on an already-backgrounded PWA would just land the user
+    // on whatever page they were last viewing. Workaround: postMessage the
+    // URL to the page and let the page do window.location.href itself.
+    // Each page includes a listener in its SW-registration snippet that
+    // handles {type:'NAVIGATE', url}. We still call navigate() (a no-op on
+    // iOS, but works on Chrome/Android) as a belt-and-suspenders move.
     for (const c of allClients) {
       try {
         const cu = new URL(c.url);
-        if (cu.origin === target.origin && 'navigate' in c) {
-          await c.navigate(target.href);
-          return c.focus();
-        }
+        if (cu.origin !== target.origin) continue;
+        try { c.postMessage({ type: 'NAVIGATE', url: target.href }); } catch (_) {}
+        if ('navigate' in c) { try { await c.navigate(target.href); } catch (_) {} }
+        return c.focus();
       } catch (_) {}
     }
 
@@ -79,7 +87,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v10-deeplink';
+const VERSION = 'dvsl-v11-navmsg';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
