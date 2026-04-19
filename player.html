@@ -189,8 +189,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 
     <!-- Tab bar -->
     <div class="tab-bar">
-      <button class="ptab active" data-tab="avail" onclick="switchTab('avail')">📅 Game Availability</button>
-      <button class="ptab" data-tab="media" onclick="switchTab('media')">📸 Photos &amp; Videos</button>
+      <button class="ptab active" data-tab="avail" onclick="switchTab('avail')">📅 Availability</button>
+      <button class="ptab" data-tab="media" onclick="switchTab('media')">📸 Photos</button>
+      <button class="ptab" data-tab="chat" onclick="switchTab('chat')">💬 Team Chat</button>
     </div>
 
     <!-- Tab: Game Availability -->
@@ -226,6 +227,26 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
       <div class="section-label" style="margin-bottom:10px">Team Photos &amp; Videos</div>
       <div id="media-grid"><div class="loading"><div class="spinner"></div> Loading…</div></div>
     </div>
+
+    <!-- Tab: Team Chat -->
+    <div id="tab-chat" style="display:none">
+      <div class="sec-sub" style="margin-bottom:16px">Chat with your captain and teammates. Everyone on your team with notifications on will get a push.</div>
+      <div id="chat-need-identity" style="display:none;padding:24px;text-align:center;background:var(--bg2);border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:13px">
+        Pick your name in the <strong>Who are you?</strong> box above to start chatting.
+      </div>
+      <div id="chat-box" style="display:none;border:1px solid var(--border);border-radius:12px;background:var(--card);overflow:hidden">
+        <div id="chat-messages" style="height:55vh;min-height:320px;overflow-y:auto;padding:14px;background:var(--bg2);display:flex;flex-direction:column;gap:10px">
+          <div class="loading"><div class="spinner"></div> Loading messages…</div>
+        </div>
+        <div style="display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);background:var(--card)">
+          <input id="chat-input" type="text" maxlength="500" placeholder="Message your team…" autocomplete="off"
+            style="flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:22px;font-size:15px;outline:none;background:var(--bg2)"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.playerSendChat()}">
+          <button id="chat-send" onclick="window.playerSendChat()"
+            style="padding:0 20px;border:none;background:var(--navy);color:#fff;border-radius:22px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:14px;cursor:pointer">Send</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -233,7 +254,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, addDoc, setDoc, deleteDoc, doc, query, orderBy, where } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, addDoc, setDoc, deleteDoc, doc, query, orderBy, where, limit, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const app = initializeApp({
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -306,6 +327,7 @@ window.checkPassword = function() {
 
 window.backToPicker = function() {
   MY_TEAM=null; MY_PLAYERS=[]; MY_GAMES=[]; _rsvps={};
+  if (_chatUnsub) { _chatUnsub(); _chatUnsub = null; }
   document.getElementById('pw-screen').style.display = 'none';
   document.getElementById('app').style.display = 'none';
   document.getElementById('team-picker').style.display = 'block';
@@ -352,6 +374,10 @@ window.onPlayerChange = function() {
   const pid = document.getElementById('player-select').value;
   if (pid) localStorage.setItem('player_portal_'+MY_TEAM.id, pid);
   renderAvailability();
+  // If chat tab is open, refresh its identity state + re-render so "mine"
+  // bubble coloring tracks the selected player.
+  const chatVisible = document.getElementById('tab-chat').style.display !== 'none';
+  if (chatVisible) activateChat();
 };
 
 // ── Availability ─────────────────────────────────────────────────
@@ -466,7 +492,135 @@ window.switchTab = function(tab) {
   document.querySelectorAll('.ptab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.getElementById('tab-avail').style.display = tab === 'avail' ? '' : 'none';
   document.getElementById('tab-media').style.display = tab === 'media' ? '' : 'none';
+  document.getElementById('tab-chat').style.display = tab === 'chat' ? '' : 'none';
   if (tab === 'media') loadMedia();
+  if (tab === 'chat') activateChat();
+};
+
+// ── Team Chat ─────────────────────────────────────────────────────
+// Reuses MY_TEAM + the already-selected player for identity, so no
+// separate name picker is needed. Each new message fires a push via
+// /api/send-notification (excluding this device).
+const PLAYER_PUSH_SECRET = 'dvsl-push-2026-rkj3849f';
+let _chatUnsub = null;
+
+function activateChat() {
+  if (!MY_TEAM) return;
+  const pid = document.getElementById('player-select').value;
+  const need = document.getElementById('chat-need-identity');
+  const box  = document.getElementById('chat-box');
+  if (!pid) {
+    need.style.display = 'block';
+    box.style.display = 'none';
+    if (_chatUnsub) { _chatUnsub(); _chatUnsub = null; }
+    return;
+  }
+  need.style.display = 'none';
+  box.style.display = 'block';
+  subscribeToChat();
+}
+
+function subscribeToChat() {
+  if (_chatUnsub) _chatUnsub();
+  const q = query(
+    collection(db, 'team_messages'),
+    where('team_id', '==', MY_TEAM.id),
+    orderBy('timestamp', 'asc'),
+    limit(100)
+  );
+  _chatUnsub = onSnapshot(q, snap => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderChat(msgs);
+  }, err => {
+    document.getElementById('chat-messages').innerHTML =
+      `<div class="empty-state">Could not load messages: ${esc(err.message)}</div>`;
+  });
+}
+
+function fmtChatTime(d) {
+  if (!d) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+         d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function renderChat(msgs) {
+  const el = document.getElementById('chat-messages');
+  if (!msgs.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:30px 20px">No messages yet. Say hello! 👋</div>';
+    return;
+  }
+  const pid = document.getElementById('player-select').value;
+  const me = MY_PLAYERS.find(p => p.id === pid);
+  const myName = me?.name || '';
+  const myEmail = me?.email || '';
+  el.innerHTML = msgs.map(m => {
+    const mine = (myEmail && m.author_email === myEmail) ||
+                 (!myEmail && m.author_name === myName);
+    const isCap = !!m.is_captain;
+    const who   = m.author_name || m.team_name || m.author_email || 'Unknown';
+    const d     = m.timestamp?.toDate ? m.timestamp.toDate() : null;
+    const align = mine ? 'flex-end' : 'flex-start';
+    const bg    = mine ? 'var(--navy)' : (isCap ? '#fff' : '#fff');
+    const fg    = mine ? '#fff' : 'var(--text)';
+    const border = mine ? 'none' : (isCap ? '1px solid rgba(0,45,114,.25);border-left:3px solid var(--navy)' : '1px solid var(--border)');
+    const radius = mine ? '14px 14px 4px 14px' : '14px 14px 14px 4px';
+    return `<div style="align-self:${align};max-width:82%;display:flex;flex-direction:column;gap:2px;align-items:${align}">
+      ${!mine ? `<div style="font-size:11px;font-weight:600;color:${isCap?'var(--navy)':'var(--muted)'};padding:0 4px">${esc(who)}</div>` : ''}
+      <div style="padding:10px 14px;border-radius:${radius};background:${bg};color:${fg};border:${border};font-size:14.5px;line-height:1.45;word-wrap:break-word;white-space:pre-wrap">${esc(m.text)}</div>
+      <div style="font-size:10px;color:var(--muted);padding:0 4px">${fmtChatTime(d)}</div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+window.playerSendChat = async function() {
+  if (!MY_TEAM) return;
+  const pid = document.getElementById('player-select').value;
+  if (!pid) { toast('Pick your name first', 'error'); return; }
+  const me = MY_PLAYERS.find(p => p.id === pid);
+  if (!me) { toast('Could not find your player record', 'error'); return; }
+
+  const input = document.getElementById('chat-input');
+  const btn   = document.getElementById('chat-send');
+  const text  = input.value.trim();
+  if (!text) return;
+  input.value = ''; input.disabled = true; btn.disabled = true;
+
+  try {
+    await addDoc(collection(db, 'team_messages'), {
+      text,
+      author_email: me.email || null,
+      author_name: me.name || pid,
+      is_captain: false,
+      team_id: MY_TEAM.id,
+      team_name: MY_TEAM.name || MY_TEAM.id,
+      team_color: MY_TEAM.color || '#002D72',
+      timestamp: serverTimestamp(),
+    });
+    // Fire push to teammates (excluding this device).
+    try {
+      await fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PLAYER_PUSH_SECRET },
+        body: JSON.stringify({
+          title: `${MY_TEAM.name || MY_TEAM.id} — ${me.name || pid}`,
+          body: text.length > 120 ? text.slice(0, 120) + '…' : text,
+          category: 'team_chat',
+          team: MY_TEAM.id,
+          url: `/player.html`,
+          excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+        }),
+      });
+    } catch(e) { console.warn('Chat push failed (message still delivered in-app):', e); }
+  } catch(e) {
+    toast('Failed to send: ' + e.message, 'error');
+    input.value = text;
+  }
+  input.disabled = false; btn.disabled = false;
+  input.focus();
 };
 
 // ── Media helpers ─────────────────────────────────────────────────

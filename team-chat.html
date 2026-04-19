@@ -235,13 +235,15 @@ async function loadTeamAndChat(tid) {
     document.getElementById('team-logo').innerHTML = `<img src="${esc(TEAM.logo)}" alt="">`;
   }
 
-  // Load roster for identity picker
+  // Load roster for identity picker. Note: players collection uses `team`
+  // (not team_id) and `num` (not jersey) — field names from the registration
+  // flow.
   try {
-    const q = query(collection(db, 'players'), where('team_id', '==', tid));
+    const q = query(collection(db, 'players'), where('team', '==', tid));
     const snap = await getDocs(q);
     ROSTER = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     ROSTER.sort((a,b) => {
-      const ja = parseInt(a.jersey ?? 999), jb = parseInt(b.jersey ?? 999);
+      const ja = parseInt(a.num ?? 999), jb = parseInt(b.num ?? 999);
       if (ja !== jb) return ja - jb;
       return (a.name || '').localeCompare(b.name || '');
     });
@@ -272,7 +274,7 @@ function showIdentityModal() {
   } else {
     list.innerHTML = ROSTER.map(p => `
       <div class="roster-item" data-pid="${esc(p.id)}">
-        <span><span class="jersey">#${esc(p.jersey ?? '—')}</span> ${esc(p.name || p.id)}</span>
+        <span><span class="jersey">#${esc(p.num ?? '—')}</span> ${esc(p.name || p.id)}</span>
         <span style="color:var(--muted2);font-size:12px">›</span>
       </div>`).join('');
     list.querySelectorAll('.roster-item').forEach(row => {
