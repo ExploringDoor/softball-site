@@ -5456,6 +5456,13 @@ function setView(v){
   document.title = v==='schedule' ? 'Schedule — DVSL Softball' : 'Scores — DVSL Softball';
   weekOffset=-1; // reset to auto-select correct week for each view
   view=v;
+  // Sync URL so the hash reflects which tab is active
+  try {
+    const wantHash = v === 'schedule' ? '#schedule' : '#scores';
+    if (window.location.hash !== wantHash) {
+      history.replaceState({page:'scores',extra:v==='schedule'?'schedule':null},'',wantHash);
+    }
+  } catch(e) {}
   document.getElementById('btn-scores').classList.toggle('active',v==='scores');
   document.getElementById('btn-schedule').classList.toggle('active',v==='schedule');
   // Update page title
