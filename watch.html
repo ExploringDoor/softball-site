@@ -74,6 +74,16 @@
         });
         window.addEventListener('pageshow', _dvslCheckPendingNav);
         window.addEventListener('focus', _dvslCheckPendingNav);
+        // Nuclear option: iOS PWA sometimes doesn't fire visibilitychange /
+        // focus / pageshow when resuming from a notification tap. Poll every
+        // 1s while the page thinks it's visible — if JS is running at all,
+        // we'll catch the pending URL within a second of resume.
+        setInterval(() => {
+          if (document.visibilityState === 'visible') _dvslCheckPendingNav();
+        }, 1000);
+        // First user interaction after resume will always fire these too.
+        window.addEventListener('touchstart', _dvslCheckPendingNav, { passive: true, once: false });
+        window.addEventListener('click', _dvslCheckPendingNav);
       });
     }
   </script>
