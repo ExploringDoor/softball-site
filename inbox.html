@@ -543,6 +543,15 @@ a{color:inherit;text-decoration:none}
   box-shadow:0 0 0 3px rgba(0,45,114,.12);
 }
 .card-body{flex:1 1 auto;min-width:0}
+/* Source label shown above the title for league-originated pushes
+   (announcements, schedule changes, playoffs, admin alerts etc) so
+   a push Adam sends from admin reads clearly as "from the league"
+   instead of just the bare title. */
+.card-source{
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--navy);margin-bottom:3px;
+}
 .card-title{
   font-family:'Barlow',sans-serif;font-weight:700;font-size:15px;
   color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -643,10 +652,24 @@ async function fetchItems() {
 
 function dismiss(item) {
   if (!TOKEN || !item || !item.id) return;
+  const payload = JSON.stringify({ token: TOKEN, id: item.id });
+  // Use sendBeacon when we're about to navigate away (tap-to-open). Regular
+  // fetch gets cancelled by the browser mid-flight when window.location
+  // changes, which is why Adam kept seeing tapped notifications stay in the
+  // list after coming back -- the dismiss never reached the server. sendBeacon
+  // is designed exactly for "fire a request during page unload / nav". Falls
+  // back to keepalive: true fetch if sendBeacon is unavailable (old browsers).
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      if (navigator.sendBeacon('/api/dismiss-pending-nav', blob)) return;
+    }
+  } catch (_) {}
   fetch('/api/dismiss-pending-nav', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: TOKEN, id: item.id }),
+    body: payload,
+    keepalive: true,
   }).catch(() => {});
 }
 
@@ -688,6 +711,30 @@ function render(items) {
   clearBtn.disabled = false;
   pageSub.textContent = items.length + ' unread ' + (items.length === 1 ? 'alert' : 'alerts');
 
+  // Human-readable category labels + which categories are broadcast from
+  // the commissioner (admin) vs from automated systems / captains. Adam's
+  // feedback: a push he sent from admin showed up in inbox as "test test"
+  // with just "scores" under it, no hint that the league office sent it.
+  // Adding a small "📣 DVSL League" source line above the title makes it
+  // obvious; category gets a friendlier human label too.
+  const CATEGORY_LABEL = {
+    scores:          'Scores',
+    rainouts:        'Rainout',
+    schedule:        'Schedule change',
+    playoffs:        'Playoffs',
+    announcements:   'League announcement',
+    live:            'Live game',
+    pregame:         'Pre-game reminder',
+    photos:          'Team photos',
+    team_chat:       'Team chat',
+    captains_chat:   'Captains chat',
+    admin:           'Admin alert',
+  };
+  // Any push in one of these categories is, by definition, from the
+  // commissioner's office -- render a "From DVSL League" source header.
+  const LEAGUE_SOURCE_CATS = new Set([
+    'announcements', 'rainouts', 'schedule', 'playoffs', 'admin', 'pregame',
+  ]);
   items.forEach(item => {
     const card = document.createElement('div');
     card.className = 'card';
@@ -697,6 +744,15 @@ function render(items) {
 
     const body = document.createElement('div');
     body.className = 'card-body';
+
+    // Source label (e.g. "📣 DVSL League") for commissioner-originated
+    // pushes, so Adam's announcements don't just read as "test test".
+    if (LEAGUE_SOURCE_CATS.has(item.category)) {
+      const src = document.createElement('div');
+      src.className = 'card-source';
+      src.textContent = '📣 DVSL League';
+      body.appendChild(src);
+    }
 
     const title = document.createElement('div');
     title.className = 'card-title';
@@ -715,7 +771,7 @@ function render(items) {
     if (item.category) {
       const cat = document.createElement('span');
       cat.className = 'card-cat';
-      cat.textContent = item.category;
+      cat.textContent = CATEGORY_LABEL[item.category] || item.category;
       meta.appendChild(cat);
     }
     const when = document.createElement('span');
