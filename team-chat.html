@@ -61,6 +61,15 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line
 .msg.theirs .bubble{background:#fff;border:1px solid var(--border);border-bottom-left-radius:4px}
 .msg.captain .bubble{background:#fff;border:1px solid rgba(0,45,114,.25);border-left:3px solid var(--navy)}
 .msg .time{font-size:10px;color:var(--muted2);padding:0 4px}
+.msg .bubble{position:relative}
+.msg .del-btn{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;border:2px solid var(--bg2);font-size:12px;line-height:1;font-weight:700;cursor:pointer;display:none;align-items:center;justify-content:center;padding:0}
+.msg.mine .del-btn,.msg.can-delete .del-btn{display:flex}
+.msg .del-btn:hover{transform:scale(1.1)}
+
+/* Admin reset link */
+.team-hdr .admin-actions{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-size:11px;opacity:.85;text-align:right}
+.team-hdr .admin-actions a{color:#fff;text-decoration:underline;cursor:pointer}
+.team-hdr .admin-actions .reset-link{color:#ffb4b4}
 
 .empty{color:var(--muted);text-align:center;padding:40px 20px;font-size:14px}
 
@@ -124,9 +133,12 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line
       <div class="name" id="team-name">Loading…</div>
       <div class="sub" id="team-sub">Team Chat</div>
     </div>
-    <div class="me">
+    <div class="me admin-actions">
       <div id="me-name">—</div>
-      <a onclick="changeIdentity()">Change</a>
+      <div>
+        <a onclick="changeIdentity()">Change</a>
+        <a id="reset-link" class="reset-link hidden" onclick="resetChat()" style="margin-left:8px">Reset chat</a>
+      </div>
     </div>
   </div>
 
@@ -159,7 +171,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, query, where, orderBy, limit, onSnapshot, addDoc, getDocs, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, query, where, orderBy, limit, onSnapshot, addDoc, getDocs, doc, deleteDoc, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -177,10 +189,17 @@ const db = getFirestore(app);
 // ── URL & state ──────────────────────────────────────────────────────
 const params = new URLSearchParams(location.search);
 const teamId = params.get('team') || '';
+// Admin mode — enables "Reset chat" button + delete-any-message on taps.
+// Gated via ?admin=1 URL param AND a localStorage key set once on first use;
+// matches the same pattern used in notifications.html. Not a hard security
+// boundary (Firestore rules are), just a UI reveal.
+const IS_ADMIN = params.get('admin') === '1' || localStorage.getItem('dvsl-is-admin') === '1';
+if (params.get('admin') === '1') localStorage.setItem('dvsl-is-admin', '1');
 let TEAM = null;
 let ROSTER = [];
 let IDENTITY = null; // { name, email, is_captain }
 let unsub = null;
+let MSG_CACHE = {}; // id → message doc (for delete lookup)
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -254,6 +273,10 @@ async function loadTeamAndChat(tid) {
     const saved = localStorage.getItem('dvsl-chat-identity-' + tid);
     if (saved) IDENTITY = JSON.parse(saved);
   } catch(e) {}
+
+  if (IS_ADMIN) {
+    document.getElementById('reset-link').classList.remove('hidden');
+  }
 
   if (!IDENTITY) {
     showIdentityModal();
@@ -338,8 +361,11 @@ function renderMessages(msgs) {
   const el = document.getElementById('chat-wrap');
   if (!msgs.length) {
     el.innerHTML = '<div class="empty">No messages yet. Start the conversation!</div>';
+    MSG_CACHE = {};
     return;
   }
+  MSG_CACHE = {};
+  msgs.forEach(m => { MSG_CACHE[m.id] = m; });
   const myKey = IDENTITY?.email || IDENTITY?.name;
   el.innerHTML = msgs.map(m => {
     const authorKey = m.author_email || m.author_name || '';
@@ -348,21 +374,70 @@ function renderMessages(msgs) {
     const isCap = !!m.is_captain;
     const whoLabel = m.author_name || m.team_name || m.author_email || 'Unknown';
     const time = m.timestamp?.toDate ? fmtTime(m.timestamp.toDate()) : '';
+    // Show delete button on own messages always, or on any message in admin mode
+    const canDelete = mine || IS_ADMIN;
     const cls = [
       'msg',
       mine ? 'mine' : 'theirs',
       isCap && !mine ? 'captain' : '',
+      !mine && IS_ADMIN ? 'can-delete' : '',
     ].filter(Boolean).join(' ');
     const whoClass = isCap ? 'who captain' : 'who';
+    const delBtn = canDelete
+      ? `<button class="del-btn" data-mid="${esc(m.id)}" title="Delete message" aria-label="Delete message">×</button>`
+      : '';
     return `<div class="${cls}">
       ${!mine ? `<div class="${whoClass}">${esc(whoLabel)}</div>` : ''}
-      <div class="bubble">${esc(m.text)}</div>
+      <div class="bubble">${esc(m.text)}${delBtn}</div>
       <div class="time">${time}</div>
     </div>`;
   }).join('');
+  // Wire delete buttons (event delegation is simpler here since re-rendered every snapshot)
+  el.querySelectorAll('.del-btn').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      deleteMessage(btn.dataset.mid);
+    });
+  });
   // Auto-scroll to bottom on new messages
   el.scrollTop = el.scrollHeight;
 }
+
+async function deleteMessage(mid) {
+  const m = MSG_CACHE[mid];
+  if (!m) return;
+  const preview = (m.text || '').slice(0, 60);
+  if (!confirm(`Delete this message?\n\n"${preview}${m.text?.length > 60 ? '…' : ''}"`)) return;
+  try {
+    await deleteDoc(doc(db, 'team_messages', mid));
+    // Snapshot listener will re-render automatically
+  } catch(e) {
+    alert('Could not delete: ' + e.message);
+  }
+}
+
+// Admin-only: nuke every message in this team's chat. Batched in chunks of
+// 400 to stay under Firestore's 500-ops batch limit, with a headroom margin.
+window.resetChat = async function() {
+  if (!IS_ADMIN) return;
+  if (!confirm(`Reset the entire chat for ${TEAM?.name || teamId}?\n\nThis deletes ALL messages permanently. This cannot be undone.`)) return;
+  if (!confirm('Are you absolutely sure? Last chance to back out.')) return;
+  try {
+    const q = query(collection(db, 'team_messages'), where('team_id', '==', teamId));
+    const snap = await getDocs(q);
+    if (!snap.docs.length) { alert('Chat is already empty.'); return; }
+    let remaining = snap.docs.slice();
+    while (remaining.length) {
+      const chunk = remaining.splice(0, 400);
+      const batch = writeBatch(db);
+      chunk.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    alert(`Deleted ${snap.docs.length} message(s).`);
+  } catch(e) {
+    alert('Reset failed: ' + e.message);
+  }
+};
 
 function fmtTime(d) {
   const now = new Date();
