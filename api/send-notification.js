@@ -102,7 +102,7 @@ export default async function handler(req, res) {
     try {
       await writePendingNav({
         projectId: PROJECT_ID, accessToken,
-        token: row.token, url: clickUrlForNav, title, body,
+        token: row.token, url: clickUrlForNav, title, body, category,
       });
     } catch (_) {}
     try {
@@ -245,22 +245,26 @@ async function fcmSend({ projectId, accessToken, token, title, body, url }) {
   return await resp.json();
 }
 
-// Write pending_nav/{tokenHash} = {url, ts, title, body} so the recipient's
-// page can retrieve the deep-link target via /api/check-pending-nav when
-// they resume the PWA. This is the primary deep-link delivery path — the
-// SW push event is unreliable on iOS PWAs.
-async function writePendingNav({ projectId, accessToken, token, url, title, body }) {
+// Append one pending_nav doc per push so the recipient's page can list
+// unread deep-links and show a banner chip. Creating a new doc each time
+// (not upserting) gives us a queue instead of a single overwritable slot —
+// critical for "I got a score push and a chat push; let me choose which
+// to open." The page fetches the list via /api/check-pending-nav and
+// deletes one via /api/dismiss-pending-nav when the user taps or X's it.
+async function writePendingNav({ projectId, accessToken, token, url, title, body, category }) {
   const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
-  const endpoint = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/pending_nav/${tokenHash}`;
+  const endpoint = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/pending_nav`;
   const fields = {
-    url:   { stringValue: String(url || '/') },
-    ts:    { integerValue: String(Date.now()) },
-    title: { stringValue: String(title || '').slice(0, 200) },
-    body:  { stringValue: String(body || '').slice(0, 400) },
+    token_hash: { stringValue: tokenHash },
+    url:        { stringValue: String(url || '/') },
+    ts:         { integerValue: String(Date.now()) },
+    title:      { stringValue: String(title || '').slice(0, 200) },
+    body:       { stringValue: String(body || '').slice(0, 400) },
+    category:   { stringValue: String(category || '') },
   };
-  // PATCH upserts the doc (create if missing, replace if exists).
+  // POST to the collection endpoint → Firestore auto-generates a doc ID.
   const resp = await fetch(endpoint, {
-    method: 'PATCH',
+    method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields }),
   });

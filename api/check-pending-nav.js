@@ -1,22 +1,21 @@
 // Vercel Serverless Function — /api/check-pending-nav.js
 //
 // The page calls this on load / visibility-resume with its FCM token. We
-// look up pending_nav/{tokenHash} in Firestore (written by
-// /api/send-notification the moment a push was sent to this token) and
-// return the deep-link URL if the push arrived within the last 2 minutes.
-// We delete the doc after reading so a URL is only ever consumed once.
+// return the LIST of unread pending_nav docs for this token (newest first,
+// stale items filtered out) so the page can render a banner chip with
+// "N new notifications" and let the user tap one to navigate.
 //
-// This completely sidesteps the iOS-PWA service-worker push event quirks:
-// we don't care whether the SW's push listener fires or whether
-// notificationclick runs. As long as the HTTP POST to /api/send-notification
-// succeeded (server-side), Firestore has the answer and the page can find
-// it regardless of what iOS did with the notification banner.
+// Each push writes a new pending_nav doc via /api/send-notification. Docs
+// are removed by /api/dismiss-pending-nav (when the user taps the chip or
+// X's it) or auto-expired by the STALE_MS window below.
 //
-// Env vars (same as send-notification.js):
-//   FCM_PROJECT_ID
-//   FCM_SERVICE_ACCOUNT_JSON
+// NOTE: we do NOT delete docs on read. Reading is non-destructive so the
+// chip can persist across page navigations. Deletion happens only when
+// the user explicitly consumes an item.
 
 import crypto from 'crypto';
+
+const STALE_MS = 24 * 60 * 60 * 1000; // 24 hours — anything older is garbage-collected
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -28,58 +27,92 @@ export default async function handler(req, res) {
   const PROJECT_ID = process.env.FCM_PROJECT_ID;
   const SVC_JSON   = process.env.FCM_SERVICE_ACCOUNT_JSON;
   if (!PROJECT_ID || !SVC_JSON) {
-    return res.status(503).json({ error: 'Not configured', url: null });
+    return res.status(503).json({ error: 'Not configured', items: [] });
   }
 
   const { token } = req.body || {};
   if (!token || typeof token !== 'string') {
-    return res.status(400).json({ error: 'token required', url: null });
+    return res.status(400).json({ error: 'token required', items: [] });
   }
 
   let svc;
   try { svc = JSON.parse(SVC_JSON); }
-  catch (e) { return res.status(500).json({ error: 'Bad service account', url: null }); }
+  catch { return res.status(500).json({ error: 'Bad service account', items: [] }); }
 
   let accessToken;
   try { accessToken = await getAccessToken(svc); }
-  catch (e) { return res.status(500).json({ error: 'Auth failed', url: null }); }
+  catch { return res.status(500).json({ error: 'Auth failed', items: [] }); }
 
   const tokenHash = sha256hex(token);
-  const docUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/pending_nav/${tokenHash}`;
+  const queryUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
 
-  // Read the doc.
-  let pendingUrl = null;
-  let pendingTs  = 0;
+  // Structured query: token_hash == hash, ordered by ts desc, limit 20.
+  const query = {
+    structuredQuery: {
+      from: [{ collectionId: 'pending_nav' }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: 'token_hash' },
+          op: 'EQUAL',
+          value: { stringValue: tokenHash },
+        },
+      },
+      orderBy: [{ field: { fieldPath: 'ts' }, direction: 'DESCENDING' }],
+      limit: 20,
+    },
+  };
+
+  let rows = [];
   try {
-    const resp = await fetch(docUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (resp.ok) {
-      const data = await resp.json();
-      const f = data.fields || {};
-      pendingUrl = f.url?.stringValue || null;
-      pendingTs  = f.ts?.integerValue ? parseInt(f.ts.integerValue, 10) : 0;
+    const resp = await fetch(queryUrl, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(query),
+    });
+    if (!resp.ok) {
+      return res.status(200).json({ items: [], error: 'query failed' });
     }
-    // 404 = no pending doc — that's the normal no-push case, not an error.
-  } catch (e) {
-    return res.status(200).json({ url: null, error: 'read failed' });
+    rows = await resp.json();
+  } catch {
+    return res.status(200).json({ items: [], error: 'query threw' });
   }
 
-  // Freshness gate: 2-minute window. If older, return null and delete so
-  // we don't accidentally route the user somewhere stale on a later open.
-  const ageMs = pendingTs ? (Date.now() - pendingTs) : -1;
-  const fresh = pendingUrl && ageMs >= 0 && ageMs <= 120000;
+  const now = Date.now();
+  const items = [];
+  const staleDocPaths = [];
 
-  // Always delete after read — fire-and-forget; the client has the URL now.
-  // (If delete fails, worst case: next check returns null because of the
-  // freshness gate once ageMs > 120000.)
-  fetch(docUrl, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  }).catch(() => {});
+  for (const row of rows) {
+    if (!row.document) continue;
+    const doc = row.document;
+    const f = doc.fields || {};
+    const ts = f.ts?.integerValue ? parseInt(f.ts.integerValue, 10) : 0;
+    const ageMs = ts ? (now - ts) : -1;
+    const docPath = doc.name || '';
+    const id = docPath.split('/').pop() || '';
 
-  return res.status(200).json({
-    url: fresh ? pendingUrl : null,
-    ageMs: ageMs,
-  });
+    if (!id) continue;
+    if (ageMs > STALE_MS || ageMs < 0) {
+      // Too old — queue for sweep, skip in response.
+      if (docPath) staleDocPaths.push(docPath);
+      continue;
+    }
+    items.push({
+      id,
+      url: f.url?.stringValue || '/',
+      ts,
+      ageMs,
+      title: f.title?.stringValue || '',
+      body: f.body?.stringValue || '',
+      category: f.category?.stringValue || '',
+    });
+  }
+
+  // Fire-and-forget garbage collection of stale docs.
+  if (staleDocPaths.length) {
+    sweepStale({ accessToken, docPaths: staleDocPaths }).catch(() => {});
+  }
+
+  return res.status(200).json({ items });
 }
 
 // ── helpers ─────────────────────────────────────────────────────────────
@@ -113,4 +146,16 @@ async function getAccessToken(svc) {
   const data = await resp.json();
   if (!data.access_token) throw new Error(data.error_description || JSON.stringify(data));
   return data.access_token;
+}
+
+async function sweepStale({ accessToken, docPaths }) {
+  // Each docPath is the full "projects/.../documents/pending_nav/{id}".
+  for (const p of docPaths) {
+    try {
+      await fetch(`https://firestore.googleapis.com/v1/${p}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+    } catch {}
+  }
 }

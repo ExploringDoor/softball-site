@@ -12,11 +12,15 @@
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <script>
   // Register the SW (offline shell + FCM push). Auto-reload on SW takeover
-  // so iOS-PWA users always get the latest build. Deep-link routing goes
-  // through Firestore via /api/check-pending-nav — the iOS SW push event
-  // is unreliable, so we route the target URL server-side via Firestore
-  // the moment /api/send-notification fires, and the page retrieves it
-  // on resume. No cache API, no postMessage, no SW events required.
+  // so iOS-PWA users always get the latest build.
+  //
+  // Deep-linking from pushes happens via an IN-PAGE CHIP, not auto-nav.
+  // Every push writes a pending_nav doc in Firestore. On load / resume we
+  // fetch this device's unread list and render a banner at the top of the
+  // page. Tapping the chip navigates to that item and dismisses it; the X
+  // dismisses without navigating. No more "newest wins" teleporting — the
+  // user chooses which push to open, and opening the app normally no
+  // longer hijacks you away from your current page.
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').then(r => { try { r.update(); } catch(_){} }).catch(() => {});
@@ -42,16 +46,19 @@
           b.textContent = e.data.version;
         }
       });
-      // Deep-link via Firestore. /api/send-notification wrote
-      // pending_nav/{tokenHash} just before sending the push. We fetch it
-      // on resume and navigate if fresh (< 2 min) and not already there.
+
+      // ── Notification chip UI ──
+      // Polls /api/check-pending-nav for this device's unread items and
+      // renders a chip at the top of the page. Tap → navigate + dismiss
+      // that one. X → dismiss without navigating. Both hit
+      // /api/dismiss-pending-nav fire-and-forget.
       let _dvslLastCheck = 0;
       async function _dvslCheckPendingNav() {
         const now = Date.now();
-        if (now - _dvslLastCheck < 3000) return;  // throttle
+        if (now - _dvslLastCheck < 3000) return; // throttle
         _dvslLastCheck = now;
         const token = localStorage.getItem('dvsl-notif-token');
-        if (!token) return;
+        if (!token) { _dvslRenderChip([]); return; }
         try {
           const resp = await fetch('/api/check-pending-nav', {
             method: 'POST',
@@ -60,15 +67,95 @@
           });
           if (!resp.ok) return;
           const data = await resp.json();
-          if (!data || !data.url) return;
-          const t = new URL(data.url, location.origin);
-          const sameHere =
-            t.origin === location.origin &&
-            t.pathname === location.pathname &&
-            t.search === location.search;
-          if (sameHere) return;
-          window.location.href = t.href;
+          const items = Array.isArray(data && data.items) ? data.items : [];
+          _dvslRenderChip(items);
         } catch(_) {}
+      }
+      function _dvslRenderChip(items) {
+        // Hide any item that points to the page we're already on — no point
+        // offering a "go to X" chip when you're already at X.
+        const visible = (items || []).filter(it => {
+          try {
+            const t = new URL(it.url || '/', location.origin);
+            return !(t.origin === location.origin &&
+                      t.pathname === location.pathname &&
+                      t.search === location.search);
+          } catch(_) { return true; }
+        });
+        let chip = document.getElementById('dvsl-chip');
+        if (!visible.length) { if (chip) chip.remove(); return; }
+        if (!chip) {
+          chip = document.createElement('div');
+          chip.id = 'dvsl-chip';
+          chip.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99998;background:#002D72;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px;font:500 14px/1.25 system-ui,-apple-system,Segoe UI,Inter,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;padding-top:calc(10px + env(safe-area-inset-top))';
+          document.body.appendChild(chip);
+        }
+        const top = visible[0];
+        let label;
+        if (visible.length === 1) {
+          const ttl = (top.title || 'DVSL').slice(0, 40);
+          const bod = (top.body || '').slice(0, 60);
+          label = bod ? (ttl + ' — ' + bod) : ttl;
+        } else {
+          label = visible.length + ' new notifications — tap to view';
+        }
+        chip.innerHTML = '';
+        const bell = document.createElement('span');
+        bell.textContent = '🔔';
+        bell.style.cssText = 'font-size:16px;flex:0 0 auto';
+        const text = document.createElement('span');
+        text.textContent = label;
+        text.style.cssText = 'flex:1 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+        const arrow = document.createElement('span');
+        arrow.textContent = '›';
+        arrow.style.cssText = 'flex:0 0 auto;font-size:18px;opacity:.7';
+        const close = document.createElement('button');
+        close.textContent = '×';
+        close.setAttribute('aria-label', 'Dismiss');
+        close.style.cssText = 'flex:0 0 auto;background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:4px;width:26px;height:26px;font:400 18px/1 system-ui,sans-serif;cursor:pointer;padding:0';
+        close.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (visible.length === 1) { _dvslDismiss(top); }
+          else { _dvslDismissAll(); }
+          chip.remove();
+        });
+        chip.appendChild(bell);
+        chip.appendChild(text);
+        chip.appendChild(arrow);
+        chip.appendChild(close);
+        chip.onclick = () => _dvslConsumeAndNav(top);
+      }
+      function _dvslConsumeAndNav(item) {
+        const token = localStorage.getItem('dvsl-notif-token');
+        if (token && item && item.id) {
+          fetch('/api/dismiss-pending-nav', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token, id: item.id }),
+          }).catch(() => {});
+        }
+        try {
+          const t = new URL((item && item.url) || '/', location.origin);
+          window.location.href = t.href;
+        } catch(_) { window.location.href = '/'; }
+      }
+      function _dvslDismiss(item) {
+        const token = localStorage.getItem('dvsl-notif-token');
+        if (!token || !item || !item.id) return;
+        fetch('/api/dismiss-pending-nav', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, id: item.id }),
+        }).catch(() => {});
+      }
+      function _dvslDismissAll() {
+        const token = localStorage.getItem('dvsl-notif-token');
+        if (!token) return;
+        fetch('/api/dismiss-pending-nav', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, dismissAll: true }),
+        }).catch(() => {});
       }
       _dvslCheckPendingNav();
       document.addEventListener('visibilitychange', () => {
@@ -76,9 +163,8 @@
       });
       window.addEventListener('pageshow', _dvslCheckPendingNav);
       window.addEventListener('focus', _dvslCheckPendingNav);
-      // Safety net for iOS PWAs that don't fire the above on notification
-      // resume: poll every 5s while visible. Cheap (1 POST per 5s max, and
-      // only when token exists).
+      // Safety net: poll every 5s while visible. Cheap — only hits the API
+      // when a push token actually exists in localStorage.
       setInterval(() => {
         if (document.visibilityState === 'visible') _dvslCheckPendingNav();
       }, 5000);
