@@ -26,12 +26,26 @@ firebase.initializeApp({
   appId: "1:145862305559:web:153ec455bad57e17517952"
 });
 
-// Calling firebase.messaging() is required so FCM wires up its push event
-// listener inside this SW. We intentionally do NOT define onBackgroundMessage
-// here — when the FCM payload contains a top-level `notification` block, the
-// SDK auto-displays it once. Adding onBackgroundMessage caused a duplicate
-// banner. One banner = the right behavior.
-firebase.messaging();
+// We now send DATA-ONLY pushes (no top-level `notification` block) so FCM's
+// SDK does NOT auto-display. Instead onBackgroundMessage fires and we call
+// showNotification ourselves, which means event.notification.data contains
+// exactly what we put there — not FCM's wrapped `FCM_MSG` structure — so
+// the notificationclick handler below can just read event.notification.data.url.
+const _messaging = firebase.messaging();
+_messaging.onBackgroundMessage((payload) => {
+  const d = (payload && payload.data) || {};
+  const title = d.title || 'DVSL';
+  const body = d.body || '';
+  const url = d.url || '/';
+  self.registration.showNotification(title, {
+    body,
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: 'dvsl-push',       // coalesce if multiple arrive at once
+    renotify: true,         // still vibrate/buzz even when coalesced
+    data: { url },
+  });
+});
 
 // Respond to version queries from page scripts so they can render a
 // small SW-version badge (proves which build is actually live on the
@@ -45,14 +59,8 @@ self.addEventListener('message', (event) => {
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
 
-  // FCM payload includes the target URL in TWO places depending on how the
-  // notification was built:
-  //   - event.notification.data.url     ← our own /api/send-notification
-  //   - event.notification.data.FCM_MSG.notification.click_action (rare)
-  // Fall back to '/' if neither exists.
-  const data = event.notification.data || {};
-  const fcm = data.FCM_MSG?.notification || {};
-  const rawUrl = data.url || fcm.click_action || fcm.fcmOptions?.link || '/';
+  // We set data ourselves in onBackgroundMessage, so it's just {url}.
+  const rawUrl = (event.notification.data && event.notification.data.url) || '/';
 
   // Resolve against this SW's origin so relative paths ("/team-chat.html?...")
   // work and we can compare pathname+search against any open DVSL tab.
@@ -104,7 +112,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v14-poll';
+const VERSION = 'dvsl-v15-dataonly';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
