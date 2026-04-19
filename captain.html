@@ -1517,6 +1517,25 @@ window.saveEditGame = async function(gameId) {
       }).catch(e => console.warn('Admin notify failed:', e));
     } catch(_) {}
 
+    // Push notification to subscribers of both teams. Only fires if something
+    // schedule-facing actually changed. Excludes the captain's own device.
+    try {
+      if (g && summary && summary !== 'no visible field changes') {
+        fetch('/api/send-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': 'dvsl-push-2026-rkj3849f' },
+          body: JSON.stringify({
+            title: `Schedule update: ${teamsLabel}`,
+            body: `${after.date} ${after.time} @ ${after.field} — ${summary}`,
+            category: 'schedule',
+            teams: [g.away, g.home].filter(Boolean),
+            url: '/schedule.html',
+            excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+          }),
+        }).catch(e => console.warn('Schedule push failed:', e));
+      }
+    } catch(_) {}
+
     toast('Game updated!');
     renderSchedule();
   } catch(e) { toast('Failed to save: ' + e.message, 'error'); }

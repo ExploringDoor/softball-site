@@ -50,7 +50,9 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, category, team, url, excludeToken } = req.body || {};
+  const { title, body, category, team, teams, url, excludeToken } = req.body || {};
+  // `team` (single) and `teams` (array) are both supported. `teams` wins when
+  // present — use it for schedule changes that affect multiple teams.
   if (!title || !body || !category) {
     return res.status(400).json({ error: 'title, body, and category are required' });
   }
@@ -67,7 +69,7 @@ export default async function handler(req, res) {
   // 2. Pull matching tokens out of the notification_tokens collection via
   //    the Firestore REST API (reuses same service-account auth).
   let tokens = [];
-  try { tokens = await listMatchingTokens({ projectId: PROJECT_ID, accessToken, category, team }); }
+  try { tokens = await listMatchingTokens({ projectId: PROJECT_ID, accessToken, category, team, teams }); }
   catch(e) { return res.status(500).json({ error: 'Failed to read tokens', detail: e.message }); }
 
   // Exclude sender's own token so people don't get pinged for their own chat
@@ -120,11 +122,15 @@ async function getAccessToken(svc) {
   return data.access_token;
 }
 
-async function listMatchingTokens({ projectId, accessToken, category, team }) {
+async function listMatchingTokens({ projectId, accessToken, category, team, teams }) {
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/notification_tokens?pageSize=300`;
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }});
   const data = await resp.json();
   if (!data.documents) return [];
+  // Normalize: prefer `teams` (array); else build single-element from `team`.
+  const teamWanted = Array.isArray(teams) && teams.length
+    ? teams.filter(Boolean)
+    : (team ? [team] : []);
   const out = [];
   for (const d of data.documents) {
     const f = d.fields || {};
@@ -132,9 +138,10 @@ async function listMatchingTokens({ projectId, accessToken, category, team }) {
     if (!tok) continue;
     const cats = (f.categories?.arrayValue?.values || []).map(v => v.stringValue);
     if (cats.length && !cats.includes(category)) continue;
-    const teams = (f.teams?.arrayValue?.values || []).map(v => v.stringValue);
-    // Empty teams = "all teams"; otherwise must include the requested team
-    if (team && teams.length && !teams.includes(team)) continue;
+    const tokTeams = (f.teams?.arrayValue?.values || []).map(v => v.stringValue);
+    // Empty subscriber teams = "all teams" (always match). Otherwise we need
+    // at least one overlap between what we're targeting and what they follow.
+    if (teamWanted.length && tokTeams.length && !teamWanted.some(t => tokTeams.includes(t))) continue;
     out.push(tok);
   }
   return out;

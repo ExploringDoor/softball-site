@@ -4111,12 +4111,36 @@ window.saveEditGame = async function(gameId) {
     field: document.getElementById('eg-field-' + gameId).value,
     addr: document.getElementById('eg-addr-' + gameId).value.trim()
   };
+  // Snapshot pre-edit state for the "what changed" push notification.
+  const _prev = GAMES.find(x => x.id === gameId);
+  const before = _prev ? {
+    date: _prev.date||'', time: _prev.time||'', field: _prev.field||'',
+    away: _prev.away||'', home: _prev.home||''
+  } : null;
   try {
     await updateDoc(doc(db, 'games', gameId), data);
     const g = GAMES.find(x => x.id === gameId);
     if (g) Object.assign(g, data);
     toast('Game updated!');
     await logActivity('Schedule', `Edited game: ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk}`);
+
+    // Push notification to subscribers of either team if date/time/field/teams changed.
+    try {
+      const diffs = [];
+      if (before) {
+        if (before.date !== data.date) diffs.push(`date: ${before.date||'—'} → ${data.date||'—'}`);
+        if (before.time !== data.time) diffs.push(`time: ${before.time||'—'} → ${data.time||'—'}`);
+        if (before.field !== data.field) diffs.push(`field: ${before.field||'—'} → ${data.field||'—'}`);
+        if (before.away !== data.away || before.home !== data.home) diffs.push('matchup changed');
+      }
+      if (diffs.length) {
+        sendSchedulePush({
+          title: `Schedule update: ${getTeamName(data.away)} @ ${getTeamName(data.home)}`,
+          body: `${data.date} ${data.time} @ ${data.field} — ${diffs.join('; ')}`,
+          teams: [data.away, data.home].filter(Boolean),
+        });
+      }
+    } catch(e) { console.warn('Schedule push skipped:', e); }
     // Remember this game was just edited so the next Sync click can target
     // only it (update the 2 affected calendar events, not re-push 15 games
     // per team). Cleared by gcal-sync.html after a successful targeted sync.
@@ -4140,6 +4164,14 @@ window.deleteGame = async function(gameId) {
     GAMES = GAMES.filter(x => x.id !== gameId);
     toast('Game deleted');
     await logActivity('Schedule', `Deleted game: ${getTeamName(g?.away)} @ ${getTeamName(g?.home)} Wk ${g?.wk}`);
+    // Push notification to both teams' subscribers.
+    try {
+      if (g) sendSchedulePush({
+        title: `Game canceled`,
+        body: `${getTeamName(g.away)} @ ${getTeamName(g.home)} (Wk ${g.wk||'?'}) has been removed from the schedule.`,
+        teams: [g.away, g.home].filter(Boolean),
+      });
+    } catch(e) { console.warn('Cancel push skipped:', e); }
     renderSchedule();
     renderScores();
     renderDashboard();
@@ -5845,6 +5877,24 @@ window.previewBlast = function() {
 // callable — set a secret before going live.
 // ═══════════════════════════════════════════════════════════════════
 const PUSH_ADMIN_SECRET = 'dvsl-push-2026-rkj3849f'; // matches ADMIN_SEND_SECRET env var on Vercel
+
+// Fire-and-forget schedule push. Used by saveEditGame / deleteGame so admins
+// don't have to go to the Push tab after every schedule change. Silently
+// swallows errors — we don't want to block the save if push fails.
+window.sendSchedulePush = function({ title, body, teams }) {
+  if (!Array.isArray(teams) || !teams.length) return;
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
+    body: JSON.stringify({
+      title, body,
+      category: 'schedule',
+      teams,
+      url: '/schedule.html',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Schedule push failed:', e));
+};
 
 window.refreshSubscriberCount = async function() {
   const el = document.getElementById('push-sub-count');
