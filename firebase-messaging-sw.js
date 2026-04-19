@@ -12,16 +12,12 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(function(payload) {
-  const title = payload.notification?.title || 'DVSL Update';
-  const options = {
-    body: payload.notification?.body || '',
-    icon: '/dvsl-logo-dark.png',
-    badge: '/dvsl-logo-dark.png',
-    data: payload.data
-  };
-  self.registration.showNotification(title, options);
-});
+// IMPORTANT: Do NOT call onBackgroundMessage here. When the FCM payload has
+// a `notification` field (which ours always does), Firebase's internal SW
+// handler auto-displays the notification. Adding an onBackgroundMessage
+// handler that calls self.registration.showNotification() would display a
+// DUPLICATE notification for every push. If we ever need custom background
+// handling (e.g. data-only messages), add it only for data-only payloads.
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
