@@ -2621,11 +2621,12 @@
       </g>
     </svg>
 
-    <!-- Position labels -->
+    <!-- Position labels (4-outfielder alignment: LF / LCF / RCF / RF) -->
     <div id="pos-labels">
-      <div class="pos-label" style="left:15%;top:18%">LF</div>
-      <div class="pos-label" style="left:50%;top:7%">CF</div>
-      <div class="pos-label" style="left:85%;top:18%">RF</div>
+      <div class="pos-label" style="left:12%;top:18%">LF</div>
+      <div class="pos-label" style="left:37%;top:9%">LCF</div>
+      <div class="pos-label" style="left:63%;top:9%">RCF</div>
+      <div class="pos-label" style="left:88%;top:18%">RF</div>
       <div class="pos-label" style="left:33%;top:28%">SS</div>
       <div class="pos-label" style="left:65%;top:28%">2B</div>
       <div class="pos-label" style="left:14%;top:37%">3B</div>
@@ -2645,9 +2646,10 @@
 
     <!-- Fielder overlay — gloves appear on field for out/error/fc/sac -->
     <div id="fielder-overlay" style="display:none;position:absolute;inset:0;z-index:20;background:rgba(0,0,0,0.28);">
-      <div class="fielder-btn" style="left:15%;top:18%"  data-pos="LF"></div>
-      <div class="fielder-btn" style="left:50%;top:8%"   data-pos="CF"></div>
-      <div class="fielder-btn" style="left:85%;top:18%"  data-pos="RF"></div>
+      <div class="fielder-btn" style="left:12%;top:18%"  data-pos="LF"></div>
+      <div class="fielder-btn" style="left:37%;top:10%"  data-pos="LCF"></div>
+      <div class="fielder-btn" style="left:63%;top:10%"  data-pos="RCF"></div>
+      <div class="fielder-btn" style="left:88%;top:18%"  data-pos="RF"></div>
       <div class="fielder-btn" style="left:33%;top:28%"  data-pos="SS"></div>
       <div class="fielder-btn" style="left:65%;top:28%"  data-pos="2B"></div>
       <div class="fielder-btn" style="left:14%;top:37%"  data-pos="3B"></div>
@@ -3365,6 +3367,14 @@ function handlePitch(type) {
   if (halfEndOverlay && halfEndOverlay.style.display !== 'none' && halfEndOverlay.style.display !== '') return;
   const gameOverOverlay = document.getElementById('game-over-overlay');
   if (gameOverOverlay && gameOverOverlay.style.display !== 'none' && gameOverOverlay.style.display !== '') return;
+  // Hard guard: if outs are already 3 (or more), the half-inning is over.
+  // This catches the case where the half-end overlay was cancelled but
+  // the captain keeps tapping — previously this could produce a 4th out.
+  if (G.outs >= 3) {
+    // Re-trigger the half-inning-end flow so they can't just keep scoring.
+    endHalfInning();
+    return;
+  }
   if (type === 'bip') { openBipSheet('level1'); return; }
   snapshotState();
   if (type !== 'bip') {
@@ -4036,8 +4046,14 @@ function advanceLineup(team) {
 
 // ===== END HALF INNING =====
 function endHalfInning() {
-  // Snapshot BEFORE switching so CANCEL can restore
-  snapshotState();
+  // NOTE: Do NOT snapshot here. Every action that drove outs from 2→3
+  // (pitch → strikeout, BIP out, double play, etc.) already pushed its
+  // own snapshot via snapshotState() BEFORE mutating G.outs. If we push
+  // another snapshot here at outs=3, then CANCEL → undoLast() just
+  // restores that same outs=3 state, and the captain can keep scoring
+  // and rack up a 4th out in the inning. Skipping the snapshot means
+  // CANCEL pops the real pre-3rd-out snapshot and cleanly rewinds by
+  // one play (outs back to 2, runners / lineup / stats restored).
 
   const team = battingTeam();    // team that just batted
   const prevScore = team === 'away' ? G._prevAwayScore : G._prevHomeScore;
@@ -4860,8 +4876,11 @@ document.getElementById('menu-reset-game').addEventListener('click', async () =>
     const failures = [];
     try {
       const { doc: _doc, deleteDoc: _del, updateDoc: _upd } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+      // NOTE: `live_scores` is a dead collection — watch.html listens to
+      // `game_states` instead, and nothing in the codebase ever writes to
+      // live_scores. Attempting to delete from it just trips Firestore rules
+      // (permission-denied) and makes reset look broken. Skip it.
       const tries = [
-        ['live_scores/'+gid,        () => _del(_doc(db, 'live_scores', gid))],
         ['game_states/'+gid,        () => _del(_doc(db, 'game_states', gid))],
         ['game_states/'+gid+'_away',() => _del(_doc(db, 'game_states', `${gid}_away`))],
         ['game_states/'+gid+'_home',() => _del(_doc(db, 'game_states', `${gid}_home`))],
@@ -5203,7 +5222,7 @@ function showFielderOverlay(action) {
   const outfieldOnly = action === 'hit' && (bipHitResult === 'homerun' || bipHitResult === 'itphr');
   overlay.querySelectorAll('.fielder-btn').forEach(btn => {
     const pos = btn.dataset.pos;
-    const isOutfield = pos === 'LF' || pos === 'CF' || pos === 'RF';
+    const isOutfield = pos === 'LF' || pos === 'LCF' || pos === 'CF' || pos === 'RCF' || pos === 'RF';
     btn.style.display = (outfieldOnly && !isOutfield) ? 'none' : '';
   });
   overlay.style.display = 'block';
@@ -5849,7 +5868,10 @@ window.luClosePitcherSheet = function() {
 };
 
 // ── Position picker ─────────────────────────────────────────────────
-const LU_POSITIONS = ['P','C','1B','2B','3B','SS','LF','CF','RF','DH'];
+// 4-outfielder alignment: LF / LCF / RCF / RF (no true CF — this league uses
+// 4 OFs). CF stays available in admin / captain for backward compat on player
+// records, but the scoring lineup picker uses the 4-OF set.
+const LU_POSITIONS = ['P','C','1B','2B','3B','SS','LF','LCF','RCF','RF','DH'];
 let _luPosTeam = null, _luPosIdx = null;
 
 window.luOpenPosPicker = function(team, idx) {
