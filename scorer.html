@@ -466,6 +466,45 @@
       });
     }
   </script>
+
+  <!-- Scorer-specific tab-bar killer.
+       The /pwa scaffold script above injects #dvsl-tabbar + a matching
+       <style id="dvsl-tabbar-css"> via createElement at window.load.
+       Because that stylesheet is appended AFTER our inline <style>, a
+       plain CSS `display:none !important` override loses the cascade
+       fight — which is why Adam's v37 fix didn't actually hide the bar
+       on his phone. Kill the elements from the DOM instead and keep a
+       MutationObserver running so nothing re-inserts them. The scorer is
+       a full-screen scoring experience; the scaffold's Home/Scores/
+       Schedule/Inbox/More chrome has no place here and was overlapping
+       the lineup's NEXT button, position picker bottom row, and pitcher
+       picker. The on-screen "‹ Back" button in the lineup header already
+       gives the user a way out. -->
+  <script>
+    (function killDvslTabbar(){
+      const KILL = ['dvsl-tabbar', 'dvsl-tabbar-css', 'dvsl-more-sheet', 'dvsl-more-backdrop'];
+      function sweep() {
+        for (const id of KILL) {
+          const el = document.getElementById(id);
+          if (el) el.remove();
+        }
+      }
+      // Immediate sweep (catches any scaffold that already finished).
+      sweep();
+      // Stand a watcher on <html> so we catch the scaffold's deferred
+      // insertions (they happen inside window.load). subtree:true is
+      // needed because the scaffold injects the <style> into <head>
+      // while the tab bar <nav> goes into <body>.
+      try {
+        new MutationObserver(sweep).observe(document.documentElement, { childList: true, subtree: true });
+      } catch(_) {}
+      // Re-sweep at key lifecycle moments too, as a cheap safety net.
+      window.addEventListener('load', sweep);
+      document.addEventListener('DOMContentLoaded', sweep);
+      document.addEventListener('visibilitychange', sweep);
+      window.addEventListener('pageshow', sweep);
+    })();
+  </script>
 <title>DVSL Live Scorer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -512,15 +551,12 @@
     justify-content: center;
   }
 
-  /* The global DVSL tab bar (injected by the PWA scaffold on every page)
-     has no business living on the live scorer — it's a full-screen scoring
-     experience with its own bottom UI. Left alone, the tab bar (z-index
-     99995, ~74px tall) was overlapping the lineup screen's NEXT button,
-     the position picker grid, and the pitcher picker — Adam hit this on
-     his phone while trying to set a lineup and couldn't reach half the
-     positions. Hide it entirely on this page. Back-navigation lives in
-     the on-screen "‹ Back" button already. */
-  #dvsl-tabbar, #dvsl-more-sheet, #dvsl-more-backdrop { display: none !important; }
+  /* Defensive belt-and-suspenders: the JS killer (below <body>) deletes
+     the scaffold tab bar, but hide anything that sneaks in anyway.
+     (CSS alone cannot win here because the scaffold injects its own
+     stylesheet later in the cascade with !important; this rule only
+     catches the brief window before the MutationObserver fires.) */
+  #dvsl-tabbar, #dvsl-more-sheet, #dvsl-more-backdrop, #dvsl-tabbar-css { display: none !important; }
 
   body > * {
     max-width: 520px;
