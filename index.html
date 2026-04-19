@@ -1119,6 +1119,36 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .ptbl td:not(:first-child){text-align:right;color:var(--muted);font-size:12px}
 .ptbl tr:last-child td{border-bottom:none}
 .ptbl tr:hover td{background:rgba(0,0,0,.03)}
+/* Horizontal scroll container for the advanced box score on mobile.
+   Without -webkit-overflow-scrolling + touch-action, iOS loses the
+   scroll position on touchend — users have to hold their finger to
+   keep the far-right columns in view. A gradient fade on the right
+   edge signals there's more to scroll to. */
+.adv-bs-scroll{
+  position:relative;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;
+  touch-action:pan-x pan-y;
+  scrollbar-width:thin;
+}
+.adv-bs-scroll::after{
+  content:'';
+  position:sticky;
+  top:0;right:0;
+  display:block;
+  width:28px;
+  height:100%;
+  margin-left:-28px;
+  pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.9));
+  transition:opacity .2s;
+}
+.adv-bs-scroll.scrolled-end::after{opacity:0}
+.adv-bs-scroll table{min-width:560px}
+.adv-bs-hint{font-size:11px;color:var(--muted2);margin:-4px 0 6px;display:none}
+@media(max-width:640px){.adv-bs-hint{display:block}}
 .bs-notes-block{margin-top:10px;padding:10px 12px;background:#f8f9fb;border-radius:6px;border:1px solid #e5e7eb}
 .bs-note-row{font-size:12px;color:#374151;line-height:1.7}
 .bs-note-row b{color:#111;font-weight:700}
@@ -1466,6 +1496,36 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .ptbl td:not(:first-child){text-align:right;color:var(--muted);font-size:12px}
 .ptbl tr:last-child td{border-bottom:none}
 .ptbl tr:hover td{background:rgba(0,0,0,.03)}
+/* Horizontal scroll container for the advanced box score on mobile.
+   Without -webkit-overflow-scrolling + touch-action, iOS loses the
+   scroll position on touchend — users have to hold their finger to
+   keep the far-right columns in view. A gradient fade on the right
+   edge signals there's more to scroll to. */
+.adv-bs-scroll{
+  position:relative;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;
+  touch-action:pan-x pan-y;
+  scrollbar-width:thin;
+}
+.adv-bs-scroll::after{
+  content:'';
+  position:sticky;
+  top:0;right:0;
+  display:block;
+  width:28px;
+  height:100%;
+  margin-left:-28px;
+  pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.9));
+  transition:opacity .2s;
+}
+.adv-bs-scroll.scrolled-end::after{opacity:0}
+.adv-bs-scroll table{min-width:560px}
+.adv-bs-hint{font-size:11px;color:var(--muted2);margin:-4px 0 6px;display:none}
+@media(max-width:640px){.adv-bs-hint{display:block}}
 .bs-notes-block{margin-top:10px;padding:10px 12px;background:#f8f9fb;border-radius:6px;border:1px solid #e5e7eb}
 .bs-note-row{font-size:12px;color:#374151;line-height:1.7}
 .bs-note-row b{color:#111;font-weight:700}
@@ -6160,12 +6220,14 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       <div id="bs-bat-adv" class="pop-grid2" style="display:none">
         <div style="grid-column:1/-1">
           <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away}</div>
-          <div style="overflow-x:auto"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(aLineup,away)}</tbody></table></div>
+          <div class="adv-bs-hint">← swipe to see all columns →</div>
+          <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(aLineup,away)}</tbody></table></div>
           ${mkBatNotes(aLineup,'away')}
         </div>
         <div style="grid-column:1/-1;margin-top:16px">
           <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home}</div>
-          <div style="overflow-x:auto"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(hLineup,home)}</tbody></table></div>
+          <div class="adv-bs-hint">← swipe to see all columns →</div>
+          <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(hLineup,home)}</tbody></table></div>
           ${mkBatNotes(hLineup,'home')}
         </div>
       </div>`;
