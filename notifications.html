@@ -183,6 +183,17 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
           <span class="slider"></span>
         </label>
       </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
+          <div class="cat-name">Team Chat</div>
+          <div class="cat-desc">Messages from your captain and teammates</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked data-cat="team_chat" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
     </div>
 
     <!-- Favorite teams: gate notifications to chosen teams -->
@@ -273,6 +284,9 @@ function init() {
   if (savedToken) {
     updateUI(true);
     loadSavedCategories();
+    // Auto-migrate: add 'team_chat' to existing subscribers so they get the
+    // new team chat category without having to re-enable notifications.
+    migrateAddTeamChatCategory(savedToken);
   }
 
   // Populate the team-preferences list regardless of subscription state
@@ -303,6 +317,29 @@ function updateUI(enabled) {
     enableSection.classList.remove('hidden');
     enabledSection.classList.add('hidden');
   }
+}
+
+async function migrateAddTeamChatCategory(token) {
+  try {
+    const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
+    const snap = await getDocs(q);
+    for (const d of snap.docs) {
+      const cats = d.data().categories || [];
+      if (!cats.includes('team_chat')) {
+        await updateDoc(doc(db, 'notification_tokens', d.id), {
+          categories: [...cats, 'team_chat'],
+        });
+        // Keep localStorage in sync so the checkbox reflects actual state.
+        try {
+          const saved = JSON.parse(localStorage.getItem('dvsl-notif-categories') || '[]');
+          if (!saved.includes('team_chat')) {
+            localStorage.setItem('dvsl-notif-categories', JSON.stringify([...saved, 'team_chat']));
+            document.querySelectorAll('[data-cat="team_chat"]').forEach(cb => cb.checked = true);
+          }
+        } catch(e) {}
+      }
+    }
+  } catch(e) { console.warn('team_chat migration skipped:', e); }
 }
 
 function loadSavedCategories() {
@@ -390,7 +427,7 @@ window.enableNotifications = async function() {
       throw new Error('No token received');
     }
 
-    const categories = ['scores', 'rainouts', 'schedule', 'playoffs'];
+    const categories = ['scores', 'rainouts', 'schedule', 'playoffs', 'team_chat'];
     const teams = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
 
     // Save token to Firestore — backend filters on (categories, teams)

@@ -3587,15 +3587,34 @@ window.sendTeamMsg = async function() {
   if (!text) return;
   input.value = '';
   input.disabled = true;
+  const teamName = MY_TEAM?.name || captainData.team_name;
   try {
     await addDoc(collection(db, 'team_messages'), {
       text,
       author_email: currentUser.email,
+      author_name: teamName + ' (Captain)',
+      is_captain: true,
       team_id: captainData.team_id,
-      team_name: MY_TEAM?.name || captainData.team_name,
+      team_name: teamName,
       team_color: MY_TEAM?.color || '#002D72',
       timestamp: serverTimestamp(),
     });
+    // Fire push notification to opted-in players of this team.
+    // Excludes the captain's own FCM token so they don't ping themselves.
+    try {
+      await fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': 'dvsl-push-2026-rkj3849f' },
+        body: JSON.stringify({
+          title: `${teamName} — Captain`,
+          body: text.length > 120 ? text.slice(0, 120) + '…' : text,
+          category: 'team_chat',
+          team: captainData.team_id,
+          url: `/team-chat.html?team=${encodeURIComponent(captainData.team_id)}`,
+          excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+        }),
+      });
+    } catch(e) { console.warn('Team push failed (message still delivered in-app):', e); }
     // Email players who have an email on file
     if (EMAILJS_ENABLED) {
       const recipients = MY_PLAYERS.filter(p => p.email);

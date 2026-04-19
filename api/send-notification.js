@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, category, team, url } = req.body || {};
+  const { title, body, category, team, url, excludeToken } = req.body || {};
   if (!title || !body || !category) {
     return res.status(400).json({ error: 'title, body, and category are required' });
   }
@@ -69,6 +69,10 @@ export default async function handler(req, res) {
   let tokens = [];
   try { tokens = await listMatchingTokens({ projectId: PROJECT_ID, accessToken, category, team }); }
   catch(e) { return res.status(500).json({ error: 'Failed to read tokens', detail: e.message }); }
+
+  // Exclude sender's own token so people don't get pinged for their own chat
+  // messages. Callers pass their localStorage 'dvsl-notif-token' here.
+  if (excludeToken) tokens = tokens.filter(t => t !== excludeToken);
 
   if (!tokens.length) return res.status(200).json({ sent: 0, note: 'No matching subscribers' });
 

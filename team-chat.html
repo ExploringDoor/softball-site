@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#002D72">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DVSL">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<script>
+  // Register the combined SW (offline + FCM push). Same pattern as other
+  // pages — registering any other SW at scope "/" would invalidate the
+  // FCM push subscription.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    });
+  }
+</script>
+<title>Team Chat — DVSL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff;--bg2:#f5f5f5;--card:#ffffff;--card2:#f8f8f8;--card3:#f0f0f0;
+  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.15);
+  --navy:#002D72;--navy-light:rgba(0,45,114,0.08);
+  --white:#1a1a1a;--muted:rgba(0,0,0,0.5);--muted2:rgba(0,0,0,0.35);
+  --red:#c8102e;--green:#22c55e;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line-height:1.6;display:flex;flex-direction:column}
+
+/* Nav */
+.nav{position:sticky;top:0;z-index:40;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:rgba(255,255,255,0.97);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border)}
+.nav-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:17px;letter-spacing:.1em;text-transform:uppercase;color:var(--navy);text-decoration:none;display:flex;align-items:center;gap:8px}
+.nav-back{font-size:13px;font-weight:600;color:var(--muted);text-decoration:none;display:flex;align-items:center;gap:6px}
+
+/* Header card */
+.team-hdr{background:var(--navy);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:12px}
+.team-hdr .logo{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.15);display:grid;place-items:center;overflow:hidden}
+.team-hdr .logo img{width:100%;height:100%;object-fit:contain}
+.team-hdr .name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;letter-spacing:.02em;line-height:1}
+.team-hdr .sub{font-size:12px;opacity:.85;margin-top:2px}
+.team-hdr .me{margin-left:auto;font-size:11px;opacity:.85;text-align:right}
+.team-hdr .me a{color:#fff;text-decoration:underline;cursor:pointer}
+
+/* Messages list */
+.chat-wrap{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:var(--bg2)}
+.msg{max-width:82%;display:flex;flex-direction:column;gap:2px}
+.msg.mine{align-self:flex-end;align-items:flex-end}
+.msg.theirs{align-self:flex-start;align-items:flex-start}
+.msg .who{font-size:11px;font-weight:600;color:var(--muted);padding:0 4px}
+.msg .who.captain{color:var(--navy)}
+.msg .bubble{padding:10px 14px;border-radius:14px;font-size:14.5px;line-height:1.45;word-wrap:break-word;white-space:pre-wrap;max-width:100%}
+.msg.mine .bubble{background:var(--navy);color:#fff;border-bottom-right-radius:4px}
+.msg.theirs .bubble{background:#fff;border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg.captain .bubble{background:#fff;border:1px solid rgba(0,45,114,.25);border-left:3px solid var(--navy)}
+.msg .time{font-size:10px;color:var(--muted2);padding:0 4px}
+
+.empty{color:var(--muted);text-align:center;padding:40px 20px;font-size:14px}
+
+/* Input row */
+.input-row{display:flex;gap:8px;padding:10px 12px;background:#fff;border-top:1px solid var(--border);position:sticky;bottom:0}
+.input-row input{flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:22px;font-size:15px;outline:none;background:var(--card2)}
+.input-row input:focus{border-color:var(--navy);background:#fff}
+.input-row button{padding:0 20px;border:none;background:var(--navy);color:#fff;border-radius:22px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:14px;cursor:pointer}
+.input-row button:disabled{opacity:.5;cursor:not-allowed}
+
+/* Identity modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:#fff;border-radius:14px;max-width:400px;width:100%;padding:24px;max-height:85vh;overflow-y:auto}
+.modal h2{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;margin-bottom:6px}
+.modal p{font-size:13px;color:var(--muted);margin-bottom:16px}
+.roster-list{display:flex;flex-direction:column;gap:4px;max-height:50vh;overflow-y:auto;margin-bottom:14px;border:1px solid var(--border);border-radius:8px;padding:6px}
+.roster-item{padding:10px 12px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+.roster-item:hover{background:var(--bg2)}
+.roster-item .jersey{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--muted);font-size:13px;min-width:32px}
+.custom-name{border-top:1px solid var(--border);padding-top:14px}
+.custom-name label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px}
+.custom-name input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+.custom-name button{margin-top:10px;width:100%;padding:10px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
+
+/* Team picker */
+.team-picker{padding:20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.team-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 12px;text-align:center;cursor:pointer;text-decoration:none;color:var(--white);transition:all .15s}
+.team-card:hover{border-color:var(--navy);box-shadow:0 2px 10px rgba(0,45,114,.1)}
+.team-card .tlogo{width:48px;height:48px;margin:0 auto 8px;display:grid;place-items:center}
+.team-card .tlogo img{width:100%;height:100%;object-fit:contain}
+.team-card .tname{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.02em}
+
+/* Misc */
+.hidden{display:none!important}
+.loading{text-align:center;padding:60px 20px;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="index.html" class="nav-brand">DVSL</a>
+  <a href="index.html" class="nav-back">← Home</a>
+</nav>
+
+<!-- Team picker (shown when no ?team= param) -->
+<div id="picker-view" class="hidden">
+  <div style="padding:24px 20px 8px">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;line-height:1;color:var(--navy);letter-spacing:-.01em">TEAM CHAT</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:4px">Pick your team to join the chat.</div>
+  </div>
+  <div id="team-picker-grid" class="team-picker">
+    <div class="loading">Loading teams…</div>
+  </div>
+</div>
+
+<!-- Chat view (shown when ?team= param present) -->
+<div id="chat-view" class="hidden" style="flex:1;display:flex;flex-direction:column;min-height:0">
+  <div class="team-hdr" id="team-hdr">
+    <div class="logo" id="team-logo"></div>
+    <div>
+      <div class="name" id="team-name">Loading…</div>
+      <div class="sub" id="team-sub">Team Chat</div>
+    </div>
+    <div class="me">
+      <div id="me-name">—</div>
+      <a onclick="changeIdentity()">Change</a>
+    </div>
+  </div>
+
+  <div class="chat-wrap" id="chat-wrap">
+    <div class="loading">Loading messages…</div>
+  </div>
+
+  <div class="input-row">
+    <input id="msg-input" type="text" placeholder="Message your team…" maxlength="500" autocomplete="off"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}">
+    <button onclick="sendMessage()" id="send-btn">Send</button>
+  </div>
+</div>
+
+<!-- Identity modal -->
+<div id="identity-modal" class="modal-bg hidden">
+  <div class="modal">
+    <h2 id="identity-title">Who are you?</h2>
+    <p>Pick your name so your teammates know who's talking.</p>
+    <div id="roster-list" class="roster-list">
+      <div class="loading" style="padding:20px">Loading roster…</div>
+    </div>
+    <div class="custom-name">
+      <label for="custom-name-input">Not on the roster? Type a name:</label>
+      <input id="custom-name-input" type="text" placeholder="e.g. Adam M." maxlength="40">
+      <button onclick="saveCustomIdentity()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, collection, query, where, orderBy, limit, onSnapshot, addDoc, getDocs, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+};
+const PUSH_SECRET = 'dvsl-push-2026-rkj3849f';
+
+const app = initializeApp(FIREBASE_CONFIG);
+const db = getFirestore(app);
+
+// ── URL & state ──────────────────────────────────────────────────────
+const params = new URLSearchParams(location.search);
+const teamId = params.get('team') || '';
+let TEAM = null;
+let ROSTER = [];
+let IDENTITY = null; // { name, email, is_captain }
+let unsub = null;
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ── Boot ─────────────────────────────────────────────────────────────
+if (!teamId) {
+  showTeamPicker();
+} else {
+  loadTeamAndChat(teamId);
+}
+
+async function showTeamPicker() {
+  document.getElementById('picker-view').classList.remove('hidden');
+  let teams = [];
+  try {
+    const snap = await getDocs(collection(db, 'teams'));
+    teams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) {
+    document.getElementById('team-picker-grid').innerHTML =
+      '<div class="loading">Could not load teams. Check your connection.</div>';
+    return;
+  }
+  teams.sort((a,b) => (a.name || a.id).localeCompare(b.name || b.id));
+  document.getElementById('team-picker-grid').innerHTML = teams.map(t => `
+    <a class="team-card" href="team-chat.html?team=${encodeURIComponent(t.id)}">
+      <div class="tlogo">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}</div>
+      <div class="tname">${esc(t.name || t.id)}</div>
+    </a>`).join('');
+}
+
+async function loadTeamAndChat(tid) {
+  document.getElementById('chat-view').classList.remove('hidden');
+
+  // Load team meta
+  try {
+    const snap = await getDocs(collection(db, 'teams'));
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    TEAM = all.find(t => t.id === tid);
+    if (!TEAM) {
+      document.getElementById('chat-wrap').innerHTML =
+        `<div class="empty">Team "${esc(tid)}" not found. <a href="team-chat.html" style="color:var(--navy)">Pick another team</a>.</div>`;
+      return;
+    }
+  } catch(e) {
+    document.getElementById('chat-wrap').innerHTML =
+      '<div class="empty">Could not load team data. Check your connection.</div>';
+    return;
+  }
+
+  document.getElementById('team-name').textContent = TEAM.name || TEAM.id;
+  document.getElementById('team-sub').textContent = 'Team Chat';
+  if (TEAM.logo) {
+    document.getElementById('team-logo').innerHTML = `<img src="${esc(TEAM.logo)}" alt="">`;
+  }
+
+  // Load roster for identity picker
+  try {
+    const q = query(collection(db, 'players'), where('team_id', '==', tid));
+    const snap = await getDocs(q);
+    ROSTER = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    ROSTER.sort((a,b) => {
+      const ja = parseInt(a.jersey ?? 999), jb = parseInt(b.jersey ?? 999);
+      if (ja !== jb) return ja - jb;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  } catch(e) { ROSTER = []; }
+
+  // Restore identity if we've been here before for this team
+  try {
+    const saved = localStorage.getItem('dvsl-chat-identity-' + tid);
+    if (saved) IDENTITY = JSON.parse(saved);
+  } catch(e) {}
+
+  if (!IDENTITY) {
+    showIdentityModal();
+  } else {
+    document.getElementById('me-name').textContent = IDENTITY.name;
+    subscribeToMessages();
+  }
+}
+
+function showIdentityModal() {
+  const modal = document.getElementById('identity-modal');
+  const list = document.getElementById('roster-list');
+  document.getElementById('identity-title').textContent =
+    `Who are you? — ${TEAM?.name || TEAM?.id || 'Team'}`;
+
+  if (!ROSTER.length) {
+    list.innerHTML = '<div class="loading" style="padding:20px">No roster loaded. Type your name below.</div>';
+  } else {
+    list.innerHTML = ROSTER.map(p => `
+      <div class="roster-item" data-pid="${esc(p.id)}">
+        <span><span class="jersey">#${esc(p.jersey ?? '—')}</span> ${esc(p.name || p.id)}</span>
+        <span style="color:var(--muted2);font-size:12px">›</span>
+      </div>`).join('');
+    list.querySelectorAll('.roster-item').forEach(row => {
+      row.addEventListener('click', () => {
+        const p = ROSTER.find(x => x.id === row.dataset.pid);
+        if (p) savePlayerIdentity(p);
+      });
+    });
+  }
+  modal.classList.remove('hidden');
+}
+
+function savePlayerIdentity(player) {
+  IDENTITY = {
+    name: player.name || player.id,
+    email: player.email || null,
+    is_captain: false,
+    player_id: player.id,
+  };
+  localStorage.setItem('dvsl-chat-identity-' + teamId, JSON.stringify(IDENTITY));
+  document.getElementById('identity-modal').classList.add('hidden');
+  document.getElementById('me-name').textContent = IDENTITY.name;
+  subscribeToMessages();
+}
+
+window.saveCustomIdentity = function() {
+  const val = document.getElementById('custom-name-input').value.trim();
+  if (!val) return;
+  IDENTITY = { name: val, email: null, is_captain: false };
+  localStorage.setItem('dvsl-chat-identity-' + teamId, JSON.stringify(IDENTITY));
+  document.getElementById('identity-modal').classList.add('hidden');
+  document.getElementById('me-name').textContent = IDENTITY.name;
+  subscribeToMessages();
+};
+
+window.changeIdentity = function() {
+  document.getElementById('identity-modal').classList.remove('hidden');
+};
+
+// ── Messages ─────────────────────────────────────────────────────────
+function subscribeToMessages() {
+  if (unsub) unsub();
+  // limit(100) caps the initial fetch + listener billing.
+  const q = query(
+    collection(db, 'team_messages'),
+    where('team_id', '==', teamId),
+    orderBy('timestamp', 'asc'),
+    limit(100)
+  );
+  unsub = onSnapshot(q, snap => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMessages(msgs);
+  }, err => {
+    console.error('Snapshot error:', err);
+    document.getElementById('chat-wrap').innerHTML =
+      `<div class="empty">Could not load messages: ${esc(err.message)}</div>`;
+  });
+}
+
+function renderMessages(msgs) {
+  const el = document.getElementById('chat-wrap');
+  if (!msgs.length) {
+    el.innerHTML = '<div class="empty">No messages yet. Start the conversation!</div>';
+    return;
+  }
+  const myKey = IDENTITY?.email || IDENTITY?.name;
+  el.innerHTML = msgs.map(m => {
+    const authorKey = m.author_email || m.author_name || '';
+    const mine = (IDENTITY?.email && m.author_email === IDENTITY.email) ||
+                 (!IDENTITY?.email && m.author_name === IDENTITY?.name);
+    const isCap = !!m.is_captain;
+    const whoLabel = m.author_name || m.team_name || m.author_email || 'Unknown';
+    const time = m.timestamp?.toDate ? fmtTime(m.timestamp.toDate()) : '';
+    const cls = [
+      'msg',
+      mine ? 'mine' : 'theirs',
+      isCap && !mine ? 'captain' : '',
+    ].filter(Boolean).join(' ');
+    const whoClass = isCap ? 'who captain' : 'who';
+    return `<div class="${cls}">
+      ${!mine ? `<div class="${whoClass}">${esc(whoLabel)}</div>` : ''}
+      <div class="bubble">${esc(m.text)}</div>
+      <div class="time">${time}</div>
+    </div>`;
+  }).join('');
+  // Auto-scroll to bottom on new messages
+  el.scrollTop = el.scrollHeight;
+}
+
+function fmtTime(d) {
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) {
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+         d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+// ── Send ─────────────────────────────────────────────────────────────
+window.sendMessage = async function() {
+  if (!IDENTITY) { showIdentityModal(); return; }
+  const input = document.getElementById('msg-input');
+  const btn = document.getElementById('send-btn');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.disabled = true;
+  btn.disabled = true;
+
+  try {
+    await addDoc(collection(db, 'team_messages'), {
+      text,
+      author_email: IDENTITY.email || null,
+      author_name: IDENTITY.name,
+      is_captain: !!IDENTITY.is_captain,
+      team_id: teamId,
+      team_name: TEAM?.name || teamId,
+      team_color: TEAM?.color || '#002D72',
+      timestamp: serverTimestamp(),
+    });
+
+    // Fire push to opted-in team members (excluding this device)
+    try {
+      await fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+        body: JSON.stringify({
+          title: `${TEAM?.name || teamId} — ${IDENTITY.name}`,
+          body: text.length > 120 ? text.slice(0, 120) + '…' : text,
+          category: 'team_chat',
+          team: teamId,
+          url: `/team-chat.html?team=${encodeURIComponent(teamId)}`,
+          excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+        }),
+      });
+    } catch(e) { console.warn('Push failed (message still delivered in-app):', e); }
+  } catch(e) {
+    alert('Failed to send: ' + e.message);
+    input.value = text; // restore so the user doesn't lose their draft
+  }
+
+  input.disabled = false;
+  btn.disabled = false;
+  input.focus();
+};
+</script>
+</body>
+</html>
