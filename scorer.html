@@ -4195,27 +4195,58 @@ function triggerHR(batter, sid, team, isItphr) {
 
   let kfText = '';
 
+  // Runners should visibly TAG each base on the way around the diamond.
+  // Earlier versions used a single ease-in-out interpolation between bases,
+  // which swept the runner across each corner so fast you couldn't see it
+  // hit the bag — Adam's exact complaint. Fix:
+  //   - Linear timing overall (no speed-up/slow-down curve that smears bases).
+  //   - At every base along the path, inject two keyframes instead of one:
+  //       "arrive at base" (scale pulse up) → "leave base" (scale normal),
+  //     separated by a small PAUSE_PCT hold so the pulse is visible.
+  //   - The final home-plate arrival still fades out for the existing
+  //     scoring effect.
+  const PAUSE_PCT = 3;   // % of the animation spent "touching" each base
+
   runnersToAnimate.forEach((entry, idx) => {
     const path = entry.path;
     const segCount = path.length - 1;
-    const duration = 0.55 + segCount * 0.42; // ~0.42s per base
-    const delay = idx * 0.38;
+    // Slow things down slightly — the whole circuit should feel like a jog,
+    // not a sprint, so the base touches read on screen.
+    const duration = 0.9 + segCount * 0.55; // ~0.55s per segment + setup
+    const delay = idx * 0.45;
     const animName = `hrRun_${idx}`;
 
+    // How long is each moving segment (in keyframe %). Reserve PAUSE_PCT at
+    // every base touched after the start, up to (but not including) the
+    // final fade window between 90% and 100%.
+    const pauseStops = Math.max(0, segCount - 1); // pauses at intermediate bases
+    const moveBudget = 90 - pauseStops * PAUSE_PCT; // total time actually moving
+    const segPct = moveBudget / segCount;
+
     let kf = `@keyframes ${animName} {`;
+    let cursor = 0;
     path.forEach((pt, pi) => {
-      const pct = Math.round((pi / segCount) * 90);
-      kf += `${pct}%{left:${pt[0]}%;top:${pt[1]}%;opacity:1;transform:translate(-50%,-50%);}`;
+      const isLast = pi === path.length - 1;
+      const isFirst = pi === 0;
+      const arriveScale = isFirst ? 1 : 1.25; // pulse on arrival
+      // "arrive at base" keyframe — runner is on the bag, scaled up
+      kf += `${Math.round(cursor)}%{left:${pt[0]}%;top:${pt[1]}%;opacity:1;transform:translate(-50%,-50%) scale(${arriveScale});}`;
+      if (!isLast) {
+        // Hold briefly at this base (scale down to normal on the way out).
+        cursor += PAUSE_PCT;
+        kf += `${Math.round(cursor)}%{left:${pt[0]}%;top:${pt[1]}%;opacity:1;transform:translate(-50%,-50%) scale(1);}`;
+        cursor += segPct;
+      }
     });
-    // Fade out at home
-    kf += `100%{left:${coords.home[0]}%;top:${coords.home[1]}%;opacity:0;transform:translate(-50%,-50%) scale(1.3);}`;
+    // Fade out + final flourish at home plate.
+    kf += `100%{left:${coords.home[0]}%;top:${coords.home[1]}%;opacity:0;transform:translate(-50%,-50%) scale(1.5);}`;
     kf += '}';
     kfText += kf;
 
     const r = document.createElement('div');
     r.className = 'hr-runner';
     r.style.cssText = `left:${path[0][0]}%;top:${path[0][1]}%;transform:translate(-50%,-50%);` +
-      `animation:${animName} ${duration}s ease-in-out ${delay}s both;`;
+      `animation:${animName} ${duration}s linear ${delay}s both;`;
     r.textContent = '#' + entry.runner.num;
     hrRunners.appendChild(r);
   });
@@ -4226,12 +4257,13 @@ function triggerHR(batter, sid, team, isItphr) {
   styleEl.textContent = kfText;
   document.head.appendChild(styleEl);
 
-  // Total time = last runner's delay + duration + small buffer
+  // Total time = last runner's delay + duration + small buffer. Must stay in
+  // sync with the per-runner timing above (delay=idx*0.45, duration=0.9+seg*0.55).
   const lastIdx = runnersToAnimate.length - 1;
-  const lastDelay = lastIdx * 0.38;
+  const lastDelay = lastIdx * 0.45;
   const lastSegCount = runnersToAnimate[lastIdx].path.length - 1;
-  const lastDuration = 0.55 + lastSegCount * 0.42;
-  const totalMs = Math.max((lastDelay + lastDuration + 0.6) * 1000, 2200);
+  const lastDuration = 0.9 + lastSegCount * 0.55;
+  const totalMs = Math.max((lastDelay + lastDuration + 0.6) * 1000, 2600);
 
   setTimeout(() => {
     let runs = 0;
