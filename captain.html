@@ -678,6 +678,31 @@ function posOptionsHtml(selected=''){return '<option value="">-- Position --</op
 // ═══════════════════════════════════════════════════════════════════
 let currentUser = null; // set to team name string when team is selected
 let captainData = null;  // { team_id, team_name, email }
+
+// Fire a push notification when a game becomes final. Called from the 3
+// captain score-submit paths when both captains' submissions align and
+// `done` flips to true. Silently ignores failures.
+const CAPTAIN_PUSH_SECRET = 'dvsl-push-2026-rkj3849f';
+function sendFinalScorePush(g, awayScore, homeScore) {
+  if (!g || !g.away || !g.home) return;
+  const awayName = ALL_TEAMS.find(t => t.id === g.away)?.name || g.away;
+  const homeName = ALL_TEAMS.find(t => t.id === g.home)?.name || g.home;
+  const parts = [];
+  if (g.wk) parts.push(`Week ${g.wk}`);
+  if (g.date) parts.push(g.date);
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': CAPTAIN_PUSH_SECRET },
+    body: JSON.stringify({
+      title: `Final: ${awayName} ${awayScore}, ${homeName} ${homeScore}`,
+      body: parts.join(' · ') || 'Game final',
+      category: 'scores',
+      teams: [g.away, g.home],
+      url: '/index.html',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Final score push failed:', e));
+}
 let MY_TEAM = null;
 let ALL_TEAMS = [];
 let MY_GAMES = [];
@@ -2255,9 +2280,14 @@ window.submitScoreOnly = async function(gameId) {
         ...(scoresMatch ? {} : { has_discrepancy: true })
       });
     }
+    const _wasDone = !!g.done;
     await updateDoc(doc(db,'games',gameId), gameUpdate);
     const gObj = MY_GAMES.find(x=>x.id===gameId);
     if (gObj) Object.assign(gObj, gameUpdate);
+    // Fire final-score push only when this submission newly finalizes the game.
+    if (gameUpdate.done && !_wasDone) {
+      sendFinalScorePush(g, gameUpdate.away_score, gameUpdate.home_score);
+    }
     if (gameUpdate.done) await recalcStandingsFromAllGames();
     document.getElementById('boxscore-entry-'+gameId).style.display='none';
     toast('Score submitted!','success');
@@ -2928,9 +2958,14 @@ window.submitBoxScore = async function(gameId) {
   boxScoreData.status = finalStatus === 'approved' ? 'approved' : (finalStatus === 'conflict' ? 'approved' : 'pending');
 
   try {
+    const _wasDone = !!g.done;
     await submitBoxScoreUnified(gameId, boxScoreData, myRole);
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     Object.assign(g, gameUpdate);
+    // Fire final-score push on the transition to done.
+    if (gameUpdate.done && !_wasDone) {
+      sendFinalScorePush(g, gameUpdate.away_score, gameUpdate.home_score);
+    }
     if (gameUpdate.done) await recalcStandingsFromAllGames();
     const subId = `${gameId}_${myRole}`;
     const subData = {
@@ -3125,9 +3160,14 @@ window.submitScore = async function(gameId) {
   };
 
   try {
+    const _wasDone = !!g.done;
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     // Update local state
     Object.assign(g, gameUpdate);
+    // Fire final-score push on the transition to done.
+    if (gameUpdate.done && !_wasDone) {
+      sendFinalScorePush(g, gameUpdate.away_score, gameUpdate.home_score);
+    }
     if (gameUpdate.done) await recalcStandingsFromAllGames();
     const subId = `${gameId}_${myRole}`;
     subData.role = myRole;

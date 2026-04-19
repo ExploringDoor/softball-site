@@ -1702,6 +1702,7 @@ window.admSoUpdateSB = function(gameId, team) {
 
 window.adminSubmitScoreOnly = async function(gameId) {
   const g = GAMES.find(x=>x.id===gameId); if(!g) return;
+  const wasDone = !!g.done; // capture BEFORE update so we only push on first finalize
   const awayFinal = parseInt(document.getElementById(`adm-so-${gameId}-away-R`)?.value)||0;
   const homeFinal = parseInt(document.getElementById(`adm-so-${gameId}-home-R`)?.value)||0;
   const tbl = document.getElementById('adm-so-ls-'+gameId);
@@ -1741,6 +1742,8 @@ window.adminSubmitScoreOnly = async function(gameId) {
     if (gObj) { gObj.away_score=awayFinal; gObj.home_score=homeFinal; gObj.done=true; gObj.score_conflict=false; gObj.score_pending=false; }
     toast('Score submitted and game marked final!');
     await logActivity('Score Entry', `${getTeamName(g.away)} ${awayFinal} - ${getTeamName(g.home)} ${homeFinal} (Final)`);
+    // Push only when game is newly finalized.
+    if (!wasDone) sendScorePush(g, awayFinal, homeFinal);
     await recalcStandingsFromGames();
     document.getElementById('score-form-'+gameId).style.display = 'none';
     renderScores(); renderDashboard(); renderStandings();
@@ -1751,12 +1754,16 @@ window.saveScore = async function(gameId, markDone) {
   const as = parseInt(document.getElementById('as-' + gameId).value);
   const hs = parseInt(document.getElementById('hs-' + gameId).value);
   if (isNaN(as) || isNaN(hs)) { toast('Please enter both scores', 'error'); return; }
+  const _pre = GAMES.find(x => x.id === gameId);
+  const wasDone = !!_pre?.done;
   try {
     await updateDoc(doc(db, 'games', gameId), { away_score: as, home_score: hs, done: markDone });
     const g = GAMES.find(x => x.id === gameId);
     if (g) { g.away_score = as; g.home_score = hs; g.done = markDone; }
     toast(markDone ? 'Score saved and marked final!' : 'Score saved as draft');
     await logActivity('Score Entry', `${getTeamName(g?.away)} ${as} - ${getTeamName(g?.home)} ${hs}${markDone ? ' (Final)' : ' (Draft)'}`);
+    // Only push when flipping from not-done → done.
+    if (markDone && !wasDone && g) sendScorePush(g, as, hs);
     if (markDone) await recalcStandingsFromGames();
     renderScores();
     renderDashboard();
@@ -3259,11 +3266,15 @@ window.saveBoxScore = async function(markFinal) {
       if(!snap.empty) await updateDoc(doc(db,'box_scores',snap.docs[0].id), boxData);
       else await setDoc(primaryRef, boxData);
     }
+    const _preG = GAMES.find(x=>x.id===bsGameId);
+    const wasDone = !!_preG?.done;
     await updateDoc(doc(db,'games',bsGameId), {away_score:awayR, home_score:homeR, done:markFinal});
     const g = GAMES.find(x=>x.id===bsGameId);
     if(g){g.away_score=awayR;g.home_score=homeR;g.done=markFinal;}
     toast(markFinal?'Box score saved & game final!':'Box score draft saved');
     await logActivity('Box Score',`${getTeamName(bsGameData.away)} ${awayR} - ${getTeamName(bsGameData.home)} ${homeR}${markFinal?' (Final)':' (Draft)'}`);
+    // Push only on transition to final.
+    if (markFinal && !wasDone && g) sendScorePush(g, awayR, homeR);
     if(markFinal) await recalcStandingsFromGames();
     closeBoxScore(); renderScores(); renderDashboard(); renderStandings();
   } catch(e) { toast('Failed: '+e.message,'error'); }
@@ -5051,6 +5062,8 @@ window.approveScore = async function(submissionId) {
     // Find the game document
     let gameId = s.game_id;
     if (gameId) {
+      const _preG = GAMES.find(x => x.id === gameId);
+      const wasDone = !!_preG?.done;
       // Update the game directly
       await updateDoc(doc(db, 'games', gameId), {
         away_score: s.away_score,
@@ -5060,6 +5073,8 @@ window.approveScore = async function(submissionId) {
       // Update local GAMES state
       const g = GAMES.find(x => x.id === gameId);
       if (g) { g.away_score = s.away_score; g.home_score = s.home_score; g.done = true; }
+      // Push only if this approval is what newly finalizes the game.
+      if (!wasDone && g) sendScorePush(g, s.away_score, s.home_score);
     }
 
     // Mark submission as approved
@@ -5894,6 +5909,30 @@ window.sendSchedulePush = function({ title, body, teams }) {
       excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
     }),
   }).catch(e => console.warn('Schedule push failed:', e));
+};
+
+// Fire when a game becomes final. Only call this when done is transitioning
+// to true — not on draft saves or score edits to already-final games.
+window.sendScorePush = function(g, awayScore, homeScore) {
+  if (!g || !g.away || !g.home) return;
+  const awayName = getTeamName(g.away);
+  const homeName = getTeamName(g.home);
+  const title = `Final: ${awayName} ${awayScore}, ${homeName} ${homeScore}`;
+  const parts = [];
+  if (g.wk) parts.push(`Week ${g.wk}`);
+  if (g.date) parts.push(g.date);
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
+    body: JSON.stringify({
+      title,
+      body: parts.join(' · ') || 'Game final',
+      category: 'scores',
+      teams: [g.away, g.home],
+      url: '/index.html',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Score push failed:', e));
 };
 
 window.refreshSubscriberCount = async function() {
