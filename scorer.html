@@ -512,6 +512,16 @@
     justify-content: center;
   }
 
+  /* The global DVSL tab bar (injected by the PWA scaffold on every page)
+     has no business living on the live scorer — it's a full-screen scoring
+     experience with its own bottom UI. Left alone, the tab bar (z-index
+     99995, ~74px tall) was overlapping the lineup screen's NEXT button,
+     the position picker grid, and the pitcher picker — Adam hit this on
+     his phone while trying to set a lineup and couldn't reach half the
+     positions. Hide it entirely on this page. Back-navigation lives in
+     the on-screen "‹ Back" button already. */
+  #dvsl-tabbar, #dvsl-more-sheet, #dvsl-more-backdrop { display: none !important; }
+
   body > * {
     max-width: 520px;
     width: 100%;
@@ -2473,14 +2483,14 @@
 
 <!-- Pitcher picker sheet -->
 <div id="lu-pitcher-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998" onclick="luClosePitcherSheet()"></div>
-<div id="lu-pitcher-sheet" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1e293b;border-radius:16px 16px 0 0;z-index:9999;max-height:65vh;overflow-y:auto;padding:20px 16px 32px">
+<div id="lu-pitcher-sheet" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1e293b;border-radius:16px 16px 0 0;z-index:9999;max-height:65vh;overflow-y:auto;padding:20px 16px calc(32px + env(safe-area-inset-bottom))">
   <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:white;text-align:center;margin-bottom:14px;letter-spacing:.06em">SELECT PITCHER</div>
   <div id="lu-pitcher-list"></div>
 </div>
 
 <!-- Position picker sheet -->
 <div id="lu-pos-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998" onclick="luClosePosSheet()"></div>
-<div id="lu-pos-sheet" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1e293b;border-radius:16px 16px 0 0;z-index:9999;padding:20px 16px 32px">
+<div id="lu-pos-sheet" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#1e293b;border-radius:16px 16px 0 0;z-index:9999;padding:20px 16px calc(32px + env(safe-area-inset-bottom))">
   <div style="font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;color:white;text-align:center;margin-bottom:14px;letter-spacing:.06em">SET POSITION</div>
   <div id="lu-pos-grid" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;max-width:360px;margin:0 auto"></div>
 </div>
