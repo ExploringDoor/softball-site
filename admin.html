@@ -387,7 +387,6 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="recaps" data-sec="recaps" onclick="showSection('recaps')"><span class="icon">&#128220;</span> Recaps</div>
       <div class="nav-item" data-section="banner" data-sec="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
       <div class="nav-item" data-section="push" data-sec="push" onclick="showSection('push')"><span class="icon">&#128276;</span> Push Notifications</div>
-      <div class="nav-item" data-section="email" data-sec="email" onclick="showSection('email')"><span class="icon">&#9993;</span> Email Blast</div>
       <div class="nav-item" data-section="contacts" data-sec="contacts" onclick="showSection('contacts')"><span class="icon">&#128222;</span> Contacts</div>
       <div class="nav-item" data-section="financials" data-sec="financials" onclick="showSection('financials')"><span class="icon">&#128181;</span> Financials</div>
       <div class="nav-item" data-section="registrations" data-sec="registrations" onclick="showSection('registrations')"><span class="icon">&#128221;</span> Registrations</div>
@@ -779,46 +778,6 @@ select.form-input{cursor:pointer}
         <div id="push-result" style="margin-top:10px;font-size:13px"></div>
       </div>
 
-    </div>
-
-    <!-- ═══ EMAIL BLAST ═══ -->
-    <div class="section" id="sec-email">
-      <div class="main-header">
-        <div class="main-title">Email Blast</div>
-        <div class="main-subtitle">Send announcements to teams</div>
-      </div>
-      <div class="panel">
-        <div style="background:var(--blue-bg);color:var(--blue);font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:16px">
-          Note: Messages are saved to Firebase. Actual email delivery requires Firebase Cloud Functions to be configured separately.
-        </div>
-        <div class="form-row">
-          <div class="form-col" style="max-width:300px">
-            <label class="form-label">To</label>
-            <select class="form-input" id="email-to">
-              <option value="all">All Teams</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-col">
-            <label class="form-label">Subject</label>
-            <input type="text" class="form-input" id="email-subject" placeholder="Announcement subject...">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-col">
-            <label class="form-label">Message</label>
-            <textarea class="form-input" id="email-body" rows="6" placeholder="Write your message..."></textarea>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="sendAnnouncement()">Save Announcement</button>
-      </div>
-      <div class="panel">
-        <div class="panel-title">Past Announcements</div>
-        <div id="announcements-list">
-          <div class="loading"><div class="spinner"></div> Loading...</div>
-        </div>
-      </div>
     </div>
 
     <!-- ═══ CAPTAINS ═══ -->
@@ -1494,7 +1453,6 @@ async function loadAllData() {
     renderStandings();
     renderRecaps();
     loadBanner();
-    loadAnnouncements();
     loadActivityLog();
     loadCaptains();
     loadScoreReviews();
@@ -4266,12 +4224,6 @@ function populateTeamDropdowns() {
   ).join('');
   document.getElementById('roster-team-select').innerHTML = opts;
 
-  // Email dropdown
-  const emailOpts = '<option value="all">All Teams</option>' + TEAMS.map(t =>
-    `<option value="${t.id}">${esc(t.name)}</option>`
-  ).join('');
-  document.getElementById('email-to').innerHTML = emailOpts;
-
   // Scores + Schedule "Filter by Team" dropdowns — preserve the current
   // selection on re-populate so filters don't reset when new data loads.
   const filterOpts = '<option value="all">All Teams</option>' + TEAMS.map(t =>
@@ -4772,79 +4724,6 @@ window.alertLoadFromHistory = function(idx) {
   alertUpdatePreview();
   toast('Alert loaded — click Publish to go live');
 };
-
-// ═══════════════════════════════════════════════════════════════════
-// EMAIL / ANNOUNCEMENTS
-// ═══════════════════════════════════════════════════════════════════
-window.sendAnnouncement = async function() {
-  const to = document.getElementById('email-to').value;
-  const subject = document.getElementById('email-subject').value.trim();
-  const body = document.getElementById('email-body').value.trim();
-  if (!subject || !body) { toast('Enter a subject and message', 'error'); return; }
-  try {
-    await addDoc(collection(db, 'announcements'), {
-      to: to === 'all' ? 'All Teams' : getTeamFull(to),
-      to_id: to,
-      subject, body,
-      timestamp: Timestamp.now(),
-      sent_by: currentUser?.email || 'unknown'
-    });
-    toast('Announcement saved!');
-    await logActivity('Email', `Announcement: "${subject}"`);
-    document.getElementById('email-subject').value = '';
-    document.getElementById('email-body').value = '';
-    loadAnnouncements();
-    // Push to subscribers of the targeted team (or everyone if "all").
-    try {
-      sendAnnouncementPush({
-        title: subject,
-        body: body.length > 160 ? body.slice(0, 157) + '...' : body,
-        teams: to === 'all' ? [] : [to],
-      });
-    } catch(e) { console.warn('Announcement push skipped:', e); }
-  } catch(e) { toast('Failed: ' + e.message, 'error'); }
-};
-
-// Fire-and-forget league-announcement push. When `teams` is an empty array
-// we omit the teams param entirely so the backend treats it as "all teams".
-window.sendAnnouncementPush = function({ title, body, teams }) {
-  const payload = {
-    title: `📣 ${title}`,
-    body,
-    category: 'announcements',
-    url: '/index.html',
-    excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
-  };
-  if (Array.isArray(teams) && teams.length) payload.teams = teams;
-  return fetch('/api/send-notification', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
-    body: JSON.stringify(payload),
-  }).catch(e => console.warn('Announcement push failed:', e));
-};
-
-async function loadAnnouncements() {
-  const el = document.getElementById('announcements-list');
-  try {
-    const q2 = query(collection(db, 'announcements'), orderBy('timestamp', 'desc'));
-    const snap = await getDocs(q2);
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (!items.length) { el.innerHTML = '<div class="empty">No announcements yet</div>'; return; }
-    el.innerHTML = items.map(a => {
-      const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
-      return `<div style="padding:12px 0;border-bottom:1px solid var(--border2)">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <strong style="font-size:14px">${esc(a.subject)}</strong>
-          <span class="badge badge-info">${esc(a.to || 'All Teams')}</span>
-        </div>
-        <div style="font-size:13px;color:var(--text);margin-top:6px;white-space:pre-wrap">${esc(a.body)}</div>
-        <div style="font-size:11px;color:var(--muted2);margin-top:4px">${t.toLocaleDateString()} ${t.toLocaleTimeString()} &bull; ${esc(a.sent_by||'')}</div>
-      </div>`;
-    }).join('');
-  } catch(e) {
-    el.innerHTML = '<div class="empty">Could not load announcements</div>';
-  }
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // CAPTAINS MANAGEMENT
