@@ -4187,11 +4187,15 @@ function renderChatMessages(msgs, containerId, myEmail) {
   const canModerateOthers = containerId === 'teamchat-messages';
   CHAT_CACHE[containerId] = {};
   msgs.forEach(m => { CHAT_CACHE[containerId][m.id] = m; });
-  // For Captains Chat, prefer team abbreviation (e.g. "DN", "TBIR") over
-  // full team name — keeps bubbles tight and readable on mobile. We look up
-  // the short from the ALL_TEAMS list by team_id first (most reliable),
-  // then by team_name for older messages that predate team_short being
-  // stored on the doc.
+  // Captains Chat bubble labels are "SHORT (Captain Full Name)" -- short
+  // keeps it tight on mobile, the name in parens tells Adam which captain
+  // is talking (per-message). Team Chat bubbles show the sender's real
+  // first+last name (Adam: "you should be using the person's first and
+  // last name, so if I'm signed in you should see that coming from my
+  // name"). The captain-name lookup prefers the sender's own email
+  // match; falls back to the first captain listed for that team in the
+  // admin captains page (Adam: "if a team has three captains, for now
+  // just use the top captain's name").
   const preferShort = containerId === 'captchat-messages';
   el.innerHTML = msgs.map(m => {
     const mine = m.author_email === myEmail;
@@ -4201,11 +4205,34 @@ function renderChatMessages(msgs, containerId, myEmail) {
       : '';
     let label;
     if (preferShort) {
+      // Captains Chat: "SHORT (Captain Name)"
       const byId = m.team_id ? ALL_TEAMS.find(t => t.id === m.team_id) : null;
       const byName = !byId && m.team_name ? ALL_TEAMS.find(t => t.name === m.team_name) : null;
-      label = m.team_short || byId?.short || byName?.short || m.team_name || m.author_email || 'Unknown';
+      const short = m.team_short || byId?.short || byName?.short || m.team_name || '';
+      const senderLc = (m.author_email || '').toLowerCase();
+      const senderCap = senderLc
+        ? (ALL_CAPTAINS || []).find(c => (c.email || '').toLowerCase() === senderLc)
+        : null;
+      const firstForTeam = m.team_id
+        ? (ALL_CAPTAINS || []).find(c => c.team_id === m.team_id)
+        : null;
+      const capName = senderCap?.name || firstForTeam?.name || '';
+      label = capName ? `${short} (${capName})` : (short || m.author_email || 'Unknown');
     } else {
-      label = m.team_name || m.author_email;
+      // Team Chat: prefer the sender's real name. author_name on the
+      // message is the source of truth (captains now write their own
+      // name on send -- see sendTeamMsg). Older captain messages stored
+      // "Team Name (Captain)" in author_name; detect that and swap in
+      // the captain's real name from ALL_CAPTAINS by email.
+      let name = m.author_name || '';
+      if (/\(captain\)\s*$/i.test(name)) {
+        const lc = (m.author_email || '').toLowerCase();
+        const cap = lc
+          ? (ALL_CAPTAINS || []).find(c => (c.email || '').toLowerCase() === lc)
+          : null;
+        if (cap?.name) name = cap.name;
+      }
+      label = name || m.author_email || m.team_name || 'Unknown';
     }
     return `<div class="chat-msg ${mine ? 'mine' : 'theirs'}">
       ${!mine ? `<div class="chat-meta">${esc(label)}</div>` : ''}
@@ -4328,11 +4355,20 @@ window.sendTeamMsg = async function() {
   input.value = '';
   input.disabled = true;
   const teamName = MY_TEAM?.name || captainData.team_name;
+  // Write the captain's real first+last name as author_name so Team Chat
+  // renders "Adam Miller" (not "Tifereth Bet Israel -- Royals (Captain)")
+  // in the bubble header. Match the logged-in email against the captains
+  // collection; fall back to the email if we somehow don't find a match.
+  const myCapDoc = (ALL_CAPTAINS || []).find(c =>
+    c.team_id === captainData.team_id &&
+    (c.email || '').toLowerCase() === (currentUser.email || '').toLowerCase()
+  );
+  const myName = myCapDoc?.name || currentUser.displayName || currentUser.email || 'Captain';
   try {
     const msgRef = await addDoc(collection(db, 'team_messages'), {
       text,
       author_email: currentUser.email,
-      author_name: teamName + ' (Captain)',
+      author_name: myName,
       is_captain: true,
       team_id: captainData.team_id,
       team_name: teamName,

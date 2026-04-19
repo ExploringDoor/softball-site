@@ -879,7 +879,19 @@ function renderMessages(msgs) {
     const mine = (IDENTITY?.email && m.author_email === IDENTITY.email) ||
                  (!IDENTITY?.email && m.author_name === IDENTITY?.name);
     const isCap = !!m.is_captain;
-    const whoLabel = m.author_name || m.team_name || m.author_email || 'Unknown';
+    // Prefer the sender's real first+last name. Legacy captain messages
+    // (pre-v41) stored author_name as "Team Name (Captain)" -- if we
+    // detect that pattern, strip the suffix and the team name to fall
+    // back to the captain-name lookup path below. Eventually those old
+    // messages age out; new captain messages write their real name.
+    let whoLabel = m.author_name || '';
+    if (/\(captain\)\s*$/i.test(whoLabel)) {
+      // We don't have a captains lookup on this page -- best-effort is to
+      // just drop the "(Captain)" tag and keep whatever was before it.
+      // Not perfect for legacy messages, but clears from v41 onward.
+      whoLabel = whoLabel.replace(/\s*\(captain\)\s*$/i, '').trim();
+    }
+    if (!whoLabel) whoLabel = m.team_name || m.author_email || 'Unknown';
     const time = m.timestamp?.toDate ? fmtTime(m.timestamp.toDate()) : '';
     // Show delete button on own messages always, or on any message in admin mode
     const canDelete = mine || IS_ADMIN;
