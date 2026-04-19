@@ -53,7 +53,11 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, category, team, teams, url, excludeToken, adminOnly } = req.body || {};
+  const { title, body, category, team, teams, url, excludeToken, adminOnly, sourceId } = req.body || {};
+  // sourceId: optional stable ID of the originating object (e.g. chat message
+  // doc id). Copied onto every pending_nav doc so the notification can be
+  // retroactively cleared if the source is deleted (e.g. user deletes a chat
+  // message sent by mistake → matching bell items disappear league-wide).
   // `team` (single) and `teams` (array) are both supported. `teams` wins when
   // present — use it for schedule changes that affect multiple teams.
   if (!title || !body || !category) {
@@ -102,7 +106,7 @@ export default async function handler(req, res) {
     try {
       await writePendingNav({
         projectId: PROJECT_ID, accessToken,
-        token: row.token, url: clickUrlForNav, title, body, category,
+        token: row.token, url: clickUrlForNav, title, body, category, sourceId,
       });
     } catch (_) {}
     try {
@@ -251,7 +255,7 @@ async function fcmSend({ projectId, accessToken, token, title, body, url }) {
 // critical for "I got a score push and a chat push; let me choose which
 // to open." The page fetches the list via /api/check-pending-nav and
 // deletes one via /api/dismiss-pending-nav when the user taps or X's it.
-async function writePendingNav({ projectId, accessToken, token, url, title, body, category }) {
+async function writePendingNav({ projectId, accessToken, token, url, title, body, category, sourceId }) {
   const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
   const endpoint = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/pending_nav`;
   const fields = {
@@ -262,6 +266,10 @@ async function writePendingNav({ projectId, accessToken, token, url, title, body
     body:       { stringValue: String(body || '').slice(0, 400) },
     category:   { stringValue: String(category || '') },
   };
+  // Cascade-delete key. When sourceId is set (chat message id, typically),
+  // the /api/delete-by-source endpoint can later find and delete every
+  // pending_nav row that originated from this source, across all tokens.
+  if (sourceId) fields.source_id = { stringValue: String(sourceId).slice(0, 200) };
   // POST to the collection endpoint → Firestore auto-generates a doc ID.
   const resp = await fetch(endpoint, {
     method: 'POST',
