@@ -111,6 +111,10 @@ export default async function handler(req, res) {
       title: f.title?.stringValue || '',
       body: f.body?.stringValue || '',
       category: f.category?.stringValue || '',
+      // Optional attached photo (base64 data URI). Only commissioner
+      // pushes ever set this, and only when Adam attaches one from the
+      // admin composer.
+      image_data_url: f.image_data_url?.stringValue || '',
     });
   }
 

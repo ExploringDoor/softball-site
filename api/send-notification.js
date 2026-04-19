@@ -53,15 +53,28 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, category, team, teams, url, excludeToken, adminOnly, sourceId } = req.body || {};
+  const { title, body, category, team, teams, url, excludeToken, adminOnly, sourceId, imageDataUrl } = req.body || {};
   // sourceId: optional stable ID of the originating object (e.g. chat message
   // doc id). Copied onto every pending_nav doc so the notification can be
   // retroactively cleared if the source is deleted (e.g. user deletes a chat
   // message sent by mistake → matching bell items disappear league-wide).
   // `team` (single) and `teams` (array) are both supported. `teams` wins when
   // present — use it for schedule changes that affect multiple teams.
+  // imageDataUrl: optional base64 JPEG data URI (e.g. "data:image/jpeg;base64,…")
+  // already resized/compressed on the client. Copied into each pending_nav
+  // doc so the recipient's Inbox can render it in the card. The push itself
+  // stays text-only (FCM webpush image needs a hosted HTTPS URL, not a
+  // data URI). Soft-capped at 700KB to stay well under Firestore's 1MB
+  // doc limit after other fields are added.
   if (!title || !body || !category) {
     return res.status(400).json({ error: 'title, body, and category are required' });
+  }
+  let safeImage = null;
+  if (imageDataUrl && typeof imageDataUrl === 'string' && imageDataUrl.startsWith('data:image/')) {
+    if (imageDataUrl.length > 900_000) {
+      return res.status(400).json({ error: 'Image too large — max ~650KB after compression' });
+    }
+    safeImage = imageDataUrl;
   }
 
   let svc;
@@ -107,6 +120,7 @@ export default async function handler(req, res) {
       await writePendingNav({
         projectId: PROJECT_ID, accessToken,
         token: row.token, url: clickUrlForNav, title, body, category, sourceId,
+        imageDataUrl: safeImage,
       });
     } catch (_) {}
     try {
@@ -255,7 +269,7 @@ async function fcmSend({ projectId, accessToken, token, title, body, url }) {
 // critical for "I got a score push and a chat push; let me choose which
 // to open." The page fetches the list via /api/check-pending-nav and
 // deletes one via /api/dismiss-pending-nav when the user taps or X's it.
-async function writePendingNav({ projectId, accessToken, token, url, title, body, category, sourceId }) {
+async function writePendingNav({ projectId, accessToken, token, url, title, body, category, sourceId, imageDataUrl }) {
   const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex');
   const endpoint = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/pending_nav`;
   const fields = {
@@ -270,6 +284,9 @@ async function writePendingNav({ projectId, accessToken, token, url, title, body
   // the /api/delete-by-source endpoint can later find and delete every
   // pending_nav row that originated from this source, across all tokens.
   if (sourceId) fields.source_id = { stringValue: String(sourceId).slice(0, 200) };
+  // Optional attached photo (base64 data URI). Inbox card renders this
+  // when present. Already size-validated by the caller.
+  if (imageDataUrl) fields.image_data_url = { stringValue: imageDataUrl };
   // POST to the collection endpoint → Firestore auto-generates a doc ID.
   const resp = await fetch(endpoint, {
     method: 'POST',

@@ -552,6 +552,15 @@ a{color:inherit;text-decoration:none}
   font-size:11px;letter-spacing:.1em;text-transform:uppercase;
   color:var(--navy);margin-bottom:3px;
 }
+/* Photo attached to a league push (Adam uploads from admin). Base64
+   data URI stored inline on the pending_nav doc; rendered here as
+   a clean rounded thumbnail under the body text. */
+.card-img{
+  display:block;width:100%;max-height:280px;object-fit:cover;
+  border-radius:10px;margin-top:8px;
+  border:1px solid var(--border);
+  background:#f1f5f9;
+}
 .card-title{
   font-family:'Barlow',sans-serif;font-weight:700;font-size:15px;
   color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
@@ -765,6 +774,18 @@ function render(items) {
       msg.className = 'card-msg';
       msg.textContent = item.body;
       body.appendChild(msg);
+    }
+
+    // Optional photo attached by Adam via the admin push composer.
+    // Stored inline as a base64 data URI on the pending_nav doc so
+    // we can render it here with no extra fetch.
+    if (item.image_data_url) {
+      const img = document.createElement('img');
+      img.className = 'card-img';
+      img.src = item.image_data_url;
+      img.alt = '';
+      img.loading = 'lazy';
+      body.appendChild(img);
     }
 
     const meta = document.createElement('div');

@@ -1241,6 +1241,22 @@ select.form-input{cursor:pointer}
             <input type="text" class="form-input" id="push-url" placeholder="/schedule.html">
           </div>
         </div>
+        <div class="form-row">
+          <div class="form-col">
+            <label class="form-label">Image (optional) — shows in the recipient's Inbox</label>
+            <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+              <label class="btn btn-outline" style="position:relative;cursor:pointer;margin:0">
+                📷 Attach Photo
+                <input type="file" accept="image/*" id="push-image-input" onchange="handlePushImage(this.files[0])" style="position:absolute;inset:0;opacity:0;cursor:pointer">
+              </label>
+              <div id="push-image-preview" style="display:none;position:relative">
+                <img id="push-image-thumb" style="max-height:96px;max-width:160px;border-radius:8px;border:1px solid var(--border);display:block" alt="Preview">
+                <button type="button" onclick="clearPushImage()" title="Remove image" style="position:absolute;top:-8px;right:-8px;width:22px;height:22px;border-radius:50%;background:#dc2626;color:#fff;border:2px solid #fff;font-size:12px;font-weight:900;line-height:1;cursor:pointer;padding:0">×</button>
+              </div>
+              <div id="push-image-info" style="align-self:center;font-size:12px;color:var(--muted2)"></div>
+            </div>
+          </div>
+        </div>
         <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center">
           <button class="btn btn-primary" onclick="sendPushNotification()">🔔 Send Notification</button>
           <button class="btn btn-outline" onclick="refreshSubscriberCount()">Refresh Subscriber Count</button>
@@ -6938,6 +6954,85 @@ function _pushFillTeamDropdown() {
   }
 })();
 
+// ── Optional photo attached to a push notification ─────────────────
+// Stored as a base64 JPEG data URI in each pending_nav doc (no Firebase
+// Storage dep). The picker resizes to 900px longest-side + JPEG q0.72
+// before encoding so the final string lands ~100-200KB for typical
+// iPhone photos -- well under Firestore's 1MB per-doc cap. The
+// lockscreen push itself stays text-only (FCM webpush image requires
+// a hosted HTTPS URL; data URIs don't work), but the picture renders
+// in the recipient's Inbox card when they tap in.
+let _pushImageDataUrl = null;
+window.handlePushImage = async function(file) {
+  if (!file) return;
+  const info = document.getElementById('push-image-info');
+  const preview = document.getElementById('push-image-preview');
+  const thumb = document.getElementById('push-image-thumb');
+  if (!/^image\//.test(file.type)) {
+    info.textContent = 'Not an image file.'; info.style.color = '#dc2626';
+    return;
+  }
+  info.style.color = 'var(--muted2)';
+  info.textContent = 'Processing…';
+  try {
+    const dataUrl = await _resizeImageToDataUrl(file, 900, 0.72);
+    // Warn if the base64 is over 650KB -- leaves headroom under the
+    // 1MB Firestore doc limit once other fields are added.
+    const approxKB = Math.round(dataUrl.length * 0.75 / 1024);
+    if (approxKB > 650) {
+      info.textContent = `Image too large (${approxKB}KB). Pick a smaller photo.`;
+      info.style.color = '#dc2626';
+      _pushImageDataUrl = null;
+      preview.style.display = 'none';
+      return;
+    }
+    _pushImageDataUrl = dataUrl;
+    thumb.src = dataUrl;
+    preview.style.display = 'block';
+    info.textContent = `Attached — ${approxKB}KB (will show in inbox card)`;
+  } catch(e) {
+    info.textContent = 'Could not process image: ' + (e.message || e);
+    info.style.color = '#dc2626';
+    _pushImageDataUrl = null;
+    preview.style.display = 'none';
+  }
+};
+window.clearPushImage = function() {
+  _pushImageDataUrl = null;
+  document.getElementById('push-image-input').value = '';
+  document.getElementById('push-image-preview').style.display = 'none';
+  document.getElementById('push-image-info').textContent = '';
+};
+
+// Canvas-based resize. Reads the file into an Image, computes a
+// scaled-down canvas so the longest side <= maxSize, draws, and
+// returns a JPEG data URL. Keeping JPEG (not PNG) for file-size
+// reasons -- push photos are always "acceptable to compress."
+async function _resizeImageToDataUrl(file, maxSize, quality) {
+  const fileDataUrl = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result);
+    r.onerror = () => rej(new Error('read failed'));
+    r.readAsDataURL(file);
+  });
+  const img = await new Promise((res, rej) => {
+    const i = new Image();
+    i.onload = () => res(i);
+    i.onerror = () => rej(new Error('decode failed'));
+    i.src = fileDataUrl;
+  });
+  let w = img.naturalWidth, h = img.naturalHeight;
+  if (Math.max(w, h) > maxSize) {
+    if (w >= h) { h = Math.round(h * maxSize / w); w = maxSize; }
+    else        { w = Math.round(w * maxSize / h); h = maxSize; }
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
 window.sendPushNotification = async function() {
   const title = document.getElementById('push-title').value.trim();
   const body  = document.getElementById('push-body').value.trim();
@@ -6947,7 +7042,8 @@ window.sendPushNotification = async function() {
   const result = document.getElementById('push-result');
 
   if (!title || !body) { toast('Title and message are required', 'error'); return; }
-  if (!confirm(`Send push "${title}" to ${team ? getTeamName(team)+' subscribers' : 'ALL subscribers'}?`)) return;
+  const imgNote = _pushImageDataUrl ? ' (with photo)' : '';
+  if (!confirm(`Send push "${title}"${imgNote} to ${team ? getTeamName(team)+' subscribers' : 'ALL subscribers'}?`)) return;
 
   result.innerHTML = `<span style="color:var(--muted2)">Sending...</span>`;
   try {
@@ -6957,12 +7053,19 @@ window.sendPushNotification = async function() {
         'Content-Type': 'application/json',
         ...(PUSH_ADMIN_SECRET ? { 'X-Admin-Secret': PUSH_ADMIN_SECRET } : {}),
       },
-      body: JSON.stringify({ title, body, category, team, url, adminOnly: category === 'admin' || undefined }),
+      body: JSON.stringify({
+        title, body, category, team, url,
+        adminOnly: category === 'admin' || undefined,
+        imageDataUrl: _pushImageDataUrl || undefined,
+      }),
     });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.detail || data.error || `HTTP ${resp.status}`);
-    result.innerHTML = `<span style="color:#16a34a">✓ Sent to ${data.sent} device${data.sent===1?'':'s'}${data.failed ? ` (${data.failed} failed)` : ''}</span>`;
-    await logActivity('Push Notifications', `Sent "${title}" (${category}${team?', '+getTeamName(team):''}) to ${data.sent} devices`);
+    result.innerHTML = `<span style="color:#16a34a">✓ Sent to ${data.sent} device${data.sent===1?'':'s'}${data.failed ? ` (${data.failed} failed)` : ''}${_pushImageDataUrl ? ' (with photo)' : ''}</span>`;
+    await logActivity('Push Notifications', `Sent "${title}"${_pushImageDataUrl?' (with photo)':''} (${category}${team?', '+getTeamName(team):''}) to ${data.sent} devices`);
+    // Reset image attachment after a successful send so the next push
+    // doesn't accidentally reuse the last photo.
+    if (_pushImageDataUrl) clearPushImage();
   } catch(err) {
     result.innerHTML = `<span style="color:#dc2626">✗ ${err.message}</span>`;
     if (String(err.message).includes('not configured')) {
