@@ -126,16 +126,17 @@
               transform: translateX(-50%) !important;
               width: 100% !important;
               max-width: 480px !important;
-              /* Taller + more top padding so icons/labels sit a touch further
-                 from the physical bottom edge. User reported tapping Scores /
-                 Schedule sometimes missed because the hit area ran right into
-                 the home-indicator area. 68px tall + 6px top pad gives the
-                 whole bar a little more breathing room. */
-              height: calc(68px + env(safe-area-inset-bottom)) !important;
-              padding-top: 6px !important;
+              /* Taller bar + extra padding-bottom beyond safe-area so icons
+                 sit visibly higher off the physical bottom edge of the phone.
+                 Adam said v32's 68px/6px pad change wasn't enough — icons still
+                 felt like they were hugging the home-indicator. Here the inner
+                 content area gets 8px of top pad AND 14px of pad below the
+                 system safe-area, so icons float ~14px higher than before. */
+              height: calc(74px + env(safe-area-inset-bottom)) !important;
+              padding-top: 8px !important;
               padding-left: max(8px, env(safe-area-inset-left)) !important;
               padding-right: max(8px, env(safe-area-inset-right)) !important;
-              padding-bottom: env(safe-area-inset-bottom) !important;
+              padding-bottom: calc(env(safe-area-inset-bottom) + 14px) !important;
               margin: 0 !important;
               display: flex !important;
               align-items: stretch !important;
@@ -305,8 +306,8 @@
         function _dvslApplyBodyPad() {
           const mobile = window.matchMedia('(max-width: 767px)').matches;
           if (mobile) {
-            // 68px bar + 6px top pad + ~8px gap = 82px of content clearance.
-            document.body.style.paddingBottom = 'calc(82px + env(safe-area-inset-bottom))';
+            // 74px bar + 8px top pad + 14px bottom pad + ~8px gap = 104px clearance.
+            document.body.style.paddingBottom = 'calc(104px + env(safe-area-inset-bottom))';
           } else {
             document.body.style.paddingBottom = '';
           }
@@ -2356,6 +2357,26 @@
   }
   .play-log-entry:hover .play-log-edit-btn,
   .play-log-edit-btn:active { opacity: 1; color: var(--blue); }
+
+  /* When the half-inning-end modal is open, block every click surface
+     on the board BELOW the modal. Adam found he could still tap
+     runners / fielder gloves / pitch types through the dim overlay
+     — the modal was z-indexed correctly but some elements live in
+     their own stacking contexts. Forcing pointer-events:none on the
+     known interactive surfaces is the reliable fix. The modal's own
+     buttons live inside #half-end-overlay and stay active. */
+  body.half-end-open #pitch-buttons,
+  body.half-end-open #undo-pitch-btn,
+  body.half-end-open .base-tap-zone,
+  body.half-end-open .fielder-btn,
+  body.half-end-open #fielder-overlay,
+  body.half-end-open #bip-sheet,
+  body.half-end-open #runner-sheet,
+  body.half-end-open #batter-sheet,
+  body.half-end-open #menu-sheet,
+  body.half-end-open #override-sheet,
+  body.half-end-open .base-zone,
+  body.half-end-open .mound-tap { pointer-events: none !important; }
 </style>
 </head>
 <body>
@@ -4020,6 +4041,12 @@ function endHalfInning() {
   if (pitchBtns) { pitchBtns.style.pointerEvents = 'none'; pitchBtns.style.opacity = '0.25'; }
   if (undoBtn)   { undoBtn.disabled = true; undoBtn.style.opacity = '0.3'; }
 
+  // Belt-and-suspenders: also flag body so CSS can disable runner taps,
+  // fielder gloves and any other click surface that isn't the two
+  // buttons inside the half-end modal. Adam reported being able to
+  // click the baserunners and pitch types even with the modal up.
+  document.body.classList.add('half-end-open');
+
   // Ensure out counter shows 3 before the overlay appears
   renderAll();
 
@@ -4033,6 +4060,7 @@ function _reenablePitchButtons() {
   const undoBtn   = document.getElementById('undo-pitch-btn');
   if (pitchBtns) { pitchBtns.style.pointerEvents = ''; pitchBtns.style.opacity = ''; }
   if (undoBtn)   { undoBtn.disabled = false; undoBtn.style.opacity = ''; }
+  document.body.classList.remove('half-end-open');
 }
 
 const MAX_INNINGS = 7;
@@ -5082,7 +5110,19 @@ let fielderAction = null;
 
 function showFielderOverlay(action) {
   fielderAction = action;
-  document.getElementById('fielder-overlay').style.display = 'block';
+  const overlay = document.getElementById('fielder-overlay');
+  // HR / ITPHR can't possibly be fielded by an infielder, pitcher or
+  // catcher — only the three outfielders make sense. Hide the six
+  // infield gloves when the action is a homerun hit; show them all
+  // for any other action (single/double/flyout/GO/FC/error). Keep
+  // the DOM untouched for the next call by resetting on each show.
+  const outfieldOnly = action === 'hit' && (bipHitResult === 'homerun' || bipHitResult === 'itphr');
+  overlay.querySelectorAll('.fielder-btn').forEach(btn => {
+    const pos = btn.dataset.pos;
+    const isOutfield = pos === 'LF' || pos === 'CF' || pos === 'RF';
+    btn.style.display = (outfieldOnly && !isOutfield) ? 'none' : '';
+  });
+  overlay.style.display = 'block';
 }
 
 function hideFielderOverlay() {
@@ -5839,6 +5879,11 @@ document.getElementById('gom-final-btn').addEventListener('click', async () => {
         done: true, live: false,
         away_score: G.awayScore, home_score: G.homeScore
       }).catch(() => {});
+      // Fire final-score push: this is the first + official submission
+      // from the live scorer, matching the captain-side "Final:" push.
+      try {
+        sendScorerFinalPush(G.gameId, G.awayTeam, G.homeTeam, G.awayScore, G.homeScore, G.wk);
+      } catch (e) { console.warn('final push skipped:', e); }
       recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
     } else if (scoringSide) {
       // Second submission — this captain is authoritative for their own team's
@@ -6959,6 +7004,31 @@ function sendLiveGamePush(game, awayTeam, homeTeam) {
       excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
     }),
   }).catch(e => console.warn('Live push failed:', e));
+}
+
+// Fire "Final:" push when the live scorer finalizes a game. Adam
+// reported getting the "game started" push but NOT a "game ended"
+// one when the scorer wrapped a game — the game-done branch below
+// updates Firestore but never pinged /api/send-notification. This
+// closes that gap. Captain flows have their own push (captain.html)
+// so we guard on `live: false` transition to avoid double-pushing.
+function sendScorerFinalPush(gameId, awayTeam, homeTeam, awayScore, homeScore, wk) {
+  const awayName = awayTeam?.short || awayTeam?.name || 'Away';
+  const homeName = homeTeam?.short || homeTeam?.name || 'Home';
+  const parts = [];
+  if (wk) parts.push(`Week ${wk}`);
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': SCORER_PUSH_SECRET },
+    body: JSON.stringify({
+      title: `Final: ${awayName} ${awayScore}, ${homeName} ${homeScore}`,
+      body: parts.join(' · ') || 'Game final',
+      category: 'scores',
+      teams: [awayTeam?.id, homeTeam?.id].filter(Boolean),
+      url: '/#scores',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Final score push failed:', e));
 }
 
 // ===== PRACTICE MODE =====

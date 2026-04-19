@@ -138,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v32-bs-tabbar-potg';
+const VERSION = 'dvsl-v33-scorer-pitch-split-pushes';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

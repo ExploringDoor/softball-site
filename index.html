@@ -126,16 +126,17 @@
               transform: translateX(-50%) !important;
               width: 100% !important;
               max-width: 480px !important;
-              /* Taller + more top padding so icons/labels sit a touch further
-                 from the physical bottom edge. User reported tapping Scores /
-                 Schedule sometimes missed because the hit area ran right into
-                 the home-indicator area. 68px tall + 6px top pad gives the
-                 whole bar a little more breathing room. */
-              height: calc(68px + env(safe-area-inset-bottom)) !important;
-              padding-top: 6px !important;
+              /* Taller bar + extra padding-bottom beyond safe-area so icons
+                 sit visibly higher off the physical bottom edge of the phone.
+                 Adam said v32's 68px/6px pad change wasn't enough — icons still
+                 felt like they were hugging the home-indicator. Here the inner
+                 content area gets 8px of top pad AND 14px of pad below the
+                 system safe-area, so icons float ~14px higher than before. */
+              height: calc(74px + env(safe-area-inset-bottom)) !important;
+              padding-top: 8px !important;
               padding-left: max(8px, env(safe-area-inset-left)) !important;
               padding-right: max(8px, env(safe-area-inset-right)) !important;
-              padding-bottom: env(safe-area-inset-bottom) !important;
+              padding-bottom: calc(env(safe-area-inset-bottom) + 14px) !important;
               margin: 0 !important;
               display: flex !important;
               align-items: stretch !important;
@@ -305,8 +306,8 @@
         function _dvslApplyBodyPad() {
           const mobile = window.matchMedia('(max-width: 767px)').matches;
           if (mobile) {
-            // 68px bar + 6px top pad + ~8px gap = 82px of content clearance.
-            document.body.style.paddingBottom = 'calc(82px + env(safe-area-inset-bottom))';
+            // 74px bar + 8px top pad + 14px bottom pad + ~8px gap = 104px clearance.
+            document.body.style.paddingBottom = 'calc(104px + env(safe-area-inset-bottom))';
           } else {
             document.body.style.paddingBottom = '';
           }
@@ -1128,14 +1129,14 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .preview-team-row>div{display:flex;align-items:center;}
   .pgrid{grid-template-columns:1fr 1fr}
   /* Gameday popup: anchored to top on mobile so it's always reachable.
-     Bottom padding has to clear the bottom tab bar (~58px + safe-area)
-     AND the global 6px lift we added to the tab bar — otherwise the
-     last row of a long box score / pitching table gets hidden behind
-     the tab bar and the user has to scroll-and-hold just to peek at it. */
-  .pop{align-items:flex-start!important;padding:70px 10px calc(80px + env(safe-area-inset-bottom,0px))!important;z-index:800!important;}
+     Bottom padding has to clear the v33 tab bar (74px + pads + safe-area)
+     otherwise the last row of a long box score / pitching table gets
+     hidden behind the tab bar and the user has to scroll-and-hold just
+     to peek at it. */
+  .pop{align-items:flex-start!important;padding:70px 10px calc(96px + env(safe-area-inset-bottom,0px))!important;z-index:800!important;}
   /* Use 100dvh so iOS Safari URL bar doesn't clip the bottom of the popup.
-     Subtract: 86 (top pad) + 80 (tab-bar + gap) + safe-area. */
-  .pop-box{max-height:calc(100vh - 166px)!important;max-height:calc(100dvh - 166px - env(safe-area-inset-bottom,0px))!important;border-radius:12px!important;padding-bottom:env(safe-area-inset-bottom,0px)!important;}
+     Subtract: 86 (top pad) + 96 (tab-bar + gap) + safe-area. */
+  .pop-box{max-height:calc(100vh - 182px)!important;max-height:calc(100dvh - 182px - env(safe-area-inset-bottom,0px))!important;border-radius:12px!important;padding-bottom:env(safe-area-inset-bottom,0px)!important;}
   .pop-x{z-index:900!important;}
   .pop-hd{padding:18px 18px 12px!important;}
   /* Extra bottom padding inside the scrollable body so the final row
@@ -7003,27 +7004,62 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
             // for the pitching "BF" notes row in basic mode.
             const bfCell = p.bf != null ? p.bf : (outs + hVal + bbVal);
             return `<tr>
-              <td style="text-align:left"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${decBadge}</td>
+              <td style="text-align:left;width:1%;white-space:nowrap;padding-right:4px"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${decBadge}</td>
               <td>${ip}</td><td>${hVal}</td><td>${p.r||0}</td><td>${p.er||p.r||0}</td><td>${bbVal}</td><td>${kCell}</td><td>${whipCell}</td><td>${bfCell}</td><td>${pcCell}</td>
             </tr>`;}).join('')
         : `<tr><td colspan="10" style="text-align:center;padding:10px;color:#999">—</td></tr>`;
 
-      // Pitching table now has 10 columns (added WHIP + BF). On mobile
-      // that's wider than a stacked grid column so we wrap each team's
-      // table in .adv-bs-scroll — same horizontal-swipe pattern the
-      // advanced batting view uses. The hint tells the user to swipe.
+      // Basic pitching: only IP / H / R / ER / K next to the Pitcher
+      // name. Adam wanted the basic view stripped down and IP tucked
+      // right next to the name (no horizontal scroll required) — BB,
+      // WHIP, BF and PC now live exclusively in the advanced view.
+      const mkPitchRowsBasic=pitchers=>pitchers.length
+        ? pitchers.map(p=>{
+            const outs = p.outs != null ? p.outs : (p.ip ? (Math.floor(parseFloat(p.ip))*3 + Math.round((parseFloat(p.ip)%1)*10)) : 0);
+            const ip=p.ip!=null?p.ip:(Math.floor((p.outs||0)/3)+'.'+(p.outs||0)%3);
+            const dec = p.decision;
+            const decBadge = dec ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;background:${dec==='W'?'#dcfce7':dec==='L'?'#fee2e2':'#f3f4f6'};color:${dec==='W'?'#166534':dec==='L'?'#991b1b':'#374151'}">${dec}</span>` : '';
+            const kVal = p.k || p.so || 0;
+            const hVal = p.h || 0;
+            const kBad = outs > 0 && kVal > outs;
+            const kCell = kBad
+              ? `<span style="${warnStyle}" title="Impossible: K (${kVal}) exceeds outs recorded (${outs}). A strikeout is always an out, so this line has bad data.">${kVal} ⚠</span>`
+              : kVal;
+            return `<tr>
+              <td style="text-align:left;width:1%;white-space:nowrap;padding-right:4px"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${decBadge}</td>
+              <td>${ip}</td><td>${hVal}</td><td>${p.r||0}</td><td>${p.er||p.r||0}</td><td>${kCell}</td>
+            </tr>`;}).join('')
+        : `<tr><td colspan="6" style="text-align:center;padding:10px;color:#999">—</td></tr>`;
+
+      // Two pitching views: basic (6 cols, fits without scroll) and
+      // advanced (10 cols, needs .adv-bs-scroll horizontal swipe).
+      // toggleAdvBox() flips both #bs-*-basic and #bs-*-adv together
+      // so the single "View Advanced Box Score" button governs both
+      // batting and pitching.
       bodyHtml += `<div class="pop-sec-title" style="margin-top:18px">Pitching</div>
-        <div class="pop-grid2">
+        <div id="bs-pitch-basic" class="pop-grid2">
           <div>
             <div class="pop-team-lbl" style="color:${ac}">${away}</div>
-            <div class="adv-bs-hint">← swipe to see all columns →</div>
-            <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th title="Walks+Hits per Inning Pitched">WHIP</th><th title="Batters Faced">BF</th><th title="Pitch Count">PC</th></tr></thead><tbody>${mkPitchRows(aPitch)}</tbody></table></div>
+            <table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>K</th></tr></thead><tbody>${mkPitchRowsBasic(aPitch)}</tbody></table>
             ${mkPitchNotes(aPitch,'away')}
           </div>
           <div>
             <div class="pop-team-lbl" style="color:${hc}">${home}</div>
+            <table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>K</th></tr></thead><tbody>${mkPitchRowsBasic(hPitch)}</tbody></table>
+            ${mkPitchNotes(hPitch,'home')}
+          </div>
+        </div>
+        <div id="bs-pitch-adv" class="pop-grid2" style="display:none">
+          <div style="grid-column:1/-1">
+            <div class="pop-team-lbl" style="color:${ac}">${away}</div>
             <div class="adv-bs-hint">← swipe to see all columns →</div>
-            <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th title="Walks+Hits per Inning Pitched">WHIP</th><th title="Batters Faced">BF</th><th title="Pitch Count">PC</th></tr></thead><tbody>${mkPitchRows(hPitch)}</tbody></table></div>
+            <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th title="Walks+Hits per Inning Pitched">WHIP</th><th title="Batters Faced">BF</th><th title="Pitch Count">PC</th></tr></thead><tbody>${mkPitchRows(aPitch)}</tbody></table></div>
+            ${mkPitchNotes(aPitch,'away')}
+          </div>
+          <div style="grid-column:1/-1;margin-top:16px">
+            <div class="pop-team-lbl" style="color:${hc}">${home}</div>
+            <div class="adv-bs-hint">← swipe to see all columns →</div>
+            <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th title="Walks+Hits per Inning Pitched">WHIP</th><th title="Batters Faced">BF</th><th title="Pitch Count">PC</th></tr></thead><tbody>${mkPitchRows(hPitch)}</tbody></table></div>
             ${mkPitchNotes(hPitch,'home')}
           </div>
         </div>`;
@@ -7273,6 +7309,16 @@ function toggleAdvBox(btn){
   const showAdv = adv.style.display === 'none';
   basic.style.display = showAdv ? 'none' : '';
   adv.style.display   = showAdv ? '' : 'none';
+  // Pitching has its own basic (IP/H/R/ER/K only) and advanced
+  // (adds BB/WHIP/BF/PC in a horizontally-swipeable table) views.
+  // Flip both together so the single toggle button governs the
+  // whole box score in lockstep.
+  const pBasic = document.getElementById('bs-pitch-basic');
+  const pAdv   = document.getElementById('bs-pitch-adv');
+  if (pBasic && pAdv) {
+    pBasic.style.display = showAdv ? 'none' : '';
+    pAdv.style.display   = showAdv ? '' : 'none';
+  }
   if(btn) btn.textContent = showAdv ? 'View Basic Box Score' : 'View Advanced Box Score';
 }
 

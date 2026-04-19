@@ -126,16 +126,17 @@
               transform: translateX(-50%) !important;
               width: 100% !important;
               max-width: 480px !important;
-              /* Taller + more top padding so icons/labels sit a touch further
-                 from the physical bottom edge. User reported tapping Scores /
-                 Schedule sometimes missed because the hit area ran right into
-                 the home-indicator area. 68px tall + 6px top pad gives the
-                 whole bar a little more breathing room. */
-              height: calc(68px + env(safe-area-inset-bottom)) !important;
-              padding-top: 6px !important;
+              /* Taller bar + extra padding-bottom beyond safe-area so icons
+                 sit visibly higher off the physical bottom edge of the phone.
+                 Adam said v32's 68px/6px pad change wasn't enough — icons still
+                 felt like they were hugging the home-indicator. Here the inner
+                 content area gets 8px of top pad AND 14px of pad below the
+                 system safe-area, so icons float ~14px higher than before. */
+              height: calc(74px + env(safe-area-inset-bottom)) !important;
+              padding-top: 8px !important;
               padding-left: max(8px, env(safe-area-inset-left)) !important;
               padding-right: max(8px, env(safe-area-inset-right)) !important;
-              padding-bottom: env(safe-area-inset-bottom) !important;
+              padding-bottom: calc(env(safe-area-inset-bottom) + 14px) !important;
               margin: 0 !important;
               display: flex !important;
               align-items: stretch !important;
@@ -305,8 +306,8 @@
         function _dvslApplyBodyPad() {
           const mobile = window.matchMedia('(max-width: 767px)').matches;
           if (mobile) {
-            // 68px bar + 6px top pad + ~8px gap = 82px of content clearance.
-            document.body.style.paddingBottom = 'calc(82px + env(safe-area-inset-bottom))';
+            // 74px bar + 8px top pad + 14px bottom pad + ~8px gap = 104px clearance.
+            document.body.style.paddingBottom = 'calc(104px + env(safe-area-inset-bottom))';
           } else {
             document.body.style.paddingBottom = '';
           }
