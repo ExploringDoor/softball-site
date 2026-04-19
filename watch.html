@@ -46,6 +46,34 @@
             b.textContent = e.data.version;
           }
         });
+        // Pending-nav check: sw.js stashes a target URL in Cache API when a
+        // push is tapped. We read it whenever the page becomes visible or
+        // loads — survives iOS PWA freezing postMessage delivery while
+        // backgrounded.
+        async function _dvslCheckPendingNav() {
+          try {
+            if (!('caches' in self)) return;
+            const cache = await caches.open('dvsl-pending-nav');
+            const resp = await cache.match('/__dvsl_pending_nav');
+            if (!resp) return;
+            const url = (await resp.text()).trim();
+            await cache.delete('/__dvsl_pending_nav');
+            if (!url) return;
+            const t = new URL(url, location.origin);
+            const sameHere =
+              t.origin === location.origin &&
+              t.pathname === location.pathname &&
+              t.search === location.search &&
+              t.hash === location.hash;
+            if (!sameHere) window.location.href = t.href;
+          } catch(_) {}
+        }
+        _dvslCheckPendingNav();
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') _dvslCheckPendingNav();
+        });
+        window.addEventListener('pageshow', _dvslCheckPendingNav);
+        window.addEventListener('focus', _dvslCheckPendingNav);
       });
     }
   </script>

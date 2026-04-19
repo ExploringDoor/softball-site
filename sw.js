@@ -71,10 +71,22 @@ self.addEventListener('notificationclick', function(event) {
       } catch (_) {}
     }
 
-    // 2. Belt-and-suspenders: tell every in-scope client via postMessage to
-    //    navigate to the target URL. On iOS standalone PWAs, client.navigate()
-    //    silently no-ops — postMessage + window.location.href is the only
-    //    reliable way to move a backgrounded PWA.
+    // 2. Stash the target URL in the Cache API so the page can pick it up
+    //    when it becomes visible. This is the ONLY approach that survives
+    //    iOS PWA quirks — postMessage gets dropped if the page is frozen
+    //    while backgrounded, and client.navigate() + openWindow() both
+    //    silently no-op on iOS. Cache API writes are persistent and the
+    //    page reads them on visibilitychange/pageshow.
+    try {
+      const cache = await caches.open('dvsl-pending-nav');
+      await cache.put(
+        new Request('/__dvsl_pending_nav'),
+        new Response(target.href, { headers: { 'content-type': 'text/plain' } })
+      );
+    } catch (_) {}
+
+    // 3. Also postMessage every in-scope client as a best-effort fast path
+    //    (works on Chrome/Android and on iOS when the page isn't frozen).
     for (const c of allClients) {
       try {
         const cu = new URL(c.url);
@@ -84,17 +96,15 @@ self.addEventListener('notificationclick', function(event) {
       } catch (_) {}
     }
 
-    // 3. ALWAYS call openWindow. On iOS installed PWAs, openWindow() to an
-    //    in-scope URL brings the existing standalone window forward AND
-    //    navigates it — which is exactly what we want. On Chrome/Android it
-    //    opens a new tab if none exists, or refocuses+navigates if one does.
-    //    If a matching window was already open (step 1), we returned early
-    //    above, so this only runs when we actually need movement.
+    // 4. openWindow brings the PWA to foreground. The visibilitychange
+    //    handler on the page then reads the pending URL from Cache API and
+    //    navigates. On Chrome/Android this also opens a fresh window when
+    //    none is open.
     return clients.openWindow(target.href);
   })());
 });
 
-const VERSION = 'dvsl-v12-openwin';
+const VERSION = 'dvsl-v13-cachenav';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
