@@ -1,6 +1,11 @@
 importScripts('https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging-compat.js');
 
+// Force immediate activation so a new SW takes over without waiting for all
+// old clients to close. Critical on iOS where PWA clients linger.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+
 firebase.initializeApp({
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
   authDomain: "dvsl-292dd.firebaseapp.com",
