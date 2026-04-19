@@ -13,58 +13,55 @@
 // two SWs competing at scope "/" cause the push subscription to be silently
 // invalidated on each page load. One SW = stable push subscription.
 
-// ── FCM push handling (loaded at top so install event can reference it) ──
-importScripts('https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging-compat.js');
+// ── RAW push handling — no Firebase SDK in the SW ──
+//
+// v18 diagnostic showed onBackgroundMessage NEVER fires on iOS PWA even
+// with data-only pushes: FCM's SW-side SDK intercepts the push event,
+// auto-displays a banner, and never calls our callback. Solution: don't
+// load the FCM SDK in the SW at all. Handle the raw `push` event.
+//
+// FCM's getToken() on the page side just calls pushManager.subscribe on
+// our registration — it doesn't require firebase-messaging code IN the
+// SW, only that the SW is registered. So we can own the push pipeline.
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch (_) {}
 
-firebase.initializeApp({
-  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
-  authDomain: "dvsl-292dd.firebaseapp.com",
-  projectId: "dvsl-292dd",
-  storageBucket: "dvsl-292dd.firebasestorage.app",
-  messagingSenderId: "145862305559",
-  appId: "1:145862305559:web:153ec455bad57e17517952"
-});
+  // FCM HTTP v1 delivers the `data` object at payload.data. Some FCM paths
+  // also wrap in FCM_MSG — handle both.
+  const d =
+    (payload && payload.data) ||
+    (payload && payload.FCM_MSG && payload.FCM_MSG.data) ||
+    payload ||
+    {};
+  const rawUrl = d.url;
+  const title  = d.title || 'DVSL';
+  const body   = d.body || '';
+  const url    = rawUrl || '/';
 
-// We now send DATA-ONLY pushes (no top-level `notification` block) so FCM's
-// SDK does NOT auto-display. Instead onBackgroundMessage fires and we call
-// showNotification ourselves, which means event.notification.data contains
-// exactly what we put there — not FCM's wrapped `FCM_MSG` structure — so
-// the notificationclick handler below can just read event.notification.data.url.
-const _messaging = firebase.messaging();
-_messaging.onBackgroundMessage(async (payload) => {
-  const d = (payload && payload.data) || {};
-  const rawUrl = d.url;                        // preserve undefined-ness for diag
-  const title = d.title || 'DVSL';
-  const body = d.body || '';
-  const url = rawUrl || '/';
-
-  // Single-entry JSON write — no race between two cache.put calls — and
-  // also stash diagnostic info so the page can tell us what FCM actually
-  // delivered in payload.data.
-  try {
-    const cache = await caches.open('dvsl-pending-nav');
-    const info = {
-      url: rawUrl == null ? null : String(rawUrl),
-      ts: Date.now(),
-      keys: Object.keys(d),
-      title: d.title || null,
-      body: d.body || null,
-    };
-    await cache.put(
-      new Request('/__dvsl_push_info'),
-      new Response(JSON.stringify(info), { headers: { 'content-type': 'application/json' } })
-    );
-  } catch (_) {}
-
-  self.registration.showNotification(title, {
-    body,
-    icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    tag: 'dvsl-push',       // coalesce if multiple arrive at once
-    renotify: true,         // still vibrate/buzz even when coalesced
-    data: { url },
-  });
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open('dvsl-pending-nav');
+      const info = {
+        url: rawUrl == null ? null : String(rawUrl),
+        ts: Date.now(),
+        keys: Object.keys(d),
+        source: 'raw-push',
+      };
+      await cache.put(
+        new Request('/__dvsl_push_info'),
+        new Response(JSON.stringify(info), { headers: { 'content-type': 'application/json' } })
+      );
+    } catch (_) {}
+    await self.registration.showNotification(title, {
+      body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: 'dvsl-push',
+      renotify: true,
+      data: { url },
+    });
+  })());
 });
 
 // Respond to version queries from page scripts so they can render a
@@ -141,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v18-json';
+const VERSION = 'dvsl-v19-rawpush';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
