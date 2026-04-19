@@ -138,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v24-bell';
+const VERSION = 'dvsl-v25-bell-fixes';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

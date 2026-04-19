@@ -13,14 +13,14 @@
   <meta name="apple-mobile-web-app-title" content="DVSL">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <script>
-    // SW registration + FCM-backed notification UI.
+    // SW registration + notification UI.
     //
-    // The UI is a floating bell button in the top-right corner, shown only
-    // when there's at least 1 unread push. Tapping the bell opens a small
-    // dropdown panel anchored to it with up to 20 recent items; a footer
-    // link goes to /inbox.html for the full-page view. Each item can be
-    // tapped (nav + dismiss) or X'd (dismiss only). "Clear all" in the
-    // header dismisses the whole queue.
+    // The UI is a floating bell (top-right, always visible once the user
+    // has an FCM token) that opens a dropdown panel with the unread list.
+    // Panel: three-section flex column (header, scrollable list, footer),
+    // backdrop-dimmed and body-scroll-locked so the page behind can't be
+    // scrolled while it's open. Footer link → /inbox.html for the full
+    // page view.
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(r => { try { r.update(); } catch(_){} }).catch(() => {});
@@ -47,17 +47,19 @@
           }
         });
 
-        // ── Notification bell + dropdown panel ──
+        // ── Notification bell ──
         let _dvslLastCheck = 0;
         let _dvslLastItems = [];
         let _dvslLastSig = null;
+        let _dvslSavedScrollY = null;
+
         async function _dvslCheckPendingNav() {
           const now = Date.now();
           if (now - _dvslLastCheck < 3000) return;
           _dvslLastCheck = now;
           const token = localStorage.getItem('dvsl-notif-token');
           if (!token) {
-            if (_dvslLastSig !== '') { _dvslLastSig = ''; _dvslLastItems = []; _dvslRenderBell([]); }
+            if (_dvslLastSig !== '') { _dvslLastSig = ''; _dvslLastItems = []; _dvslRenderBell(); }
             return;
           }
           try {
@@ -69,23 +71,108 @@
             if (!resp.ok) return;
             const data = await resp.json();
             const items = Array.isArray(data && data.items) ? data.items : [];
-            const sig = items.map(it => it.id).sort().join(',');
             _dvslLastItems = items;
+            // Always refresh the badge count; only rebuild panel rows if the
+            // signature changed (prevents flicker on 5s poll).
+            _dvslUpdateBadge();
+            const sig = items.map(it => it.id).sort().join(',');
             if (sig === _dvslLastSig) return;
             _dvslLastSig = sig;
-            _dvslRenderBell(items);
+            if (document.getElementById('dvsl-bell-panel')) _dvslRenderPanel();
           } catch(_) {}
         }
-        function _dvslVisibleItems(items) {
-          return (items || []).filter(it => {
-            try {
-              const t = new URL(it.url || '/', location.origin);
-              return !(t.origin === location.origin &&
-                        t.pathname === location.pathname &&
-                        t.search === location.search);
-            } catch(_) { return true; }
+
+        function _dvslEnsureBell() {
+          if (document.getElementById('dvsl-bell')) return;
+          const bell = document.createElement('button');
+          bell.id = 'dvsl-bell';
+          bell.setAttribute('aria-label', 'Notifications');
+          bell.style.cssText = 'position:fixed;top:calc(10px + env(safe-area-inset-top));right:12px;z-index:99998;width:44px;height:44px;border-radius:50%;background:#002D72;color:#fff;border:0;box-shadow:0 2px 10px rgba(0,0,0,.35);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0';
+          const icon = document.createElement('span');
+          icon.textContent = '🔔';
+          icon.style.cssText = 'font-size:20px;line-height:1';
+          const badge = document.createElement('span');
+          badge.id = 'dvsl-bell-badge';
+          badge.style.cssText = 'position:absolute;top:-4px;right:-4px;background:#e53935;color:#fff;font:700 11px/1 system-ui,-apple-system,sans-serif;min-width:18px;height:18px;padding:0 5px;border-radius:9px;display:none;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.3)';
+          bell.appendChild(icon);
+          bell.appendChild(badge);
+          bell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (document.getElementById('dvsl-bell-panel')) _dvslClosePanel();
+            else _dvslOpenPanel();
           });
+          document.body.appendChild(bell);
         }
+        function _dvslUpdateBadge() {
+          _dvslEnsureBell();
+          const count = _dvslLastItems.length;
+          const badge = document.getElementById('dvsl-bell-badge');
+          if (!badge) return;
+          if (count > 0) {
+            badge.style.display = 'flex';
+            badge.textContent = count > 99 ? '99+' : String(count);
+          } else {
+            badge.style.display = 'none';
+          }
+        }
+        function _dvslRenderBell() {
+          const token = localStorage.getItem('dvsl-notif-token');
+          if (!token) {
+            const b = document.getElementById('dvsl-bell');
+            if (b) b.remove();
+            _dvslClosePanel();
+            return;
+          }
+          _dvslUpdateBadge();
+          if (document.getElementById('dvsl-bell-panel')) _dvslRenderPanel();
+        }
+
+        // ── Body scroll lock (iOS PWA-safe) ──
+        function _dvslLockBody() {
+          if (_dvslSavedScrollY != null) return;
+          _dvslSavedScrollY = window.scrollY || 0;
+          document.body.style.position = 'fixed';
+          document.body.style.top = '-' + _dvslSavedScrollY + 'px';
+          document.body.style.left = '0';
+          document.body.style.right = '0';
+          document.body.style.width = '100%';
+        }
+        function _dvslUnlockBody() {
+          if (_dvslSavedScrollY == null) return;
+          const y = _dvslSavedScrollY;
+          document.body.style.position = '';
+          document.body.style.top = '';
+          document.body.style.left = '';
+          document.body.style.right = '';
+          document.body.style.width = '';
+          _dvslSavedScrollY = null;
+          window.scrollTo(0, y);
+        }
+
+        function _dvslOpenPanel() {
+          _dvslLockBody();
+          const backdrop = document.createElement('div');
+          backdrop.id = 'dvsl-bell-backdrop';
+          backdrop.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(0,0,0,.28);opacity:0;transition:opacity 150ms;touch-action:none';
+          backdrop.addEventListener('click', _dvslClosePanel);
+          document.body.appendChild(backdrop);
+          requestAnimationFrame(() => { backdrop.style.opacity = '1'; });
+
+          const panel = document.createElement('div');
+          panel.id = 'dvsl-bell-panel';
+          panel.style.cssText = 'position:fixed;top:calc(62px + env(safe-area-inset-top));right:12px;z-index:99997;width:min(340px, calc(100vw - 24px));max-height:min(70vh, 520px);display:flex;flex-direction:column;background:#fff;color:#111;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.28);font:500 14px/1.35 system-ui,-apple-system,Segoe UI,Inter,sans-serif;border:1px solid rgba(0,0,0,0.06);overflow:hidden;transform:translateY(-6px);opacity:0;transition:opacity 160ms, transform 160ms';
+          document.body.appendChild(panel);
+          requestAnimationFrame(() => { panel.style.opacity = '1'; panel.style.transform = 'translateY(0)'; });
+          _dvslRenderPanel();
+        }
+        function _dvslClosePanel() {
+          const b = document.getElementById('dvsl-bell-backdrop');
+          const p = document.getElementById('dvsl-bell-panel');
+          if (b) b.remove();
+          if (p) p.remove();
+          _dvslUnlockBody();
+        }
+
         function _dvslAgo(ts) {
           const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1000));
           if (s < 60) return 'just now';
@@ -93,90 +180,47 @@
           if (s < 86400) return Math.floor(s/3600) + 'h ago';
           return Math.floor(s/86400) + 'd ago';
         }
-        function _dvslRenderBell(items) {
-          const visible = _dvslVisibleItems(items);
-          let bell = document.getElementById('dvsl-bell');
-          if (!visible.length) {
-            if (bell) bell.remove();
-            _dvslClosePanel();
-            return;
-          }
-          if (!bell) {
-            bell = document.createElement('button');
-            bell.id = 'dvsl-bell';
-            bell.setAttribute('aria-label', 'Notifications');
-            bell.style.cssText = 'position:fixed;top:calc(10px + env(safe-area-inset-top));right:12px;z-index:99998;width:44px;height:44px;border-radius:50%;background:#002D72;color:#fff;border:0;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0';
-            const icon = document.createElement('span');
-            icon.textContent = '🔔';
-            icon.style.cssText = 'font-size:20px;line-height:1';
-            const badge = document.createElement('span');
-            badge.id = 'dvsl-bell-badge';
-            badge.style.cssText = 'position:absolute;top:-4px;right:-4px;background:#e53935;color:#fff;font:700 11px/1 system-ui,-apple-system,sans-serif;min-width:18px;height:18px;padding:0 5px;border-radius:9px;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.3)';
-            bell.appendChild(icon);
-            bell.appendChild(badge);
-            bell.addEventListener('click', (e) => {
-              e.stopPropagation();
-              if (document.getElementById('dvsl-bell-panel')) _dvslClosePanel();
-              else _dvslOpenPanel();
-            });
-            document.body.appendChild(bell);
-          }
-          const badge = document.getElementById('dvsl-bell-badge');
-          if (badge) badge.textContent = String(visible.length > 99 ? '99+' : visible.length);
-          // If panel is open, keep it in sync.
-          if (document.getElementById('dvsl-bell-panel')) _dvslRenderPanel(visible);
-        }
-        function _dvslOpenPanel() {
-          const backdrop = document.createElement('div');
-          backdrop.id = 'dvsl-bell-backdrop';
-          backdrop.style.cssText = 'position:fixed;inset:0;z-index:99996;background:transparent';
-          backdrop.addEventListener('click', _dvslClosePanel);
-          document.body.appendChild(backdrop);
-          const panel = document.createElement('div');
-          panel.id = 'dvsl-bell-panel';
-          panel.style.cssText = 'position:fixed;top:calc(62px + env(safe-area-inset-top));right:12px;z-index:99997;width:min(340px, calc(100vw - 24px));max-height:70vh;overflow-y:auto;background:#fff;color:#111;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);font:500 14px/1.35 system-ui,-apple-system,Segoe UI,Inter,sans-serif;border:1px solid rgba(0,0,0,0.06)';
-          document.body.appendChild(panel);
-          _dvslRenderPanel(_dvslVisibleItems(_dvslLastItems));
-        }
-        function _dvslClosePanel() {
-          const b = document.getElementById('dvsl-bell-backdrop');
-          const p = document.getElementById('dvsl-bell-panel');
-          if (b) b.remove();
-          if (p) p.remove();
-        }
-        function _dvslRenderPanel(visible) {
+
+        function _dvslRenderPanel() {
           const panel = document.getElementById('dvsl-bell-panel');
           if (!panel) return;
+          const items = _dvslLastItems || [];
           panel.innerHTML = '';
+
           // Header
           const head = document.createElement('div');
-          head.style.cssText = 'display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f7f7f7;border-bottom:1px solid #eee;position:sticky;top:0;border-radius:12px 12px 0 0';
+          head.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:12px 14px;background:#f7f7f7;border-bottom:1px solid #eee';
           const ttl = document.createElement('div');
           ttl.textContent = 'Notifications';
           ttl.style.cssText = 'flex:1 1 auto;font-weight:700;color:#111';
           const clr = document.createElement('button');
           clr.textContent = 'Clear all';
           clr.style.cssText = 'background:transparent;border:0;color:#002D72;font:600 12px/1 system-ui,-apple-system,sans-serif;cursor:pointer;padding:6px 4px';
+          clr.disabled = items.length === 0;
+          if (clr.disabled) clr.style.opacity = '0.4';
           clr.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (items.length === 0) return;
             _dvslDismissAll();
             _dvslLastSig = '';
             _dvslLastItems = [];
             _dvslClosePanel();
-            const bell = document.getElementById('dvsl-bell');
-            if (bell) bell.remove();
+            _dvslUpdateBadge();
           });
           head.appendChild(ttl);
           head.appendChild(clr);
           panel.appendChild(head);
 
-          if (!visible.length) {
+          // Scrollable list (middle)
+          const list = document.createElement('div');
+          list.style.cssText = 'flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch';
+          if (!items.length) {
             const empty = document.createElement('div');
-            empty.textContent = 'No new notifications';
-            empty.style.cssText = 'padding:24px 14px;text-align:center;color:#888;font-weight:500';
-            panel.appendChild(empty);
+            empty.style.cssText = 'padding:28px 14px;text-align:center;color:#888;font-weight:500';
+            empty.innerHTML = '<div style="font-size:32px;opacity:.5;margin-bottom:6px">📭</div>No new notifications';
+            list.appendChild(empty);
           } else {
-            visible.forEach(item => {
+            items.forEach(item => {
               const row = document.createElement('div');
               row.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:12px 14px;border-bottom:1px solid #f2f2f2;cursor:pointer';
               row.addEventListener('mouseenter', () => { row.style.background = '#f8f8f8'; });
@@ -206,29 +250,26 @@
                 _dvslDismiss(item);
                 row.remove();
                 _dvslLastItems = (_dvslLastItems || []).filter(i => i.id !== item.id);
-                const remaining = _dvslVisibleItems(_dvslLastItems);
-                const badge = document.getElementById('dvsl-bell-badge');
-                if (badge) badge.textContent = String(remaining.length);
-                if (!remaining.length) {
-                  _dvslClosePanel();
-                  const bell = document.getElementById('dvsl-bell');
-                  if (bell) bell.remove();
-                }
+                _dvslUpdateBadge();
+                // If the list is empty, swap in the empty state.
+                if (!_dvslLastItems.length) _dvslRenderPanel();
               });
               row.addEventListener('click', () => _dvslConsumeAndNav(item));
               row.appendChild(txt);
               row.appendChild(x);
-              panel.appendChild(row);
+              list.appendChild(row);
             });
           }
+          panel.appendChild(list);
 
-          // Footer: link to the full inbox page.
+          // Footer: always links to full inbox.
           const foot = document.createElement('a');
           foot.href = '/inbox.html';
           foot.textContent = 'See all in inbox →';
-          foot.style.cssText = 'display:block;padding:12px 14px;text-align:center;font-weight:700;color:#002D72;text-decoration:none;background:#fafafa;border-top:1px solid #eee;border-radius:0 0 12px 12px;position:sticky;bottom:0';
+          foot.style.cssText = 'flex:0 0 auto;display:block;padding:12px 14px;text-align:center;font-weight:700;color:#002D72;text-decoration:none;background:#fafafa;border-top:1px solid #eee';
           panel.appendChild(foot);
         }
+
         function _dvslConsumeAndNav(item) {
           const token = localStorage.getItem('dvsl-notif-token');
           if (token && item && item.id) {
@@ -238,6 +279,7 @@
               body: JSON.stringify({ token, id: item.id }),
             }).catch(() => {});
           }
+          _dvslClosePanel();
           try {
             const t = new URL((item && item.url) || '/', location.origin);
             window.location.href = t.href;
@@ -259,8 +301,13 @@
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ token, dismissAll: true }),
-        }).catch(() => {});
+          }).catch(() => {});
         }
+
+        // Render the bell immediately if the user is already subscribed
+        // (avoids a delay waiting for the first poll). The badge count fills
+        // in once the first /api/check-pending-nav call returns.
+        if (localStorage.getItem('dvsl-notif-token')) _dvslEnsureBell();
         _dvslCheckPendingNav();
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') _dvslCheckPendingNav();
