@@ -278,12 +278,70 @@ async function loadTeamAndChat(tid) {
     document.getElementById('reset-link').classList.remove('hidden');
   }
 
+  // Password gate — uses the team's player_password (same one as the Player
+  // Portal). Admin mode bypasses. A successful unlock persists in
+  // localStorage so players don't have to re-enter every visit. Without this
+  // gate, anyone with ?team=XXX could read a private team's chat.
+  if (!passwordAccepted(tid)) {
+    showPasswordGate(tid);
+    return;
+  }
+
   if (!IDENTITY) {
     showIdentityModal();
   } else {
     document.getElementById('me-name').textContent = IDENTITY.name;
     subscribeToMessages();
   }
+}
+
+function passwordAccepted(tid) {
+  if (IS_ADMIN) return true;
+  const stored = (TEAM?.player_password || TEAM?.password || '').trim();
+  if (!stored) return true; // no password set on team = open access (legacy)
+  return localStorage.getItem('dvsl-chat-pw-' + tid) === '1';
+}
+
+function showPasswordGate(tid) {
+  const wrap = document.getElementById('chat-wrap');
+  wrap.innerHTML = `
+    <div style="max-width:380px;margin:40px auto;padding:28px 24px;background:var(--card);border:1px solid var(--border);border-radius:14px;text-align:center">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;color:var(--navy);margin-bottom:6px">
+        Team Password Required
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5">
+        Ask your captain for the team password to join <strong>${esc(TEAM?.name || tid)}</strong>'s chat.
+      </div>
+      <input id="chat-pw-input" type="password" placeholder="Team password" autocomplete="off"
+        style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:10px;text-align:center">
+      <div id="chat-pw-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:10px">Wrong password. Try again.</div>
+      <button id="chat-pw-btn"
+        style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer">
+        Unlock Chat
+      </button>
+      <div style="margin-top:14px">
+        <a href="team-chat.html" style="color:var(--muted);font-size:12px;text-decoration:none">← Pick a different team</a>
+      </div>
+    </div>`;
+  const input = document.getElementById('chat-pw-input');
+  const btn = document.getElementById('chat-pw-btn');
+  const err = document.getElementById('chat-pw-error');
+  const attempt = () => {
+    const entered = (input.value || '').trim().toLowerCase();
+    const stored = (TEAM?.player_password || TEAM?.password || '').trim().toLowerCase();
+    if (entered && entered === stored) {
+      localStorage.setItem('dvsl-chat-pw-' + tid, '1');
+      // Restart the flow now that we've unlocked.
+      location.reload();
+    } else {
+      err.style.display = 'block';
+      input.value = '';
+      input.focus();
+    }
+  };
+  btn.addEventListener('click', attempt);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
+  setTimeout(() => input.focus(), 60);
 }
 
 function showIdentityModal() {

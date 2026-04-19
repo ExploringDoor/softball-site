@@ -20,7 +20,7 @@
 // Request body (JSON):
 //   title: string                — notification headline
 //   body: string                 — notification body text
-//   category: "scores"|"rainouts"|"schedule"|"playoffs"|"team_chat"|"announcements"|"photos"|"admin"
+//   category: "scores"|"rainouts"|"schedule"|"playoffs"|"team_chat"|"captains_chat"|"announcements"|"photos"|"admin"|"live"|"pregame"
 //   team?: string                — team id; omit to target all teams
 //   teams?: string[]             — multi-team target (wins over team)
 //   url?: string                 — deep-link url on notification click
@@ -171,9 +171,19 @@ async function listMatchingTokens({ projectId, accessToken, category, team, team
     const cats = (f.categories?.arrayValue?.values || []).map(v => v.stringValue);
     if (cats.length && !cats.includes(category)) continue;
     const tokTeams = (f.teams?.arrayValue?.values || []).map(v => v.stringValue);
-    // Empty subscriber teams = "all teams" (always match). Otherwise we need
-    // at least one overlap between what we're targeting and what they follow.
-    if (teamWanted.length && tokTeams.length && !teamWanted.some(t => tokTeams.includes(t))) continue;
+    // Private chat rooms (team_chat) REQUIRE an explicit team-list match on
+    // both sides — otherwise a subscriber with no favorite-teams picked
+    // would receive every team's chat (old "empty = all teams" default
+    // leaked private messages across teams).
+    const isTeamChat = category === 'team_chat';
+    if (isTeamChat) {
+      if (!teamWanted.length || !tokTeams.length) continue;
+      if (!teamWanted.some(t => tokTeams.includes(t))) continue;
+    } else {
+      // Empty subscriber teams = "all teams" (always match). Otherwise we need
+      // at least one overlap between what we're targeting and what they follow.
+      if (teamWanted.length && tokTeams.length && !teamWanted.some(t => tokTeams.includes(t))) continue;
+    }
     // Extract the doc ID from the REST path ("projects/.../documents/notification_tokens/{docId}").
     const docId = d.name ? d.name.split('/').pop() : null;
     out.push({ token: tok, docId });

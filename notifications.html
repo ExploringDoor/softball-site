@@ -197,6 +197,17 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
 
       <div class="cat-item">
         <div class="cat-info">
+          <div class="cat-name">Captains Chat</div>
+          <div class="cat-desc">Messages in the captains &amp; commissioner room (captains only)</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" data-cat="captains_chat" onchange="updateCategories()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="cat-item">
+        <div class="cat-info">
           <div class="cat-name">League Announcements</div>
           <div class="cat-desc">Commissioner updates and league-wide news</div>
         </div>
@@ -382,6 +393,8 @@ async function migrateAddTeamChatCategory(token) {
   // Add any categories to existing subscribers' docs that didn't exist when
   // they first enabled notifications. Opt-out for them means unchecking
   // later — opt-in-by-default keeps them in the loop for new features.
+  // Note: captains_chat is NOT auto-added — only captains should subscribe,
+  // and they opt in by flipping the toggle themselves.
   const NEW_CATS = ['team_chat', 'announcements', 'live', 'pregame', 'photos'];
   try {
     const q = query(collection(db, 'notification_tokens'), where('token', '==', token));

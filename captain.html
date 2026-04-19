@@ -3851,6 +3851,22 @@ window.sendCaptMsg = async function() {
       team_color: MY_TEAM?.color || '#002D72',
       timestamp: serverTimestamp(),
     });
+    // Fire a push to everyone subscribed to captains_chat (no team filter —
+    // this room is league-wide for captains + commissioners).
+    try {
+      const senderLabel = MY_TEAM?.short || MY_TEAM?.name || captainData.team_name || captainData.team_id;
+      await fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': 'dvsl-push-2026-rkj3849f' },
+        body: JSON.stringify({
+          title: `Captains Chat — ${senderLabel}`,
+          body: text.length > 120 ? text.slice(0, 120) + '…' : text,
+          category: 'captains_chat',
+          url: '/captain.html?tab=captchat',
+          excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+        }),
+      });
+    } catch(e) { console.warn('Captains-chat push failed (message still delivered in-app):', e); }
     // Email all other captains
     if (EMAILJS_ENABLED) {
       const others = ALL_CAPTAINS.filter(c => c.email && c.email !== currentUser.email);
