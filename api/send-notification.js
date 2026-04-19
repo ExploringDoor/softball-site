@@ -195,15 +195,22 @@ async function fcmSend({ projectId, accessToken, token, title, body, url }) {
   const endpoint = `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
   // iOS PWA web push requires an explicit webpush.notification block and
   // a high Urgency header — without these, iOS silently drops the push.
+  // Pass URL via BOTH channels:
+  //   - `data.url` so our custom sw.js `notificationclick` handler can read it
+  //     (FCM `data` values must be strings).
+  //   - `webpush.fcm_options.link` as a fallback for the default FCM click
+  //     behavior (used when the SW doesn't intercept the click).
+  const clickUrl = url || '/';
   const message = {
     token,
     notification: { title, body },
+    data: { url: clickUrl },
     webpush: {
       headers: {
         Urgency: 'high',
         TTL: '86400',
       },
-      fcm_options: { link: url || '/' },
+      fcm_options: { link: clickUrl },
     },
   };
   const resp = await fetch(endpoint, {

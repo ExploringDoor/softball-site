@@ -761,7 +761,7 @@ function sendFinalScorePush(g, awayScore, homeScore) {
       body: parts.join(' · ') || 'Game final',
       category: 'scores',
       teams: [g.away, g.home],
-      url: '/index.html',
+      url: '/#scores',
       excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
     }),
   }).catch(e => console.warn('Final score push failed:', e));
@@ -899,9 +899,16 @@ window.selectTeam = async function(teamId) {
   if (!team) return;
   captainData = { team_id: team.id, team_name: team.name, email: team.name };
   currentUser = { email: team.name }; // used as author identifier in chat/submissions
+  // Remember this team so a push-notification deep-link (which only lands on
+  // /captain.html?tab=...) can skip the picker next time.
+  try { localStorage.setItem('dvsl-captain-team', team.id); } catch(_) {}
   document.getElementById('team-picker').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   await loadAllData();
+  // If the URL carries ?tab=captchat (notification deep-link), jump there.
+  const qsTab = new URLSearchParams(location.search).get('tab');
+  const validTabs = ['team','roster','schedule','scores','payments','attendance','teamchat','captchat','announcements','help'];
+  if (qsTab && validTabs.includes(qsTab)) showTab(qsTab);
 };
 
 window.changeTeam = function() {
@@ -909,14 +916,24 @@ window.changeTeam = function() {
   if (_unsubTeamChat) { _unsubTeamChat(); _unsubTeamChat = null; }
   if (_unsubCaptChat) { _unsubCaptChat(); _unsubCaptChat = null; }
   captainData = null; currentUser = null;
+  try { localStorage.removeItem('dvsl-captain-team'); } catch(_) {}
   document.getElementById('app').style.display = 'none';
   document.getElementById('team-picker').style.display = 'block';
   // Reset to first tab
   showTab('team');
 };
 
-// Start by showing team picker
-initTeamPicker();
+// Start by showing team picker, then auto-select the last-used team if we
+// know which one it was. This keeps notification deep-links instant instead
+// of forcing the captain to tap their team logo every time.
+initTeamPicker().then(() => {
+  try {
+    const last = localStorage.getItem('dvsl-captain-team');
+    if (last && ALL_TEAMS.some(t => t.id === last)) {
+      window.selectTeam(last);
+    }
+  } catch(_) {}
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // HELP TAB — "Email all captains" helpers (used while Captains Chat

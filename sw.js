@@ -35,11 +35,51 @@ firebase.messaging();
 
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
-  const url = event.notification.data?.url || '/';
-  event.waitUntil(clients.openWindow(url));
+
+  // FCM payload includes the target URL in TWO places depending on how the
+  // notification was built:
+  //   - event.notification.data.url     ← our own /api/send-notification
+  //   - event.notification.data.FCM_MSG.notification.click_action (rare)
+  // Fall back to '/' if neither exists.
+  const data = event.notification.data || {};
+  const fcm = data.FCM_MSG?.notification || {};
+  const rawUrl = data.url || fcm.click_action || fcm.fcmOptions?.link || '/';
+
+  // Resolve against this SW's origin so relative paths ("/team-chat.html?...")
+  // work and we can compare pathname+search against any open DVSL tab.
+  const target = new URL(rawUrl, self.location.origin);
+
+  event.waitUntil((async () => {
+    const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+
+    // 1. If a tab is already open at the exact target URL → just focus it.
+    for (const c of allClients) {
+      try {
+        const cu = new URL(c.url);
+        if (cu.origin === target.origin && cu.pathname === target.pathname && cu.search === target.search) {
+          return c.focus();
+        }
+      } catch (_) {}
+    }
+
+    // 2. If any DVSL tab is open → navigate it to the target and focus it.
+    //    This avoids spawning a second PWA window on iOS.
+    for (const c of allClients) {
+      try {
+        const cu = new URL(c.url);
+        if (cu.origin === target.origin && 'navigate' in c) {
+          await c.navigate(target.href);
+          return c.focus();
+        }
+      } catch (_) {}
+    }
+
+    // 3. Nothing open → open a fresh window.
+    return clients.openWindow(target.href);
+  })());
 });
 
-const VERSION = 'dvsl-v9-boxscore-scroll';
+const VERSION = 'dvsl-v10-deeplink';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
