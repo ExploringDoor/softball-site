@@ -260,7 +260,7 @@
 import { initializeApp, getApps, getApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import {
   initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-  getFirestore, collection, doc, getDocs, onSnapshot, query
+  getFirestore, collection, doc, getDocs, onSnapshot, query, where, Timestamp
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const FB_CFG = {
@@ -339,8 +339,12 @@ window.showList = showList;
 
 function subscribeList() {
   if (gameListUnsub) gameListUnsub();
+  // Only listen for docs updated in the last 6 hours — server-side filter keeps
+  // us from reading stale games every time anything in the collection changes.
+  const sixHoursAgo = Timestamp.fromMillis(Date.now() - 6 * 60 * 60 * 1000);
   const col = collection(db, 'game_states');
-  gameListUnsub = onSnapshot(col, (snap) => {
+  const q = query(col, where('savedAt', '>=', sixHoursAgo));
+  gameListUnsub = onSnapshot(q, (snap) => {
     gamesSnap = [];
     snap.forEach(d => gamesSnap.push({ id: d.id, data: d.data() }));
     renderList();
@@ -352,16 +356,8 @@ function subscribeList() {
 
 function renderList() {
   const el = document.getElementById('live-games');
-  // Filter out stale game_state docs — a game that hasn't been touched in
-  // 6+ hours almost certainly isn't still being scored (a full game is ~2h).
-  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-  const cutoff = Date.now() - SIX_HOURS_MS;
-  const fresh = gamesSnap.filter(d => {
-    const t = d.data.savedAt?.toMillis?.() ||
-              (d.data.savedAt?.seconds ? d.data.savedAt.seconds * 1000 : 0);
-    return t && t > cutoff;
-  });
-  const merged = mergeGames(fresh);
+  // Server-side where() already limits to docs updated in the last 6h.
+  const merged = mergeGames(gamesSnap);
   if (!merged.length) {
     el.innerHTML = `
       <div class="empty">
@@ -427,25 +423,32 @@ window.showDetail = showDetail;
 
 function subscribeDetail(gid) {
   if (gameDetailUnsub) gameDetailUnsub();
-  // Listen to whole collection so we can merge _away/_home sides for this gid.
-  const col = collection(db, 'game_states');
-  gameDetailUnsub = onSnapshot(col, (snap) => {
-    const matching = [];
-    snap.forEach(d => {
-      if (baseId(d.id) === gid) matching.push({ id: d.id, data: d.data() });
-    });
-    if (!matching.length) {
-      renderDetailEnded();
-      return;
-    }
-    // Pick freshest
-    matching.sort((a,b) => {
-      const ta = a.data.savedAt?.seconds || a.data.savedAt?.toMillis?.() || 0;
-      const tb = b.data.savedAt?.seconds || b.data.savedAt?.toMillis?.() || 0;
-      return tb - ta;
-    });
-    renderDetail(gid, matching[0].data);
-  });
+  // Listen to ONLY the 3 possible docs for this game instead of the whole
+  // collection. Avoids re-reading every game_state every time any other game
+  // updates.
+  const ids = [gid, `${gid}_away`, `${gid}_home`];
+  const latest = {};   // id -> {exists, data}
+  const unsubs = ids.map(id =>
+    onSnapshot(doc(db, 'game_states', id), (snap) => {
+      latest[id] = { exists: snap.exists(), data: snap.data() || null };
+      // Pick the freshest doc that exists
+      const matching = Object.entries(latest)
+        .filter(([, v]) => v.exists)
+        .map(([id, v]) => ({ id, data: v.data }));
+      if (!matching.length) {
+        // Only show "ended" after all 3 listeners have reported
+        if (Object.keys(latest).length === ids.length) renderDetailEnded();
+        return;
+      }
+      matching.sort((a,b) => {
+        const ta = a.data.savedAt?.seconds || a.data.savedAt?.toMillis?.() || 0;
+        const tb = b.data.savedAt?.seconds || b.data.savedAt?.toMillis?.() || 0;
+        return tb - ta;
+      });
+      renderDetail(gid, matching[0].data);
+    })
+  );
+  gameDetailUnsub = () => unsubs.forEach(u => u && u());
 }
 
 function renderDetailEnded() {
