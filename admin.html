@@ -1051,7 +1051,7 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, setDoc, Timestamp, deleteField, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, limit, setDoc, Timestamp, deleteField, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
@@ -1188,18 +1188,17 @@ window.clearActivityLog = async function() {
 };
 
 // ── Captains Chat management ──────────────────────────────────────
+// Fetch ONLY the 5 most recent messages via orderBy+limit — not the whole
+// collection. renderDashboard() fires after every admin action, so this
+// function is called dozens of times per session.
 window.refreshCaptainChat = async function() {
   const el = document.getElementById('captain-chat-preview');
   if (!el) return;
   el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
   try {
-    const snap = await getDocs(collection(db, 'captain_chat'));
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      .sort((a,b) => {
-        const ta = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
-        const tb = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
-        return tb - ta;
-      });
+    const q = query(collection(db, 'captain_chat'), orderBy('timestamp', 'desc'), limit(5));
+    const snap = await getDocs(q);
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     if (!msgs.length) {
       el.innerHTML = '<div class="empty" style="padding:12px">No messages in captains chat.</div>';
       return;
@@ -1209,7 +1208,7 @@ window.refreshCaptainChat = async function() {
       const d = ts.toDate();
       return d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
     };
-    const preview = msgs.slice(0, 5).map(m => {
+    const preview = msgs.map(m => {
       const team = m.team_name || '?';
       const txt = (m.text || '').slice(0, 80) + ((m.text || '').length > 80 ? '…' : '');
       return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px">
@@ -1217,7 +1216,8 @@ window.refreshCaptainChat = async function() {
         <div style="color:var(--muted);margin-top:2px">${txt}</div>
       </div>`;
     }).join('');
-    el.innerHTML = `<div style="margin-bottom:8px;color:var(--text);font-weight:600">${msgs.length} message${msgs.length===1?'':'s'}</div>${preview}${msgs.length > 5 ? `<div style="padding:8px;color:var(--muted);font-size:12px">…and ${msgs.length - 5} more</div>` : ''}`;
+    const hitLimit = msgs.length === 5;
+    el.innerHTML = `<div style="margin-bottom:8px;color:var(--text);font-weight:600">${hitLimit ? '5+ recent' : msgs.length} message${msgs.length===1?'':'s'}</div>${preview}`;
   } catch(e) {
     el.innerHTML = `<div style="color:var(--red);padding:8px">Failed to load: ${e.message}</div>`;
   }
