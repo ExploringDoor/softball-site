@@ -53,12 +53,16 @@
       // that one. X → dismiss without navigating. Both hit
       // /api/dismiss-pending-nav fire-and-forget.
       let _dvslLastCheck = 0;
+      let _dvslLastSig = null; // fingerprint of last-rendered item list
       async function _dvslCheckPendingNav() {
         const now = Date.now();
         if (now - _dvslLastCheck < 3000) return; // throttle
         _dvslLastCheck = now;
         const token = localStorage.getItem('dvsl-notif-token');
-        if (!token) { _dvslRenderChip([]); return; }
+        if (!token) {
+          if (_dvslLastSig !== '') { _dvslLastSig = ''; _dvslRenderChip([]); }
+          return;
+        }
         try {
           const resp = await fetch('/api/check-pending-nav', {
             method: 'POST',
@@ -68,6 +72,11 @@
           if (!resp.ok) return;
           const data = await resp.json();
           const items = Array.isArray(data && data.items) ? data.items : [];
+          // Skip re-render if nothing changed — avoids visible flicker on
+          // every 5s poll, and preserves the user's expanded/collapsed state.
+          const sig = items.map(i => i.id).sort().join(',');
+          if (sig === _dvslLastSig) return;
+          _dvslLastSig = sig;
           _dvslRenderChip(items);
         } catch(_) {}
       }
@@ -128,20 +137,39 @@
           return;
         }
 
-        // Multi-item: header + scrollable list of rows.
+        // ── Multi-item: collapsed-by-default dropdown ──
+        // Header is a small bar ("🔔 N new notifications ⌄ ×"). Tap the
+        // header to expand/collapse the list. Per-row × dismisses one item
+        // locally (no flashy refetch). Dismissing the last row yanks the
+        // whole chip. Polling won't re-render unless the item list actually
+        // changed (see signature check in _dvslCheckPendingNav), so the
+        // expanded state is preserved across 5s ticks.
         headerText.textContent = visible.length + ' new notifications';
+        const caret = document.createElement('span');
+        caret.textContent = '⌄';
+        caret.style.cssText = 'flex:0 0 auto;font-size:18px;opacity:.85;transition:transform 150ms;display:inline-block';
         closeAll.addEventListener('click', (e) => {
           e.stopPropagation();
           _dvslDismissAll();
           wrap.remove();
+          _dvslLastSig = '';
         });
+        header.style.cursor = 'pointer';
         header.appendChild(bell);
         header.appendChild(headerText);
+        header.appendChild(caret);
         header.appendChild(closeAll);
         wrap.appendChild(header);
 
         const list = document.createElement('div');
-        list.style.cssText = 'max-height:60vh;overflow-y:auto;background:#001a4a';
+        list.style.cssText = 'max-height:60vh;overflow-y:auto;background:#001a4a;display:none';
+        function setOpen(open) {
+          wrap.dataset.open = open ? '1' : '0';
+          list.style.display = open ? 'block' : 'none';
+          caret.style.transform = open ? 'rotate(180deg)' : '';
+        }
+        header.addEventListener('click', () => setOpen(wrap.dataset.open !== '1'));
+
         visible.forEach(item => {
           const row = document.createElement('div');
           row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);cursor:pointer';
@@ -168,10 +196,9 @@
             e.stopPropagation();
             _dvslDismiss(item);
             row.remove();
-            // If the list is now empty, yank the whole chip. Otherwise refresh
-            // from server so the header count stays accurate.
-            if (!list.children.length) { wrap.remove(); }
-            else { _dvslLastCheck = 0; setTimeout(_dvslCheckPendingNav, 200); }
+            const remaining = list.children.length;
+            if (!remaining) { wrap.remove(); _dvslLastSig = ''; return; }
+            headerText.textContent = remaining + ' new notification' + (remaining === 1 ? '' : 's');
           });
           row.addEventListener('click', () => _dvslConsumeAndNav(item));
           row.appendChild(rowText);
@@ -180,6 +207,7 @@
           list.appendChild(row);
         });
         wrap.appendChild(list);
+        setOpen(false);
       }
       function _dvslConsumeAndNav(item) {
         const token = localStorage.getItem('dvsl-notif-token');
