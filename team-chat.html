@@ -58,14 +58,23 @@
             return;
           }
           const cache = await caches.open('dvsl-pending-nav');
-          const [clickResp, urlResp] = await Promise.all([
-            cache.match('/__dvsl_click_count'),
+          const [urlResp, pushTsResp] = await Promise.all([
             cache.match('/__dvsl_pending_nav'),
+            cache.match('/__dvsl_push_ts'),
           ]);
-          const clicks = clickResp ? (await clickResp.text()).trim() : '0';
-          const url    = urlResp ? (await urlResp.text()).trim() : '';
-          _dvslDiag('clk:' + clicks + ' ' + (url ? ('url:' + url.replace(location.origin,'')) : 'url:none'));
+          const url     = urlResp ? (await urlResp.text()).trim() : '';
+          const pushTs  = pushTsResp ? parseInt((await pushTsResp.text()).trim(), 10) : 0;
+          const ageSec  = pushTs ? Math.round((Date.now() - pushTs) / 1000) : -1;
+          _dvslDiag((url ? ('url:' + url.replace(location.origin,'')) : 'url:none') + ' age:' + ageSec + 's');
           if (!url) return;
+          // Only navigate if the push arrived in the last 60s — otherwise
+          // this is just the user manually reopening the app hours later
+          // and we'd send them somewhere they don't want to go.
+          if (ageSec < 0 || ageSec > 60) {
+            await cache.delete('/__dvsl_pending_nav');
+            await cache.delete('/__dvsl_push_ts');
+            return;
+          }
           const t = new URL(url, location.origin);
           const sameHere =
             t.origin === location.origin &&
@@ -73,12 +82,12 @@
             t.search === location.search &&
             t.hash === location.hash;
           if (sameHere) {
-            // Clear so we don't keep retrying.
             await cache.delete('/__dvsl_pending_nav');
+            await cache.delete('/__dvsl_push_ts');
             return;
           }
-          // NAVIGATE! Clear cache AFTER to be safe.
           await cache.delete('/__dvsl_pending_nav');
+          await cache.delete('/__dvsl_push_ts');
           _dvslDiag('→ navigating to ' + t.pathname + t.search);
           window.location.href = t.href;
         } catch(e) {

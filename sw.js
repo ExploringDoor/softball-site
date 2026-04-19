@@ -32,11 +32,28 @@ firebase.initializeApp({
 // exactly what we put there — not FCM's wrapped `FCM_MSG` structure — so
 // the notificationclick handler below can just read event.notification.data.url.
 const _messaging = firebase.messaging();
-_messaging.onBackgroundMessage((payload) => {
+_messaging.onBackgroundMessage(async (payload) => {
   const d = (payload && payload.data) || {};
   const title = d.title || 'DVSL';
   const body = d.body || '';
   const url = d.url || '/';
+
+  // KEY FIX: write the URL to cache HERE (when the push arrives), not in
+  // notificationclick. iOS PWAs don't reliably fire notificationclick when
+  // the PWA is backgrounded-but-alive — iOS just refocuses the window. So
+  // we stash the URL now; the page polls for it and navigates on resume.
+  try {
+    const cache = await caches.open('dvsl-pending-nav');
+    await cache.put(
+      new Request('/__dvsl_pending_nav'),
+      new Response(url, { headers: { 'content-type': 'text/plain' } })
+    );
+    await cache.put(
+      new Request('/__dvsl_push_ts'),
+      new Response(String(Date.now()), { headers: { 'content-type': 'text/plain' } })
+    );
+  } catch (_) {}
+
   self.registration.showNotification(title, {
     body,
     icon: '/icons/icon-192.png',
@@ -121,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v16-diag';
+const VERSION = 'dvsl-v17-pusharrival';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
