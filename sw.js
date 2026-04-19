@@ -39,7 +39,7 @@ self.addEventListener('notificationclick', function(event) {
   event.waitUntil(clients.openWindow(url));
 });
 
-const VERSION = 'dvsl-v8-push';
+const VERSION = 'dvsl-v9-boxscore-scroll';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
