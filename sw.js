@@ -33,6 +33,15 @@ firebase.initializeApp({
 // banner. One banner = the right behavior.
 firebase.messaging();
 
+// Respond to version queries from page scripts so they can render a
+// small SW-version badge (proves which build is actually live on the
+// phone — useful for debugging iOS PWA update lag).
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'GET_VERSION') {
+    try { event.source?.postMessage({ type: 'VERSION', version: VERSION }); } catch (_) {}
+  }
+});
+
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
 
@@ -62,32 +71,30 @@ self.addEventListener('notificationclick', function(event) {
       } catch (_) {}
     }
 
-    // 2. If any DVSL tab is open → navigate it to the target.
-    //
-    // client.navigate() is unreliable on iOS standalone PWAs — it silently
-    // does nothing while focus() still succeeds, which is why tapping a
-    // notification on an already-backgrounded PWA would just land the user
-    // on whatever page they were last viewing. Workaround: postMessage the
-    // URL to the page and let the page do window.location.href itself.
-    // Each page includes a listener in its SW-registration snippet that
-    // handles {type:'NAVIGATE', url}. We still call navigate() (a no-op on
-    // iOS, but works on Chrome/Android) as a belt-and-suspenders move.
+    // 2. Belt-and-suspenders: tell every in-scope client via postMessage to
+    //    navigate to the target URL. On iOS standalone PWAs, client.navigate()
+    //    silently no-ops — postMessage + window.location.href is the only
+    //    reliable way to move a backgrounded PWA.
     for (const c of allClients) {
       try {
         const cu = new URL(c.url);
-        if (cu.origin !== target.origin) continue;
-        try { c.postMessage({ type: 'NAVIGATE', url: target.href }); } catch (_) {}
-        if ('navigate' in c) { try { await c.navigate(target.href); } catch (_) {} }
-        return c.focus();
+        if (cu.origin === target.origin) {
+          try { c.postMessage({ type: 'NAVIGATE', url: target.href }); } catch (_) {}
+        }
       } catch (_) {}
     }
 
-    // 3. Nothing open → open a fresh window.
+    // 3. ALWAYS call openWindow. On iOS installed PWAs, openWindow() to an
+    //    in-scope URL brings the existing standalone window forward AND
+    //    navigates it — which is exactly what we want. On Chrome/Android it
+    //    opens a new tab if none exists, or refocuses+navigates if one does.
+    //    If a matching window was already open (step 1), we returned early
+    //    above, so this only runs when we actually need movement.
     return clients.openWindow(target.href);
   })());
 });
 
-const VERSION = 'dvsl-v11-navmsg';
+const VERSION = 'dvsl-v12-openwin';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
