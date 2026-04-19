@@ -46,7 +46,11 @@ export default async function handler(req, res) {
   const tokenHash = sha256hex(token);
   const queryUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
 
-  // Structured query: token_hash == hash, ordered by ts desc, limit 20.
+  // Structured query: token_hash == hash. NOTE: no orderBy — a filter +
+  // orderBy on a different field requires a composite index in Firestore.
+  // We'd rather not depend on an index being deployed, so we fetch up to
+  // 100 matching docs and sort them in JS below. token_hash alone has an
+  // auto-created single-field index so this is fast.
   const query = {
     structuredQuery: {
       from: [{ collectionId: 'pending_nav' }],
@@ -57,24 +61,27 @@ export default async function handler(req, res) {
           value: { stringValue: tokenHash },
         },
       },
-      orderBy: [{ field: { fieldPath: 'ts' }, direction: 'DESCENDING' }],
-      limit: 20,
+      limit: 100,
     },
   };
 
   let rows = [];
+  let lastStatus = 0;
+  let lastBody = '';
   try {
     const resp = await fetch(queryUrl, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(query),
     });
+    lastStatus = resp.status;
     if (!resp.ok) {
-      return res.status(200).json({ items: [], error: 'query failed' });
+      try { lastBody = (await resp.text()).slice(0, 400); } catch {}
+      return res.status(200).json({ items: [], error: 'query failed', status: lastStatus, body: lastBody });
     }
     rows = await resp.json();
-  } catch {
-    return res.status(200).json({ items: [], error: 'query threw' });
+  } catch (e) {
+    return res.status(200).json({ items: [], error: 'query threw', detail: String(e).slice(0, 300) });
   }
 
   const now = Date.now();
@@ -106,6 +113,11 @@ export default async function handler(req, res) {
       category: f.category?.stringValue || '',
     });
   }
+
+  // Sort newest-first (we dropped the Firestore orderBy to avoid the
+  // composite-index requirement — cheap to sort ≤100 rows here).
+  items.sort((a, b) => b.ts - a.ts);
+  if (items.length > 20) items.length = 20;
 
   // Fire-and-forget garbage collection of stale docs.
   if (staleDocPaths.length) {
