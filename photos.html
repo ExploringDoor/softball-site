@@ -126,8 +126,13 @@
               transform: translateX(-50%) !important;
               width: 100% !important;
               max-width: 480px !important;
-              height: calc(58px + env(safe-area-inset-bottom)) !important;
-              padding-top: 0 !important;
+              /* Taller + more top padding so icons/labels sit a touch further
+                 from the physical bottom edge. User reported tapping Scores /
+                 Schedule sometimes missed because the hit area ran right into
+                 the home-indicator area. 68px tall + 6px top pad gives the
+                 whole bar a little more breathing room. */
+              height: calc(68px + env(safe-area-inset-bottom)) !important;
+              padding-top: 6px !important;
               padding-left: max(8px, env(safe-area-inset-left)) !important;
               padding-right: max(8px, env(safe-area-inset-right)) !important;
               padding-bottom: env(safe-area-inset-bottom) !important;
@@ -300,12 +305,37 @@
         function _dvslApplyBodyPad() {
           const mobile = window.matchMedia('(max-width: 767px)').matches;
           if (mobile) {
-            document.body.style.paddingBottom = 'calc(72px + env(safe-area-inset-bottom))';
+            // 68px bar + 6px top pad + ~8px gap = 82px of content clearance.
+            document.body.style.paddingBottom = 'calc(82px + env(safe-area-inset-bottom))';
           } else {
             document.body.style.paddingBottom = '';
           }
         }
         window.addEventListener('resize', _dvslApplyBodyPad);
+
+        // Tab bar is built once at load, but the active-tab highlight
+        // needs to react to client-side nav. Fan pages use location.hash
+        // routing (goPage sets #scores / #schedule / #home etc.), and the
+        // History API via goPage fires 'hashchange' or pushState which
+        // doesn't, so we listen to both. User reported: tapping Scores /
+        // Schedule kept Home glowing blue because this only ran at load.
+        function _dvslSyncActiveTab() {
+          const bar = document.getElementById('dvsl-tabbar');
+          if (!bar) return;
+          const active = _dvslCurrentTab();
+          bar.querySelectorAll('[data-tab]').forEach(el => {
+            if (el.dataset.tab === active) el.classList.add('active');
+            else el.classList.remove('active');
+          });
+        }
+        window.addEventListener('hashchange', _dvslSyncActiveTab);
+        window.addEventListener('popstate', _dvslSyncActiveTab);
+        // Also poll briefly after goPage-style navs (pushState doesn't fire
+        // hashchange). Cheap enough — runs on any tab-bar click.
+        document.addEventListener('click', (e) => {
+          const a = e.target && e.target.closest && e.target.closest('#dvsl-tabbar [data-tab]');
+          if (a) setTimeout(_dvslSyncActiveTab, 50);
+        });
 
         // ── More sheet ────────────────────────────────────────────────
         let _dvslSavedScrollY = null;
