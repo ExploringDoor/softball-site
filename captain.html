@@ -52,7 +52,7 @@
         // ── Bottom tab bar + "More" sheet ─────────────────────────────
         const TABS = [
           { id: 'home',     label: 'Home',     icon: '🏠', href: '/#home' },
-          { id: 'scores',   label: 'Scores',   icon: '⚾', href: '/#scores' },
+          { id: 'scores',   label: 'Scores',   icon: '🥎', href: '/#scores' },
           { id: 'schedule', label: 'Schedule', icon: '📅', href: '/#schedule' },
           { id: 'inbox',    label: 'Inbox',    icon: '🔔', href: '/inbox.html', badge: true },
           { id: 'more',     label: 'More',     icon: '⋯',  more: true },
@@ -126,8 +126,10 @@
               transform: translateX(-50%) !important;
               width: 100% !important;
               max-width: 480px !important;
-              height: calc(56px + env(safe-area-inset-bottom)) !important;
-              padding: 0 !important;
+              height: calc(58px + env(safe-area-inset-bottom)) !important;
+              padding-top: 0 !important;
+              padding-left: max(8px, env(safe-area-inset-left)) !important;
+              padding-right: max(8px, env(safe-area-inset-right)) !important;
               padding-bottom: env(safe-area-inset-bottom) !important;
               margin: 0 !important;
               display: flex !important;
@@ -141,24 +143,45 @@
               -webkit-backdrop-filter: none !important;
               box-shadow: 0 -4px 16px rgba(0,0,0,.06) !important;
               z-index: 99995 !important;
-              font: 600 10px/1.1 system-ui,-apple-system,Segoe UI,Inter,sans-serif !important;
+              box-sizing: border-box !important;
+              font: 600 10px/1.1 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,Inter,sans-serif !important;
             }
             #dvsl-tabbar > * {
               flex: 1 1 0; min-width: 0;
               display: flex; flex-direction: column;
               align-items: center; justify-content: center;
-              gap: 3px; padding: 4px 4px;
+              gap: 3px; padding: 4px 2px;
               background: transparent; border: 0;
               color: #8b8b8b; text-decoration: none; cursor: pointer;
               position: relative; -webkit-tap-highlight-color: transparent;
               overflow: visible;
+              box-sizing: border-box;
+              transition: color 160ms ease, transform 160ms ease;
             }
-            #dvsl-tabbar > *.active { color: #002D72; }
-            #dvsl-tabbar .dt-ico { font-size: 20px; line-height: 1; }
+            /* Active tab: vivid navy, bolder label, gentle glow on the icon so
+               it's obvious at a glance which section you're viewing. */
+            #dvsl-tabbar > *.active { color: #0046B4; }
+            #dvsl-tabbar > *.active .dt-ico {
+              text-shadow: 0 0 14px rgba(0,70,180,.55), 0 0 4px rgba(0,70,180,.35);
+              transform: translateY(-1px) scale(1.06);
+            }
+            #dvsl-tabbar > *.active .dt-label {
+              font-weight: 900 !important;
+              letter-spacing: .04em !important;
+            }
+            #dvsl-tabbar > *.active::before {
+              content: ''; position: absolute; top: 0; left: 20%; right: 20%;
+              height: 3px; background: #0046B4; border-radius: 0 0 3px 3px;
+            }
+            #dvsl-tabbar .dt-ico {
+              font-size: 20px; line-height: 1;
+              transition: text-shadow 160ms ease, transform 160ms ease;
+            }
             #dvsl-tabbar .dt-label {
+              font: 700 9.5px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif !important;
               letter-spacing: 0; text-transform: uppercase;
               white-space: nowrap;
-              max-width: 100%;
+              overflow: visible !important;
               text-align: center;
             }
             #dvsl-tabbar .dt-badge {

@@ -138,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v29-polish';
+const VERSION = 'dvsl-v30-polish';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
