@@ -4293,24 +4293,41 @@ document.getElementById('menu-game-over').addEventListener('click', () => {
   showGameOverOverlay();
 });
 
-document.getElementById('menu-reset-game').addEventListener('click', () => {
+document.getElementById('menu-reset-game').addEventListener('click', async () => {
   closeMenuSheet();
   if (!confirm('Reset this game back to 0–0 and return to game select? All scores and stats will be cleared.')) return;
   // Also clear the local backup so we don't resurrect a zombie game on next open
   try { clearLocalState(); } catch(_) {}
-  // Wipe live score + saved game state in Firebase if we have a gameId
-  if (G.gameId) {
+  // Wipe live score + saved game state in Firebase if we have a gameId.
+  // We AWAIT these so a silent quota/permission failure actually surfaces to
+  // the captain — otherwise watch.html keeps showing the pre-reset score
+  // (the game_states docs never got deleted).
+  if (G.gameId && G.gameId !== 'practice') {
+    const gid = G.gameId;
+    const failures = [];
     try {
-      import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js').then(({ doc, deleteDoc, updateDoc }) => {
-        deleteDoc(doc(db, 'live_scores', G.gameId)).catch(() => {});
-        // Delete both shared and per-side state docs
-        deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
-        deleteDoc(doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
-        deleteDoc(doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
-        // Clear live flag + scores on the game doc itself so re-entry starts clean
-        updateDoc(doc(db, 'games', G.gameId), { live: false, away_score: 0, home_score: 0 }).catch(() => {});
-      });
-    } catch(e) {}
+      const { doc: _doc, deleteDoc: _del, updateDoc: _upd } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+      const tries = [
+        ['live_scores/'+gid,        () => _del(_doc(db, 'live_scores', gid))],
+        ['game_states/'+gid,        () => _del(_doc(db, 'game_states', gid))],
+        ['game_states/'+gid+'_away',() => _del(_doc(db, 'game_states', `${gid}_away`))],
+        ['game_states/'+gid+'_home',() => _del(_doc(db, 'game_states', `${gid}_home`))],
+        ['games/'+gid+' (live=false)', () => _upd(_doc(db, 'games', gid), { live: false, away_score: 0, home_score: 0 })],
+      ];
+      await Promise.all(tries.map(([label, fn]) =>
+        fn().catch(err => {
+          // Ignore not-found — that's a successful delete of a nonexistent doc
+          if (err && err.code === 'not-found') return;
+          failures.push(`${label}: ${err?.code || err?.message || err}`);
+        })
+      ));
+    } catch(e) {
+      failures.push(`import: ${e?.message || e}`);
+    }
+    if (failures.length) {
+      alert('Reset partially failed — watch.html may still show the old score.\n\n' + failures.join('\n') +
+            '\n\nIf this mentions quota/resource-exhausted, wait until midnight Pacific for the daily Firestore quota to reset, or upgrade to Blaze plan. Then try Reset again.');
+    }
   }
   // Reset all G state
   Object.assign(G, {
