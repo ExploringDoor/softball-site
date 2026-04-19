@@ -729,23 +729,29 @@ window.playerSendChat = async function() {
   input.value = ''; input.disabled = true; btn.disabled = true;
 
   try {
+    const isCap = !!me.captain;
     await addDoc(collection(db, 'team_messages'), {
       text,
       author_email: me.email || null,
       author_name: me.name || pid,
-      is_captain: false,
+      is_captain: isCap,
       team_id: MY_TEAM.id,
       team_name: MY_TEAM.name || MY_TEAM.id,
       team_color: MY_TEAM.color || '#002D72',
       timestamp: serverTimestamp(),
     });
     // Fire push to teammates (excluding this device).
+    // Title: captain → just their name; player → "TBI — Joe Smith".
     try {
+      const shortCode = MY_TEAM.short || MY_TEAM.id;
+      const pushTitle = isCap
+        ? (me.name || pid)
+        : `${shortCode} — ${me.name || pid}`;
       await fetch('/api/send-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PLAYER_PUSH_SECRET },
         body: JSON.stringify({
-          title: `${MY_TEAM.name || MY_TEAM.id} — ${me.name || pid}`,
+          title: pushTitle,
           body: text.length > 120 ? text.slice(0, 120) + '…' : text,
           category: 'team_chat',
           team: MY_TEAM.id,

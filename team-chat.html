@@ -372,7 +372,10 @@ function savePlayerIdentity(player) {
   IDENTITY = {
     name: player.name || player.id,
     email: player.email || null,
-    is_captain: false,
+    // Player docs seeded via firebase-add-rosters.html have a `captain:true`
+    // flag on the captain's row. Honor it so pushes show the captain's name
+    // alone instead of "TBI — Mark Schwartz".
+    is_captain: !!player.captain,
     player_id: player.id,
   };
   localStorage.setItem('dvsl-chat-identity-' + teamId, JSON.stringify(IDENTITY));
@@ -530,13 +533,20 @@ window.sendMessage = async function() {
       timestamp: serverTimestamp(),
     });
 
-    // Fire push to opted-in team members (excluding this device)
+    // Fire push to opted-in team members (excluding this device).
+    // Title format:
+    //   Captain sending   → "Mark Schwartz"
+    //   Player sending    → "TBI — Joe Smith"  (short team code, never full name)
     try {
+      const shortCode = TEAM?.short || teamId;
+      const pushTitle = IDENTITY.is_captain
+        ? IDENTITY.name
+        : `${shortCode} — ${IDENTITY.name}`;
       await fetch('/api/send-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
         body: JSON.stringify({
-          title: `${TEAM?.name || teamId} — ${IDENTITY.name}`,
+          title: pushTitle,
           body: text.length > 120 ? text.slice(0, 120) + '…' : text,
           category: 'team_chat',
           team: teamId,

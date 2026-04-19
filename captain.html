@@ -3816,11 +3816,20 @@ window.sendTeamMsg = async function() {
     // Fire push notification to opted-in players of this team.
     // Excludes the captain's own FCM token so they don't ping themselves.
     try {
+      // Title is just the captain's real name (e.g. "Mark Schwartz") — cleaner
+      // than "Tifereth Bet Israel Royals — Captain". Look up in the captains
+      // collection by matching email + team; fall back to short-code + Captain.
+      const capDoc = (ALL_CAPTAINS || []).find(c =>
+        c.team_id === captainData.team_id &&
+        (c.email || '').toLowerCase() === (currentUser.email || '').toLowerCase()
+      );
+      const pushTitle = capDoc?.name
+        || `${MY_TEAM?.short || captainData.team_id} — Captain`;
       await fetch('/api/send-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': 'dvsl-push-2026-rkj3849f' },
         body: JSON.stringify({
-          title: `${teamName} — Captain`,
+          title: pushTitle,
           body: text.length > 120 ? text.slice(0, 120) + '…' : text,
           category: 'team_chat',
           team: captainData.team_id,
@@ -3871,12 +3880,20 @@ window.sendCaptMsg = async function() {
     // Fire a push to everyone subscribed to captains_chat (no team filter —
     // this room is league-wide for captains + commissioners).
     try {
-      const senderLabel = MY_TEAM?.short || MY_TEAM?.name || captainData.team_name || captainData.team_id;
+      // Title format: "TBI — Mark Schwartz" — short team code + captain's
+      // real name. Falls back to "<short> — Captain" if we can't find the
+      // captain doc for this logged-in email.
+      const teamShort = MY_TEAM?.short || captainData.team_id;
+      const capDoc = (ALL_CAPTAINS || []).find(c =>
+        c.team_id === captainData.team_id &&
+        (c.email || '').toLowerCase() === (currentUser.email || '').toLowerCase()
+      );
+      const senderName = capDoc?.name || 'Captain';
       await fetch('/api/send-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': 'dvsl-push-2026-rkj3849f' },
         body: JSON.stringify({
-          title: `Captains Chat — ${senderLabel}`,
+          title: `${teamShort} — ${senderName}`,
           body: text.length > 120 ? text.slice(0, 120) + '…' : text,
           category: 'captains_chat',
           url: '/captain.html?tab=captchat',
