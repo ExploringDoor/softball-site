@@ -4654,16 +4654,53 @@ function renderSchedule() {
   if (!GAMES.length) { el.innerHTML = '<div class="empty">No games in schedule</div>'; return; }
 
   const filterTeam = document.getElementById('schedule-team-filter')?.value || 'all';
+  // Build a sortable numeric key per game. Prefer date_iso + time_24, but
+  // fall back to PARSING the human-readable date/time if the ISO fields
+  // are missing — older CSV imports and some legacy games lack them, and
+  // without the fallback almost every game sorts to the top of its week
+  // with a blank date_iso, making the schedule appear "out of order".
+  const _schedKey = (g) => {
+    // Date piece (YYYY-MM-DD → numeric)
+    let dPart = 99991231;
+    if (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) {
+      dPart = parseInt(g.date_iso.replace(/-/g, ''), 10);
+    } else if (g.date) {
+      // Parse "Apr 25" by assuming the current schedule year. Not perfect
+      // across year rollovers but fine within a single season.
+      const parsed = new Date(`${g.date} ${new Date().getFullYear()} 12:00`);
+      if (!isNaN(parsed)) {
+        const y = parsed.getFullYear();
+        const m = String(parsed.getMonth() + 1).padStart(2, '0');
+        const d = String(parsed.getDate()).padStart(2, '0');
+        dPart = parseInt(`${y}${m}${d}`, 10);
+      }
+    }
+    // Time piece (minutes since midnight). Prefer time_24, else parse
+    // "7:00 PM" style from the display string.
+    let tPart = 9999;
+    if (g.time_24 && /^\d{1,2}:\d{2}$/.test(g.time_24)) {
+      const [hh, mm] = g.time_24.split(':').map(Number);
+      tPart = hh * 60 + mm;
+    } else if (g.time) {
+      const m = String(g.time).match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+      if (m) {
+        let hh = parseInt(m[1], 10);
+        const mm = parseInt(m[2], 10);
+        const ampm = (m[3] || '').toUpperCase();
+        if (ampm === 'PM' && hh < 12) hh += 12;
+        if (ampm === 'AM' && hh === 12) hh = 0;
+        tPart = hh * 60 + mm;
+      }
+    }
+    return { wk: g.wk || 9999, d: dPart, t: tPart };
+  };
   const visibleGames = (filterTeam === 'all'
     ? GAMES.slice()
     : GAMES.filter(g => g.away === filterTeam || g.home === filterTeam)
-  ).sort((a, b) =>
-    // Sort by week first, then by ISO date, then by 24h time — so within a week
-    // the rows go earliest-to-latest instead of whatever order Firestore returned.
-    (a.wk || 0) - (b.wk || 0) ||
-    (a.date_iso || '').localeCompare(b.date_iso || '') ||
-    (a.time_24 || '').localeCompare(b.time_24 || '')
-  );
+  ).sort((a, b) => {
+    const ka = _schedKey(a), kb = _schedKey(b);
+    return ka.wk - kb.wk || ka.d - kb.d || ka.t - kb.t;
+  });
   if (!visibleGames.length) {
     const teamLabel = TEAMS.find(t => t.id === filterTeam)?.name || filterTeam;
     el.innerHTML = `<div class="empty">No games scheduled for ${esc(teamLabel)}</div>`;
@@ -5116,54 +5153,82 @@ window.confirmRainOutDay = async function() {
 };
 
 window.saveEditGame = async function(gameId) {
+  const _prev = GAMES.find(x => x.id === gameId);
+  if (!_prev) { toast('Game not found', 'error'); return; }
+
   const dateIso = document.getElementById('eg-date-' + gameId).value;
   const time24  = document.getElementById('eg-time-' + gameId).value;
-  let dateDisplay = '', dayDisplay = '', timeDisplay = '';
+
+  // Build date/time display strings from the form values. If an input is
+  // EMPTY, don't overwrite the previously saved values — otherwise older
+  // games imported without date_iso/time_24 would get their human-readable
+  // `date`/`time` wiped on every edit (which also shuffled sort order, so
+  // the row appeared to "jump to a different game"). Only fields the user
+  // actually filled in are updated.
+  const data = {
+    wk: parseInt(document.getElementById('eg-wk-' + gameId).value) || (_prev.wk || 1),
+    away: document.getElementById('eg-away-' + gameId).value || _prev.away || '',
+    home: document.getElementById('eg-home-' + gameId).value || _prev.home || '',
+    field: document.getElementById('eg-field-' + gameId).value || _prev.field || '',
+    addr: document.getElementById('eg-addr-' + gameId).value.trim(),
+  };
   if (dateIso) {
     const d = new Date(dateIso + 'T12:00:00');
-    dateDisplay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
-    dayDisplay  = d.toLocaleDateString('en-US', { weekday:'short' });
+    data.date_iso = dateIso;
+    data.date = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    data.day  = d.toLocaleDateString('en-US', { weekday:'short' });
+  } else {
+    // Leave date fields untouched — preserves existing human-readable date
+    // on older games that have `date` but no `date_iso`.
+    data.date_iso = _prev.date_iso || '';
+    data.date     = _prev.date || '';
+    data.day      = _prev.day || '';
   }
   if (time24) {
     const [hh, mm] = time24.split(':').map(Number);
     const suffix = hh >= 12 ? 'PM' : 'AM';
-    timeDisplay = `${hh%12||12}:${String(mm).padStart(2,'0')} ${suffix}`;
+    data.time_24 = time24;
+    data.time    = `${hh%12||12}:${String(mm).padStart(2,'0')} ${suffix}`;
+  } else {
+    data.time_24 = _prev.time_24 || '';
+    data.time    = _prev.time || '';
   }
-  const data = {
-    wk: parseInt(document.getElementById('eg-wk-' + gameId).value) || 1,
-    date: dateDisplay, day: dayDisplay, time: timeDisplay,
-    date_iso: dateIso||'', time_24: time24||'',
-    away: document.getElementById('eg-away-' + gameId).value,
-    home: document.getElementById('eg-home-' + gameId).value,
-    field: document.getElementById('eg-field-' + gameId).value,
-    addr: document.getElementById('eg-addr-' + gameId).value.trim()
+
+  // Snapshot pre-edit state for the "what changed" activity log + push.
+  const before = {
+    wk: _prev.wk||'', date: _prev.date||'', time: _prev.time||'',
+    field: _prev.field||'', away: _prev.away||'', home: _prev.home||''
   };
-  // Snapshot pre-edit state for the "what changed" push notification.
-  const _prev = GAMES.find(x => x.id === gameId);
-  const before = _prev ? {
-    date: _prev.date||'', time: _prev.time||'', field: _prev.field||'',
-    away: _prev.away||'', home: _prev.home||''
-  } : null;
+  // Build a reusable diff the activity log AND the push share. Admin's
+  // own notifications panel was showing just "Edited game: X @ Y" with no
+  // diff, even though subscribers got the full "date A → B; time X → Y"
+  // text. Now both use the same summary.
+  const diffs = [];
+  if (before.wk != data.wk) diffs.push(`week: ${before.wk||'—'} → ${data.wk||'—'}`);
+  if (before.date !== data.date) diffs.push(`date: ${before.date||'—'} → ${data.date||'—'}`);
+  if (before.time !== data.time) diffs.push(`time: ${before.time||'—'} → ${data.time||'—'}`);
+  if (before.field !== data.field) diffs.push(`field: ${before.field||'—'} → ${data.field||'—'}`);
+  if (before.away !== data.away || before.home !== data.home) {
+    diffs.push(`matchup: ${getTeamName(before.away)} @ ${getTeamName(before.home)} → ${getTeamName(data.away)} @ ${getTeamName(data.home)}`);
+  }
+  const diffSummary = diffs.length ? diffs.join('; ') : 'no changes';
+
   try {
     await updateDoc(doc(db, 'games', gameId), data);
     const g = GAMES.find(x => x.id === gameId);
     if (g) Object.assign(g, data);
     toast('Game updated!');
-    await logActivity('Schedule', `Edited game: ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk}`);
+    await logActivity(
+      'Schedule',
+      `Edited ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk} — ${diffSummary}`
+    );
 
     // Push notification to subscribers of either team if date/time/field/teams changed.
     try {
-      const diffs = [];
-      if (before) {
-        if (before.date !== data.date) diffs.push(`date: ${before.date||'—'} → ${data.date||'—'}`);
-        if (before.time !== data.time) diffs.push(`time: ${before.time||'—'} → ${data.time||'—'}`);
-        if (before.field !== data.field) diffs.push(`field: ${before.field||'—'} → ${data.field||'—'}`);
-        if (before.away !== data.away || before.home !== data.home) diffs.push('matchup changed');
-      }
       if (diffs.length) {
         sendSchedulePush({
           title: `Schedule update: ${getTeamName(data.away)} @ ${getTeamName(data.home)}`,
-          body: `${data.date} ${data.time} @ ${data.field} — ${diffs.join('; ')}`,
+          body: `${data.date} ${data.time} @ ${data.field} — ${diffSummary}`,
           teams: [data.away, data.home].filter(Boolean),
         });
       }
@@ -5178,8 +5243,43 @@ window.saveEditGame = async function(gameId) {
         localStorage.setItem('dvsl_pending_gcal_games', JSON.stringify(pending));
       }
     } catch(_) {}
+    // Also queue a pending_gcal_syncs doc so the dashboard's yellow
+    // "⚠ Pending Google Calendar sync" banner + badge light up the same
+    // way they do for captain edits. Previously only captain.html wrote
+    // to this collection, so admin-side edits never showed a reminder.
+    // Doc id = gameId so repeated edits coalesce to one row instead of
+    // piling up multiple entries for the same game.
+    if (diffs.length) {
+      try {
+        await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
+          game_id: gameId,
+          teams_label: `${getTeamName(data.away)} @ ${getTeamName(data.home)}`,
+          edited_by: currentUser?.email || 'admin',
+          edited_by_id: '',
+          edited_by_email: currentUser?.email || '',
+          summary: diffSummary,
+          source: 'admin',
+          status: 'pending',
+          timestamp: Timestamp.now(),
+        });
+      } catch(e) { console.warn('Could not queue gcal sync:', e.message); }
+    }
     renderSchedule();
     renderScores();
+    // Post-save: scroll the updated row into view and flash it green so
+    // the admin can instantly see which row actually changed. The weekly
+    // re-sort means the edited game may have jumped positions, which
+    // previously made it look like "the wrong game got changed".
+    requestAnimationFrame(() => {
+      const row = document.getElementById('sched-row-' + gameId);
+      if (row) {
+        try { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_) {}
+        const origBg = row.style.background;
+        row.style.transition = 'background .2s ease';
+        row.style.background = '#d1fae5';
+        setTimeout(() => { row.style.background = origBg || ''; }, 1800);
+      }
+    });
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 

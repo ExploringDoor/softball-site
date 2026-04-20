@@ -138,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v50-safe-area-all-pages';
+const VERSION = 'dvsl-v51-admin-schedule-fixes';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
