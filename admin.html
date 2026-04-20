@@ -4762,9 +4762,10 @@ function renderSchedule() {
         <button class="btn btn-danger btn-sm" onclick="deleteGame('${g.id}')">Delete</button>
       </td>
     </tr>
-    <tr id="sched-edit-${g.id}" style="display:none"><td colspan="9" id="sched-edit-cell-${g.id}"></td></tr>`; }).join('')}
+    `; }).join('')}
     </tbody>
-  </table></div>`;
+  </table></div>
+  <div id="sched-edit-panel" style="display:none;margin-top:14px"></div>`;
 }
 
 function teamOptionsHtml(selected) {
@@ -5037,13 +5038,32 @@ window.importCsvGames = async function() {
 };
 
 window.editGame = function(gameId) {
-  const row = document.getElementById('sched-edit-' + gameId);
-  if (row.style.display !== 'none') { row.style.display = 'none'; return; }
-  row.style.display = 'table-row';
+  // Edit form used to be injected into a hidden <tr> inside the schedule
+  // table (colspan=9). On mobile the table has overflow-x:auto, so the
+  // form's td was as wide as the full table (900+px) — forcing the user
+  // to horizontal-scroll to reach the Time field and Save button.
+  // Now we render the form into a sibling #sched-edit-panel below the
+  // table, which sizes to viewport width naturally.
+  const panel = document.getElementById('sched-edit-panel');
+  if (!panel) return;
+  // Toggle off if the same game is already being edited.
+  if (panel.dataset.editing === gameId && panel.style.display !== 'none') {
+    panel.style.display = 'none';
+    panel.dataset.editing = '';
+    panel.innerHTML = '';
+    return;
+  }
   const g = GAMES.find(x => x.id === gameId);
   if (!g) return;
-  document.getElementById('sched-edit-cell-' + gameId).innerHTML = `
-    <div class="inline-form">
+  panel.dataset.editing = gameId;
+  panel.style.display = 'block';
+  const matchupLbl = `${getTeamName(g.away)} @ ${getTeamName(g.home)}`;
+  panel.innerHTML = `
+    <div class="inline-form" style="border-color:var(--navy);border-width:2px">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px">
+        <span>Editing Wk ${g.wk||'?'} — ${esc(matchupLbl)}</span>
+        <button class="btn btn-outline btn-sm" onclick="closeScheduleEdit()" aria-label="Close edit form">✕</button>
+      </div>
       <div class="form-row">
         <div class="form-col form-col-sm"><label class="form-label">Week</label><input type="number" class="form-input" id="eg-wk-${gameId}" value="${g.wk||''}" min="1"></div>
         <div class="form-col"><label class="form-label">Date</label><input type="date" class="form-input" id="eg-date-${gameId}" value="${esc(g.date_iso||'')}"></div>
@@ -5057,12 +5077,23 @@ window.editGame = function(gameId) {
         <div class="form-col"><label class="form-label">Field</label><select class="form-input" id="eg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
         <div class="form-col"><label class="form-label">Address</label><input type="text" class="form-input" id="eg-addr-${gameId}" value="${esc(g.addr||'')}"></div>
       </div>
-      <div class="form-row">
-        <button class="btn btn-success btn-sm" onclick="saveEditGame('${gameId}')">Save</button>
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('sched-edit-${gameId}').style.display='none'">Cancel</button>
-        <button class="btn btn-sm" style="background:#64748b;color:#fff" onclick="toggleRainout('${gameId}')" title="Mark this game as rained out and push a rainout alert to subscribers">🌧 ${g.rained_out ? 'Un-Rainout' : 'Mark Rainout'}</button>
+      <div class="form-row" style="gap:8px;flex-wrap:wrap">
+        <button class="btn btn-success" onclick="saveEditGame('${gameId}')" style="flex:1 1 120px;min-height:44px">Save</button>
+        <button class="btn btn-outline" onclick="closeScheduleEdit()" style="flex:1 1 100px;min-height:44px">Cancel</button>
+        <button class="btn" style="background:#64748b;color:#fff;flex:1 1 140px;min-height:44px" onclick="toggleRainout('${gameId}')" title="Mark this game as rained out and push a rainout alert to subscribers">🌧 ${g.rained_out ? 'Un-Rainout' : 'Mark Rainout'}</button>
       </div>
     </div>`;
+  // Scroll the panel into view so the admin doesn't have to hunt for it
+  // after tapping Edit on a row further down the table.
+  try { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(_) {}
+};
+
+window.closeScheduleEdit = function() {
+  const panel = document.getElementById('sched-edit-panel');
+  if (!panel) return;
+  panel.style.display = 'none';
+  panel.dataset.editing = '';
+  panel.innerHTML = '';
 };
 
 // Mark a game as rained out (or un-mark it). Toggles g.rained_out and fires
@@ -5093,9 +5124,8 @@ window.toggleRainout = async function(gameId) {
     }
     renderSchedule();
     renderDashboard();
-    // Close the edit row so the status change is obvious on the list.
-    const row = document.getElementById('sched-edit-' + gameId);
-    if (row) row.style.display = 'none';
+    // Close the edit panel so the status change is obvious on the list.
+    if (typeof window.closeScheduleEdit === 'function') window.closeScheduleEdit();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 

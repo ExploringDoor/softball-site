@@ -560,6 +560,21 @@
       text-align:right; font-variant-numeric: tabular-nums;
     }
     .game-card .score.batting{ color:var(--red); }
+    .game-card .card-actions{
+      display:flex; gap:8px; margin-top:4px;
+      border-top:1px solid var(--line); padding-top:10px;
+    }
+    .game-card .card-actions .card-btn{
+      flex:1; padding:10px 12px; border:1px solid var(--line);
+      border-radius:10px; background:var(--card);
+      font-size:13px; font-weight:700; color:var(--ink);
+      display:inline-flex; align-items:center; justify-content:center; gap:6px;
+      cursor:pointer; text-transform:uppercase; letter-spacing:.5px;
+    }
+    .game-card .card-actions .card-btn.primary{
+      background:var(--ink); color:#fff; border-color:var(--ink);
+    }
+    .game-card .card-actions .card-btn:active{ transform:scale(.98); }
 
     .empty{
       background:var(--card); border-radius:14px; border:1px solid var(--line);
@@ -890,8 +905,14 @@ function renderGameCard(gid, g) {
   const away = g.awayTeam || {};
   const home = g.homeTeam || {};
   const battingIsAway = battingSide(g) === 'away';
+  // Card is still tappable (opens Play-by-Play). The two buttons below
+  // give a one-tap shortcut straight to either view — Adam asked for a
+  // "Box Score" button so fans could check how a player is doing without
+  // having to drill in + switch tabs.
+  // stopPropagation on each button prevents the outer card click from
+  // overriding the button's own showDetail() call.
   return `
-    <div class="game-card" onclick="showDetail('${gid}')">
+    <div class="game-card" onclick="showDetail('${gid}','pbp')">
       <div class="inning-row">
         <span class="live-badge">● LIVE</span>
         <span>${inningLabel(g)}</span>
@@ -910,6 +931,10 @@ function renderGameCard(gid, g) {
         </div>
         <div class="score ${!battingIsAway?'batting':''}">${g.homeScore ?? 0}</div>
       </div>
+      <div class="card-actions">
+        <button class="card-btn primary" onclick="event.stopPropagation(); showDetail('${gid}','pbp')">Play-by-Play</button>
+        <button class="card-btn" onclick="event.stopPropagation(); showDetail('${gid}','box')">Box Score</button>
+      </div>
     </div>`;
 }
 
@@ -922,8 +947,14 @@ function renderOffline() {
 }
 
 // ── detail view ───────────────────────────────────────
-function showDetail(gid) {
+// initialTab: 'pbp' (default) or 'box'. Game-card "Box Score" button
+// passes 'box' so the detail view opens directly on the box-score tab
+// without needing a second tap.
+function showDetail(gid, initialTab) {
   currentGameId = gid;
+  if (initialTab === 'pbp' || initialTab === 'box') {
+    window._dvslDetailTab = initialTab;
+  }
   document.getElementById('list').style.display = 'none';
   document.getElementById('detail').style.display = 'block';
   document.getElementById('backBtn').style.display = 'inline-block';
