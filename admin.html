@@ -5348,6 +5348,52 @@ window.deleteGame = async function(gameId) {
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
 
+// One-off utility: set all April games (current year) to 6:00 PM start.
+// Call from admin console: `bulkSetAprilTime('18:00')` — dry-run prints
+// a list first; pass `true` as the second arg to actually commit the
+// writes. Scoped to games whose date_iso starts "YYYY-04-" OR whose
+// human-readable `date` starts "Apr " (matches legacy rows that lack
+// date_iso). Not wired to the UI; kept as an admin-only escape hatch.
+window.bulkSetAprilTime = async function(time24 = '18:00', commit = false) {
+  const yr = new Date().getFullYear();
+  const isoPrefix = `${yr}-04-`;
+  const matches = GAMES.filter(g =>
+    (g.date_iso && g.date_iso.startsWith(isoPrefix)) ||
+    (!g.date_iso && typeof g.date === 'string' && /^Apr\s/i.test(g.date))
+  );
+  const [hh, mm] = time24.split(':').map(Number);
+  const suffix = hh >= 12 ? 'PM' : 'AM';
+  const display = `${hh%12||12}:${String(mm).padStart(2,'0')} ${suffix}`;
+  console.log(`[bulkSetAprilTime] ${matches.length} April ${yr} games → ${display} (${time24})`);
+  console.table(matches.map(g => ({
+    wk: g.wk, date: g.date, date_iso: g.date_iso,
+    old_time: g.time, old_time_24: g.time_24,
+    matchup: `${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
+  })));
+  if (!commit) {
+    console.log('[bulkSetAprilTime] dry run. Re-run with (time, true) to commit.');
+    return matches.length;
+  }
+  let ok = 0, fail = 0;
+  for (const g of matches) {
+    try {
+      await updateDoc(doc(db, 'games', g.id), { time_24: time24, time: display });
+      g.time_24 = time24; g.time = display;
+      ok++;
+    } catch (e) {
+      console.warn('failed', g.id, e.message);
+      fail++;
+    }
+  }
+  toast(`Updated ${ok} April games to ${display}${fail?` (${fail} failed)`:''}`);
+  try {
+    await logActivity('Schedule',
+      `Bulk set ${ok} April ${yr} games to ${display} (${time24})`);
+  } catch(_) {}
+  renderSchedule();
+  return { ok, fail };
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // ROSTERS
 // ═══════════════════════════════════════════════════════════════════
