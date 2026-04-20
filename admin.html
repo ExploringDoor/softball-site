@@ -4699,8 +4699,28 @@ function renderSchedule() {
     : GAMES.filter(g => g.away === filterTeam || g.home === filterTeam)
   ).sort((a, b) => {
     const ka = _schedKey(a), kb = _schedKey(b);
-    return ka.wk - kb.wk || ka.d - kb.d || ka.t - kb.t;
+    // Coerce wk to a number — legacy CSV imports sometimes stored it as a
+    // string ("3"), which when mixed with numbers can confuse subtraction
+    // in edge cases (NaN for non-numeric values). parseInt forces sanity.
+    const kaw = parseInt(ka.wk, 10); const kbw = parseInt(kb.wk, 10);
+    const wa = isNaN(kaw) ? 9999 : kaw;
+    const wb = isNaN(kbw) ? 9999 : kbw;
+    return wa - wb || ka.d - kb.d || ka.t - kb.t;
   });
+  // Diagnostic: log the computed sort keys once per render so we can see
+  // from the console whether the output matches expectations. Remove once
+  // the "schedule out of order" report is resolved.
+  try {
+    console.log('[schedule sort] first 15 rows:',
+      visibleGames.slice(0, 15).map(g => ({
+        wk: g.wk, wk_type: typeof g.wk,
+        date: g.date, date_iso: g.date_iso,
+        time: g.time, time_24: g.time_24,
+        key: _schedKey(g),
+        matchup: `${g.away}@${g.home}`,
+      }))
+    );
+  } catch(_) {}
   if (!visibleGames.length) {
     const teamLabel = TEAMS.find(t => t.id === filterTeam)?.name || filterTeam;
     el.innerHTML = `<div class="empty">No games scheduled for ${esc(teamLabel)}</div>`;
