@@ -4771,7 +4771,29 @@ function buildHomeRecentScores(){
   const wrap=document.getElementById('home-recent-scores-wrap');
   const el=document.getElementById('home-recent-scores');
   if(!wrap||!el) return;
-  const done=SCHEDULE_PREVIEW.filter(g=>g.done).slice(-3).reverse();
+  // Sort done games by actual calendar date DESC (most recent first), then by
+  // wk DESC as tiebreak. Prior logic ("last 3 after sort by wk asc") would
+  // push an early-week game off the list if any later-week games were marked
+  // done — which happens with seed / demo data, or if a makeup game sits in
+  // the future but is already closed out. "Recent Scores" should mean the
+  // games that most recently actually happened.
+  const today = new Date(); today.setHours(0,0,0,0);
+  const toD = g => {
+    const s = g.rawDate || g.date || '';
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  };
+  const done = SCHEDULE_PREVIEW
+    .filter(g => g.done)
+    // Only games that actually happened on or before today — filters out any
+    // stray future-dated games that somehow got marked done.
+    .filter(g => { const d = toD(g); return !d || d <= today; })
+    .sort((a,b) => {
+      const da = toD(a), db = toD(b);
+      if (da && db && da.getTime() !== db.getTime()) return db - da;
+      return (b.wk||0) - (a.wk||0);
+    })
+    .slice(0,3);
   if(!done.length){ wrap.style.display='none'; return; }
   wrap.style.display='block';
   el.innerHTML=done.map(g=>scheduleBlock(g,false)).join('');
