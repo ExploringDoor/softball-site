@@ -138,7 +138,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v56-fullwidth-modals';
+const VERSION = 'dvsl-v57-scorer-audit-and-inbox-archive';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

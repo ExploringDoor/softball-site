@@ -4827,7 +4827,7 @@ function buildSchedule(){
     const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
     const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
     return `<div class="preview-card">
-      <div class="preview-time">${g.time||'TBD'}${g.field?` · ${g.field}`:''}</div>
+      <div class="preview-time">${g.day?g.day.slice(0,3).toUpperCase()+' ':''}${g.date||''}${g.date?' · ':''}${g.time||'TBD'}${g.field?` · ${g.field}`:''}</div>
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,atm?.short||g.away)}</div>
@@ -6556,7 +6556,9 @@ function scheduleBlock(g, isNext){
     </div>`;
   } else {
     const timeStr=g.time||'TBD';
-    const timeField=timeStr+(g.field?` · ${g.field}`:'');
+    const dayPrefix=g.day?g.day.slice(0,3).toUpperCase()+' ':'';
+    const datePart=g.date?`${dayPrefix}${g.date} · `:'';
+    const timeField=datePart+timeStr+(g.field?` · ${g.field}`:'');
     return `<div class="preview-card${isNext?' next':''}">
       <div class="preview-time">${timeField}${g.live?' <span class="live-badge">🔴 LIVE</span>':''}</div>
       <div class="preview-teams">

@@ -609,6 +609,38 @@ a{color:inherit;text-decoration:none}
 /* loading */
 .loading{text-align:center;padding:48px;color:var(--muted);font-size:13px}
 
+/* Tabs: Unread | Archive.
+   Archive is a client-side cache in localStorage (dvsl-inbox-archive).
+   The server deletes pending_nav docs on dismiss, so if we didn't snapshot
+   every notification we see, the user could never revisit an old one. The
+   cache is capped at 100 items, keyed by id, and lives per-device. */
+.inbox-tabs{
+  display:flex;gap:4px;padding:0 20px 0;margin-top:-6px;
+  border-bottom:1px solid var(--border);
+}
+.inbox-tab{
+  background:transparent;border:0;color:var(--muted);cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;
+  letter-spacing:.08em;text-transform:uppercase;
+  padding:12px 16px;border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:all .15s;
+}
+.inbox-tab:hover{color:var(--text)}
+.inbox-tab.active{color:var(--navy);border-bottom-color:var(--navy)}
+.inbox-tab-count{
+  display:inline-block;margin-left:6px;padding:1px 7px;
+  background:var(--navy-dim);color:var(--navy);border-radius:100px;
+  font-size:10px;font-weight:800;min-width:18px;
+}
+.inbox-tab:not(.active) .inbox-tab-count{
+  background:var(--card3);color:var(--muted);
+}
+
+/* Archive cards: muted (no unread dot, faded), but still tappable to
+   re-navigate and still have an X to wipe from local archive. */
+.card.archived{opacity:.72}
+.card.archived .card-dot{display:none}
+
 /* Bell retired in v27 — inbox is now reachable via the bottom Inbox tab. */
 </style>
 </head>
@@ -629,19 +661,93 @@ a{color:inherit;text-decoration:none}
   <div class="page-sub" id="pageSub">Recent alerts from DVSL</div>
 </section>
 
+<div class="inbox-tabs" role="tablist">
+  <button class="inbox-tab active" id="tab-unread"  role="tab" aria-selected="true">
+    Unread<span class="inbox-tab-count" id="tab-unread-count">0</span>
+  </button>
+  <button class="inbox-tab" id="tab-archive" role="tab" aria-selected="false">
+    Archive<span class="inbox-tab-count" id="tab-archive-count">0</span>
+  </button>
+</div>
+
 <div id="list" class="list">
   <div class="loading">Loading…</div>
 </div>
 
 <script>
-// /api bindings — the same endpoints the chip uses. This page only
-// reads the unread list and lets the user dismiss or navigate. No
-// localStorage access beyond the FCM token (written elsewhere when the
-// user opts into pushes).
+// /api bindings — the same endpoints the chip uses. This page reads
+// the unread list (server-side) and also keeps a client-side archive
+// in localStorage so the user can revisit notifications even after the
+// server-side pending_nav doc is deleted on dismiss.
 const TOKEN = localStorage.getItem('dvsl-notif-token');
 const listEl = document.getElementById('list');
 const clearBtn = document.getElementById('clearAllBtn');
 const pageSub = document.getElementById('pageSub');
+const tabUnread  = document.getElementById('tab-unread');
+const tabArchive = document.getElementById('tab-archive');
+const tabUnreadCount  = document.getElementById('tab-unread-count');
+const tabArchiveCount = document.getElementById('tab-archive-count');
+
+// Which tab is showing right now.
+let CURRENT_TAB = 'unread';
+let LAST_UNREAD = []; // most recent fetch — used for tab switching without re-fetching
+
+// ── Archive (localStorage) ──────────────────────────────────────────────
+// Cap at 100 to keep storage trivial; oldest evicted first. Keyed by id
+// so re-snapshotting an item we've already archived is a no-op.
+const ARCHIVE_KEY = 'dvsl-inbox-archive';
+const ARCHIVE_MAX = 100;
+
+function loadArchive() {
+  try {
+    const raw = localStorage.getItem(ARCHIVE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (_) { return []; }
+}
+function saveArchive(arr) {
+  try {
+    // Sort newest first, cap at MAX
+    const trimmed = arr
+      .slice()
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+      .slice(0, ARCHIVE_MAX);
+    localStorage.setItem(ARCHIVE_KEY, JSON.stringify(trimmed));
+  } catch (_) {}
+}
+function archiveSnapshot(items) {
+  if (!Array.isArray(items) || !items.length) return;
+  const existing = loadArchive();
+  const byId = new Map(existing.map(it => [it.id, it]));
+  let changed = false;
+  items.forEach(it => {
+    if (!it || !it.id) return;
+    if (!byId.has(it.id)) {
+      // Strip token_hash etc — only keep what we render
+      byId.set(it.id, {
+        id: it.id,
+        title: it.title || '',
+        body: it.body || '',
+        url: it.url || '/',
+        ts: it.ts || Date.now(),
+        category: it.category || '',
+        image_data_url: it.image_data_url || '',
+        archivedAt: Date.now(),
+      });
+      changed = true;
+    }
+  });
+  if (changed) saveArchive(Array.from(byId.values()));
+}
+function removeFromArchive(id) {
+  if (!id) return;
+  const arr = loadArchive().filter(it => it.id !== id);
+  saveArchive(arr);
+}
+function clearArchive() {
+  try { localStorage.removeItem(ARCHIVE_KEY); } catch (_) {}
+}
 
 function ago(ts) {
   const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1000));
@@ -697,9 +803,13 @@ function dismissAll() {
   }).catch(() => {});
 }
 
-function render(items) {
+function render(items, mode = 'unread') {
   listEl.innerHTML = '';
-  if (!TOKEN) {
+  // Update tab counts (uses LAST_UNREAD and archive, not just `items`).
+  tabUnreadCount.textContent  = String(LAST_UNREAD.length);
+  tabArchiveCount.textContent = String(loadArchive().length);
+
+  if (mode === 'unread' && !TOKEN) {
     listEl.innerHTML = `
       <div class="empty">
         <div class="empty-icon">🔕</div>
@@ -712,6 +822,17 @@ function render(items) {
     return;
   }
   if (!items.length) {
+    if (mode === 'archive') {
+      listEl.innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">🗂️</div>
+          <div class="empty-title">No archived notifications</div>
+          <div class="empty-sub">Once you receive notifications, they'll be saved here so you can revisit them even after dismissing.</div>
+        </div>`;
+      clearBtn.disabled = true;
+      pageSub.textContent = 'Archive is empty';
+      return;
+    }
     listEl.innerHTML = `
       <div class="empty">
         <div class="empty-icon">📭</div>
@@ -724,7 +845,13 @@ function render(items) {
     return;
   }
   clearBtn.disabled = false;
-  pageSub.textContent = items.length + ' unread ' + (items.length === 1 ? 'alert' : 'alerts');
+  if (mode === 'archive') {
+    clearBtn.textContent = 'Clear archive';
+    pageSub.textContent = items.length + ' archived ' + (items.length === 1 ? 'alert' : 'alerts');
+  } else {
+    clearBtn.textContent = 'Clear all';
+    pageSub.textContent = items.length + ' unread ' + (items.length === 1 ? 'alert' : 'alerts');
+  }
 
   // Human-readable category labels + which categories are broadcast from
   // the commissioner (admin) vs from automated systems / captains. Adam's
@@ -752,7 +879,7 @@ function render(items) {
   ]);
   items.forEach(item => {
     const card = document.createElement('div');
-    card.className = 'card';
+    card.className = 'card' + (mode === 'archive' ? ' archived' : '');
 
     const dot = document.createElement('div');
     dot.className = 'card-dot';
@@ -813,23 +940,39 @@ function render(items) {
     x.textContent = '×';
     x.addEventListener('click', (e) => {
       e.stopPropagation();
-      dismiss(item);
+      if (mode === 'archive') {
+        // Archive X: remove from localStorage only. Don't touch server —
+        // the doc was already deleted when it was dismissed the first time.
+        removeFromArchive(item.id);
+      } else {
+        dismiss(item);
+        // Unread dismiss: also remove id from LAST_UNREAD so tab counts update.
+        LAST_UNREAD = LAST_UNREAD.filter(it => it.id !== item.id);
+      }
       card.style.transition = 'all .2s';
       card.style.opacity = '0';
       card.style.transform = 'translateX(20px)';
       setTimeout(() => {
         card.remove();
-        // If the list is now empty, reload the render for the empty state.
-        if (!listEl.querySelector('.card')) render([]);
-        else {
-          const remaining = listEl.querySelectorAll('.card').length;
-          pageSub.textContent = remaining + ' unread ' + (remaining === 1 ? 'alert' : 'alerts');
+        const remaining = listEl.querySelectorAll('.card').length;
+        if (!remaining) {
+          render([], mode);
+        } else {
+          tabUnreadCount.textContent  = String(LAST_UNREAD.length);
+          tabArchiveCount.textContent = String(loadArchive().length);
+          if (mode === 'archive') {
+            pageSub.textContent = remaining + ' archived ' + (remaining === 1 ? 'alert' : 'alerts');
+          } else {
+            pageSub.textContent = remaining + ' unread ' + (remaining === 1 ? 'alert' : 'alerts');
+          }
         }
       }, 200);
     });
 
     card.addEventListener('click', () => {
-      dismiss(item);
+      // Archive-mode tap: re-navigate without server dismiss (doc is gone).
+      // Unread-mode tap: keep existing behavior — dismiss + navigate.
+      if (mode !== 'archive') dismiss(item);
       try {
         const t = new URL(item.url || '/', location.origin);
         window.location.href = t.href;
@@ -844,13 +987,39 @@ function render(items) {
 }
 
 clearBtn.addEventListener('click', () => {
-  dismissAll();
-  render([]);
+  if (CURRENT_TAB === 'archive') {
+    if (!confirm('Clear all archived notifications from this device? This cannot be undone.')) return;
+    clearArchive();
+    render([], 'archive');
+  } else {
+    dismissAll();
+    LAST_UNREAD = [];
+    render([], 'unread');
+  }
 });
+
+function setTab(tab) {
+  CURRENT_TAB = tab;
+  tabUnread .classList.toggle('active', tab === 'unread');
+  tabArchive.classList.toggle('active', tab === 'archive');
+  tabUnread .setAttribute('aria-selected', tab === 'unread'  ? 'true' : 'false');
+  tabArchive.setAttribute('aria-selected', tab === 'archive' ? 'true' : 'false');
+  if (tab === 'archive') {
+    render(loadArchive(), 'archive');
+  } else {
+    render(LAST_UNREAD, 'unread');
+  }
+}
+tabUnread .addEventListener('click', () => setTab('unread'));
+tabArchive.addEventListener('click', () => setTab('archive'));
 
 async function refresh() {
   const items = await fetchItems();
-  render(items);
+  LAST_UNREAD = items;
+  // Snapshot any newly-seen items into the archive cache. Even if the user
+  // dismisses immediately, we'll still have a copy.
+  archiveSnapshot(items);
+  render(CURRENT_TAB === 'archive' ? loadArchive() : items, CURRENT_TAB);
 }
 
 refresh();

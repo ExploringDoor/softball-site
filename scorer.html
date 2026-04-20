@@ -2943,6 +2943,13 @@
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-muted);margin-bottom:6px;">NOTES (OPTIONAL)</div>
       <input class="pem-input" id="pem-desc" type="text" autocomplete="off" placeholder="Edit description...">
     </div>
+    <!-- Footer note: explain what Correct Play does and doesn't reverse,
+         so captains aren't surprised when fixing an old play doesn't
+         rewind a run that already scored. -->
+    <div style="padding:0 16px 14px;font-family:'Barlow',sans-serif;font-size:12px;line-height:1.45;color:var(--text-muted);">
+      <strong style="color:var(--text);font-weight:700;">Adjusts:</strong> batter stat line (AB/H/SO/BB) and pitcher stat line (H/BB/K).<br>
+      <strong style="color:var(--text);font-weight:700;">Does not adjust:</strong> the inning's outs, runners on base, or the score. For a recent mistake use <em>Cancel</em> to undo and re-enter; this option is for fixing the box score.
+    </div>
   </div>
 </div>
 
@@ -3616,12 +3623,17 @@ function endAtBat(result, details) {
     return;
   } else if (result === 'batterinterference') {
     G.outs++;
+    const psBI = currentPitcherStats(fieldingTeam());
+    if (psBI && G.outs <= 3) psBI.outs++;
     logPlay('Out', 'BI — Batter interference');
     flashFeedback('OUT', 'var(--red)');
     advanceLineup(team);
   } else {
-    // fallback out
+    // fallback out — generic "out" with no specific result type. Still
+    // counts as an out for the pitcher (otherwise IP under-counts).
     G.outs++;
+    const psFB = currentPitcherStats(fieldingTeam());
+    if (psFB && G.outs <= 3) psFB.outs++;
     logPlay('Out', 'Out');
     flashFeedback('OUT', 'var(--red)');
     advanceLineup(team);
@@ -3774,9 +3786,14 @@ function confirmDoublePlay() {
       outNames.push(nm + (entry.isBatter ? ' (batter)' : ` (from ${entry.from === 1 ? '1st' : entry.from === 2 ? '2nd' : '3rd'})`));
     } else if (entry.sel === 'score') {
       if (team === 'away') G.awayScore++; else G.homeScore++;
-      if (!entry.isBatter) markRunnerScored(entry.runner, team);
-      const ps = currentPitcherStats(fTeam);
-      if (ps) ps.r++;
+      if (!entry.isBatter) {
+        markRunnerScored(entry.runner, team); // handles pitcher R credit
+      } else {
+        // Batter scoring on this play isn't a "runner", so mRS isn't called.
+        // Credit pitcher R explicitly.
+        const ps = currentPitcherStats(fTeam);
+        if (ps) ps.r = (ps.r || 0) + 1;
+      }
     } else {
       G.runners[entry.sel] = entry.runner;
     }
@@ -3963,12 +3980,9 @@ function confirmRunnerAdvance() {
   _rasRunners.forEach(({ runner, sel }) => {
     if (sel === 'score') {
       if (team === 'away') G.awayScore++; else G.homeScore++;
-      markRunnerScored(runner, team);
+      markRunnerScored(runner, team); // handles pitcher R credit
       if (stats) stats.rbi = (stats.rbi || 0) + 1;
       rbiFromRunners++;
-      // Track pitcher R — pitcher is fielding team (opposite of batting team)
-      const pStatsR = currentPitcherStats(team === 'away' ? 'home' : 'away');
-      if (pStatsR) pStatsR.r++;
     } else if (sel === 'out') {
       if (G.outs < 3) {  // cap at 3 to prevent IP overcounting
         G.outs++;
@@ -4013,21 +4027,40 @@ function markRunnerScored(runner, team) {
   if (pid && G.playerStats[team] && G.playerStats[team][pid]) {
     G.playerStats[team][pid].r = (G.playerStats[team][pid].r || 0) + 1;
   }
+  // Credit opposing pitcher with a run allowed. Centralising this here (rather
+  // than duplicating `pStatsR.r++` at every call site) is what prevents the
+  // "pitcher R < team R" drift that burned us in SA @ BOB May 5: bases-loaded
+  // walk-ins and manual runner-move-to-home were the two paths that forgot
+  // to increment pitcher R, so one of BOB's 3 runs never hit Palman's line.
+  // If you add a new scoring path in the future, call this function and you
+  // get correct pitcher accounting for free.
+  const fTeam = team === 'away' ? 'home' : 'away';
+  const ps = currentPitcherStats(fTeam);
+  if (ps) ps.r = (ps.r || 0) + 1;
 }
 
 // ===== LOG PLAY =====
 function logPlay(resultLabel, desc) {
   const b = currentBatter();
   const team = battingTeam();
+  const fTeam = team === 'away' ? 'home' : 'away';
+  const pitcher = G.pitchers[fTeam];
   const player = b ? `#${b.num} ${b.name}` : 'Batter';
   const teamShort = team === 'away' ? G.awayTeam.short : G.homeTeam.short;
   const pid = b ? (b.pid || b.id || b.name) : null;
+  // Capture which pitcher was on the mound for this play so the Correct
+  // Play feature can debit/credit the right pitcher's stat line — even
+  // after a pitching change has happened later in the game. Without this
+  // a correction silently hits whoever is pitching now.
+  const pitcherPid = pitcher ? (pitcher.pid || pitcher.name) : null;
   G.playLog.unshift({
     inning: inningDisplay(),
     team: teamShort,
     battingTeam: team,
+    fieldingTeam: fTeam,
     player,
     pid,
+    pitcherPid,
     result: resultLabel,
     desc,
     score: `${G.awayScore}-${G.homeScore}`,
@@ -4349,9 +4382,11 @@ function triggerHR(batter, sid, team, isItphr) {
     if (team === 'away') G.awayScore += runs;
     else G.homeScore += runs;
 
-    // Track pitcher runs allowed for HR
+    // Track pitcher runs allowed for HR. Base runners were already credited
+    // to the pitcher inside markRunnerScored above, so we only add +1 here
+    // for the batter (who doesn't go through markRunnerScored).
     const pStatsHRr = currentPitcherStats(team === 'away' ? 'home' : 'away');
-    if (pStatsHRr) { pStatsHRr.r = (pStatsHRr.r || 0) + runs; pStatsHRr.outs = (pStatsHRr.outs || 0); }
+    if (pStatsHRr) { pStatsHRr.r = (pStatsHRr.r || 0) + 1; pStatsHRr.outs = (pStatsHRr.outs || 0); }
 
     // Log HR details for box score notes
     const runnersOnCount = [1,2,3].filter(b => runnersOnBase[b]).length;
@@ -4779,22 +4814,32 @@ document.getElementById('runner-sheet-overlay').addEventListener('click', (e) =>
 
 function handleRunnerMove(runner, fromBase, targetBase, result) {
   snapshotState();
+  // Friendly runner label for the play log.
+  const rName = runner ? ((runner.name && runner.name !== 'Batter') ? runner.name : ('#' + (runner.num || '?'))) : 'Runner';
+  const fromLabel = fromBase === 1 ? '1st' : fromBase === 2 ? '2nd' : fromBase === 3 ? '3rd' : ('base ' + fromBase);
+  const toLabel   = targetBase === 'home' ? 'home' : (targetBase === 1 ? '1st' : targetBase === 2 ? '2nd' : targetBase === 3 ? '3rd' : ('base ' + targetBase));
   if (result === 'safe') {
     // Move runner
     G.runners[fromBase] = null;
     if (targetBase === 'home') {
-      // Score
+      // Score — markRunnerScored credits batter R + pitcher R.
       const team = battingTeam();
       if (team === 'away') G.awayScore++;
       else G.homeScore++;
       markRunnerScored(runner, team);
+      logPlay('Run', `${rName} scores from ${fromLabel}`);
     } else {
       G.runners[parseInt(targetBase)] = runner;
+      logPlay('Advance', `${rName} advances ${fromLabel} → ${toLabel}`);
     }
   } else {
-    // Out
+    // Out — credit the pitcher's IP. Without this the pitcher under-counts
+    // outs (same class of bug as the SA @ BOB pitcher R drift).
     G.runners[fromBase] = null;
     G.outs++;
+    const psRun = currentPitcherStats(fieldingTeam());
+    if (psRun && G.outs <= 3) psRun.outs++;
+    logPlay('Out', `${rName} out ${fromLabel} → ${toLabel}`);
     flashFeedback('OUT', 'var(--red)');
     if (G.outs >= 3) {
       setTimeout(() => endHalfInning(), 800);
@@ -5386,6 +5431,28 @@ function statsForResult(key) {
   }
 }
 
+// Pitcher-side mirror of statsForResult. Used by Correct Play so that
+// changing a strikeout → single ALSO debits the K from the pitcher's line
+// and credits the H. Intentionally does NOT touch `outs` — outs are
+// already encoded in inning progression (G.outs / endHalfInning) and
+// can't be safely rewound by a correction made several plays later.
+// Same reason we don't touch team R / G.runners here: by the time a
+// correction is made, those have already moved on. Use Cancel/undo if
+// you need to rewind state, not Correct Play.
+function pitcherStatsForResult(key) {
+  switch (key) {
+    case 'single':    return { h:1 };
+    case 'double':    return { h:1 };
+    case 'triple':    return { h:1 };
+    case 'homerun':   return { h:1 };
+    case 'error':     return {};
+    case 'out':       return {};
+    case 'strikeout': return { k:1 };
+    case 'walk':      return { bb:1 };
+    default:          return {};
+  }
+}
+
 function applyStatDelta(stats, delta, sign) {
   if (!stats) return;
   Object.entries(delta).forEach(([k, v]) => {
@@ -5490,19 +5557,31 @@ document.getElementById('pem-save-btn').addEventListener('click', () => {
   const entry = G.playLog[_editingPlayIdx];
 
   if (_pemNewResult && _pemNewResult !== inferResultKey(entry.result)) {
-    // Reverse old stat impact
     const oldKey   = inferResultKey(entry.result);
     const oldDelta = statsForResult(oldKey);
+    const newDelta = statsForResult(_pemNewResult);
+
+    // ── Batter stats ───────────────────────────────────────────────
     if (entry.pid && entry.battingTeam && G.playerStats[entry.battingTeam]) {
       const stats = G.playerStats[entry.battingTeam][entry.pid];
-      if (stats) applyStatDelta(stats, oldDelta, -1);
+      if (stats) {
+        applyStatDelta(stats, oldDelta, -1);
+        applyStatDelta(stats, newDelta, +1);
+      }
     }
 
-    // Apply new stat impact
-    const newDelta = statsForResult(_pemNewResult);
-    if (entry.pid && entry.battingTeam && G.playerStats[entry.battingTeam]) {
-      const stats = G.playerStats[entry.battingTeam][entry.pid];
-      if (stats) applyStatDelta(stats, newDelta, +1);
+    // ── Pitcher stats (same play, same pitcher who threw it) ───────
+    // Use entry.pitcherPid + entry.fieldingTeam captured at logPlay time
+    // so corrections to old plays still hit the right pitcher's line
+    // even if a pitching change happened later in the game.
+    const fTeam = entry.fieldingTeam ||
+                  (entry.battingTeam === 'away' ? 'home' : 'away');
+    if (entry.pitcherPid && fTeam && G.pitcherStats[fTeam]) {
+      const pStats = G.pitcherStats[fTeam][entry.pitcherPid];
+      if (pStats) {
+        applyStatDelta(pStats, pitcherStatsForResult(oldKey), -1);
+        applyStatDelta(pStats, pitcherStatsForResult(_pemNewResult), +1);
+      }
     }
 
     // Update result label
@@ -6741,6 +6820,24 @@ async function saveBoxScore(isFinal = false) {
     const homeLineup   = buildLineupArray('home');
     const awayPitchers = buildPitcherArray('away');
     const homePitchers = buildPitcherArray('home');
+
+    // ── Sanity check: pitcher R should match opposing team score ──
+    // Away pitchers face home batters, so sum(awayPitchers.r) must equal
+    // G.homeScore. If not, accounting has drifted (the exact class of bug that
+    // bit SA @ BOB on May 5 — one BOB run didn't land on Palman's line).
+    // Logs a console warning AND (on final submit) surfaces it as a toast
+    // so the captain can fix it before the box score goes public.
+    try {
+      const awayPR = awayPitchers.reduce((a, p) => a + (p.r || 0), 0);
+      const homePR = homePitchers.reduce((a, p) => a + (p.r || 0), 0);
+      if (awayPR !== G.homeScore || homePR !== G.awayScore) {
+        const msg = `Pitcher R mismatch: away pitchers R=${awayPR} vs home score=${G.homeScore}, home pitchers R=${homePR} vs away score=${G.awayScore}.`;
+        console.warn('[saveBoxScore]', msg);
+        if (isFinal && typeof flashFeedback === 'function') {
+          flashFeedback('CHECK PITCHER R', 'var(--red)');
+        }
+      }
+    } catch (_) {}
 
     // ── Player of the Game: pick the best batter across both lineups ──
     // Score = HR×4 + 3B×3 + 2B×2 + H + RBI×2 + R (matches index.html openRecap formula)
