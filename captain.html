@@ -2845,21 +2845,33 @@ window.submitScoreOnly = async function(gameId) {
     const myId = captainData.team_id;
     const isHome = g.home===myId; const myRole=isHome?'home':'away'; const otherRole=isHome?'away':'home';
     await submitBoxScoreUnified(gameId, boxScoreData, myRole);
-    const gameUpdate = { [`score_submitted_${myRole}_away`]:awayFinal, [`score_submitted_${myRole}_home`]:homeFinal, [`score_submitted_${myRole}_by`]:captainData.team_name, score_pending:true };
-    const otherAway=g[`score_submitted_${otherRole}_away`]; const otherHome=g[`score_submitted_${otherRole}_home`];
-    if (otherAway!==undefined&&otherHome!==undefined) {
-      // Per-side authority: each captain's own team score is authoritative.
-      const finalAway = isHome ? otherAway : awayFinal;
-      const finalHome = isHome ? homeFinal : otherHome;
-      const scoresMatch = otherAway===awayFinal && otherHome===homeFinal;
-      Object.assign(gameUpdate, {
-        done:true, away_score:finalAway, home_score:finalHome,
-        score_confirmed:true, score_pending:false,
-        score_conflict: !scoresMatch,
-        ...(scoresMatch ? {} : { has_discrepancy: true })
-      });
-    }
     const _wasDone = !!g.done;
+    // First-submit-wins policy: whoever submits first finalizes the game.
+    // A later submission from the other captain is still recorded (for the
+    // audit trail) and flags a discrepancy if it disagrees — admin can
+    // reconcile after the fact.
+    const gameUpdate = {
+      [`score_submitted_${myRole}_away`]: awayFinal,
+      [`score_submitted_${myRole}_home`]: homeFinal,
+      [`score_submitted_${myRole}_by`]:  captainData.team_name,
+    };
+    if (!_wasDone) {
+      Object.assign(gameUpdate, {
+        done: true,
+        away_score: awayFinal,
+        home_score: homeFinal,
+        score_confirmed: true,
+        score_pending: false,
+        score_conflict: false,
+      });
+    } else {
+      const storedAway = (typeof g.away_score === 'number') ? g.away_score : awayFinal;
+      const storedHome = (typeof g.home_score === 'number') ? g.home_score : homeFinal;
+      if (storedAway !== awayFinal || storedHome !== homeFinal) {
+        gameUpdate.score_conflict = true;
+        gameUpdate.has_discrepancy = true;
+      }
+    }
     await updateDoc(doc(db,'games',gameId), gameUpdate);
     const gObj = MY_GAMES.find(x=>x.id===gameId);
     if (gObj) Object.assign(gObj, gameUpdate);
@@ -2874,7 +2886,12 @@ window.submitScoreOnly = async function(gameId) {
     }
     if (gameUpdate.done) await recalcStandingsFromAllGames();
     document.getElementById('boxscore-entry-'+gameId).style.display='none';
-    toast('Score submitted!','success');
+    const msg = !_wasDone
+      ? 'Score submitted — game is now final! (Admin can edit later if needed.)'
+      : (gameUpdate.has_discrepancy
+          ? 'Submitted — but your score differs from the already-final result. Flagged for admin review.'
+          : 'Score submitted — matches the final on record.');
+    toast(msg,'success');
     await loadAllData();
   } catch(e) { toast('Error: '+e.message,'error'); }
 };
@@ -3499,51 +3516,44 @@ window.submitBoxScore = async function(gameId) {
   const myRole = isHome ? 'home' : 'away';
   const otherRole = isHome ? 'away' : 'home';
 
+  // First-submit-wins policy: whoever submits first finalizes the game.
+  // A later submission still gets recorded (for the audit trail) and flags
+  // a discrepancy if it disagrees — admin reconciles after the fact.
+  const _wasDone = !!g.done;
   const gameUpdate = {
     [`score_submitted_${myRole}_away`]: awayFinal,
     [`score_submitted_${myRole}_home`]: homeFinal,
-    [`score_submitted_${myRole}_by`]: captainData.team_name,
-    score_pending: true
+    [`score_submitted_${myRole}_by`]:  captainData.team_name,
   };
 
-  const otherAwayKey = `score_submitted_${otherRole}_away`;
-  const otherHomeKey = `score_submitted_${otherRole}_home`;
-  const otherHasSubmitted = g[otherAwayKey] !== undefined && g[otherHomeKey] !== undefined;
+  let finalStatus = 'approved';
+  let toastMsg = 'Box score submitted — game is now final! (Admin can edit later if needed.)';
 
-  let finalStatus = 'pending';
-  let toastMsg = 'Box score submitted! Waiting for the other captain to confirm.';
-
-  if (otherHasSubmitted) {
-    const otherAway = g[otherAwayKey];
-    const otherHome = g[otherHomeKey];
-    // Per-side authority: each captain's own team score is the authoritative one.
-    const finalAway = isHome ? otherAway : awayFinal;
-    const finalHome = isHome ? homeFinal : otherHome;
+  if (!_wasDone) {
     gameUpdate.done = true;
-    gameUpdate.away_score = finalAway;
-    gameUpdate.home_score = finalHome;
+    gameUpdate.away_score = awayFinal;
+    gameUpdate.home_score = homeFinal;
     gameUpdate.score_confirmed = true;
     gameUpdate.score_pending = false;
-    if (otherAway === awayFinal && otherHome === homeFinal) {
-      gameUpdate.score_conflict = false;
-      finalStatus = 'approved';
-      toastMsg = 'Scores match! Box score and game are now live.';
-    } else {
-      // Scores differ — still auto-finalize using per-side authority, but flag
-      // the discrepancy so it surfaces in admin review.
+    gameUpdate.score_conflict = false;
+  } else {
+    const storedAway = (typeof g.away_score === 'number') ? g.away_score : awayFinal;
+    const storedHome = (typeof g.home_score === 'number') ? g.home_score : homeFinal;
+    if (storedAway !== awayFinal || storedHome !== homeFinal) {
       gameUpdate.score_conflict = true;
       gameUpdate.has_discrepancy = true;
       finalStatus = 'conflict';
-      toastMsg = `Scores differ — using ${getTeamName(g.away)} ${finalAway}–${getTeamName(g.home)} ${finalHome} (each captain authoritative for their own team).`;
-      await logActivity('Score Conflict', `Auto-resolved via per-side authority on game ${gameId}: final ${getTeamName(g.away)} ${finalAway}–${getTeamName(g.home)} ${finalHome}. ${captainData.team_name} said ${awayFinal}–${homeFinal}; other captain said ${otherAway}–${otherHome}`);
-      sendScoreConflictAlert(g, awayFinal, homeFinal, otherAway, otherHome);
+      toastMsg = `Submitted — but your score (${awayFinal}–${homeFinal}) differs from the final on record (${storedAway}–${storedHome}). Flagged for admin review.`;
+      await logActivity('Score Conflict', `Late captain submission on game ${gameId} disagrees with final: stored ${getTeamName(g.away)} ${storedAway}–${getTeamName(g.home)} ${storedHome}; ${captainData.team_name} said ${awayFinal}–${homeFinal}.`);
+      sendScoreConflictAlert(g, awayFinal, homeFinal, storedAway, storedHome);
+    } else {
+      toastMsg = 'Box score submitted — matches the final on record.';
     }
   }
 
-  boxScoreData.status = finalStatus === 'approved' ? 'approved' : (finalStatus === 'conflict' ? 'approved' : 'pending');
+  boxScoreData.status = 'approved';
 
   try {
-    const _wasDone = !!g.done;
     await submitBoxScoreUnified(gameId, boxScoreData, myRole);
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     Object.assign(g, gameUpdate);
@@ -3698,46 +3708,38 @@ window.submitScore = async function(gameId) {
   const myRole = isHome ? 'home' : 'away';
   const otherRole = isHome ? 'away' : 'home';
 
-  // Build the update for this team's submission
+  // First-submit-wins policy: whoever submits first finalizes the game.
+  // A later submission still gets recorded (for the audit trail) and flags
+  // a discrepancy if it disagrees — admin reconciles after the fact.
+  const _wasDone = !!g.done;
   const gameUpdate = {
     [`score_submitted_${myRole}_away`]: awayScore,
     [`score_submitted_${myRole}_home`]: homeScore,
-    [`score_submitted_${myRole}_by`]: captainData.team_name,
-    score_pending: true
+    [`score_submitted_${myRole}_by`]:  captainData.team_name,
   };
 
-  // Check if other team already submitted
-  const otherAwayKey = `score_submitted_${otherRole}_away`;
-  const otherHomeKey = `score_submitted_${otherRole}_home`;
-  const otherHasSubmitted = g[otherAwayKey] !== undefined && g[otherHomeKey] !== undefined;
+  let finalStatus = 'approved';
+  let toastMsg = 'Score submitted — game is now final! (Admin can edit later if needed.)';
 
-  let finalStatus = 'pending';
-  let toastMsg = 'Score submitted! Waiting for the other captain to confirm.';
-
-  if (otherHasSubmitted) {
-    const otherAway = g[otherAwayKey];
-    const otherHome = g[otherHomeKey];
-    // Per-side authority: each captain's own team score is authoritative.
-    const finalAway = isHome ? otherAway : awayScore;
-    const finalHome = isHome ? homeScore : otherHome;
+  if (!_wasDone) {
     gameUpdate.done = true;
-    gameUpdate.away_score = finalAway;
-    gameUpdate.home_score = finalHome;
+    gameUpdate.away_score = awayScore;
+    gameUpdate.home_score = homeScore;
     gameUpdate.score_confirmed = true;
     gameUpdate.score_pending = false;
-    if (otherAway === awayScore && otherHome === homeScore) {
-      gameUpdate.score_conflict = false;
-      finalStatus = 'approved';
-      toastMsg = 'Scores match! Game is now live.';
-    } else {
-      // Scores differ — still auto-finalize using per-side authority, but flag
-      // the discrepancy so admin can review.
+    gameUpdate.score_conflict = false;
+  } else {
+    const storedAway = (typeof g.away_score === 'number') ? g.away_score : awayScore;
+    const storedHome = (typeof g.home_score === 'number') ? g.home_score : homeScore;
+    if (storedAway !== awayScore || storedHome !== homeScore) {
       gameUpdate.score_conflict = true;
       gameUpdate.has_discrepancy = true;
       finalStatus = 'conflict';
-      toastMsg = `Scores differ — using ${getTeamName(g.away)} ${finalAway}–${getTeamName(g.home)} ${finalHome} (each captain authoritative for their own team).`;
-      await logActivity('Score Conflict', `Auto-resolved via per-side authority on game ${gameId}: final ${getTeamName(g.away)} ${finalAway}–${getTeamName(g.home)} ${finalHome}. ${captainData.team_name} said ${awayScore}–${homeScore}; other captain said ${otherAway}–${otherHome}`);
-      sendScoreConflictAlert(g, awayScore, homeScore, otherAway, otherHome);
+      toastMsg = `Submitted — but your score (${awayScore}–${homeScore}) differs from the final on record (${storedAway}–${storedHome}). Flagged for admin review.`;
+      await logActivity('Score Conflict', `Late captain submission on game ${gameId} disagrees with final: stored ${getTeamName(g.away)} ${storedAway}–${getTeamName(g.home)} ${storedHome}; ${captainData.team_name} said ${awayScore}–${homeScore}.`);
+      sendScoreConflictAlert(g, awayScore, homeScore, storedAway, storedHome);
+    } else {
+      toastMsg = 'Score submitted — matches the final on record.';
     }
   }
 
@@ -3756,7 +3758,6 @@ window.submitScore = async function(gameId) {
   };
 
   try {
-    const _wasDone = !!g.done;
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     // Update local state
     Object.assign(g, gameUpdate);
