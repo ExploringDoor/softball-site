@@ -311,7 +311,8 @@
 
       function _dvslApplyBodyPad() {
         const mobile = window.matchMedia('(max-width: 767px)').matches;
-        if (mobile) {
+        const hasTabBar = !!document.getElementById('dvsl-tabbar');
+        if (mobile && hasTabBar) {
           // 74px bar + 8px top pad + 14px bottom pad + ~8px gap = 104px clearance.
           document.body.style.paddingBottom = 'calc(104px + env(safe-area-inset-bottom))';
         } else {
@@ -415,9 +416,13 @@
         setTimeout(() => { if (s) s.remove(); if (b) b.remove(); _dvslUnlockBody(); }, 220);
       }
 
-      // Build the tab bar on every page load (not just when a token exists —
-      // non-subscribers still need navigation).
-      _dvslEnsureTabBar();
+      // Build the tab bar ONLY when running as an installed PWA (home-
+      // screen app). In regular Safari / Chrome we leave the page's own
+      // hamburger menu in place — a phone-style tab bar at the bottom of
+      // a browser tab looks out of place and fights the browser's own
+      // toolbar for screen space.
+      const _dvslIsPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+      if (_dvslIsPwa) _dvslEnsureTabBar();
 
       // ── Inbox badge polling (was the bell) ────────────────────────
       let _dvslLastCheck = 0;

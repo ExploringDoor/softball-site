@@ -313,7 +313,8 @@
 
         function _dvslApplyBodyPad() {
           const mobile = window.matchMedia('(max-width: 767px)').matches;
-          if (mobile) {
+          const hasTabBar = !!document.getElementById('dvsl-tabbar');
+          if (mobile && hasTabBar) {
             // 74px bar + 8px top pad + 14px bottom pad + ~8px gap = 104px clearance.
             document.body.style.paddingBottom = 'calc(104px + env(safe-area-inset-bottom))';
           } else {
@@ -417,9 +418,13 @@
           setTimeout(() => { if (s) s.remove(); if (b) b.remove(); _dvslUnlockBody(); }, 220);
         }
 
-        // Build the tab bar on every page load (not just when a token exists —
-        // non-subscribers still need navigation).
-        _dvslEnsureTabBar();
+        // Build the tab bar ONLY when running as an installed PWA (home-
+        // screen app). In regular Safari / Chrome we leave the page's own
+        // hamburger menu in place — a phone-style tab bar at the bottom of
+        // a browser tab looks out of place and fights the browser's own
+        // toolbar for screen space.
+        const _dvslIsPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+        if (_dvslIsPwa) _dvslEnsureTabBar();
 
         // ── Inbox badge polling (was the bell) ────────────────────────
         let _dvslLastCheck = 0;
@@ -680,6 +685,60 @@
       text-align:center; font-size:11px; color:var(--muted); margin-top:12px;
     }
 
+    /* tabs — Play-by-Play vs Box Score */
+    .detail-tabs{
+      display:flex; gap:4px; margin-bottom: 10px;
+      background: #f2f3f6; border-radius:10px; padding:4px;
+    }
+    .detail-tabs .dtab{
+      flex:1 1 0; padding: 9px 8px; font-size:13px; font-weight:700;
+      letter-spacing: .5px; text-transform:uppercase;
+      color: var(--muted); background: transparent; border:0;
+      border-radius: 7px; cursor:pointer;
+      font-family: inherit;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .detail-tabs .dtab.active{
+      background:#fff; color: var(--navy);
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .tab-pane{ display:none; }
+    .tab-pane.active{ display:block; }
+
+    /* box score tables */
+    .box-section{ margin-bottom: 18px; }
+    .box-section:last-child{ margin-bottom: 0; }
+    .box-section h4{
+      margin: 0 0 6px; font-size: 12px; letter-spacing:1px;
+      text-transform:uppercase; color: var(--navy); font-weight: 800;
+      padding-bottom: 4px; border-bottom: 2px solid var(--navy);
+    }
+    .box-table{
+      width:100%; border-collapse: collapse;
+      font-size: 12px; font-variant-numeric: tabular-nums;
+    }
+    .box-table th, .box-table td{
+      padding: 5px 4px; border-bottom: 1px solid var(--line);
+      text-align: center;
+    }
+    .box-table th{
+      font-size: 10px; letter-spacing: .5px; color: var(--muted);
+      text-transform: uppercase; font-weight: 700;
+    }
+    .box-table th:first-child, .box-table td:first-child{
+      text-align: left; font-weight: 600; color: var(--ink);
+      min-width: 0; max-width: 140px; overflow:hidden;
+      white-space: nowrap; text-overflow: ellipsis;
+      padding-left: 2px;
+    }
+    .box-table .totals td{
+      font-weight: 800; background: #fafbfd;
+      border-top: 1px solid var(--line); border-bottom: 0;
+    }
+    .box-empty{
+      color: var(--muted); font-size: 13px; padding: 6px 0;
+    }
+
     /* small */
     @media (max-width: 420px){
       .game-card .score{ font-size:22px; }
@@ -937,6 +996,11 @@ function renderDetail(gid, g) {
 
   const lineScoreHTML = renderLineScore(g);
   const playLogHTML = renderPlayLog(g);
+  const boxScoreHTML = renderBoxScore(g);
+
+  // Preserve which tab the user had open across snapshot re-renders so
+  // the view doesn't snap back to Play-by-Play every time the scorer taps.
+  const activeTab = window._dvslDetailTab || 'pbp';
 
   document.getElementById('detail').innerHTML = `
     <div class="detail-hero">
@@ -983,10 +1047,134 @@ function renderDetail(gid, g) {
     </div>
 
     ${lineScoreHTML}
-    ${playLogHTML}
+
+    <div class="detail-tabs" role="tablist">
+      <button class="dtab ${activeTab==='pbp'?'active':''}" onclick="switchDetailTab('pbp')">Play-by-Play</button>
+      <button class="dtab ${activeTab==='box'?'active':''}" onclick="switchDetailTab('box')">Box Score</button>
+    </div>
+    <div class="tab-pane ${activeTab==='pbp'?'active':''}" id="tab-pbp">${playLogHTML}</div>
+    <div class="tab-pane ${activeTab==='box'?'active':''}" id="tab-box">${boxScoreHTML}</div>
 
     <div class="updated">${staleNote}</div>
   `;
+}
+
+function switchDetailTab(which) {
+  window._dvslDetailTab = which;
+  document.querySelectorAll('.detail-tabs .dtab').forEach((btn, i) => {
+    const isActive = (i === 0 && which === 'pbp') || (i === 1 && which === 'box');
+    btn.classList.toggle('active', isActive);
+  });
+  const pbp = document.getElementById('tab-pbp');
+  const box = document.getElementById('tab-box');
+  if (pbp) pbp.classList.toggle('active', which === 'pbp');
+  if (box) box.classList.toggle('active', which === 'box');
+}
+window.switchDetailTab = switchDetailTab;
+
+function renderBoxScore(g) {
+  const sections = [];
+  sections.push(buildBattingSection(g, 'away'));
+  sections.push(buildBattingSection(g, 'home'));
+  sections.push(buildPitchingSection(g, 'away'));
+  sections.push(buildPitchingSection(g, 'home'));
+  return `<div class="panel">
+    <h3>Box Score</h3>
+    ${sections.join('')}
+  </div>`;
+}
+
+function teamLabel(g, side) {
+  const t = (side === 'away' ? g.awayTeam : g.homeTeam) || {};
+  return (t.name || t.short || (side === 'away' ? 'Away' : 'Home'));
+}
+
+function buildBattingSection(g, side) {
+  const lineup = (g.lineups && g.lineups[side]) || [];
+  const stats  = (g.playerStats && g.playerStats[side]) || {};
+  // Fall back to stat-keys if lineup wasn't set (rare — but keeps panel
+  // useful even when a captain started scoring without building a lineup).
+  const players = lineup.length
+    ? lineup
+    : Object.keys(stats).map(pid => ({ pid, name: pid, num: '?' }));
+  if (!players.length) {
+    return `<div class="box-section">
+      <h4>${teamLabel(g, side)} — Batting</h4>
+      <div class="box-empty">No at-bats yet.</div>
+    </div>`;
+  }
+  const tot = { ab:0, h:0, d:0, t:0, hr:0, rbi:0, r:0, bb:0, so:0 };
+  const rows = players.map(p => {
+    const pid = p.pid || p.id || p.name;
+    const s = stats[pid] || {};
+    const ab=s.ab||0, h=s.h||0, d=s.doubles||0, tri=s.triples||0, hr=s.hr||0,
+          rbi=s.rbi||0, r=s.r||0, bb=s.bb||0, so=s.so||0;
+    tot.ab+=ab; tot.h+=h; tot.d+=d; tot.t+=tri; tot.hr+=hr;
+    tot.rbi+=rbi; tot.r+=r; tot.bb+=bb; tot.so+=so;
+    const name = `#${p.num || '?'} ${p.name || ''}`.trim();
+    return `<tr>
+      <td>${name}</td>
+      <td>${ab}</td><td>${h}</td><td>${d}</td><td>${tri}</td>
+      <td>${hr}</td><td>${rbi}</td><td>${r}</td><td>${bb}</td><td>${so}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="box-section">
+    <h4>${teamLabel(g, side)} — Batting</h4>
+    <table class="box-table">
+      <thead><tr>
+        <th>Batter</th><th>AB</th><th>H</th><th>2B</th><th>3B</th>
+        <th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>K</th>
+      </tr></thead>
+      <tbody>
+        ${rows}
+        <tr class="totals">
+          <td>Totals</td>
+          <td>${tot.ab}</td><td>${tot.h}</td><td>${tot.d}</td><td>${tot.t}</td>
+          <td>${tot.hr}</td><td>${tot.rbi}</td><td>${tot.r}</td><td>${tot.bb}</td><td>${tot.so}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function buildPitchingSection(g, side) {
+  const pStats = (g.pitcherStats && g.pitcherStats[side]) || {};
+  const keys = Object.keys(pStats);
+  const current = (g.pitchers && g.pitchers[side]) || null;
+  if (!keys.length && !current) {
+    return `<div class="box-section">
+      <h4>${teamLabel(g, side)} — Pitching</h4>
+      <div class="box-empty">No pitcher recorded.</div>
+    </div>`;
+  }
+  let rows;
+  if (!keys.length && current) {
+    rows = `<tr>
+      <td>#${current.num||'?'} ${current.name||''}</td>
+      <td>—</td><td>0</td><td>0</td><td>0</td><td>0</td>
+    </tr>`;
+  } else {
+    rows = keys.map(k => {
+      const s = pStats[k] || {};
+      const outs = s.outs || 0;
+      const ip = Math.floor(outs / 3) + '.' + (outs % 3);
+      const name = `#${s.num||'?'} ${s.name||''}`.trim();
+      return `<tr>
+        <td>${name}</td>
+        <td>${ip}</td>
+        <td>${s.h||0}</td><td>${s.r||0}</td><td>${s.bb||0}</td><td>${s.k||0}</td>
+      </tr>`;
+    }).join('');
+  }
+  return `<div class="box-section">
+    <h4>${teamLabel(g, side)} — Pitching</h4>
+    <table class="box-table">
+      <thead><tr>
+        <th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
 }
 
 function renderLineScore(g) {

@@ -311,7 +311,8 @@
 
         function _dvslApplyBodyPad() {
           const mobile = window.matchMedia('(max-width: 767px)').matches;
-          if (mobile) {
+          const hasTabBar = !!document.getElementById('dvsl-tabbar');
+          if (mobile && hasTabBar) {
             // 74px bar + 8px top pad + 14px bottom pad + ~8px gap = 104px clearance.
             document.body.style.paddingBottom = 'calc(104px + env(safe-area-inset-bottom))';
           } else {
@@ -415,9 +416,13 @@
           setTimeout(() => { if (s) s.remove(); if (b) b.remove(); _dvslUnlockBody(); }, 220);
         }
 
-        // Build the tab bar on every page load (not just when a token exists —
-        // non-subscribers still need navigation).
-        _dvslEnsureTabBar();
+        // Build the tab bar ONLY when running as an installed PWA (home-
+        // screen app). In regular Safari / Chrome we leave the page's own
+        // hamburger menu in place — a phone-style tab bar at the bottom of
+        // a browser tab looks out of place and fights the browser's own
+        // toolbar for screen space.
+        const _dvslIsPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+        if (_dvslIsPwa) _dvslEnsureTabBar();
 
         // ── Inbox badge polling (was the bell) ────────────────────────
         let _dvslLastCheck = 0;
@@ -628,7 +633,7 @@ body.dark [style*="border:1px solid rgba(0,0,0,.08)"]{border-color:rgba(255,255,
 body.dark [style*="border-bottom:1px solid rgba(0,0,0"]{border-bottom-color:rgba(255,255,255,.06)!important}
 
 /* ── NAV ── */
-.nav{position:fixed;top:48px;left:0;right:0;z-index:400;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(255,255,255,0.97);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border)}
+.nav{position:fixed;top:calc(48px + env(safe-area-inset-top, 0px));left:0;right:0;z-index:400;height:62px;display:flex;align-items:center;justify-content:space-between;padding:0 40px;background:rgba(255,255,255,0.97);backdrop-filter:blur(24px) saturate(180%);border-bottom:1px solid var(--border)}
 @media(max-width:700px){.nav{top:64px!important}.mob-menu{top:126px!important}}
 .nav-brand{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:19px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);cursor:pointer;user-select:none;display:flex;align-items:center;gap:10px}
 
@@ -876,10 +881,15 @@ body.dark .nav-team-name{color:#e0e0e0}
 .pcs-lbl{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-family:'Inter',sans-serif;margin-top:1px}
 
 /* ── PLAYER MODAL ── */
-.modal-bg{display:none;position:fixed;inset:0;z-index:800;background:rgba(0,0,0,.82);backdrop-filter:blur(10px);align-items:center;justify-content:center;padding:16px}
+.modal-bg{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.82);backdrop-filter:blur(10px);align-items:center;justify-content:center;padding:16px}
 .modal-bg.open{display:flex}
-.modal-box{background:var(--card);border:1px solid var(--border2);border-radius:18px;width:100%;max-width:700px;max-height:92vh;overflow-y:auto;position:relative;box-shadow:0 32px 80px rgba(0,0,0,.2)}
-.modal-bar{display:flex;justify-content:flex-end;padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card);z-index:10;border-radius:18px 18px 0 0}
+.modal-box{background:var(--card);border:1px solid var(--border2);border-radius:18px;width:100%;max-width:700px;max-height:92vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;position:relative;box-shadow:0 32px 80px rgba(0,0,0,.2)}
+.modal-bar{display:flex;justify-content:flex-end;padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card);z-index:100;border-radius:18px 18px 0 0}
+/* Hide the bottom tab bar (5 icons) whenever any fullscreen modal is
+   open — otherwise the bar floats over the modal's close button and
+   scrollable content on iOS PWA. */
+body.dvsl-modal-open #dvsl-tabbar{display:none!important}
+body.dvsl-modal-open{padding-bottom:0!important}
 .modal-close{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;background:rgba(0,0,0,.04);border:1px solid var(--border2);color:var(--white);border-radius:8px;padding:10px 20px;cursor:pointer;transition:all .2s;min-height:44px;min-width:80px}
 .modal-close:hover{border-color:var(--gold);color:var(--gold)}
 .modal-inner{padding:28px 32px 36px}
@@ -1256,7 +1266,12 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 #score-ticker{
   position:fixed;top:0;left:0;right:0;z-index:200;
   background:#002D72;border-bottom:1px solid rgba(0,0,0,.15);
-  height:48px;display:flex;align-items:stretch;overflow:visible;
+  /* height + padding-top so the ticker content clears iOS PWA's
+     translucent status bar (battery / wifi / time). In plain Safari
+     env(safe-area-inset-top) is 0, so this is a no-op there. */
+  height:calc(48px + env(safe-area-inset-top, 0px));
+  padding-top:env(safe-area-inset-top, 0px);
+  display:flex;align-items:stretch;overflow:visible;
   transition:transform .3s ease,opacity .3s ease;color:#ffffff;
 }
 #score-ticker.hidden{transform:translateY(-100%);opacity:0;pointer-events:none;transition:transform .3s ease,opacity .3s ease}
@@ -1301,6 +1316,10 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 /* Push nav and content down by ticker height */
 /* nav top controlled by JS scroll handler */
 body.ticker-hidden #score-ticker{display:none}
+/* When a fullscreen modal is open, force the ticker off-screen so
+   its blue bar doesn't bleed through the modal backdrop or clip the
+   close button on iOS PWA. */
+body.ticker-force-hide #score-ticker{transform:translateY(-100%)!important;opacity:0!important;pointer-events:none!important;transition:transform .2s ease,opacity .2s ease!important}
 
 /* SCORES */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -2415,7 +2434,7 @@ thead th.sorted-col .sarrow{opacity:1}
 /* Ticker - horizontal scrolling on mobile (unchanged) */
 @media(max-width:700px){
   html,body{overflow-x:hidden!important;max-width:100vw!important;}
-  #score-ticker{overflow:hidden!important;max-width:100vw!important;height:64px!important;min-height:64px!important;}
+  #score-ticker{overflow:hidden!important;max-width:100vw!important;height:calc(64px + env(safe-area-inset-top, 0px))!important;min-height:calc(64px + env(safe-area-inset-top, 0px))!important;padding-top:env(safe-area-inset-top, 0px)!important;}
   .st-scroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;flex:1!important;max-width:100%;}
   .st-track{animation:none!important;transform:none!important;position:static!important;width:max-content!important;display:inline-flex!important;height:64px!important;align-items:stretch!important;}
   .st-game{height:64px!important;padding:0 10px!important;align-items:center!important;overflow:visible!important;}
@@ -2778,20 +2797,6 @@ thead th.sorted-col .sarrow{opacity:1}
   <div class="divider"></div>
 
 
-
-  <div class="divider"></div>
-
-  <div class="divider"></div>
-
-  <!-- ALERTS CTA -->
-  <section class="sec" id="signup-anchor">
-    <div style="text-align:center;padding:40px 18px">
-      <div class="sec-eyebrow">Stay connected</div>
-      <div class="sec-title" style="margin-bottom:12px">Game Day Alerts</div>
-      <p style="color:rgba(0,0,0,.5);font-size:15px;margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto">Get score notifications, rainout alerts, schedule changes, and playoff updates.</p>
-      <a href="notifications.html" style="display:inline-block;background:#002D72;color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase;padding:14px 32px;border-radius:8px;text-decoration:none">🔔 Set Up Alerts</a>
-    </div>
-  </section>
 
   <footer class="ft">
     <div class="ft-logo">⬡ DVSL</div>
@@ -5502,8 +5507,34 @@ function openModal(playerId){
     window._modalLog=p.log;
     window._modalLogRows=logRows;
 
-  document.getElementById('modal-bg').classList.add('open');
-  document.body.style.overflow='hidden';
+  // If we're opening this from inside the Box Score popup, close that
+  // popup first. Stacking two full-screen modals was making the player
+  // modal's close bar unreachable on certain players (the outer popup's
+  // scroll state would push the sticky close button off the top edge).
+  const _scPop = document.getElementById('scPop');
+  if (_scPop && _scPop.classList.contains('open')) {
+    _scPop.classList.remove('open');
+  }
+  const _modalBg = document.getElementById('modal-bg');
+  const _modalBox = _modalBg && _modalBg.querySelector('.modal-box');
+  _modalBg.classList.add('open');
+  // iOS PWA scroll lock: overflow:hidden on <body> silently kills touch
+  // scrolling inside nested scroll containers (the modal), which is why
+  // "you can't scroll" for some players. Use the position:fixed trick
+  // instead — it preserves touch scroll on children. We stash scrollY
+  // on the body and restore it in closeModal().
+  const _y = window.scrollY || 0;
+  document.body.dataset.scrollY = String(_y);
+  document.body.style.position = 'fixed';
+  document.body.style.top = '-' + _y + 'px';
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.width = '100%';
+  // Always land at the top of the modal so the sticky "✕ Close" bar is
+  // visible — prevents a prior player's scroll position from hiding it.
+  if (_modalBox) {
+    requestAnimationFrame(() => { _modalBox.scrollTop = 0; });
+  }
 }
 
 function expandModalStats(playerId){
@@ -5530,7 +5561,16 @@ function expandModalGames(playerId){
 function closeModal(e){
   if(e&&e.target.closest('.modal-box'))return;
   document.getElementById('modal-bg').classList.remove('open');
-  document.body.style.overflow='';
+  // Undo the position:fixed scroll lock and restore scroll position.
+  const _y = parseInt(document.body.dataset.scrollY || '0', 10) || 0;
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
+  document.body.style.overflow = '';
+  delete document.body.dataset.scrollY;
+  window.scrollTo(0, _y);
   history.replaceState(null,'',window.location.pathname+window.location.search);
 }
 document.querySelector('.modal-close').addEventListener('click',()=>closeModal());
@@ -6011,18 +6051,24 @@ function buildTicker2(){
             ticker.style.transform = 'translateY(-100%)';
             ticker.style.opacity = '0';
             ticker.style.pointerEvents = 'none';
-            if(nav) nav.style.top = '0px';
-            if(hbg && isMobile) hbg.style.top = '10px';
-            if(mobMenu) mobMenu.style.top = navH + 'px';
-            if(banner && banner.style.display !== 'none') banner.style.top = navH + 'px';
+            // Ticker slides up and away → nav moves to top of viewport
+            // but still has to clear the iOS status bar in PWA mode, so
+            // we add env(safe-area-inset-top) rather than plain 0.
+            if(nav) nav.style.top = 'env(safe-area-inset-top, 0px)';
+            if(hbg && isMobile) hbg.style.top = 'calc(10px + env(safe-area-inset-top, 0px))';
+            if(mobMenu) mobMenu.style.top = 'calc(' + navH + 'px + env(safe-area-inset-top, 0px))';
+            if(banner && banner.style.display !== 'none') banner.style.top = 'calc(' + navH + 'px + env(safe-area-inset-top, 0px))';
           } else {
             ticker.style.transform = '';
             ticker.style.opacity = '';
             ticker.style.pointerEvents = '';
-            if(nav) nav.style.top = tickerH + 'px';
-            if(hbg && isMobile) hbg.style.top = (tickerH + 10) + 'px';
-            if(mobMenu) mobMenu.style.top = (tickerH + navH) + 'px';
-            if(banner && banner.style.display !== 'none') banner.style.top = (tickerH + navH) + 'px';
+            // Ticker visible → nav sits directly below the (padded) ticker.
+            // tickerH is the CONTENT height; we add env(safe-area-inset-top)
+            // again to account for the extra padding the ticker now carries.
+            if(nav) nav.style.top = 'calc(' + tickerH + 'px + env(safe-area-inset-top, 0px))';
+            if(hbg && isMobile) hbg.style.top = 'calc(' + (tickerH + 10) + 'px + env(safe-area-inset-top, 0px))';
+            if(mobMenu) mobMenu.style.top = 'calc(' + (tickerH + navH) + 'px + env(safe-area-inset-top, 0px))';
+            if(banner && banner.style.display !== 'none') banner.style.top = 'calc(' + (tickerH + navH) + 'px + env(safe-area-inset-top, 0px))';
           }
         }
         ticking = false;
@@ -6032,6 +6078,30 @@ function buildTicker2(){
   }
   window.addEventListener('scroll', onScroll, {passive:true});
   document.addEventListener('scroll', onScroll, {passive:true});
+
+  // Also hide the ticker whenever a fullscreen modal is open (Box Score
+  // popup or Player modal). Those modals have their own internal scroll
+  // containers, so scrolling inside them doesn't fire page-scroll
+  // events — without this hook the ticker would stay pinned at the top
+  // and clip the modal's sticky close bar. We watch class-changes on
+  // both modal roots and toggle body.ticker-force-hide, which the CSS
+  // maps to transform:translateY(-100%) on #score-ticker.
+  function _syncTickerForModals() {
+    const sc = document.getElementById('scPop');
+    const mb = document.getElementById('modal-bg');
+    const open = (sc && sc.classList.contains('open')) ||
+                 (mb && mb.classList.contains('open'));
+    document.body.classList.toggle('ticker-force-hide', !!open);
+    // Also hide the bottom tab bar when any modal is open — otherwise
+    // on iOS PWA the 5-icon bar floats up and over the modal's content
+    // and close button.
+    document.body.classList.toggle('dvsl-modal-open', !!open);
+  }
+  const _mo = new MutationObserver(_syncTickerForModals);
+  ['scPop','modal-bg'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) _mo.observe(el, { attributes: true, attributeFilter: ['class'] });
+  });
 })();
 
 buildTicker2();
