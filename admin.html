@@ -4660,10 +4660,23 @@ function renderSchedule() {
   // without the fallback almost every game sorts to the top of its week
   // with a blank date_iso, making the schedule appear "out of order".
   const _schedKey = (g) => {
-    // Date piece (YYYY-MM-DD → numeric)
+    // Date piece (YYYY-MM-DD → numeric). Check EVERY plausible source,
+    // because legacy CSV imports stored dates inconsistently:
+    //   - some rows have `date_iso` = "2026-04-27" and `date` = "Apr 27"
+    //   - some rows have `date` = "2026-04-27" (ISO in the display field!)
+    //     with `date_iso` EMPTY
+    //   - some only have `date` = "Apr 27" with no year
+    // Previously, when `date` held an ISO string and `date_iso` was empty,
+    // the fallback parser did new Date("2026-04-27 2026 12:00") → NaN, so
+    // every such game got dPart=99991231 and they all tie-sorted to the
+    // bottom in render order (= visibly scrambled within their week).
+    const isoRe = /^\d{4}-\d{2}-\d{2}$/;
     let dPart = 99991231;
-    if (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) {
+    if (g.date_iso && isoRe.test(g.date_iso)) {
       dPart = parseInt(g.date_iso.replace(/-/g, ''), 10);
+    } else if (g.date && isoRe.test(g.date)) {
+      // date field itself was stored as ISO — use it directly.
+      dPart = parseInt(g.date.replace(/-/g, ''), 10);
     } else if (g.date) {
       // Parse "Apr 25" by assuming the current schedule year. Not perfect
       // across year rollovers but fine within a single season.
@@ -4707,30 +4720,40 @@ function renderSchedule() {
     const wb = isNaN(kbw) ? 9999 : kbw;
     return wa - wb || ka.d - kb.d || ka.t - kb.t;
   });
-  // Diagnostic: log the computed sort keys once per render so we can see
-  // from the console whether the output matches expectations. Remove once
-  // the "schedule out of order" report is resolved.
-  try {
-    console.log('[schedule sort] first 15 rows:',
-      visibleGames.slice(0, 15).map(g => ({
-        wk: g.wk, wk_type: typeof g.wk,
-        date: g.date, date_iso: g.date_iso,
-        time: g.time, time_24: g.time_24,
-        key: _schedKey(g),
-        matchup: `${g.away}@${g.home}`,
-      }))
-    );
-  } catch(_) {}
   if (!visibleGames.length) {
     const teamLabel = TEAMS.find(t => t.id === filterTeam)?.name || filterTeam;
     el.innerHTML = `<div class="empty">No games scheduled for ${esc(teamLabel)}</div>`;
     return;
   }
 
+  // Normalize display values for any row where `date` is an ISO string
+  // ("2026-04-27") instead of "Apr 27" — and back-fill `day` if empty.
+  // Display-only; doesn't write back to Firestore. (Firestore normalization
+  // happens on next saveEditGame for that game.)
+  const _isoRe2 = /^\d{4}-\d{2}-\d{2}$/;
+  const _displayDateDay = (g) => {
+    let dateStr = g.date || '';
+    let dayStr  = g.day || '';
+    const isoCandidate =
+      (g.date_iso && _isoRe2.test(g.date_iso)) ? g.date_iso :
+      (_isoRe2.test(dateStr) ? dateStr : '');
+    if (isoCandidate) {
+      const dt = new Date(isoCandidate + 'T12:00:00');
+      if (!isNaN(dt)) {
+        if (!dateStr || _isoRe2.test(dateStr)) {
+          dateStr = dt.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+        }
+        if (!dayStr) {
+          dayStr = dt.toLocaleDateString('en-US', { weekday:'short' });
+        }
+      }
+    }
+    return { dateStr, dayStr };
+  };
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl" id="schedule-table">
     <thead><tr><th>Wk</th><th>Date</th><th>Day</th><th>Time</th><th>Away</th><th>Home</th><th>Field</th><th>Status</th><th>Actions</th></tr></thead>
-    <tbody>${visibleGames.map(g => `<tr id="sched-row-${g.id}">
-      <td>${g.wk||''}</td><td>${esc(g.date||'')}</td><td>${esc(g.day||'')}</td><td>${esc(g.time||'')}</td>
+    <tbody>${visibleGames.map(g => { const _dd = _displayDateDay(g); return `<tr id="sched-row-${g.id}">
+      <td>${g.wk||''}</td><td>${esc(_dd.dateStr)}</td><td>${esc(_dd.dayStr)}</td><td>${esc(g.time||'')}</td>
       <td><strong>${getTeamName(g.away)}</strong></td><td><strong>${getTeamName(g.home)}</strong></td>
       <td>${esc(g.field||'')}</td>
       <td>${g.done ? '<span class="badge badge-done">Final</span>' : '<span class="badge badge-pending">Pending</span>'}</td>
@@ -4739,7 +4762,7 @@ function renderSchedule() {
         <button class="btn btn-danger btn-sm" onclick="deleteGame('${g.id}')">Delete</button>
       </td>
     </tr>
-    <tr id="sched-edit-${g.id}" style="display:none"><td colspan="9" id="sched-edit-cell-${g.id}"></td></tr>`).join('')}
+    <tr id="sched-edit-${g.id}" style="display:none"><td colspan="9" id="sched-edit-cell-${g.id}"></td></tr>`; }).join('')}
     </tbody>
   </table></div>`;
 }
