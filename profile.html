@@ -457,6 +457,20 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 .welcome-card h2{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;margin-bottom:4px}
 .welcome-card p{font-size:13px;opacity:.85}
 
+/* Upcoming-attendance mini cards on My Team */
+.upcoming-game{display:block;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;text-decoration:none;color:inherit;transition:all .15s}
+.upcoming-game:hover{border-color:var(--navy);transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,.06)}
+.upcoming-game .ug-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.upcoming-game .ug-match{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;color:var(--navy);letter-spacing:.02em}
+.upcoming-game .ug-wk{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
+.upcoming-game .ug-when{font-size:12px;color:var(--muted);margin-top:2px}
+.upcoming-game .ug-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:12px;font-weight:600}
+.upcoming-game .ug-chip{padding:3px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;line-height:1.4}
+.upcoming-game .ug-chip.yes{background:rgba(16,185,129,.12);color:var(--green)}
+.upcoming-game .ug-chip.no{background:rgba(220,38,38,.12);color:var(--red)}
+.upcoming-game .ug-chip.maybe{background:rgba(245,158,11,.14);color:#b45309}
+.upcoming-game .ug-chip.pending{background:rgba(107,114,128,.14);color:#4b5563}
+
 /* ── TABLES ── */
 .tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
 .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
@@ -845,6 +859,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
       <div class="welcome-card">
         <h2 id="capt-welcome">Welcome, Captain</h2>
         <p>Manage your team, view your schedule, and submit game scores.</p>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Next Up — Attendance</div>
+        <div class="section-sub" style="margin:-4px 0 10px">Your next 3 games with live availability counts. Tap a game for the full breakdown.</div>
+        <div id="capt-upcoming-attendance"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
       </div>
       <div class="stat-grid" id="capt-team-stats">
         <div class="loading"><div class="spinner spinner-sm"></div> Loading…</div>
@@ -1653,7 +1672,7 @@ window.captainTab = function(name) {
 // ═══════════════════════════════════════════════════════════════════
 // CAPTAIN — My Team
 // ═══════════════════════════════════════════════════════════════════
-function renderCaptainTeamTab() {
+async function renderCaptainTeamTab() {
   const teamFromAll = ALL_TEAMS.find(t => t.id === MY_TEAM.id) || MY_TEAM;
   const myGames = CAPT_ALL_GAMES.filter(g => g.away === MY_TEAM.id || g.home === MY_TEAM.id);
   const done = myGames.filter(g => g.done);
@@ -1680,6 +1699,51 @@ function renderCaptainTeamTab() {
         ? `<div><strong>Next Game:</strong> Wk ${nextGame.wk} · ${nextGame.home===MY_TEAM.id?'vs':'@'} ${esc(getTeamName(nextGame.home===MY_TEAM.id?nextGame.away:nextGame.home))} · ${esc(nextGame.date||'')} ${esc(nextGame.time||'')} ${esc(nextGame.field||'')}</div>`
         : `<div><strong>Next Game:</strong> None scheduled</div>`}
     </div>`;
+
+  // Next 3 upcoming games with availability counts
+  renderCaptainUpcomingAttendance(roster.length);
+}
+
+async function renderCaptainUpcomingAttendance(rosterSize) {
+  const el = document.getElementById('capt-upcoming-attendance');
+  if (!el) return;
+  const upcoming = CAPT_ALL_GAMES
+    .filter(g => (g.away === MY_TEAM.id || g.home === MY_TEAM.id) && !g.done)
+    .sort((a,b) => (a.wk||0) - (b.wk||0))
+    .slice(0, 3);
+  if (!upcoming.length) { el.innerHTML = '<div class="empty">No upcoming games.</div>'; return; }
+  try {
+    const snap = await getDocs(query(collection(db, 'availability'),
+      where('team_id', '==', MY_TEAM.id)));
+    const counts = {};
+    snap.docs.forEach(d => {
+      const a = d.data();
+      if (!counts[a.game_id]) counts[a.game_id] = { yes: 0, no: 0, maybe: 0 };
+      if (a.status === 'yes' || a.status === 'no' || a.status === 'maybe') counts[a.game_id][a.status]++;
+    });
+    el.innerHTML = upcoming.map(g => {
+      const oppId = g.away === MY_TEAM.id ? g.home : g.away;
+      const ha = g.home === MY_TEAM.id ? 'vs' : '@';
+      const c = counts[g.id] || { yes: 0, no: 0, maybe: 0 };
+      const responded = c.yes + c.no + c.maybe;
+      const pending = Math.max(0, (rosterSize || 0) - responded);
+      return `<a href="#" class="upcoming-game" onclick="window.captainTab('attendance');return false">
+        <div class="ug-row">
+          <div class="ug-match">${ha} ${esc(getTeamName(oppId))}</div>
+          <div class="ug-wk">Wk ${g.wk}</div>
+        </div>
+        <div class="ug-when">${esc(g.date||'')} ${esc(g.time||'')}${g.field ? ' · ' + esc(g.field) : ''}</div>
+        <div class="ug-counts">
+          <span class="ug-chip yes">✓ In ${c.yes}/${rosterSize||0}</span>
+          <span class="ug-chip no">✕ Out ${c.no}</span>
+          <span class="ug-chip maybe">? Maybe ${c.maybe}</span>
+          <span class="ug-chip pending">• No response ${pending}</span>
+        </div>
+      </a>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Could not load availability: ' + esc(e.message) + '</div>';
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
