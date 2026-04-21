@@ -892,8 +892,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
     <!-- CAPT: ROSTER -->
     <div class="section" id="csec-roster">
       <div class="section-title">Roster</div>
-      <div class="section-sub">Your team's current roster. For full management (add/edit/delete), use the Captain Portal.</div>
-      <div style="margin-bottom:14px"><a href="/captain.html" class="btn btn-outline btn-sm">Open Full Captain Portal →</a></div>
+      <div class="section-sub">Add, edit, or remove players on your team.</div>
+      <div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" onclick="captOpenAddPlayer()">+ Add Player</button></div>
+      <div id="capt-add-player-form" style="display:none"></div>
       <div id="capt-roster-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading roster…</div></div>
     </div>
 
@@ -1794,24 +1795,146 @@ async function renderCaptainUpcomingAttendance(rosterSize) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// CAPTAIN — Roster
+// CAPTAIN — Roster (full CRUD)
 // ═══════════════════════════════════════════════════════════════════
+const SOFTBALL_POSITIONS = ['P','C','1B','2B','3B','SS','LF','LCF','CF','RCF','RF','DH','UTIL','SUB'];
+function captPosOptionsHtml(selected=''){
+  return '<option value="">-- Position --</option>'+
+    SOFTBALL_POSITIONS.map(p=>`<option value="${p}"${p===selected?' selected':''}>${p}</option>`).join('');
+}
+
 function renderCaptainRoster() {
   const el = document.getElementById('capt-roster-content');
+  if (!el) return;
   const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false)
     .sort((a,b) => (a.num||999) - (b.num||999));
-  if (!roster.length) { el.innerHTML = '<div class="empty">No players yet.</div>'; return; }
-  el.innerHTML = `<div class="tbl-wrap"><div class="tbl-scroll"><table class="tbl">
-    <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Email</th></tr></thead>
-    <tbody>${roster.map(p => `
-      <tr>
-        <td style="font-weight:700">${p.num || '-'}</td>
-        <td>${esc(p.name||'')}</td>
-        <td>${esc(p.position||'-')}</td>
-        <td style="color:var(--muted);font-size:12px">${esc(p.email||'-')}</td>
-      </tr>`).join('')}
-    </tbody></table></div></div>`;
+  if (!roster.length) {
+    el.innerHTML = '<div class="empty">No players on the roster yet. Click "+ Add Player" above.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${roster.length} player(s)</div>
+    <div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>#</th><th>Name</th><th>Pos</th><th class="roster-email-col">Email</th><th>Actions</th></tr></thead>
+      <tbody>${roster.map(p => `<tr>
+        <td style="width:36px">${p.num || '-'}</td>
+        <td><strong>${esc(p.name||'')}</strong></td>
+        <td style="width:48px">${esc(p.pos || p.position || '-')}</td>
+        <td class="roster-email-col" style="color:var(--muted);font-size:12px">${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
+        <td style="white-space:nowrap;width:120px">
+          <button class="btn btn-outline btn-sm" onclick="captEditPlayer('${p.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="captRemovePlayer('${p.id}')">✕</button>
+        </td>
+      </tr>
+      <tr id="capt-player-edit-${p.id}" style="display:none"><td colspan="5" id="capt-player-edit-cell-${p.id}" style="padding:0"></td></tr>`).join('')}
+      </tbody>
+    </table></div>
+  `;
 }
+
+window.captOpenAddPlayer = function() {
+  const el = document.getElementById('capt-add-player-form');
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML = `<div class="inline-form" style="margin-bottom:16px;padding:14px;background:#f8f9fb;border:1px solid var(--border);border-radius:10px">
+    <div class="panel-title" style="margin-bottom:10px">Add Player</div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 80px 1fr;gap:8px;margin-bottom:8px">
+      <div><label class="form-label">Name</label><input type="text" class="form-input" id="cap-ap-name" placeholder="Player name"></div>
+      <div><label class="form-label">#</label><input type="number" class="form-input" id="cap-ap-num" placeholder="#" min="0"></div>
+      <div><label class="form-label">Position</label><select class="form-input" id="cap-ap-pos">${captPosOptionsHtml('')}</select></div>
+    </div>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div><label class="form-label">Email</label><input type="email" class="form-input" id="cap-ap-email" placeholder="player@email.com"></div>
+      <div><label class="form-label">Phone</label><input type="tel" class="form-input" id="cap-ap-phone" placeholder="(215) 555-0100"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success btn-sm" onclick="captSaveNewPlayer()">Add Player</button>
+      <button class="btn btn-outline btn-sm" onclick="captOpenAddPlayer()">Cancel</button>
+    </div>
+  </div>`;
+};
+
+window.captSaveNewPlayer = async function() {
+  const emailVal = document.getElementById('cap-ap-email').value.trim();
+  const phoneVal = document.getElementById('cap-ap-phone').value.trim();
+  const data = {
+    name: document.getElementById('cap-ap-name').value.trim(),
+    num: parseInt(document.getElementById('cap-ap-num').value) || 0,
+    pos: document.getElementById('cap-ap-pos').value.trim(),
+    team: MY_TEAM.id,
+    ...(emailVal && { email: emailVal }),
+    ...(phoneVal && { phone: phoneVal }),
+  };
+  if (!data.name) { toast('Please enter the player\'s name.', 'error'); return; }
+  try {
+    const ref = await addDoc(collection(db, 'players'), data);
+    data.id = ref.id;
+    CAPT_ALL_PLAYERS.push(data);
+    const addForm = document.getElementById('capt-add-player-form');
+    if (addForm) { addForm.style.display = 'none'; addForm.innerHTML = ''; }
+    toast('Player added to roster!');
+    renderCaptainRoster();
+    renderCaptainTeamTab && renderCaptainTeamTab();
+  } catch(e) { toast('Failed to add player: ' + e.message, 'error'); }
+};
+
+window.captEditPlayer = function(playerId) {
+  const row = document.getElementById('capt-player-edit-' + playerId);
+  if (!row) return;
+  if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+  row.style.display = 'table-row';
+  const p = CAPT_ALL_PLAYERS.find(x => x.id === playerId);
+  if (!p) return;
+  document.getElementById('capt-player-edit-cell-' + playerId).innerHTML = `
+    <div style="padding:12px;background:#f8f9fb;border-top:1px solid var(--border)">
+      <div style="display:grid;grid-template-columns:1fr 72px 1fr;gap:8px;margin-bottom:8px">
+        <div><label class="form-label">Name</label><input type="text" class="form-input" id="cap-ep-name-${playerId}" value="${esc(p.name||'')}"></div>
+        <div><label class="form-label">#</label><input type="number" class="form-input" id="cap-ep-num-${playerId}" value="${p.num||''}" min="0"></div>
+        <div><label class="form-label">Position</label><select class="form-input" id="cap-ep-pos-${playerId}">${captPosOptionsHtml(p.pos||p.position||'')}</select></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label class="form-label">Email</label><input type="email" class="form-input" id="cap-ep-email-${playerId}" value="${esc(p.email||'')}" placeholder="player@email.com"></div>
+        <div><label class="form-label">Phone</label><input type="tel" class="form-input" id="cap-ep-phone-${playerId}" value="${esc(p.phone||'')}" placeholder="(215) 555-0100"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-success btn-sm" onclick="captSaveEditPlayer('${playerId}')">Save</button>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('capt-player-edit-${playerId}').style.display='none'">Cancel</button>
+      </div>
+    </div>`;
+};
+
+window.captSaveEditPlayer = async function(playerId) {
+  const emailVal = document.getElementById('cap-ep-email-' + playerId).value.trim();
+  const phoneVal = document.getElementById('cap-ep-phone-' + playerId).value.trim();
+  const data = {
+    name: document.getElementById('cap-ep-name-' + playerId).value.trim(),
+    num: parseInt(document.getElementById('cap-ep-num-' + playerId).value) || 0,
+    pos: document.getElementById('cap-ep-pos-' + playerId).value.trim(),
+    email: emailVal || '',
+    phone: phoneVal || '',
+  };
+  if (!data.name) { toast('Please enter a name.', 'error'); return; }
+  try {
+    await updateDoc(doc(db, 'players', playerId), data);
+    const p = CAPT_ALL_PLAYERS.find(x => x.id === playerId);
+    if (p) Object.assign(p, data);
+    toast('Player updated!');
+    renderCaptainRoster();
+  } catch(e) { toast('Failed to update player: ' + e.message, 'error'); }
+};
+
+window.captRemovePlayer = async function(playerId) {
+  const p = CAPT_ALL_PLAYERS.find(x => x.id === playerId);
+  if (!confirm(`Remove ${p?.name || 'this player'} from the roster?`)) return;
+  try {
+    await deleteDoc(doc(db, 'players', playerId));
+    CAPT_ALL_PLAYERS = CAPT_ALL_PLAYERS.filter(x => x.id !== playerId);
+    toast('Player removed from roster.');
+    renderCaptainRoster();
+    renderCaptainTeamTab && renderCaptainTeamTab();
+  } catch(e) { toast('Failed to remove player: ' + e.message, 'error'); }
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // CAPTAIN — Schedule
