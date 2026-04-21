@@ -1539,19 +1539,75 @@ async function loadPendingNotifications(recentId = 'pnotif-recent') {
       return;
     }
     el.innerHTML = items.slice(0, 20).map(it => `
-      <a href="${esc(it.url || '#')}" class="notif-item" style="text-decoration:none;color:inherit">
+      <div class="notif-item" style="cursor:pointer" onclick="dvslOpenNotif(${JSON.stringify(it.url||'').replace(/"/g,'&quot;')}, ${JSON.stringify(it.category||'').replace(/"/g,'&quot;')}, ${JSON.stringify(it.title||'').replace(/"/g,'&quot;')})">
         <div class="notif-item-ico">🔔</div>
         <div class="notif-item-body">
           <div class="notif-item-title">${esc(it.title || 'Notification')}</div>
           <div class="notif-item-sub">${esc(it.body || '')}</div>
         </div>
-      </a>`).join('');
+      </div>`).join('');
   } catch(e) {
     el.innerHTML = '<div class="empty" style="padding:16px">Could not load: ' + esc(e.message) + '</div>';
   }
 }
 
 window.openNotifSettings = function() { window.location.href = '/inbox.html'; };
+
+// Handle clicks on recent-notification items: same-page taps switch the
+// right tab inside profile.html; off-page URLs get a full navigate.
+// Falls back to category inference when the push didn't set a hash.
+window.dvslOpenNotif = function(url, category, title) {
+  try {
+    const t = (title || '').toLowerCase();
+    const cat = (category || '').toLowerCase();
+    const onProfile = location.pathname === '/profile.html' || location.pathname.endsWith('/profile.html');
+    let u = null;
+    try { u = new URL(url, location.origin); } catch(_) {}
+    const samePage = u && (u.pathname === location.pathname);
+
+    // Map category/title to the correct tab on whichever mode is active.
+    const pickPlayerTab = () => {
+      if (cat === 'team_chat' || cat === 'teamchat' || /chat|message/.test(t)) return 'chat';
+      if (cat === 'photos' || /photo|video/.test(t)) return 'photos';
+      if (cat === 'availability' || cat === 'avail' || /availability|rsvp/.test(t)) return 'avail';
+      return null;
+    };
+    const pickCaptainTab = () => {
+      if (cat === 'team_chat' || cat === 'teamchat') return 'teamchat';
+      if (cat === 'captain_chat' || cat === 'captchat') return 'captchat';
+      if (cat === 'photos' || /photo|video/.test(t)) return 'team';
+      if (cat === 'scores' || /score|final/.test(t)) return 'scores';
+      if (cat === 'availability' || cat === 'avail' || /availability|rsvp/.test(t)) return 'attendance';
+      if (cat === 'announcements' || /announcement/.test(t)) return 'announcements';
+      return null;
+    };
+
+    // Same-page (already on profile.html or url points to profile.html)
+    if (samePage || (u && (u.pathname === '/profile.html' || u.pathname.endsWith('/profile.html')))) {
+      // 1) Explicit hash wins
+      const hash = (u && u.hash || '').replace(/^#/, '');
+      if (hash) {
+        if (MODE === 'player' && typeof window.playerTab === 'function') { window.playerTab(hash); return; }
+        if (MODE === 'captain' && typeof window.captainTab === 'function') { window.captainTab(hash); return; }
+      }
+      // 2) Fall back to category/title inference
+      if (MODE === 'player') {
+        const tab = pickPlayerTab(); if (tab) { window.playerTab(tab); return; }
+      }
+      if (MODE === 'captain') {
+        const tab = pickCaptainTab(); if (tab) { window.captainTab(tab); return; }
+      }
+      // 3) If we're currently on profile.html and couldn't infer, do nothing
+      if (onProfile) return;
+    }
+
+    // Off-page destination — just navigate
+    if (url && url !== '#') location.href = url;
+  } catch(e) {
+    console.warn('dvslOpenNotif failed:', e);
+    if (url && url !== '#') location.href = url;
+  }
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // PLAYER — Media / Photos
