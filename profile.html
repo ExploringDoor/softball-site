@@ -827,13 +827,14 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 
   <div class="tab-nav">
     <div class="tab-item active" data-ctab="team" onclick="window.captainTab('team')">My Team</div>
+    <div class="tab-item" data-ctab="notif" onclick="window.captainTab('notif')">🔔 Notifications <span class="tab-badge" id="cbadge-notif" hidden></span></div>
     <div class="tab-item" data-ctab="roster" onclick="window.captainTab('roster')">Roster</div>
     <div class="tab-item" data-ctab="schedule" onclick="window.captainTab('schedule')">Schedule</div>
     <div class="tab-item" data-ctab="scores" onclick="window.captainTab('scores')">Submit Score</div>
-    <div class="tab-item" data-ctab="payments" onclick="window.captainTab('payments')">Payments</div>
     <div class="tab-item" data-ctab="attendance" onclick="window.captainTab('attendance')">Attendance</div>
     <div class="tab-item" data-ctab="teamchat" onclick="window.captainTab('teamchat')">Team Chat <span class="tab-badge" id="cbadge-teamchat" hidden></span></div>
     <div class="tab-item" data-ctab="captchat" onclick="window.captainTab('captchat')">Captains Chat <span class="tab-badge" id="cbadge-captchat" hidden></span></div>
+    <div class="tab-item" data-ctab="payments" onclick="window.captainTab('payments')">Payments</div>
     <div class="tab-item" data-ctab="announcements" onclick="window.captainTab('announcements')">Announcements</div>
     <div class="tab-item" data-ctab="help" onclick="window.captainTab('help')">❓ Help</div>
   </div>
@@ -852,6 +853,13 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
         <div class="panel-title">Team Overview</div>
         <div id="capt-team-info"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
       </div>
+    </div>
+
+    <!-- CAPT: NOTIFICATIONS -->
+    <div class="section" id="csec-notif">
+      <div class="section-title">Notifications</div>
+      <div class="section-sub">Your push subscription, recent pings, and settings.</div>
+      <div id="cnotif-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
     </div>
 
     <!-- CAPT: ROSTER -->
@@ -1407,8 +1415,9 @@ window.playerDelChat = async function(msgId) {
 // ═══════════════════════════════════════════════════════════════════
 // PLAYER — Notifications tab
 // ═══════════════════════════════════════════════════════════════════
-function renderNotificationsTab() {
-  const el = document.getElementById('pnotif-content');
+function renderNotificationsTab(containerId = 'pnotif-content', recentId = 'pnotif-recent') {
+  const el = document.getElementById(containerId);
+  if (!el) return;
   const isPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
   const hasToken = !!localStorage.getItem('dvsl-notif-token');
 
@@ -1442,17 +1451,17 @@ function renderNotificationsTab() {
 
   html += `<div class="notif-card">
     <div class="notif-card-title">Recent</div>
-    <div id="pnotif-recent">
+    <div id="${recentId}">
       <div class="loading"><div class="spinner spinner-sm"></div> Checking…</div>
     </div>
   </div>`;
 
   el.innerHTML = html;
-  loadPendingNotifications();
+  loadPendingNotifications(recentId);
 }
 
-async function loadPendingNotifications() {
-  const el = document.getElementById('pnotif-recent');
+async function loadPendingNotifications(recentId = 'pnotif-recent') {
+  const el = document.getElementById(recentId);
   if (!el) return;
   const token = localStorage.getItem('dvsl-notif-token');
   if (!token) {
@@ -1630,6 +1639,7 @@ window.captainTab = function(name) {
   try { sessionStorage.setItem('dvsl-profile-captab', name); } catch(_) {}
 
   if (name === 'team')          renderCaptainTeamTab();
+  if (name === 'notif')         renderNotificationsTab('cnotif-content', 'cnotif-recent');
   if (name === 'roster')        renderCaptainRoster();
   if (name === 'schedule')      renderCaptainSchedule();
   if (name === 'scores')        renderCaptainScores();
