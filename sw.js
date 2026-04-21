@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v63-scores-header-week-picker-tabbar-fixes';
+const VERSION = 'dvsl-v64-header-specificity-and-ticker-hide-standalone';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

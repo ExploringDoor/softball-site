@@ -954,5 +954,35 @@ async function loadPlayerPhotos() {
 }
 loadPlayerPhotos();
 </script>
+<script>
+// Hide the score ticker on scroll (and slide the nav up into its place),
+// mirroring index.html.
+(function(){
+  const ticker = document.getElementById('score-ticker');
+  const nav = document.querySelector('nav');
+  if(!ticker) return;
+  let ticking = false;
+  function onScroll(){
+    if(ticking) return;
+    requestAnimationFrame(()=>{
+      const y = window.scrollY || window.pageYOffset || 0;
+      if(y > 10){
+        ticker.style.transform = 'translateY(-100%)';
+        ticker.style.opacity = '0';
+        ticker.style.pointerEvents = 'none';
+        if(nav) nav.style.top = 'env(safe-area-inset-top, 0px)';
+      } else {
+        ticker.style.transform = '';
+        ticker.style.opacity = '';
+        ticker.style.pointerEvents = '';
+        if(nav) nav.style.top = '';
+      }
+      ticking = false;
+    });
+    ticking = true;
+  }
+  ['scroll','touchmove'].forEach(ev=>window.addEventListener(ev,onScroll,{passive:true}));
+})();
+</script>
 </body>
 </html>

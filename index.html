@@ -2652,18 +2652,27 @@ thead th.sorted-col .sarrow{opacity:1}
   .game-block .gb-time{font-size:18px!important;color:var(--gold)!important;font-family:'Oswald',sans-serif;font-weight:700;}
   .game-block .gb-field{font-size:12px!important;color:var(--muted)!important;}
 
-  /* Week nav */
-  #dnSlots{overflow-x:auto!important;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;position:relative;z-index:5;pointer-events:auto!important;}
+  /* Week nav.
+     min-width:0 is the one that makes overflow-x:auto actually kick in
+     inside the outer flex row — without it, iOS lets the flex:1 child
+     grow to its content width and no horizontal scroll ever happens,
+     which is exactly what Adam was hitting on /#schedule. */
+  #dnSlots{overflow-x:auto!important;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;position:relative;z-index:5;pointer-events:auto!important;min-width:0!important;}
   #dnSlots::-webkit-scrollbar{display:none}
-  /* Bump tap target height + tighter horizontal padding so more week
-     buttons fit. Also ensure pointer-events are live in case a sibling
-     (.page-header-pad, or the sb-wrap below) overlaps this row. Adam
-     reported week buttons weren't tappable on iPhone. */
-  .dn-slot{flex-shrink:0!important;min-width:64px!important;padding:12px 10px!important;min-height:48px!important;position:relative;z-index:5;pointer-events:auto!important;}
-  #pg-scores > div:first-child{padding:80px 12px 0!important;}
+  /* Bump tap target + remove iOS 300ms tap delay + give taps a visible
+     highlight. Divs-with-onclick can be flaky on iOS without these
+     properties. Adam reported week buttons weren't tappable on iPhone. */
+  .dn-slot{flex-shrink:0!important;min-width:64px!important;padding:12px 10px!important;min-height:48px!important;position:relative;z-index:5;pointer-events:auto!important;touch-action:manipulation!important;-webkit-tap-highlight-color:rgba(0,45,114,.18)!important;user-select:none!important;cursor:pointer!important;}
+  .dn-slot *{pointer-events:none}
+  /* Heading clearance: this selector has higher specificity than
+     `.page-header-pad` and would otherwise win with only 80px of top
+     padding — which left "Season Scores" hidden behind the ticker+nav
+     stack (~126px + safe-area on iPhone PWA). Match the .page-header-pad
+     value so both rules agree. */
+  #pg-scores > div:first-child{padding:calc(150px + env(safe-area-inset-top, 44px)) 12px 12px!important;}
   /* Drop the 48px side padding on the week-nav wrapper so the arrows
      and several week slots actually fit within a 390px viewport. */
-  #pg-scores > div:nth-child(2){padding:0 8px 0!important;}
+  #pg-scores > div:nth-child(2){padding:0 8px 0!important;position:relative;z-index:6;}
   #pg-scores .sb-wrap{padding:16px 12px 80px!important;}
   .sb-week-head{font-size:16px!important;padding:12px 0 8px!important;}
   .sb-day-head{font-size:12px!important;}
@@ -6476,15 +6485,53 @@ function buildScoresNav(){
   }
   const off=Math.min(Math.max(0,weekOffset<0?autoIdx:weekOffset),wks.length-1);
   if(weekOffset<0)weekOffset=off;
-  document.getElementById('dnSlots').innerHTML=wks.map((w,i)=>{
+  const dnSlots=document.getElementById('dnSlots');
+  dnSlots.innerHTML=wks.map((w,i)=>{
     const label=String(w.wk).startsWith('PL')?w.wk:'WK '+w.wk;
     const dr=w.dateRange||w.date||'';
     const isRange=dr.includes('–');
-    return`<div class="dn-slot${i===off?' active':''}" onclick="setWeekAbs(${i})" style="${isRange?'min-width:90px':''}">
+    return`<div class="dn-slot${i===off?' active':''}" data-idx="${i}" role="button" tabindex="0" style="${isRange?'min-width:90px':''}">
       <div class="wk-label">${label}</div>
-      <div class="wk-date" style="${isRange?'font-size:13px;letter-spacing:0':''}}">${dr}</div>
+      <div class="wk-date" style="${isRange?'font-size:13px;letter-spacing:0':''}">${dr}</div>
     </div>`;
   }).join('');
+  // Wire a single delegated click handler on the container. Inline
+  // onclick on divs can be flaky in iOS PWA, especially when the row
+  // scrolls horizontally — iOS may treat the tap as the start of a
+  // pan and swallow the click. Delegating here and also listening for
+  // touchend gives us a reliable fallback. Only bind once.
+  if(!dnSlots._bound){
+    dnSlots._bound=true;
+    const fire=(e)=>{
+      const slot=e.target&&e.target.closest&&e.target.closest('.dn-slot');
+      if(!slot||!dnSlots.contains(slot))return;
+      const idx=parseInt(slot.dataset.idx,10);
+      if(isNaN(idx))return;
+      e.preventDefault();
+      e.stopPropagation();
+      setWeekAbs(idx);
+    };
+    dnSlots.addEventListener('click',fire);
+    // Touch-side fallback: if the finger didn't move much, treat it
+    // as a click. Threshold is generous so real horizontal scrolls
+    // aren't registered as clicks.
+    let tStartX=0,tStartY=0,tSlot=null;
+    dnSlots.addEventListener('touchstart',(e)=>{
+      const t=e.touches&&e.touches[0];if(!t)return;
+      tStartX=t.clientX;tStartY=t.clientY;
+      tSlot=e.target&&e.target.closest&&e.target.closest('.dn-slot');
+    },{passive:true});
+    dnSlots.addEventListener('touchend',(e)=>{
+      if(!tSlot)return;
+      const t=e.changedTouches&&e.changedTouches[0];if(!t){tSlot=null;return;}
+      const dx=Math.abs(t.clientX-tStartX),dy=Math.abs(t.clientY-tStartY);
+      if(dx<10&&dy<10){
+        const idx=parseInt(tSlot.dataset.idx,10);
+        if(!isNaN(idx)){e.preventDefault();setWeekAbs(idx);}
+      }
+      tSlot=null;
+    });
+  }
   // Scroll active tab into view
   setTimeout(()=>{const a=document.querySelector('#dnSlots .dn-slot.active');if(a)a.scrollIntoView({inline:'center',block:'nearest',behavior:'smooth'});},50);
 }
