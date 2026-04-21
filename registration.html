@@ -1092,6 +1092,39 @@ function toggleDarkMode(){
   if(hbg) hbg.addEventListener('click',function(){ hbg.classList.toggle('open');mob.classList.toggle('open'); });
   if(mob) mob.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){ hbg.classList.remove('open');mob.classList.remove('open'); });});
 })();
+// Hide the score ticker on scroll (and slide the nav + hamburger up into
+// its place), mirroring index.html. Adam reported: on /registration.html
+// the ticker and the floating "Alerts" chip stayed pinned even when the
+// user scrolled down.
+(function(){
+  const ticker = document.getElementById('score-ticker');
+  const nav = document.querySelector('nav');
+  const hbg = document.getElementById('hbg');
+  if(!ticker) return;
+  let ticking = false;
+  function onScroll(){
+    if(ticking) return;
+    requestAnimationFrame(()=>{
+      const y = window.scrollY || window.pageYOffset || 0;
+      if(y > 10){
+        ticker.style.transform = 'translateY(-100%)';
+        ticker.style.opacity = '0';
+        ticker.style.pointerEvents = 'none';
+        if(nav) nav.style.top = 'env(safe-area-inset-top, 0px)';
+        if(hbg) hbg.style.top = 'calc(22px + env(safe-area-inset-top, 0px))';
+      } else {
+        ticker.style.transform = '';
+        ticker.style.opacity = '';
+        ticker.style.pointerEvents = '';
+        if(nav) nav.style.top = '';
+        if(hbg) hbg.style.top = '';
+      }
+      ticking = false;
+    });
+    ticking = true;
+  }
+  ['scroll','touchmove'].forEach(ev=>window.addEventListener(ev,onScroll,{passive:true}));
+})();
 </script>
 </body>
 </html>

@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v64-header-specificity-and-ticker-hide-standalone';
+const VERSION = 'dvsl-v65-player-auto-signin-and-registration-ticker';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

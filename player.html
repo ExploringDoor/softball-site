@@ -873,6 +873,28 @@ async function initTeamPicker() {
   try {
     const snap = await getDocs(query(collection(db,'teams'), orderBy('name')));
     ALL_TEAMS = snap.docs.map(d=>({id:d.id,...d.data()})).filter(t=>t.active!==false);
+    // Auto sign-in: if we remembered a team + (optionally) a matching
+    // password, skip the team picker AND password screen. Players stay
+    // signed in across PWA sessions until they tap "Sign out" which
+    // clears these localStorage keys.
+    try {
+      const lastTeamId = localStorage.getItem('player_portal_last_team');
+      if (lastTeamId) {
+        const t = ALL_TEAMS.find(x=>x.id===lastTeamId);
+        if (t) {
+          const stored = t.player_password || t.password || '';
+          const savedPw = localStorage.getItem('player_portal_pw_'+lastTeamId) || '';
+          // Auto-enter when: team has no password (open access), OR we
+          // have the right saved password cached.
+          if (!stored || savedPw.toLowerCase() === stored.toLowerCase()) {
+            MY_TEAM = t;
+            document.getElementById('team-picker').style.display = 'none';
+            await enterApp();
+            return;
+          }
+        }
+      }
+    } catch(e) { /* fall through to normal picker */ }
     const grid = document.getElementById('team-picker-grid');
     grid.innerHTML = ALL_TEAMS.map(t=>`
       <div onclick="window.pickTeam('${t.id}')" style="background:#fff;border:2px solid ${t.color||'#002D72'}22;border-radius:14px;padding:20px 16px;text-align:center;cursor:pointer;transition:all .15s"
@@ -905,9 +927,20 @@ window.pickTeam = function(teamId) {
 window.checkPassword = function() {
   const entered = document.getElementById('pw-input').value.trim();
   const stored = MY_TEAM?.player_password || MY_TEAM?.password || '';
-  if (!stored) { enterApp(); return; } // no password set — open access
+  if (!stored) {
+    // No password set — remember the team so the picker doesn't appear again.
+    try { localStorage.setItem('player_portal_last_team', MY_TEAM.id); } catch(e){}
+    enterApp();
+    return;
+  }
   if (entered.toLowerCase() === stored.toLowerCase()) {
     document.getElementById('pw-error').style.display = 'none';
+    // Remember the signed-in team + store the password so we can auto-sign-in
+    // next visit. Falls back to a clean flow if the team's password changes.
+    try {
+      localStorage.setItem('player_portal_last_team', MY_TEAM.id);
+      localStorage.setItem('player_portal_pw_'+MY_TEAM.id, entered);
+    } catch(e) {}
     enterApp();
   } else {
     document.getElementById('pw-error').style.display = 'block';
@@ -917,6 +950,11 @@ window.checkPassword = function() {
 };
 
 window.backToPicker = function() {
+  // Sign-out: clear remembered team + password so the picker reappears.
+  try {
+    if (MY_TEAM?.id) localStorage.removeItem('player_portal_pw_'+MY_TEAM.id);
+    localStorage.removeItem('player_portal_last_team');
+  } catch(e){}
   MY_TEAM=null; MY_PLAYERS=[]; MY_GAMES=[]; _rsvps={};
   if (_chatUnsub) { _chatUnsub(); _chatUnsub = null; }
   document.getElementById('pw-screen').style.display = 'none';
