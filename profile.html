@@ -458,11 +458,14 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 .welcome-card p{font-size:13px;opacity:.85}
 
 /* Upcoming-attendance mini cards on My Team */
-.upcoming-game{display:block;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;text-decoration:none;color:inherit;transition:all .15s}
-.upcoming-game:hover{border-color:var(--navy);transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,.06)}
+.upcoming-game{display:block;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;color:inherit;transition:all .15s;cursor:pointer;user-select:none}
+.upcoming-game:hover{border-color:var(--navy);box-shadow:0 4px 10px rgba(0,0,0,.06)}
+.upcoming-game.expanded{border-color:var(--navy)}
 .upcoming-game .ug-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .upcoming-game .ug-match{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;color:var(--navy);letter-spacing:.02em}
-.upcoming-game .ug-wk{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap}
+.upcoming-game .ug-wk{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.upcoming-game .ug-caret{display:inline-block;transition:transform .2s}
+.upcoming-game.expanded .ug-caret{transform:rotate(180deg)}
 .upcoming-game .ug-when{font-size:12px;color:var(--muted);margin-top:2px}
 .upcoming-game .ug-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:12px;font-weight:600}
 .upcoming-game .ug-chip{padding:3px 8px;border-radius:999px;display:inline-flex;align-items:center;gap:4px;line-height:1.4}
@@ -470,6 +473,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 .upcoming-game .ug-chip.no{background:rgba(220,38,38,.12);color:var(--red)}
 .upcoming-game .ug-chip.maybe{background:rgba(245,158,11,.14);color:#b45309}
 .upcoming-game .ug-chip.pending{background:rgba(107,114,128,.14);color:#4b5563}
+.upcoming-game .ug-grid{display:none;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+.upcoming-game.expanded .ug-grid{display:grid}
+@media(min-width:600px){.upcoming-game .ug-grid{grid-template-columns:repeat(4,1fr)}}
+.upcoming-game .ug-col-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.upcoming-game .ug-col-list{font-size:13px;color:var(--text);line-height:1.5}
 
 /* ── TABLES ── */
 .tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
@@ -1712,34 +1720,61 @@ async function renderCaptainUpcomingAttendance(rosterSize) {
     .sort((a,b) => (a.wk||0) - (b.wk||0))
     .slice(0, 3);
   if (!upcoming.length) { el.innerHTML = '<div class="empty">No upcoming games.</div>'; return; }
+
+  // Full active roster, sorted by jersey number
+  const roster = CAPT_ALL_PLAYERS
+    .filter(p => p.team === MY_TEAM.id && p.active !== false)
+    .sort((a,b) => (a.num||999) - (b.num||999));
+
   try {
     const snap = await getDocs(query(collection(db, 'availability'),
       where('team_id', '==', MY_TEAM.id)));
-    const counts = {};
+    // game_id → playerId → status
+    const byGame = {};
     snap.docs.forEach(d => {
       const a = d.data();
-      if (!counts[a.game_id]) counts[a.game_id] = { yes: 0, no: 0, maybe: 0 };
-      if (a.status === 'yes' || a.status === 'no' || a.status === 'maybe') counts[a.game_id][a.status]++;
+      if (!byGame[a.game_id]) byGame[a.game_id] = {};
+      if (a.player_id) byGame[a.game_id][a.player_id] = { status: a.status, name: a.player_name };
     });
+
     el.innerHTML = upcoming.map(g => {
       const oppId = g.away === MY_TEAM.id ? g.home : g.away;
       const ha = g.home === MY_TEAM.id ? 'vs' : '@';
-      const c = counts[g.id] || { yes: 0, no: 0, maybe: 0 };
-      const responded = c.yes + c.no + c.maybe;
-      const pending = Math.max(0, (rosterSize || 0) - responded);
-      return `<a href="#" class="upcoming-game" onclick="window.captainTab('attendance');return false">
+      const resp = byGame[g.id] || {};
+      const yes = [], no = [], maybe = [], pending = [];
+      roster.forEach(p => {
+        const r = resp[p.id];
+        const nm = p.name || (r && r.name) || 'Player';
+        if (!r || !r.status) pending.push(nm);
+        else if (r.status === 'yes') yes.push(nm);
+        else if (r.status === 'no') no.push(nm);
+        else if (r.status === 'maybe') maybe.push(nm);
+        else pending.push(nm);
+      });
+      const col = (arr, label, color) =>
+        `<div class="ug-col">
+           <div class="ug-col-head" style="color:${color}">${label} (${arr.length})</div>
+           <div class="ug-col-list">${arr.length ? arr.map(esc).join('<br>') : '—'}</div>
+         </div>`;
+      return `<div class="upcoming-game" onclick="this.classList.toggle('expanded')">
         <div class="ug-row">
           <div class="ug-match">${ha} ${esc(getTeamName(oppId))}</div>
-          <div class="ug-wk">Wk ${g.wk}</div>
+          <div class="ug-wk">Wk ${g.wk} <span class="ug-caret">▾</span></div>
         </div>
         <div class="ug-when">${esc(g.date||'')} ${esc(g.time||'')}${g.field ? ' · ' + esc(g.field) : ''}</div>
         <div class="ug-counts">
-          <span class="ug-chip yes">✓ In ${c.yes}/${rosterSize||0}</span>
-          <span class="ug-chip no">✕ Out ${c.no}</span>
-          <span class="ug-chip maybe">? Maybe ${c.maybe}</span>
-          <span class="ug-chip pending">• No response ${pending}</span>
+          <span class="ug-chip yes">✓ In ${yes.length}/${roster.length}</span>
+          <span class="ug-chip no">✕ Out ${no.length}</span>
+          <span class="ug-chip maybe">? Maybe ${maybe.length}</span>
+          <span class="ug-chip pending">• Waiting ${pending.length}</span>
         </div>
-      </a>`;
+        <div class="ug-grid">
+          ${col(yes, '✓ In', 'var(--green)')}
+          ${col(maybe, '? Maybe', '#b45309')}
+          ${col(no, '✕ Out', 'var(--red)')}
+          ${col(pending, '• Waiting', '#4b5563')}
+        </div>
+      </div>`;
     }).join('');
   } catch(e) {
     el.innerHTML = '<div class="empty">Could not load availability: ' + esc(e.message) + '</div>';
