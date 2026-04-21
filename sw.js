@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v60-push-deeplink-to-boxscore';
+const VERSION = 'dvsl-v61-mobile-hero-safe-area-and-leaders-redirect';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
