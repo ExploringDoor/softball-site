@@ -1543,39 +1543,109 @@ window.openNotifSettings = function() { window.location.href = '/inbox.html'; };
 // ═══════════════════════════════════════════════════════════════════
 async function loadPlayerMedia() {
   const el = document.getElementById('pmedia-grid');
+  if (!el || !MY_TEAM) return;
   try {
+    // Query without orderBy first (older docs may lack timestamp/created_at), sort client-side
     const snap = await getDocs(query(collection(db, 'team_media'),
-      where('team_id', '==', MY_TEAM.id), orderBy('timestamp', 'desc'), limit(60)));
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    if (!items.length) { el.innerHTML = '<div class="empty">No photos yet. Share the first!</div>'; return; }
-    el.innerHTML = items.map(it => {
-      if (it.youtube) {
-        const vid = extractYoutubeId(it.youtube);
-        if (vid) return `<div class="media-item">
-          <iframe src="https://www.youtube.com/embed/${vid}" allowfullscreen></iframe>
-          <div class="media-item-meta">
-            ${it.caption ? `<div class="media-item-caption">${esc(it.caption)}</div>` : ''}
-            <div class="media-item-author">${esc(it.author || 'Anonymous')}</div>
-          </div>
-        </div>`;
+      where('team_id', '==', MY_TEAM.id), limit(80)));
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => {
+        const at = a.created_at || (a.timestamp?.toMillis ? new Date(a.timestamp.toMillis()).toISOString() : '');
+        const bt = b.created_at || (b.timestamp?.toMillis ? new Date(b.timestamp.toMillis()).toISOString() : '');
+        return (bt || '').localeCompare(at || '');
+      });
+    if (!items.length) { el.innerHTML = '<div class="empty">No photos yet. Share the first! ⚾</div>'; return; }
+    const myPid = document.getElementById('player-name-select')?.value || '';
+    el.innerHTML = '<div class="media-grid">' + items.map(it => {
+      const isMine = myPid && (it.player_id === myPid || (it.author && MY_PLAYERS.find(p => p.id === myPid && p.name === it.author)));
+      const deleteBtn = isMine
+        ? `<button onclick="window.deleteMedia('${it.id}')" title="Delete" style="position:absolute;top:6px;right:6px;background:rgba(220,38,38,.85);border:none;border-radius:6px;color:#fff;font-size:14px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2">🗑</button>`
+        : '';
+      const name = it.player_name || it.author || '';
+      const meta = (it.caption || name)
+        ? `<div class="media-meta">${it.caption ? `<div class="media-caption-text">${esc(it.caption)}</div>` : ''}${name ? `<div class="media-by">${esc(name)}</div>` : ''}</div>`
+        : '';
+      // YouTube entry: support both new (type:'youtube',url,youtube_id) and legacy (youtube) shapes
+      if (it.type === 'youtube' || it.youtube) {
+        const ytUrl = it.url || it.youtube || '';
+        const ytId = it.youtube_id || extractYoutubeId(ytUrl);
+        const thumb = ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '';
+        return `<div class="media-card" style="position:relative">${deleteBtn}<a href="${esc(ytUrl)}" target="_blank" rel="noopener" style="display:block;position:relative">`
+          + (thumb ? `<img src="${thumb}" alt="video" style="aspect-ratio:16/9;object-fit:cover;width:100%" loading="lazy">` : `<div style="aspect-ratio:16/9;background:#111;display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:28px">▶</span></div>`)
+          + `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none"><div style="width:40px;height:40px;background:rgba(255,0,0,.85);border-radius:8px;display:flex;align-items:center;justify-content:center"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><polygon points="5,3 19,12 5,21"/></svg></div></div>`
+          + `</a>${meta}</div>`;
       }
-      if (it.image_url) {
-        return `<div class="media-item">
-          <img src="${esc(it.image_url)}" loading="lazy">
-          <div class="media-item-meta">
-            ${it.caption ? `<div class="media-item-caption">${esc(it.caption)}</div>` : ''}
-            <div class="media-item-author">${esc(it.author || 'Anonymous')}</div>
-          </div>
-        </div>`;
+      // Image entry: support both new (type:'image',url) and legacy (image_url) shapes
+      const imgUrl = it.url || it.image_url;
+      if (imgUrl) {
+        return `<div class="media-card" style="position:relative">${deleteBtn}<img src="${esc(imgUrl)}" alt="${esc(it.caption||'photo')}" style="aspect-ratio:1;object-fit:cover;width:100%" loading="lazy">${meta}</div>`;
       }
       return '';
-    }).join('');
+    }).join('') + '</div>';
   } catch(e) { el.innerHTML = '<div class="empty">Failed to load: ' + esc(e.message) + '</div>'; }
 }
 
+window.deleteMedia = async function(docId) {
+  if (!confirm('Delete this photo/video?')) return;
+  try {
+    await deleteDoc(doc(db, 'team_media', docId));
+    toast('Deleted ✓');
+    await loadPlayerMedia();
+  } catch(e) { toast('Could not delete: ' + e.message, 'error'); }
+};
+
 function extractYoutubeId(url) {
+  if (!url) return null;
   const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/);
   return m ? m[1] : null;
+}
+
+// Compress an image file to a base64 data URL small enough for Firestore (<1MB)
+async function _playerCompressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not load image'));
+      img.onload = () => {
+        const MAX_DIM = 1200;
+        let { width, height } = img;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          if (width >= height) { height = Math.round(height * MAX_DIM / width); width = MAX_DIM; }
+          else { width = Math.round(width * MAX_DIM / height); height = MAX_DIM; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        let dataUrl = canvas.toDataURL('image/jpeg', 0.72);
+        if (dataUrl.length > 750 * 1024) dataUrl = canvas.toDataURL('image/jpeg', 0.48);
+        if (dataUrl.length > 950 * 1024) {
+          reject(new Error('Photo is still too large after compression. Try a lower-resolution image.'));
+          return;
+        }
+        resolve(dataUrl);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Notify teammates that new media was shared (category:photos)
+function _playerSendPhotoPush({ title, body, teamId }) {
+  if (!teamId) return;
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+    body: JSON.stringify({
+      title, body,
+      category: 'photos',
+      team: teamId,
+      url: '/profile.html#photos',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Photo push failed:', e));
 }
 
 window.uploadMedia = async function() {
@@ -1584,33 +1654,56 @@ window.uploadMedia = async function() {
   const caption = document.getElementById('pmedia-caption').value.trim();
   if (!file && !yt) { toast('Pick a photo or paste a YouTube link', 'error'); return; }
   const pid = document.getElementById('player-name-select').value;
+  if (!pid) { toast('Select your name first', 'error'); return; }
   const me = MY_PLAYERS.find(p => p.id === pid);
   const authorName = me?.name || 'Anonymous';
-  const payload = {
-    team_id: MY_TEAM.id, author: authorName, caption,
-    timestamp: serverTimestamp()
-  };
+  const shareBtn = document.querySelector('#ptab-photos .btn-primary');
+  if (shareBtn) { shareBtn.disabled = true; shareBtn.textContent = 'Working…'; }
+  let pushedPhoto = false, pushedVideo = false;
   try {
-    if (yt) {
-      payload.youtube = yt;
-    } else if (file) {
-      // Read file as data URL and store directly in Firestore (simple path, no storage bucket setup needed).
-      // For large files this is suboptimal; clamp at ~800KB.
-      if (file.size > 900 * 1024) { toast('Photo too large (max 900KB). Try a smaller one.', 'error'); return; }
-      payload.image_url = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(file);
+    if (file) {
+      if (shareBtn) shareBtn.textContent = 'Compressing…';
+      const dataUrl = await _playerCompressImage(file);
+      if (shareBtn) shareBtn.textContent = 'Saving…';
+      await addDoc(collection(db, 'team_media'), {
+        type: 'image', url: dataUrl,
+        team_id: MY_TEAM.id, team_name: MY_TEAM.name || '',
+        player_id: pid, player_name: authorName, author: authorName,
+        caption, created_at: new Date().toISOString(),
+        timestamp: serverTimestamp(),
       });
+      toast('Photo shared! ⚾');
+      pushedPhoto = true;
     }
-    await addDoc(collection(db, 'team_media'), payload);
-    toast('Shared!');
+    if (yt) {
+      const ytId = extractYoutubeId(yt);
+      await addDoc(collection(db, 'team_media'), {
+        type: 'youtube', url: yt, youtube_id: ytId, youtube: yt,
+        team_id: MY_TEAM.id, team_name: MY_TEAM.name || '',
+        player_id: pid, player_name: authorName, author: authorName,
+        caption, created_at: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+      });
+      toast('Video saved! 🎬');
+      pushedVideo = true;
+    }
+    // Push to teammates (best-effort)
+    try {
+      if (pushedPhoto || pushedVideo) {
+        const kind = pushedPhoto && pushedVideo ? 'photo & video' : pushedPhoto ? 'photo' : 'video';
+        _playerSendPhotoPush({
+          title: `📸 ${authorName} added a ${kind}`,
+          body: caption || `${MY_TEAM.name || 'Your team'} · ${new Date().toLocaleDateString()}`,
+          teamId: MY_TEAM.id,
+        });
+      }
+    } catch(e) { console.warn('Photo push skipped:', e); }
     document.getElementById('pmedia-file').value = '';
     document.getElementById('pmedia-yt').value = '';
     document.getElementById('pmedia-caption').value = '';
-    loadPlayerMedia();
-  } catch(e) { toast('Upload failed: ' + e.message, 'error'); }
+    await loadPlayerMedia();
+  } catch(e) { toast('Upload failed: ' + (e.message || String(e)), 'error'); }
+  finally { if (shareBtn) { shareBtn.disabled = false; shareBtn.textContent = 'Share'; } }
 };
 
 // ═══════════════════════════════════════════════════════════════════
