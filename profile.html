@@ -902,6 +902,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
     <div class="section" id="csec-schedule">
       <div class="section-title">Schedule</div>
       <div class="section-sub">Your team's upcoming and past games</div>
+      <div id="capt-calendar-share-box" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin:8px 0 14px;display:none">
+        <div style="font-weight:700;color:#1e40af;margin-bottom:4px">📅 Share Calendar Subscription</div>
+        <div style="font-size:13px;color:#1e3a8a;margin-bottom:8px">Each player needs to click this link <em>on their own phone</em> to subscribe to your team's schedule. Copy and share with your team.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="captCopyCalendarLink()">📋 Copy Link</button>
+          <button class="btn btn-outline btn-sm" onclick="captShareCalendarLink()">📤 Share</button>
+          <a id="capt-calendar-open-link" class="btn btn-outline btn-sm" href="#" target="_blank">🔗 Open</a>
+        </div>
+        <div id="capt-calendar-share-status" style="font-size:12px;color:#059669;margin-top:6px;display:none"></div>
+      </div>
       <div id="capt-schedule-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
     </div>
 
@@ -1638,13 +1648,14 @@ async function enterCaptainApp() {
 
 async function loadCaptainData() {
   try {
-    const [gSnap, pSnap, sSnap, aSnap, cSnap, paySnap] = await Promise.all([
+    const [gSnap, pSnap, sSnap, aSnap, cSnap, paySnap, calSnap] = await Promise.all([
       getDocs(query(collection(db, 'games'), orderBy('wk'))),
       getDocs(collection(db, 'players')),
       getDocs(collection(db, 'score_submissions')).catch(() => ({docs:[]})),
       getDocs(collection(db, 'announcements')).catch(() => ({docs:[]})),
       getDocs(collection(db, 'captains')).catch(() => ({docs:[]})),
       getDocs(collection(db, 'payments')).catch(() => ({docs:[]})),
+      getDocs(collection(db, 'calendars')).catch(() => ({docs:[]})),
     ]);
     CAPT_ALL_GAMES = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     CAPT_ALL_PLAYERS = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1653,10 +1664,64 @@ async function loadCaptainData() {
     CAPT_CAPTAINS = cSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     CAPT_PAYMENTS = {};
     paySnap.docs.forEach(d => { CAPT_PAYMENTS[d.id] = { id: d.id, ...d.data() }; });
+    // Calendar share URL for this captain's team
+    try {
+      const cals = calSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const myCal = cals.find(c => c.id === MY_TEAM.id);
+      window._captMyCalendarUrl = (myCal && myCal.calendar_url) ? myCal.calendar_url : null;
+    } catch(_) { window._captMyCalendarUrl = null; }
+    captUpdateCalendarShareBox();
   } catch(e) {
     toast('Failed to load: ' + e.message, 'error');
   }
 }
+
+function captUpdateCalendarShareBox() {
+  const box = document.getElementById('capt-calendar-share-box');
+  if (!box) return;
+  const url = window._captMyCalendarUrl;
+  if (!url) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  const openLink = document.getElementById('capt-calendar-open-link');
+  if (openLink) openLink.href = url.replace(/^https:\/\//, 'webcal://');
+}
+
+function _captCalendarShareText() {
+  const url = window._captMyCalendarUrl || '';
+  const teamName = MY_TEAM?.short || MY_TEAM?.name || 'our team';
+  return `Subscribe to ${teamName}'s DVSL schedule on your phone — tap this link on your own device and it'll add every game to your calendar automatically:\n\n${url}`;
+}
+
+window.captCopyCalendarLink = async function() {
+  const url = window._captMyCalendarUrl;
+  if (!url) { toast('No calendar URL available yet.', 'error'); return; }
+  const status = document.getElementById('capt-calendar-share-status');
+  try {
+    await navigator.clipboard.writeText(url);
+    if (status) { status.textContent = '✓ Link copied to clipboard.'; status.style.display='block'; setTimeout(()=>{status.style.display='none';},3000); }
+    toast('Calendar link copied.', 'success');
+  } catch(e) {
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Calendar link copied.', 'success'); }
+    catch(_) { toast('Copy failed — link: ' + url, 'error'); }
+    document.body.removeChild(ta);
+  }
+};
+
+window.captShareCalendarLink = async function() {
+  const url = window._captMyCalendarUrl;
+  if (!url) { toast('No calendar URL available yet.', 'error'); return; }
+  const text = _captCalendarShareText();
+  if (navigator.share) {
+    try { await navigator.share({ title: 'DVSL Team Calendar', text }); return; }
+    catch(_) { /* user cancelled — fall through to mailto */ }
+  }
+  const subject = encodeURIComponent('DVSL Team Calendar — subscribe on your phone');
+  const body = encodeURIComponent(text);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // CAPTAIN — Tab switching
