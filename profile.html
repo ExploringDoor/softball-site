@@ -928,8 +928,13 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 
     <!-- CAPT: TEAM CHAT -->
     <div class="section" id="csec-teamchat">
-      <div class="section-title">Team Chat</div>
-      <div class="section-sub">Send messages to your team. Players with notifications on get a push.</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+        <div>
+          <div class="section-title">Team Chat</div>
+          <div class="section-sub">Send messages to your team. Players with notifications on get a push.</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="window.captainResetTeamChat()" style="color:var(--red);border-color:var(--red);white-space:nowrap">Reset chat</button>
+      </div>
       <div class="chat-wrap">
         <div class="chat-messages" id="cteamchat-messages"><div class="empty">No messages yet.</div></div>
         <div class="chat-input-row">
@@ -1010,7 +1015,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 // Firebase setup
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, onSnapshot, serverTimestamp, limit, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, onSnapshot, serverTimestamp, limit, Timestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const app = initializeApp({
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -2026,6 +2031,28 @@ window.captainDelTeamMsg = async function(id) {
   if (!confirm('Delete this message?')) return;
   try { await deleteDoc(doc(db, 'team_messages', id)); }
   catch(e) { toast('Delete failed: ' + e.message, 'error'); }
+};
+
+// Captain-only: nuke every message in this team's chat. Batched in 400s
+// to stay under Firestore's 500-op writeBatch limit.
+window.captainResetTeamChat = async function() {
+  const teamName = MY_TEAM?.name || MY_TEAM?.id || 'your team';
+  if (!confirm(`Reset the entire Team Chat for ${teamName}?\n\nThis deletes ALL messages permanently. This cannot be undone.`)) return;
+  if (!confirm('Are you absolutely sure? Last chance to back out.')) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'team_messages'), where('team_id', '==', MY_TEAM.id)));
+    if (!snap.docs.length) { toast('Chat is already empty.', 'success'); return; }
+    let remaining = snap.docs.slice();
+    while (remaining.length) {
+      const chunk = remaining.splice(0, 400);
+      const batch = writeBatch(db);
+      chunk.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    toast(`Deleted ${snap.docs.length} message${snap.docs.length===1?'':'s'}.`, 'success');
+  } catch(e) {
+    toast('Reset failed: ' + e.message, 'error');
+  }
 };
 
 // Ping the whole team to submit availability for a specific upcoming game.
