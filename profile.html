@@ -908,8 +908,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
     <!-- CAPT: SUBMIT SCORE -->
     <div class="section" id="csec-scores">
       <div class="section-title">Submit Score</div>
-      <div class="section-sub">Quick final-score entry. For box score and line score details, use the full portal.</div>
-      <div style="margin-bottom:14px"><a href="/captain.html?tab=scores" class="btn btn-outline btn-sm">Open Full Box Score Tool →</a></div>
+      <div class="section-sub">Enter the final score (optionally inning-by-inning). For live scoring, tap "⚡ Score Live" on a game.</div>
       <div id="capt-scores-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading games…</div></div>
     </div>
 
@@ -1964,54 +1963,284 @@ function renderCaptainSchedule() {
 // ═══════════════════════════════════════════════════════════════════
 function renderCaptainScores() {
   const el = document.getElementById('capt-scores-content');
-  const pending = CAPT_ALL_GAMES.filter(g => (g.away === MY_TEAM.id || g.home === MY_TEAM.id) && !g.done)
-    .sort((a,b) => (a.wk||0)-(b.wk||0));
-  if (!pending.length) { el.innerHTML = '<div class="empty">No pending games.</div>'; return; }
+  // Show games that are either not done, OR done but I haven't submitted my own scorecard yet.
+  const pending = CAPT_ALL_GAMES.filter(g => {
+    if (g.away !== MY_TEAM.id && g.home !== MY_TEAM.id) return false;
+    if (!g.done) return true;
+    const myRole = g.home === MY_TEAM.id ? 'home' : 'away';
+    return g[`score_submitted_${myRole}_away`] === undefined;
+  }).sort((a,b) => (a.wk||0)-(b.wk||0));
+  if (!pending.length) { el.innerHTML = '<div class="empty">All your games have final scores. Nothing to submit.</div>'; return; }
   el.innerHTML = pending.map(g => {
-    const mySub = CAPT_SUBMISSIONS.find(s => s.game_id === g.id && s.submitted_by === MY_TEAM.id);
-    const otherSub = CAPT_SUBMISSIONS.find(s => s.game_id === g.id && s.submitted_by !== MY_TEAM.id);
-    return `<div class="panel">
-      <div style="font-weight:700;font-size:15px;margin-bottom:4px">Wk ${g.wk} · ${esc(getTeamName(g.away))} @ ${esc(getTeamName(g.home))}</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${esc(g.date||'')} ${esc(g.time||'')} ${esc(g.field||'')}</div>
-      ${mySub ? `<div class="badge badge-pending">You submitted: ${mySub.away_score}-${mySub.home_score}</div>` : ''}
-      ${otherSub ? `<div class="badge badge-info" style="margin-left:6px">Opponent submitted: ${otherSub.away_score}-${otherSub.home_score}</div>` : ''}
-      <div class="score-input-row">
-        <label style="font-size:13px">${esc(getTeamName(g.away))}</label>
-        <input class="score-input" id="sc-${g.id}-a" type="number" min="0" max="99" value="${mySub?.away_score ?? ''}">
-        <span style="font-size:16px;color:var(--muted);font-weight:700">—</span>
-        <input class="score-input" id="sc-${g.id}-h" type="number" min="0" max="99" value="${mySub?.home_score ?? ''}">
-        <label style="font-size:13px">${esc(getTeamName(g.home))}</label>
+    const isHome = g.home === MY_TEAM.id;
+    const myRole = isHome ? 'home' : 'away';
+    const otherRole = isHome ? 'away' : 'home';
+    const awayName = getTeamName(g.away);
+    const homeName = getTeamName(g.home);
+    const alreadySubmitted = g[`score_submitted_${myRole}_away`] !== undefined;
+    const otherHasSubmitted = g[`score_submitted_${otherRole}_away`] !== undefined;
+    const otherAway = g[`score_submitted_${otherRole}_away`];
+    const otherHome = g[`score_submitted_${otherRole}_home`];
+    const otherByName = g[`score_submitted_${otherRole}_by`] || getTeamName(isHome ? g.away : g.home);
+    const hasConflict = g.score_conflict === true;
+    const mySubAway = g[`score_submitted_${myRole}_away`] ?? '';
+    const mySubHome = g[`score_submitted_${myRole}_home`] ?? '';
+
+    let otherInfo = '';
+    if (otherHasSubmitted) {
+      otherInfo = `<div style="font-size:12px;padding:8px 12px;background:rgba(37,99,235,.06);border:1px solid rgba(37,99,235,.15);border-radius:8px;margin:8px 0;color:var(--navy)">
+        ℹ️ <strong>${esc(otherByName)}</strong> submitted: <strong>${esc(awayName)} ${otherAway ?? '?'} – ${esc(homeName)} ${otherHome ?? '?'}</strong>. ${alreadySubmitted ? '' : 'Enter your score to confirm.'}
+      </div>`;
+    }
+    let conflictInfo = '';
+    if (hasConflict) {
+      conflictInfo = `<div style="padding:10px 14px;background:#fef3c7;border:1px solid #d97706;border-radius:8px;font-size:13px;color:#92400e;font-weight:600;margin:8px 0">
+        ⚠ Score conflict — scores don't match. Admin will review and set the final.
+      </div>`;
+    }
+
+    return `<div class="panel" id="capt-submit-panel-${g.id}">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-weight:700;font-size:15px">Wk ${g.wk||'?'} · ${esc(awayName)} @ ${esc(homeName)}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(g.date||'')} ${esc(g.day||'')} ${esc(g.time||'')} ${esc(g.field||'')}</div>
+        </div>
+        ${alreadySubmitted && !hasConflict ? `<span class="badge badge-pending">✓ Your Score Submitted</span>` : hasConflict ? `<span class="badge" style="background:#fef3c7;color:#92400e">⚠ Conflict</span>` : ''}
       </div>
-      <div style="margin-top:10px">
-        <button class="btn btn-primary btn-sm" onclick="window.submitQuickScore('${g.id}')">${mySub ? 'Update' : 'Submit'} Score</button>
+      ${otherInfo}
+      ${conflictInfo}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 6px">
+        <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&team=${MY_TEAM.id}&from=profile','_blank')">⚡ Score Live</button>
+        <button class="btn btn-outline btn-sm" onclick="captToggleScoreEntry('${g.id}')">📝 ${alreadySubmitted ? 'Re-enter' : 'Enter'} Score</button>
+      </div>
+      <div id="capt-score-entry-${g.id}" style="display:${alreadySubmitted ? 'none' : 'block'}">
+        <div class="score-input-row" style="margin-top:10px">
+          <label style="font-size:13px"><strong>${esc(awayName)}</strong></label>
+          <input class="score-input" id="csc-${g.id}-a" type="number" min="0" max="99" value="${mySubAway}" placeholder="0">
+          <span style="font-size:16px;color:var(--muted);font-weight:700">—</span>
+          <input class="score-input" id="csc-${g.id}-h" type="number" min="0" max="99" value="${mySubHome}" placeholder="0">
+          <label style="font-size:13px"><strong>${esc(homeName)}</strong></label>
+        </div>
+        <div style="margin-top:10px">
+          <button type="button" class="btn btn-outline btn-sm" onclick="captToggleLineScore('${g.id}')" style="font-size:12px">▾ Add line score by inning (optional)</button>
+        </div>
+        <div id="capt-ls-${g.id}" style="display:none;margin-top:10px;overflow-x:auto;-webkit-overflow-scrolling:touch">
+          <table id="capt-ls-tbl-${g.id}" data-innings="7" style="width:100%;border-collapse:collapse;table-layout:fixed;font-family:'Barlow Condensed',sans-serif;font-size:15px;white-space:nowrap">
+            <thead><tr>
+              <th style="text-align:left;padding:4px 8px;font-size:11px;font-weight:700;color:var(--muted);width:70px">Team</th>
+              ${[1,2,3,4,5,6,7].map(n=>`<th style="text-align:center;padding:4px 2px;font-size:12px;font-weight:700;color:var(--muted)">${n}</th>`).join('')}
+              <th style="text-align:center;padding:4px 2px;font-size:12px;font-weight:700;color:var(--navy);width:40px;border-left:2px solid var(--border)">R</th>
+              <th style="text-align:center;padding:4px 2px;font-size:12px;font-weight:700;color:var(--muted);width:40px">H</th>
+              <th style="text-align:center;padding:4px 2px;font-size:12px;font-weight:700;color:var(--muted);width:40px">E</th>
+            </tr></thead>
+            <tbody>
+              ${['away','home'].map(side => {
+                const label = side === 'away' ? awayName : homeName;
+                return `<tr>
+                  <td style="padding:4px 8px;font-weight:700;font-size:13px;text-transform:uppercase;color:var(--navy)">${esc(label)}</td>
+                  ${[1,2,3,4,5,6,7].map(n => `<td style="padding:3px 3px"><input type="number" min="0" id="capt-ls-${g.id}-${side}-i${n}" placeholder="-" oninput="captLsAuto('${g.id}','${side}')" style="width:100%;text-align:center;font-size:15px;padding:4px 2px;border:1px solid var(--border);border-radius:4px;box-sizing:border-box"></td>`).join('')}
+                  <td style="padding:3px 3px;border-left:2px solid var(--border)"><input type="number" min="0" id="capt-ls-${g.id}-${side}-R" style="width:100%;text-align:center;font-size:15px;padding:4px 2px;border:1px solid var(--navy);border-radius:4px;font-weight:800;box-sizing:border-box" oninput="captLsSyncR('${g.id}','${side}')"></td>
+                  <td style="padding:3px 3px"><input type="number" min="0" id="capt-ls-${g.id}-${side}-H" placeholder="-" style="width:100%;text-align:center;font-size:14px;padding:4px 2px;border:1px solid var(--border);border-radius:4px;box-sizing:border-box"></td>
+                  <td style="padding:3px 3px"><input type="number" min="0" id="capt-ls-${g.id}-${side}-E" placeholder="-" style="width:100%;text-align:center;font-size:14px;padding:4px 2px;border:1px solid var(--border);border-radius:4px;box-sizing:border-box"></td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+          <div style="margin-top:6px"><button type="button" class="btn btn-outline btn-sm" onclick="captAddInning('${g.id}')" style="font-size:12px">+ Extra Inning</button></div>
+        </div>
+        <div style="margin-top:8px">
+          <label class="form-label" style="font-size:11px">Notes (optional)</label>
+          <input type="text" class="form-input" id="csc-${g.id}-notes" placeholder="Any notes for admin…" style="font-size:13px">
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-success btn-sm" onclick="captSubmitScore('${g.id}')">✅ Submit Score</button>
+          <button class="btn btn-outline btn-sm" onclick="captToggleScoreEntry('${g.id}')">Cancel</button>
+        </div>
       </div>
     </div>`;
   }).join('');
 }
 
-window.submitQuickScore = async function(gameId) {
-  const a = parseInt(document.getElementById('sc-' + gameId + '-a').value, 10);
-  const h = parseInt(document.getElementById('sc-' + gameId + '-h').value, 10);
-  if (isNaN(a) || isNaN(h) || a < 0 || h < 0) { toast('Enter valid scores', 'error'); return; }
+window.captToggleScoreEntry = function(gameId) {
+  const el = document.getElementById('capt-score-entry-' + gameId);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.captToggleLineScore = function(gameId) {
+  const el = document.getElementById('capt-ls-' + gameId);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.captLsAuto = function(gameId, team) {
+  const tbl = document.getElementById('capt-ls-tbl-' + gameId);
+  const ct = parseInt(tbl?.dataset?.innings || '7');
+  let sum = 0;
+  for (let i = 1; i <= ct; i++) sum += parseInt(document.getElementById(`capt-ls-${gameId}-${team}-i${i}`)?.value || '') || 0;
+  const r = document.getElementById(`capt-ls-${gameId}-${team}-R`); if (r) r.value = sum;
+  // Mirror into the main score inputs
+  const mainInput = document.getElementById(`csc-${gameId}-${team === 'away' ? 'a' : 'h'}`);
+  if (mainInput) mainInput.value = sum;
+};
+
+window.captLsSyncR = function(gameId, team) {
+  const r = document.getElementById(`capt-ls-${gameId}-${team}-R`);
+  const mainInput = document.getElementById(`csc-${gameId}-${team === 'away' ? 'a' : 'h'}`);
+  if (r && mainInput) mainInput.value = r.value;
+};
+
+window.captAddInning = function(gameId) {
+  const tbl = document.getElementById('capt-ls-tbl-' + gameId);
+  if (!tbl) return;
+  const ct = parseInt(tbl.dataset.innings || '7') + 1;
+  tbl.dataset.innings = ct;
+  const thead = tbl.querySelector('thead tr');
+  const thCells = thead.querySelectorAll('th');
+  const rTh = thCells[thCells.length - 3];
+  const newTh = document.createElement('th');
+  newTh.style.cssText = 'text-align:center;padding:4px 2px;font-size:12px;font-weight:700;color:var(--muted)';
+  newTh.textContent = ct;
+  thead.insertBefore(newTh, rTh);
+  const rows = tbl.querySelectorAll('tbody tr');
+  rows.forEach((row, ri) => {
+    const team = ri === 0 ? 'away' : 'home';
+    const cells = row.querySelectorAll('td');
+    const rTd = cells[cells.length - 3];
+    const newTd = document.createElement('td');
+    newTd.style.cssText = 'padding:3px 3px';
+    newTd.innerHTML = `<input type="number" min="0" id="capt-ls-${gameId}-${team}-i${ct}" placeholder="-" oninput="captLsAuto('${gameId}','${team}')" style="width:100%;text-align:center;font-size:15px;padding:4px 2px;border:1px solid var(--border);border-radius:4px;box-sizing:border-box">`;
+    row.insertBefore(newTd, rTd);
+  });
+};
+
+// Unified box-score upsert (parallels captain.html's submitBoxScoreUnified)
+async function captSubmitBoxScoreUnified(gameId, boxScoreData, myRole) {
+  const ref = doc(db, 'box_scores', gameId);
+  const snap = await getDoc(ref);
+  const existing = snap.exists() ? snap.data() : null;
+  if (!existing || !existing.first_submitter || existing.first_submitter === myRole) {
+    await setDoc(ref, {
+      ...boxScoreData,
+      first_submitter: myRole,
+      has_discrepancy: false,
+      discrepancies: [],
+      created_at: existing?.created_at || new Date().toISOString(),
+    });
+    return { firstSubmission: !existing, hasDiscrepancy: false };
+  }
+  // Second submission — detect score discrepancy
+  const discrepancies = [];
+  const newAway = boxScoreData.away_score ?? 0;
+  const newHome = boxScoreData.home_score ?? 0;
+  if (newAway !== (existing.away_score || 0) || newHome !== (existing.home_score || 0)) {
+    discrepancies.push({
+      type: 'score',
+      first_submitter: existing.first_submitter,
+      second_submitter: myRole,
+      first_away: existing.away_score, first_home: existing.home_score,
+      second_away: newAway, second_home: newHome,
+    });
+  }
+  const mergeUpdate = {
+    [`${myRole}_score`]: boxScoreData[`${myRole}_score`],
+    second_submitter: myRole,
+    has_discrepancy: discrepancies.length > 0,
+    discrepancies,
+    second_submitted_at: new Date().toISOString(),
+  };
+  const lsForSide = boxScoreData[`${myRole}_linescore`];
+  if (lsForSide) mergeUpdate[`${myRole}_linescore`] = lsForSide;
+  await updateDoc(ref, mergeUpdate);
+  if (discrepancies.length > 0) {
+    await updateDoc(doc(db, 'games', gameId), { has_discrepancy: true }).catch(() => {});
+  }
+  return { firstSubmission: false, hasDiscrepancy: discrepancies.length > 0 };
+}
+
+window.captSubmitScore = async function(gameId) {
   const g = CAPT_ALL_GAMES.find(x => x.id === gameId);
   if (!g) return;
-  const subId = gameId + '_' + MY_TEAM.id;
+  const a = parseInt(document.getElementById(`csc-${gameId}-a`).value, 10);
+  const h = parseInt(document.getElementById(`csc-${gameId}-h`).value, 10);
+  if (isNaN(a) || isNaN(h) || a < 0 || h < 0) { toast('Enter valid away/home scores', 'error'); return; }
+  const notes = (document.getElementById(`csc-${gameId}-notes`)?.value || '').trim();
+  const tbl = document.getElementById(`capt-ls-tbl-${gameId}`);
+  const ct = parseInt(tbl?.dataset?.innings || '7');
+  const readLS = team => {
+    const arr = [];
+    let any = false;
+    for (let i = 1; i <= ct; i++) {
+      const raw = document.getElementById(`capt-ls-${gameId}-${team}-i${i}`)?.value;
+      if (raw !== undefined && raw !== '') any = true;
+      arr.push(parseInt(raw || '') || 0);
+    }
+    return any ? arr : null;
+  };
+  const awayLS = readLS('away'); const homeLS = readLS('home');
+  const awayH = parseInt(document.getElementById(`capt-ls-${gameId}-away-H`)?.value || '') || 0;
+  const homeH = parseInt(document.getElementById(`capt-ls-${gameId}-home-H`)?.value || '') || 0;
+  const awayE = parseInt(document.getElementById(`capt-ls-${gameId}-away-E`)?.value || '') || 0;
+  const homeE = parseInt(document.getElementById(`capt-ls-${gameId}-home-E`)?.value || '') || 0;
+
+  const isHome = g.home === MY_TEAM.id;
+  const myRole = isHome ? 'home' : 'away';
+
+  const boxScoreData = {
+    game_id: gameId, week: g.wk || 0, date: g.date || '', field: g.field || '',
+    away: g.away, home: g.home,
+    away_score: a, home_score: h,
+    away_hits: awayH, home_hits: homeH,
+    away_errors: awayE, home_errors: homeE,
+    score_only: true,
+    notes: notes || undefined,
+    submitted_by: MY_TEAM.name, submitted_by_id: MY_TEAM.id,
+    status: 'approved', timestamp: Timestamp.now(),
+  };
+  if (awayLS) boxScoreData.away_linescore = awayLS;
+  if (homeLS) boxScoreData.home_linescore = homeLS;
+
   try {
+    await captSubmitBoxScoreUnified(gameId, boxScoreData, myRole);
+    // Also write a row in score_submissions for older listeners
+    const subId = gameId + '_' + MY_TEAM.id;
     await setDoc(doc(db, 'score_submissions', subId), {
       game_id: gameId, submitted_by: MY_TEAM.id, submitted_by_name: MY_TEAM.name,
-      away_score: a, home_score: h, timestamp: serverTimestamp()
+      away_score: a, home_score: h, notes: notes || '', timestamp: serverTimestamp(),
     });
-    toast('Score submitted');
-    // Check if other captain also submitted matching
-    const otherSub = CAPT_SUBMISSIONS.find(s => s.game_id === gameId && s.submitted_by !== MY_TEAM.id);
-    if (otherSub && otherSub.away_score === a && otherSub.home_score === h) {
-      await updateDoc(doc(db, 'games', gameId), { away_score: a, home_score: h, done: true });
-      toast('Both captains match — game is final!');
+
+    const wasDone = !!g.done;
+    const gameUpdate = {
+      [`score_submitted_${myRole}_away`]: a,
+      [`score_submitted_${myRole}_home`]: h,
+      [`score_submitted_${myRole}_by`]: MY_TEAM.name,
+    };
+    if (!wasDone) {
+      Object.assign(gameUpdate, {
+        done: true, away_score: a, home_score: h,
+        score_confirmed: true, score_pending: false, score_conflict: false,
+      });
+    } else {
+      const storedAway = typeof g.away_score === 'number' ? g.away_score : a;
+      const storedHome = typeof g.home_score === 'number' ? g.home_score : h;
+      if (storedAway !== a || storedHome !== h) {
+        gameUpdate.score_conflict = true;
+        gameUpdate.has_discrepancy = true;
+      }
     }
-    // Reload
+    await updateDoc(doc(db, 'games', gameId), gameUpdate);
+    Object.assign(g, gameUpdate);
+
+    const msg = !wasDone
+      ? 'Score submitted — game is now final!'
+      : (gameUpdate.has_discrepancy
+          ? 'Submitted — your score differs from the final on record. Flagged for admin review.'
+          : 'Score submitted — matches the final on record.');
+    toast(msg, 'success');
     await loadCaptainData();
     renderCaptainScores();
-  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+    renderCaptainSchedule && renderCaptainSchedule();
+  } catch(e) { toast('Error: ' + e.message, 'error'); }
 };
 
 // ═══════════════════════════════════════════════════════════════════
