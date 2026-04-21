@@ -527,7 +527,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line
 
 /* Input row */
 .input-row{display:flex;gap:8px;padding:10px 12px;background:#fff;border-top:1px solid var(--border);position:sticky;bottom:0}
-.input-row input{flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:22px;font-size:15px;outline:none;background:var(--card2)}
+.input-row input{flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:22px;font-size:16px;outline:none;background:var(--card2)}
 .input-row input:focus{border-color:var(--navy);background:#fff}
 .input-row button{padding:0 20px;border:none;background:var(--navy);color:#fff;border-radius:22px;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.05em;text-transform:uppercase;font-size:14px;cursor:pointer}
 .input-row button:disabled{opacity:.5;cursor:not-allowed}
@@ -543,7 +543,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line
 .roster-item .jersey{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--muted);font-size:13px;min-width:32px}
 .custom-name{border-top:1px solid var(--border);padding-top:14px}
 .custom-name label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px}
-.custom-name input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px}
+.custom-name input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:16px}
 .custom-name button{margin-top:10px;width:100%;padding:10px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-weight:600;cursor:pointer}
 
 /* Team picker */
@@ -700,7 +700,12 @@ async function loadTeamAndChat(tid) {
     return;
   }
 
-  document.getElementById('team-name').textContent = TEAM.name || TEAM.id;
+  // Header shows the SHORT team code (e.g. "TBIR") rather than the full
+  // name ("TBI Royals"). Adam asked for abbreviations in the team-chat
+  // header across all teams — the full name still lives in hover/title
+  // tooltips and on the team picker card.
+  document.getElementById('team-name').textContent = TEAM.short || TEAM.name || TEAM.id;
+  try { document.getElementById('team-name').title = TEAM.name || TEAM.id || ''; } catch(_) {}
   document.getElementById('team-sub').textContent = 'Team Chat';
   if (TEAM.logo) {
     document.getElementById('team-logo').innerHTML = `<img src="${esc(TEAM.logo)}" alt="">`;
@@ -765,7 +770,7 @@ function showPasswordGate(tid) {
         Ask your captain for the team password to join <strong>${esc(TEAM?.name || tid)}</strong>'s chat.
       </div>
       <input id="chat-pw-input" type="password" placeholder="Team password" autocomplete="off"
-        style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;margin-bottom:10px;text-align:center">
+        style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;font-size:16px;margin-bottom:10px;text-align:center">
       <div id="chat-pw-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:10px">Wrong password. Try again.</div>
       <button id="chat-pw-btn"
         style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer">

@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v61-mobile-hero-safe-area-and-leaders-redirect';
+const VERSION = 'dvsl-v62-scores-mobile-cleanup-and-team-chat';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

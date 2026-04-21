@@ -1155,8 +1155,30 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .home-layout-flex{flex-direction:column!important;gap:16px!important;align-items:stretch!important}
   .home-layout-flex > div:first-child{width:100%!important}
   .home-layout-flex > div:last-child{width:100%!important}
-  /* Mobile: reduce page header padding */
-  .page-header-pad{padding:120px 18px 20px!important}
+  /* Mobile: page header padding + safe-area-inset-top so the h1 and
+     week navigator always clear the fixed ticker + nav on iPhone PWA
+     (notch pushes nav bottom down ~50px beyond the 110px flat stack). */
+  .page-header-pad{padding:calc(120px + env(safe-area-inset-top, 0px)) 18px 20px!important}
+  /* Adam asked to drop the in-page "Scores | Schedule" toggle on mobile
+     because the bottom tab bar already covers that navigation. Keep the
+     big "Season Scores" / "Season Schedule" heading — just no duplicate
+     label under it. Also declutters the area above the week navigator
+     so the week arrows are easier to tap. */
+  #scores-sched-tabs{display:none!important}
+  /* Week navigator: bump tap target to ~44px and make arrows easier to
+     hit on iPhone PWA. The old 24px font + 14px side padding had roughly
+     a 24px tall hitbox which is below iOS's recommended 44x44. */
+  .dn-arrow{font-size:26px!important;padding:10px 16px!important;min-height:44px!important;min-width:44px!important;display:flex!important;align-items:center!important;justify-content:center!important}
+  /* Game-result cards: Adam wants final-score cards styled consistently
+     with the compact preview cards (which display upcoming games in a
+     small 15px font). The desktop .gc-score is 32px which feels huge on
+     a phone next to 15px team names. Dial it back to preview-card scale. */
+  .gc-score{font-size:18px!important;min-width:28px!important}
+  .gc-team-name{font-size:14px!important}
+  .gc-card-hdr{padding:6px 10px!important}
+  .gc-card-body{padding:8px 10px 6px!important}
+  .gc-card-footer{padding:8px 10px 10px!important}
+  .gc-card-headline{font-size:11px!important}
   /* Mobile: preview cards 3-column grid */
   .preview-grid{grid-template-columns:1fr 1fr!important;gap:6px!important;padding:8px 0!important;}
   .preview-card{padding:7px 8px!important;}
@@ -3137,7 +3159,7 @@ thead th.sorted-col .sarrow{opacity:1}
     <h1 id="scores-page-title" style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(34px,5vw,54px);text-transform:uppercase;line-height:.95">Season <span style="color:var(--gold)">Scores</span></h1>
   </div>
   <div style="padding:0 48px 0;max-width:1100px;margin:0 auto;background:#ffffff">
-    <div style="display:flex;gap:0;border-bottom:1px solid var(--border)">
+    <div id="scores-sched-tabs" style="display:flex;gap:0;border-bottom:1px solid var(--border)">
       <button class="tab-btn active" id="btn-scores" onclick="setView('scores')">Scores</button>
       <button class="tab-btn" id="btn-schedule" onclick="setView('schedule')">Schedule</button>
     </div>
