@@ -510,7 +510,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 .pw-back{margin-top:14px;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:underline;display:block}
 
 /* App */
-#app{display:none;padding:72px 0 40px}
+/* Top padding has to clear the navy .topbar which is `position:fixed`
+   at top 0 and whose height grows with env(safe-area-inset-top). On an
+   iPhone PWA with a ~50px inset, the topbar is ~100px tall — the old
+   flat 72px of padding was leaving "Change Team" hidden behind it. */
+#app{display:none;padding:calc(90px + env(safe-area-inset-top, 0px)) 0 40px}
 .app-header{background:var(--card);border-bottom:1px solid var(--border);padding:16px 20px;display:flex;align-items:center;gap:14px}
 .app-logo{width:44px;height:44px;object-fit:contain;flex-shrink:0}
 .app-name{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.04em;color:var(--navy)}
@@ -565,7 +569,10 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 .p-mob-menu.open{display:flex;padding-top:14px}
 .p-mob-menu a{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:26px;text-transform:uppercase;color:#1a1a1a;text-decoration:none;padding:12px 0;border-bottom:1px solid rgba(0,0,0,.08)}
 .p-mob-menu a:last-child{border-bottom:none}
-@media(max-width:768px){.hbg-btn{display:flex}.topbar-sub{display:none}}
+/* On mobile the bottom tab bar (injected by the SPA tab-bar script)
+   covers navigation, so the player-portal hamburger is redundant and
+   was overlapping with the "Change Team" button. Hide it on mobile. */
+@media(max-width:768px){.hbg-btn{display:none!important}.topbar-sub{display:none}}
 </style>
 </head>
 <body>
@@ -964,7 +971,14 @@ window.backToPicker = function() {
 
 async function enterApp() {
   document.getElementById('pw-screen').style.display = 'none';
-  document.getElementById('app-team-name').textContent = MY_TEAM.name;
+  // Use the short team abbreviation (e.g. "TBIR") instead of the full
+  // name ("TBI Royals") so the header reads cleanly on mobile next to
+  // the "Change Team" button. Falls back to full name / id if missing.
+  const teamLabel = MY_TEAM.short || MY_TEAM.name || MY_TEAM.id;
+  const teamFull  = MY_TEAM.name || MY_TEAM.id;
+  const nameEl = document.getElementById('app-team-name');
+  nameEl.textContent = teamLabel;
+  nameEl.title = teamFull;
   document.getElementById('app-logo').src = 'logos/'+MY_TEAM.id+'.png';
   document.getElementById('app').style.display = 'block';
   await loadData();
