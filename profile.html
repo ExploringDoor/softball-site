@@ -1756,6 +1756,12 @@ async function renderCaptainUpcomingAttendance(rosterSize) {
            <div class="ug-col-head" style="color:${color}">${label} (${arr.length})</div>
            <div class="ug-col-list">${arr.length ? arr.map(esc).join('<br>') : '—'}</div>
          </div>`;
+      const remindBtn = pending.length
+        ? `<button class="btn btn-primary btn-sm" style="margin-top:10px"
+             onclick="event.stopPropagation();window.captainRemindWaiting('${esc(g.id)}', this)">
+             📢 Remind ${pending.length} waiting
+           </button>`
+        : '';
       return `<div class="upcoming-game" onclick="this.classList.toggle('expanded')">
         <div class="ug-row">
           <div class="ug-match">${ha} ${esc(getTeamName(oppId))}</div>
@@ -1774,6 +1780,7 @@ async function renderCaptainUpcomingAttendance(rosterSize) {
           ${col(no, '✕ Out', 'var(--red)')}
           ${col(pending, '• Waiting', '#4b5563')}
         </div>
+        ${remindBtn}
       </div>`;
     }).join('');
   } catch(e) {
@@ -2019,6 +2026,42 @@ window.captainDelTeamMsg = async function(id) {
   if (!confirm('Delete this message?')) return;
   try { await deleteDoc(doc(db, 'team_messages', id)); }
   catch(e) { toast('Delete failed: ' + e.message, 'error'); }
+};
+
+// Ping the whole team to submit availability for a specific upcoming game.
+// (FCM tokens are not tied to player ids, so we can't filter out players who
+// already responded — but the message copy makes it clear it's a nudge for
+// anyone who hasn't yet.)
+window.captainRemindWaiting = async function(gameId, btn) {
+  const g = CAPT_ALL_GAMES.find(x => x.id === gameId);
+  if (!g) { toast('Game not found', 'error'); return; }
+  const oppId = g.away === MY_TEAM.id ? g.home : g.away;
+  const ha = g.home === MY_TEAM.id ? 'vs' : '@';
+  const when = [g.date, g.time].filter(Boolean).join(' ');
+  const title = (MY_TEAM.short || MY_TEAM.name) + ' · Availability needed';
+  const body = `Please mark your availability for Wk ${g.wk||'?'} ${ha} ${getTeamName(oppId)}${when ? ' · ' + when : ''}. Tap to submit.`;
+  const prevLabel = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Sending…'; }
+  try {
+    const resp = await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+      body: JSON.stringify({
+        title, body,
+        category: 'team_chat',
+        teams: [MY_TEAM.id],
+        url: '/profile.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    const sent = Number(data.sent) || 0;
+    toast(sent ? `Sent to ${sent} teammate${sent===1?'':'s'} ✓` : 'No subscribers matched yet', 'success');
+    if (btn) { btn.innerHTML = sent ? `Sent ✓` : 'No subscribers'; setTimeout(() => { btn.disabled = false; btn.innerHTML = prevLabel; }, 4000); }
+  } catch(e) {
+    toast('Reminder failed: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = prevLabel; }
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════

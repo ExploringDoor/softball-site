@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v70-my-team-attendance-expand-names';
+const VERSION = 'dvsl-v71-captain-availability-reminder-push';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
