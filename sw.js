@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v77-player-media-compress-push-delete';
+const VERSION = 'dvsl-v78-redirect-player-to-profile';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

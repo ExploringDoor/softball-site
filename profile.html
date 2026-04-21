@@ -1221,7 +1221,21 @@ async function enterPlayerApp() {
   document.getElementById('player-app-team').title = MY_TEAM.name || '';
   showScreen('player-app');
   await loadPlayerData();
-  renderPlayerAvail();
+  // Honor hash/query/sessionStorage for landing tab (player mode)
+  let wantTab = '';
+  try {
+    const hash = (location.hash || '').replace(/^#/, '').trim();
+    const qp = new URLSearchParams(location.search).get('tab') || '';
+    const ss = sessionStorage.getItem('dvsl-profile-ptab') || '';
+    // Normalize legacy aliases
+    const alias = { media: 'photos', availability: 'avail' };
+    const raw = hash || qp || ss || 'avail';
+    wantTab = alias[raw] || raw;
+  } catch(_) { wantTab = 'avail'; }
+  const valid = ['avail','chat','notif','photos','help'];
+  if (!valid.includes(wantTab)) wantTab = 'avail';
+  if (typeof window.playerTab === 'function') window.playerTab(wantTab);
+  else renderPlayerAvail();
 }
 
 async function loadPlayerData() {
@@ -1266,6 +1280,7 @@ window.playerTab = function(tab) {
     const el = document.getElementById('ptab-' + id);
     if (el) el.style.display = id === tab ? '' : 'none';
   });
+  try { sessionStorage.setItem('dvsl-profile-ptab', tab); } catch(_) {}
   if (tab === 'chat')   activatePlayerChat();
   if (tab === 'notif')  renderNotificationsTab();
   if (tab === 'photos') loadPlayerMedia();
