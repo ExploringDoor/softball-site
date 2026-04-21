@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#002D72">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="DVSL">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script>
+    // SW registration + bottom tab bar + "More" sheet.
+    //
+    // This page is the new unified "Profile" destination — replacing the
+    // old Inbox tab. Both players and captains sign in here: the page
+    // auto-detects which role based on localStorage and routes to the
+    // right portal.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(r => { try { r.update(); } catch(_){} }).catch(() => {});
+        let _dvslReloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (_dvslReloaded) return;
+          _dvslReloaded = true;
+          window.location.reload();
+        });
+        navigator.serviceWorker.ready.then(r => {
+          if (r.active) r.active.postMessage({ type: 'GET_VERSION' });
+        }).catch(() => {});
+
+        // ── Bottom tab bar + "More" sheet ─────────────────────────────
+        const TABS = [
+          { id: 'home',     label: 'Home',     icon: '🏠', href: '/#home' },
+          { id: 'scores',   label: 'Scores',   icon: '🥎', href: '/#scores' },
+          { id: 'schedule', label: 'Schedule', icon: '📅', href: '/#schedule' },
+          { id: 'profile',  label: 'Profile',  icon: '👤', href: '/profile.html', badge: true },
+          { id: 'more',     label: 'More',     icon: '⋯',  more: true },
+        ];
+        const MORE_GROUPS = [
+          {
+            label: 'Compete',
+            items: [
+              { icon: '🏆', label: 'Standings',   href: '/#standings' },
+              { icon: '📊', label: 'Stats',       href: '/#stats' },
+              { icon: '🥇', label: 'Leaders',     href: '/#leaders' },
+              { icon: '🏅', label: 'Playoffs',    href: '/playoffs.html' },
+              { icon: '📜', label: 'History',     href: '/#history' },
+            ],
+          },
+          {
+            label: 'Account',
+            items: [
+              { icon: '👤', label: 'My Profile',        href: '/profile.html' },
+              { icon: '🔔', label: 'Notifications',     href: '/inbox.html' },
+              { icon: '⚾', label: 'Captain Dashboard', href: '/captain.html' },
+              { icon: '✍️', label: 'Player Sign-Up',    href: '/registration.html' },
+              { icon: '🛠️', label: 'Admin Access',      href: '/admin.html' },
+            ],
+          },
+          {
+            label: 'Content',
+            items: [
+              { icon: '📸', label: 'Gallery',     href: '/photos.html' },
+              { icon: '🎥', label: 'Watch Live',  href: '/watch.html' },
+              { icon: '📋', label: 'Rules',       href: '/rules.html' },
+            ],
+          },
+        ];
+
+        function _dvslCurrentTab() {
+          const path = location.pathname.replace(/\/$/, '');
+          if (path === '/profile.html') return 'profile';
+          if (path === '/inbox.html') return 'profile';
+          if (path === '' || path === '/index.html') {
+            const hash = location.hash || '';
+            if (hash.startsWith('#scores'))   return 'scores';
+            if (hash.startsWith('#schedule')) return 'schedule';
+            if (hash === '' || hash === '#' || hash.startsWith('#home')) return 'home';
+          }
+          return null;
+        }
+
+        function _dvslEnsureTabBar() {
+          if (document.getElementById('dvsl-tabbar')) return;
+          if (!document.getElementById('dvsl-tabbar-css')) {
+            const st = document.createElement('style');
+            st.id = 'dvsl-tabbar-css';
+            st.textContent = `
+            #dvsl-tabbar {
+              position: fixed !important; top: auto !important; right: auto !important;
+              left: 50% !important; bottom: 0 !important; transform: translateX(-50%) !important;
+              width: 100% !important; max-width: 480px !important;
+              height: calc(74px + env(safe-area-inset-bottom)) !important;
+              padding-top: 8px !important;
+              padding-left: max(8px, env(safe-area-inset-left)) !important;
+              padding-right: max(8px, env(safe-area-inset-right)) !important;
+              padding-bottom: calc(env(safe-area-inset-bottom) + 14px) !important;
+              margin: 0 !important; display: flex !important;
+              align-items: stretch !important; justify-content: stretch !important;
+              gap: 0 !important; background: #fff !important; border: 0 !important;
+              border-top: 1px solid #e6e6e6 !important;
+              backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+              box-shadow: 0 -4px 16px rgba(0,0,0,.06) !important;
+              z-index: 99995 !important; box-sizing: border-box !important;
+              font: 600 10px/1.1 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,Inter,sans-serif !important;
+            }
+            #dvsl-tabbar > * {
+              flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+              align-items: center; justify-content: center;
+              gap: 3px; padding: 4px 2px; background: transparent; border: 0;
+              color: #8b8b8b; text-decoration: none; cursor: pointer;
+              position: relative; -webkit-tap-highlight-color: transparent;
+              overflow: visible; box-sizing: border-box;
+              transition: color 160ms ease, transform 160ms ease;
+            }
+            #dvsl-tabbar > *.active { color: #0057ff; }
+            #dvsl-tabbar > *.active .dt-ico {
+              text-shadow: 0 0 4px rgba(0,87,255,.95), 0 0 12px rgba(0,87,255,.75),
+                0 0 24px rgba(0,87,255,.55), 0 0 40px rgba(0,87,255,.35);
+              transform: translateY(-1px) scale(1.1);
+            }
+            #dvsl-tabbar > *.active .dt-label {
+              font-weight: 900 !important; letter-spacing: .05em !important;
+              color: #0046B4 !important; text-shadow: 0 0 6px rgba(0,70,180,.35);
+            }
+            #dvsl-tabbar .dt-ico { font-size: 20px; line-height: 1;
+              transition: text-shadow 160ms ease, transform 160ms ease; }
+            #dvsl-tabbar .dt-label {
+              font: 700 9.5px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif !important;
+              letter-spacing: 0; text-transform: uppercase;
+              white-space: nowrap; overflow: visible !important; text-align: center;
+            }
+            #dvsl-tabbar .dt-badge {
+              position: absolute; top: 4px; right: calc(50% - 20px);
+              background: #e53935; color: #fff; min-width: 16px; height: 16px;
+              padding: 0 4px; border-radius: 8px;
+              font: 700 10px/16px system-ui,sans-serif;
+              text-align: center; display: none;
+              box-shadow: 0 1px 3px rgba(0,0,0,.3);
+            }
+            #dvsl-more-backdrop { position: fixed; inset: 0; z-index: 99996;
+              background: rgba(0,0,0,.32); opacity: 0;
+              transition: opacity 150ms; touch-action: none; }
+            #dvsl-more-sheet { position: fixed; left: 50%; bottom: 0;
+              transform: translate(-50%, 100%);
+              transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+              width: 100%; max-width: 480px; max-height: 82vh;
+              display: flex; flex-direction: column; background: #fff;
+              border-radius: 18px 18px 0 0; box-shadow: 0 -12px 40px rgba(0,0,0,.25);
+              z-index: 99997; overflow: hidden;
+              font: 500 15px/1.35 system-ui,-apple-system,Segoe UI,Inter,sans-serif; color: #111; }
+            #dvsl-more-sheet.open { transform: translate(-50%, 0); }
+            #dvsl-more-grab { flex: 0 0 auto; padding: 10px 0 4px;
+              display: flex; justify-content: center; }
+            #dvsl-more-grab::before { content: ''; width: 42px; height: 4px;
+              background: #d4d4d4; border-radius: 2px; }
+            #dvsl-more-head { flex: 0 0 auto; display: flex; align-items: center;
+              padding: 4px 16px 10px; }
+            #dvsl-more-head h3 { margin: 0; flex: 1;
+              font: 700 18px/1.2 system-ui,sans-serif; color: #111; }
+            #dvsl-more-close { background: transparent; border: 0;
+              font: 400 26px/1 system-ui,sans-serif; color: #8b8b8b;
+              cursor: pointer; padding: 4px 8px; margin: -4px -8px; }
+            #dvsl-more-list { flex: 1 1 auto; overflow-y: auto;
+              overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+              padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+            .dvsl-more-group-label { font: 700 11px/1 system-ui,sans-serif;
+              color: #888; text-transform: uppercase; letter-spacing: .1em;
+              padding: 16px 18px 6px; }
+            .dvsl-more-row { display: flex; align-items: center; gap: 14px;
+              padding: 14px 18px; color: #111; text-decoration: none;
+              border-bottom: 1px solid #f3f3f3;
+              -webkit-tap-highlight-color: rgba(0,45,114,.12); }
+            .dvsl-more-row:active { background: #f5f7fb; }
+            .dvsl-more-row .dmr-ico { flex: 0 0 auto; font-size: 22px;
+              width: 28px; text-align: center; }
+            .dvsl-more-row .dmr-lbl { flex: 1 1 auto; font-weight: 600; }
+            .dvsl-more-row .dmr-chev { flex: 0 0 auto; color: #bbb; font-size: 18px; }
+            @media (min-width: 768px) {
+              #dvsl-tabbar { display: none !important; }
+              body { padding-bottom: 0 !important; }
+            }
+            @media (max-width: 767px) {
+              .hamburger, #hbg, .menu-btn, .nav-toggle { display: none !important; }
+            }
+            `;
+            document.head.appendChild(st);
+          }
+
+          const bar = document.createElement('nav');
+          bar.id = 'dvsl-tabbar';
+          bar.setAttribute('aria-label', 'Primary');
+          const active = _dvslCurrentTab();
+          TABS.forEach(t => {
+            const el = t.more ? document.createElement('button') : document.createElement('a');
+            el.dataset.tab = t.id;
+            if (!t.more) { el.href = t.href; }
+            if (t.id === active) el.classList.add('active');
+            const ico = document.createElement('span'); ico.className = 'dt-ico'; ico.textContent = t.icon;
+            const lbl = document.createElement('span'); lbl.className = 'dt-label'; lbl.textContent = t.label;
+            el.appendChild(ico); el.appendChild(lbl);
+            if (t.badge) {
+              const bg = document.createElement('span');
+              bg.className = 'dt-badge';
+              bg.id = 'dvsl-tab-inbox-badge';
+              el.appendChild(bg);
+            }
+            if (t.more) {
+              el.type = 'button';
+              el.setAttribute('aria-label', 'More destinations');
+              el.addEventListener('click', (e) => { e.preventDefault(); _dvslOpenMore(); });
+            }
+            bar.appendChild(el);
+          });
+          document.body.appendChild(bar);
+          _dvslApplyBodyPad();
+        }
+
+        function _dvslApplyBodyPad() {
+          const mobile = window.matchMedia('(max-width: 767px)').matches;
+          const hasTabBar = !!document.getElementById('dvsl-tabbar');
+          if (mobile && hasTabBar) {
+            document.body.style.paddingBottom = 'calc(104px + env(safe-area-inset-bottom))';
+          } else {
+            document.body.style.paddingBottom = '';
+          }
+        }
+        window.addEventListener('resize', _dvslApplyBodyPad);
+
+        let _dvslSavedScrollY = null;
+        function _dvslLockBody() {
+          if (_dvslSavedScrollY != null) return;
+          _dvslSavedScrollY = window.scrollY || 0;
+          document.body.style.position = 'fixed';
+          document.body.style.top = '-' + _dvslSavedScrollY + 'px';
+          document.body.style.left = '0'; document.body.style.right = '0'; document.body.style.width = '100%';
+        }
+        function _dvslUnlockBody() {
+          if (_dvslSavedScrollY == null) return;
+          const y = _dvslSavedScrollY;
+          document.body.style.position = ''; document.body.style.top = '';
+          document.body.style.left = ''; document.body.style.right = ''; document.body.style.width = '';
+          _dvslSavedScrollY = null;
+          window.scrollTo(0, y);
+        }
+
+        function _dvslOpenMore() {
+          if (document.getElementById('dvsl-more-sheet')) return;
+          _dvslLockBody();
+          const backdrop = document.createElement('div');
+          backdrop.id = 'dvsl-more-backdrop';
+          backdrop.addEventListener('click', _dvslCloseMore);
+          document.body.appendChild(backdrop);
+
+          const sheet = document.createElement('div');
+          sheet.id = 'dvsl-more-sheet';
+          sheet.setAttribute('role', 'dialog');
+          sheet.setAttribute('aria-label', 'More destinations');
+          let html = '<div id="dvsl-more-grab"></div>' +
+            '<div id="dvsl-more-head"><h3>More</h3><button id="dvsl-more-close" aria-label="Close">×</button></div>' +
+            '<div id="dvsl-more-list">';
+          MORE_GROUPS.forEach(g => {
+            html += '<div class="dvsl-more-group-label">' + g.label + '</div>';
+            g.items.forEach(it => {
+              const safeLabel = String(it.label).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+              html += '<a class="dvsl-more-row" href="' + it.href + '">' +
+                '<span class="dmr-ico">' + it.icon + '</span>' +
+                '<span class="dmr-lbl">' + safeLabel + '</span>' +
+                '<span class="dmr-chev">›</span>' +
+              '</a>';
+            });
+          });
+          html += '</div>';
+          sheet.innerHTML = html;
+          document.body.appendChild(sheet);
+          sheet.querySelector('#dvsl-more-close').addEventListener('click', _dvslCloseMore);
+          sheet.querySelectorAll('.dvsl-more-row').forEach(row => {
+            row.addEventListener('click', () => { _dvslCloseMore(); });
+          });
+          requestAnimationFrame(() => { backdrop.style.opacity = '1'; sheet.classList.add('open'); });
+        }
+        function _dvslCloseMore() {
+          const b = document.getElementById('dvsl-more-backdrop');
+          const s = document.getElementById('dvsl-more-sheet');
+          if (s) s.classList.remove('open');
+          if (b) b.style.opacity = '0';
+          setTimeout(() => { if (s) s.remove(); if (b) b.remove(); _dvslUnlockBody(); }, 220);
+        }
+
+        const _dvslIsPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+        if (_dvslIsPwa) _dvslEnsureTabBar();
+
+        // Badge polling
+        let _dvslLastCheck = 0, _dvslLastCount = -1;
+        async function _dvslCheckPendingNav() {
+          const now = Date.now();
+          if (now - _dvslLastCheck < 3000) return;
+          _dvslLastCheck = now;
+          const token = localStorage.getItem('dvsl-notif-token');
+          if (!token) { _dvslSetBadge(0); return; }
+          try {
+            const resp = await fetch('/api/check-pending-nav', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token }),
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const items = Array.isArray(data && data.items) ? data.items : [];
+            _dvslSetBadge(items.length);
+          } catch(_) {}
+        }
+        function _dvslSetBadge(count) {
+          if (count === _dvslLastCount) return;
+          _dvslLastCount = count;
+          const el = document.getElementById('dvsl-tab-inbox-badge');
+          if (!el) return;
+          if (count > 0) { el.style.display = 'block'; el.textContent = count > 99 ? '99+' : String(count); }
+          else { el.style.display = 'none'; }
+        }
+        _dvslCheckPendingNav();
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') _dvslCheckPendingNav();
+        });
+        window.addEventListener('pageshow', _dvslCheckPendingNav);
+        window.addEventListener('focus', _dvslCheckPendingNav);
+        setInterval(() => {
+          if (document.visibilityState === 'visible') _dvslCheckPendingNav();
+        }, 5000);
+      });
+    }
+  </script>
+<title>My Profile — DVSL Softball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#002D72;--navy-light:rgba(0,45,114,.08);--navy-mid:rgba(0,45,114,.15);
+  --bg:#f5f6f8;--bg2:#fafbfc;--card:#ffffff;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.06);
+  --text:#1a1a1a;--muted:#6b7280;--muted2:#9ca3af;
+  --green:#16a34a;--green-bg:rgba(22,163,74,.1);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.1);
+  --yellow:#ca8a04;--yellow-bg:rgba(202,138,4,.1);
+  --blue:#2563eb;--blue-bg:rgba(37,99,235,.1);
+}
+html{background:#002D72}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-height:1.5;min-height:100vh}
+
+/* ── FIXED TOP BAR ── */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:9999;background:#002D72;padding:calc(8px + env(safe-area-inset-top, 0px)) 20px 8px;display:flex;align-items:center;justify-content:space-between}
+.topbar a{color:#fff;font-size:13px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:6px}
+.topbar .topbar-title{color:rgba(255,255,255,.7);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+
+/* ── SCREENS ── */
+.screen{display:none;min-height:100vh;padding-top:calc(48px + env(safe-area-inset-top, 0px));background:var(--bg)}
+.screen.active{display:block}
+
+/* ── LOADING ── */
+.loading-center{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:120px 20px;color:var(--muted)}
+.spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--navy);border-radius:50%;animation:spin .6s linear infinite;margin-bottom:12px}
+.spinner-sm{width:18px;height:18px;border-width:2px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--muted);font-size:13px;padding:30px}
+.loading .spinner{margin-bottom:0}
+
+/* ── CHOOSER ── */
+.chooser-wrap{max-width:460px;margin:0 auto;padding:48px 24px 60px;text-align:center}
+.chooser-logo{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:42px;letter-spacing:.08em;text-transform:uppercase;color:var(--navy);margin-bottom:4px}
+.chooser-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:26px;color:var(--text);margin-bottom:6px}
+.chooser-sub{font-size:14px;color:var(--muted);margin-bottom:32px}
+.cbtn{width:100%;display:flex;align-items:center;gap:16px;padding:18px 20px;margin-bottom:12px;background:#fff;border:2px solid var(--border);border-radius:14px;cursor:pointer;text-align:left;transition:all .15s;text-decoration:none;color:var(--text)}
+.cbtn:hover{border-color:var(--navy);box-shadow:0 6px 20px rgba(0,0,0,.08);transform:translateY(-1px)}
+.cbtn-ico{flex:0 0 auto;font-size:32px;width:46px;text-align:center}
+.cbtn-text{flex:1}
+.cbtn-main{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;text-transform:uppercase;color:var(--navy);letter-spacing:.02em}
+.cbtn-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.cbtn-chev{flex:0 0 auto;font-size:24px;color:var(--muted2)}
+
+/* ── PICKER ── */
+.picker-wrap{max-width:720px;margin:0 auto;padding:24px}
+.picker-back{display:inline-flex;align-items:center;gap:4px;color:var(--navy);font-size:13px;font-weight:600;cursor:pointer;padding:8px 0;margin-bottom:12px}
+.picker-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30px;text-transform:uppercase;color:var(--navy);margin-bottom:4px}
+.picker-sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.team-card{background:#fff;border:2px solid rgba(0,45,114,.15);border-radius:14px;padding:18px 12px;text-align:center;cursor:pointer;transition:all .15s;user-select:none}
+.team-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.1)}
+.team-card-logo{width:60px;height:60px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center}
+.team-card-logo img{max-width:60px;max-height:60px;object-fit:contain}
+.team-card-fallback{display:none;width:60px;height:60px;border-radius:50%;color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;align-items:center;justify-content:center}
+.team-card-name{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;text-transform:uppercase;line-height:1.2}
+
+/* ── PASSWORD SCREEN ── */
+.pw-wrap{max-width:400px;margin:0 auto;padding:40px 24px;text-align:center}
+.pw-logo{width:72px;height:72px;margin:0 auto 12px;object-fit:contain}
+.pw-team-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:24px;text-transform:uppercase;color:var(--navy);margin-bottom:6px}
+.pw-sub{font-size:13px;color:var(--muted);margin-bottom:24px}
+.pw-input{width:100%;padding:14px 16px;font-size:16px;border:1px solid var(--border);border-radius:10px;text-align:center;margin-bottom:12px;background:#fff}
+.pw-input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-light)}
+.pw-btn{width:100%;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;background:var(--navy);color:#fff;border:0;border-radius:10px;cursor:pointer}
+.pw-btn:hover{background:#003d99}
+.pw-error{display:none;background:var(--red-bg);color:var(--red);font-size:13px;padding:10px;border-radius:8px;margin-bottom:12px}
+.pw-back{display:inline-block;margin-top:16px;color:var(--navy);font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;background:none;border:0}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;border-radius:8px;padding:11px 22px;cursor:pointer;transition:all .15s;text-decoration:none}
+.btn-primary{background:var(--navy);color:#fff}.btn-primary:hover{background:#003d99}
+.btn-success{background:var(--green);color:#fff}.btn-success:hover{background:#15803d}
+.btn-danger{background:var(--red);color:#fff}.btn-danger:hover{background:#b91c1c}
+.btn-outline{background:transparent;color:var(--navy);border:1px solid var(--border)}.btn-outline:hover{border-color:var(--navy);background:var(--navy-light)}
+.btn-sm{padding:7px 14px;font-size:11px}
+.btn-full{width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── APP HEADER ── */
+.app-header{background:#fff;border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:calc(38px + env(safe-area-inset-top, 0px));z-index:100}
+.app-header-brand{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+.app-header-logo{width:36px;height:36px;object-fit:contain;flex-shrink:0}
+.app-header-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;color:var(--navy);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app-header-sub{font-size:11px;color:var(--muted);margin-top:-2px}
+
+/* ── PLAYER TABS ── */
+.ptab-bar{display:flex;gap:0;background:#fff;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 8px}
+.ptab{flex:0 0 auto;padding:12px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:none;border:0;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap}
+.ptab.active{color:var(--navy);border-bottom-color:var(--navy)}
+
+/* ── CAPTAIN TABS ── */
+.tab-nav{background:#fff;border-bottom:1px solid var(--border);padding:0 16px;display:flex;gap:0;overflow-x:auto;-webkit-overflow-scrolling:touch;position:sticky;top:calc(96px + env(safe-area-inset-top, 0px));z-index:99}
+.tab-item{padding:13px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap;user-select:none}
+.tab-item:hover{color:var(--text)}
+.tab-item.active{color:var(--navy);border-bottom-color:var(--navy)}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:0 5px;margin-left:5px;vertical-align:middle;line-height:1}
+.tab-badge[hidden]{display:none!important}
+
+/* ── CONTENT ── */
+.main-content{max-width:900px;margin:0 auto;padding:18px 16px 40px}
+.section{display:none}.section.active{display:block}
+.section-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;text-transform:uppercase;letter-spacing:-.01em;color:var(--text);margin-bottom:2px}
+.section-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+
+/* ── WHO BOX ── */
+.who-box{background:#fff;border-bottom:1px solid var(--border);padding:14px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.who-label{font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+.who-select{flex:1;min-width:160px;padding:10px 14px;font-size:14px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text)}
+
+/* ── PANELS ── */
+.panel{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:18px}
+.panel-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);margin-bottom:12px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:18px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center}
+.stat-card .val{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--navy);line-height:1}
+.stat-card .lbl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+
+.welcome-card{background:linear-gradient(135deg,var(--navy),#003d99);color:#fff;border-radius:14px;padding:22px 24px;margin-bottom:20px}
+.welcome-card h2{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;margin-bottom:4px}
+.welcome-card p{font-size:13px;opacity:.85}
+
+/* ── TABLES ── */
+.tbl-wrap{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+.tbl{width:100%;border-collapse:collapse;min-width:400px}
+.tbl th{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:10px 14px;text-align:left;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)}
+.tbl td{font-size:13px;padding:10px 14px;border-bottom:1px solid var(--border2)}
+.tbl tr:last-child td{border-bottom:none}
+
+/* ── GAME CARDS ── */
+.game-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.game-card .game-info{flex:1;min-width:160px}
+.game-card .game-opp{font-weight:700;font-size:14px;margin-bottom:4px}
+.game-card .game-meta{font-size:12px;color:var(--muted)}
+.game-card .score-display{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;color:var(--navy);min-width:70px;text-align:center}
+.avail-btns{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── CHAT ── */
+.chat-wrap{display:flex;flex-direction:column;height:480px;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px}
+.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth;background:var(--bg2)}
+.chat-msg{max-width:82%;display:flex;flex-direction:column;gap:3px;position:relative}
+.chat-msg.mine{align-self:flex-end;align-items:flex-end}
+.chat-msg.theirs{align-self:flex-start;align-items:flex-start}
+.chat-bubble{padding:10px 14px;border-radius:18px;font-size:14px;line-height:1.45;word-break:break-word;position:relative}
+.chat-msg.mine .chat-bubble{background:var(--navy);color:#fff;border-bottom-right-radius:4px}
+.chat-msg.theirs .chat-bubble{background:rgba(0,0,0,.06);color:var(--text);border-bottom-left-radius:4px}
+.chat-meta{font-size:11px;color:var(--muted2);padding:0 4px}
+.chat-del{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;border:2px solid #fff;font-size:11px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+.chat-msg.mine:hover .chat-del{opacity:1}
+.chat-input-row{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:#fff}
+.chat-input{flex:1;padding:10px 14px;font-size:14px;border:1px solid var(--border);border-radius:22px;outline:none;background:var(--bg2)}
+.chat-input:focus{border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-light)}
+
+/* ── MEDIA GRID ── */
+.media-upload-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+.media-field-label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px}
+.media-input{width:100%;padding:8px 12px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:#fff}
+.media-input:focus{outline:none;border-color:var(--navy)}
+.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.media-item{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.media-item img,.media-item iframe{width:100%;display:block;aspect-ratio:1/1;object-fit:cover}
+.media-item-meta{padding:10px;font-size:12px}
+.media-item-caption{font-weight:600;margin-bottom:4px}
+.media-item-author{color:var(--muted);font-size:11px}
+
+/* ── PAYMENTS ── */
+.pay-status{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer;user-select:none}
+.pay-check{width:18px;height:18px;border-radius:4px;border:2px solid var(--border);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.pay-check.paid{background:var(--green);border-color:var(--green);color:#fff}
+.pay-check.paid::after{content:'✓';font-size:11px;font-weight:700}
+.pay-summary{display:flex;gap:20px;font-size:13px;padding:14px 16px;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)}
+
+/* ── AVAIL BUTTONS ── */
+.ab{padding:7px 14px;border-radius:8px;border:2px solid var(--border);background:transparent;color:var(--muted);font-weight:700;font-size:12px;cursor:pointer}
+.ab.ab-yes.on{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+.ab.ab-maybe.on{border-color:#f59e0b;background:rgba(245,158,11,.12);color:#f59e0b}
+.ab.ab-no.on{border-color:var(--red);background:var(--red-bg);color:var(--red)}
+
+/* ── BADGES ── */
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px}
+.badge-done{background:var(--green-bg);color:var(--green)}
+.badge-pending{background:var(--yellow-bg);color:var(--yellow)}
+.badge-info{background:var(--blue-bg);color:var(--blue)}
+
+/* ── NOTIFICATIONS ── */
+.notif-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:14px}
+.notif-card-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;color:var(--navy);text-transform:uppercase;margin-bottom:8px}
+.notif-item{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border2)}
+.notif-item:last-child{border-bottom:none}
+.notif-item-ico{flex:0 0 auto;font-size:22px;width:32px;text-align:center}
+.notif-item-body{flex:1}
+.notif-item-title{font-weight:600;font-size:14px;margin-bottom:2px}
+.notif-item-sub{font-size:12px;color:var(--muted)}
+.notif-install-banner{background:#fff3cd;border:1px solid #ffecb5;border-radius:12px;padding:14px 16px;margin-bottom:14px;font-size:13px;color:#664d03}
+.notif-install-banner strong{color:#000}
+
+/* ── FORMS ── */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.form-input{width:100%;padding:10px 14px;font-size:14px;border:1px solid var(--border);border-radius:8px;outline:none;background:#fff;color:var(--text)}
+.form-input:focus{border-color:var(--navy);box-shadow:0 0 0 3px var(--navy-light)}
+.score-input-row{display:flex;align-items:center;gap:12px;margin-top:10px}
+.score-input{width:70px;padding:10px;font-size:18px;font-weight:700;text-align:center;border:2px solid var(--border);border-radius:8px;background:#fff}
+.score-input:focus{outline:none;border-color:var(--navy)}
+
+/* ── ANNOUNCEMENTS ── */
+.announcement-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:10px}
+.announcement-card .ann-subject{font-weight:700;font-size:15px;color:var(--text);margin-bottom:4px}
+.announcement-card .ann-body{font-size:13px;color:var(--text);white-space:pre-wrap;line-height:1.55;margin-bottom:8px}
+.announcement-card .ann-meta{font-size:11px;color:var(--muted2)}
+
+/* ── HELP ── */
+.help-section details{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.help-section details[open]{box-shadow:0 2px 10px rgba(0,0,0,.05)}
+.help-section summary{padding:14px 18px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--navy);list-style:none;display:flex;align-items:center;justify-content:space-between}
+.help-section summary::-webkit-details-marker{display:none}
+.help-section summary::after{content:'▸';font-size:13px;color:var(--muted);transition:transform .15s}
+.help-section details[open] summary::after{transform:rotate(90deg)}
+.help-section .help-body{padding:4px 18px 16px;font-size:14px;line-height:1.55;color:#2a2a2a}
+.help-section .help-body p{margin:8px 0}
+.help-section .help-body ul{margin:8px 0 8px 22px}
+.help-section .help-body li{margin:5px 0}
+.help-section .help-body strong{color:var(--navy)}
+
+/* ── TOAST ── */
+.toast-container{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);z-index:9998;display:flex;flex-direction:column;gap:8px;max-width:440px;width:calc(100% - 32px)}
+.toast{padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.15);animation:toastIn .3s ease}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+.toast.info{background:var(--navy)}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateY(-8px)}}
+
+/* ── EMPTY ── */
+.empty{padding:32px;text-align:center;color:var(--muted);font-size:14px}
+
+/* ── RESPONSIVE ── */
+@media(max-width:600px){
+  .app-header{padding:10px 14px}
+  .app-header-title{font-size:16px}
+  .main-content{padding:14px 12px 40px}
+  .panel{padding:16px}
+  .welcome-card{padding:18px}
+  .chat-wrap{height:420px}
+  .team-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- FIXED TOP BAR -->
+<div class="topbar">
+  <a href="/">← Back to DVSL</a>
+  <span class="topbar-title" id="topbar-title">My Profile</span>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: LOADING                                                    -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-loading">
+  <div class="loading-center">
+    <div class="spinner"></div>
+    <div>Loading…</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: MODE CHOOSER                                               -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-chooser">
+  <div class="chooser-wrap">
+    <div class="chooser-logo">DVSL</div>
+    <div class="chooser-title">My Profile</div>
+    <div class="chooser-sub">Sign in to check availability, chat with your team, and manage your games.</div>
+    <button class="cbtn" onclick="window.startPlayerFlow()">
+      <span class="cbtn-ico">⚾</span>
+      <div class="cbtn-text">
+        <div class="cbtn-main">I'm a Player</div>
+        <div class="cbtn-sub">Mark availability, team chat, photos</div>
+      </div>
+      <span class="cbtn-chev">›</span>
+    </button>
+    <button class="cbtn" onclick="window.startCaptainFlow()">
+      <span class="cbtn-ico">🏆</span>
+      <div class="cbtn-text">
+        <div class="cbtn-main">I'm a Team Captain</div>
+        <div class="cbtn-sub">Manage roster, submit scores, payments</div>
+      </div>
+      <span class="cbtn-chev">›</span>
+    </button>
+    <div style="font-size:12px;color:var(--muted);margin-top:28px">Not on a team yet? <a href="/registration.html" style="color:var(--navy);font-weight:600">Sign up here</a>.</div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: PLAYER TEAM PICKER                                         -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-player-picker">
+  <div class="picker-wrap">
+    <div class="picker-back" onclick="window.showChooser()">← Back</div>
+    <div class="picker-title">Player Portal</div>
+    <div class="picker-sub">Select your team to continue</div>
+    <div class="team-grid" id="player-team-grid">
+      <div class="loading"><div class="spinner spinner-sm"></div> Loading teams…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: PLAYER PASSWORD                                            -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-player-pw">
+  <div class="pw-wrap">
+    <img id="pw-logo" class="pw-logo" src="" onerror="this.style.display='none'">
+    <div class="pw-team-name" id="pw-team-name"></div>
+    <div class="pw-sub">Enter your team's password to continue.</div>
+    <div class="pw-error" id="pw-error">Incorrect password. Try again.</div>
+    <input type="password" class="pw-input" id="pw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')window.checkPlayerPassword()">
+    <button class="pw-btn" onclick="window.checkPlayerPassword()">Enter</button>
+    <button class="pw-back" onclick="window.backToPlayerPicker()">← Choose a different team</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: CAPTAIN TEAM PICKER                                        -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-captain-picker">
+  <div class="picker-wrap">
+    <div class="picker-back" onclick="window.showChooser()">← Back</div>
+    <div class="picker-title">Captain Dashboard</div>
+    <div class="picker-sub">Select your team to continue</div>
+    <div class="team-grid" id="captain-team-grid">
+      <div class="loading"><div class="spinner spinner-sm"></div> Loading teams…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- PLAYER APP                                                         -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="player-app">
+  <div class="app-header">
+    <div class="app-header-brand">
+      <img id="player-app-logo" class="app-header-logo" src="" onerror="this.style.display='none'">
+      <div>
+        <div class="app-header-title" id="player-app-team">—</div>
+        <div class="app-header-sub">Player Portal</div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="window.signOutPlayer()">Change</button>
+  </div>
+
+  <div class="who-box">
+    <span class="who-label">Who are you?</span>
+    <select class="who-select" id="player-name-select" onchange="window.onPlayerNameChange()">
+      <option value="">— Select your name —</option>
+    </select>
+  </div>
+
+  <div class="ptab-bar">
+    <button class="ptab active" data-ptab="avail" onclick="window.playerTab('avail')">📅 Availability</button>
+    <button class="ptab" data-ptab="chat" onclick="window.playerTab('chat')">💬 Chat</button>
+    <button class="ptab" data-ptab="notif" onclick="window.playerTab('notif')">🔔 Notifications</button>
+    <button class="ptab" data-ptab="photos" onclick="window.playerTab('photos')">📸 Photos</button>
+    <button class="ptab" data-ptab="help" onclick="window.playerTab('help')">❓ Help</button>
+  </div>
+
+  <div class="main-content">
+    <!-- PLAYER: AVAILABILITY -->
+    <div id="ptab-avail" class="ptab-content">
+      <div id="pavail-content">
+        <div class="empty">Select your name above to get started.</div>
+      </div>
+    </div>
+
+    <!-- PLAYER: CHAT -->
+    <div id="ptab-chat" class="ptab-content" style="display:none">
+      <div class="section-sub" style="margin-bottom:12px">Chat with your captain and teammates in real time.</div>
+      <div id="pchat-need-identity" class="empty" style="display:none">Pick your name in the <strong>Who are you?</strong> box to start chatting.</div>
+      <div id="pchat-box" class="chat-wrap" style="display:none">
+        <div class="chat-messages" id="pchat-messages">
+          <div class="empty">No messages yet.</div>
+        </div>
+        <div class="chat-input-row">
+          <input class="chat-input" id="pchat-input" placeholder="Message your team…" maxlength="500"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.playerSendChat()}">
+          <button class="btn btn-primary btn-sm" onclick="window.playerSendChat()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLAYER: NOTIFICATIONS -->
+    <div id="ptab-notif" class="ptab-content" style="display:none">
+      <div class="section-title">Notifications</div>
+      <div class="section-sub">Get pinged when something happens — no need to check the app.</div>
+      <div id="pnotif-content">
+        <div class="loading"><div class="spinner spinner-sm"></div> Checking…</div>
+      </div>
+    </div>
+
+    <!-- PLAYER: PHOTOS -->
+    <div id="ptab-photos" class="ptab-content" style="display:none">
+      <div class="section-sub" style="margin-bottom:14px">Share photos and videos with your team.</div>
+      <div class="media-upload-card">
+        <div class="panel-title" style="margin-bottom:10px">📤 Add Photo or Video</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div>
+            <label class="media-field-label">📷 Photo (JPG, PNG, GIF…)</label>
+            <input type="file" id="pmedia-file" accept="image/*" style="font-size:13px;width:100%">
+          </div>
+          <div>
+            <label class="media-field-label">🎬 YouTube Link</label>
+            <input type="url" id="pmedia-yt" class="media-input" placeholder="https://youtu.be/…">
+          </div>
+          <div>
+            <label class="media-field-label">Caption (optional)</label>
+            <input type="text" id="pmedia-caption" class="media-input" placeholder="What's happening here?">
+          </div>
+          <button class="btn btn-primary" onclick="window.uploadMedia()">Share</button>
+        </div>
+      </div>
+      <div class="panel-title" style="margin:20px 0 10px">Team Photos & Videos</div>
+      <div id="pmedia-grid"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
+    </div>
+
+    <!-- PLAYER: HELP -->
+    <div id="ptab-help" class="ptab-content help-section" style="display:none">
+      <div class="section-title">Player Help</div>
+      <div class="section-sub">Everything you can do on this portal, in 60 seconds each.</div>
+      <details open>
+        <summary>1. What is this?</summary>
+        <div class="help-body">
+          <p>This is your <strong>player portal</strong>. Pick your name at the top, then:</p>
+          <ul>
+            <li><strong>📅 Availability</strong> — tell your captain which games you can play</li>
+            <li><strong>💬 Chat</strong> — message your captain and teammates</li>
+            <li><strong>🔔 Notifications</strong> — get pinged about games, chats, scores</li>
+            <li><strong>📸 Photos</strong> — share photos and videos with your team</li>
+          </ul>
+        </div>
+      </details>
+      <details>
+        <summary>2. Add to your home screen</summary>
+        <div class="help-body">
+          <p>Works like an app when installed.</p>
+          <ul>
+            <li><strong>iPhone (Safari)</strong> — Share button → Add to Home Screen.</li>
+            <li><strong>Android (Chrome)</strong> — 3-dot menu → Install app.</li>
+          </ul>
+          <p><strong>iPhone push notifications only work</strong> when installed to home screen.</p>
+        </div>
+      </details>
+      <details>
+        <summary>3. Don't see your name?</summary>
+        <div class="help-body">
+          <p>You're not on the roster yet. <a href="/registration.html" style="color:var(--navy);font-weight:600">Register here</a> and your captain will approve you.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Still stuck?</summary>
+        <div class="help-body">
+          <p><strong>Adam Miller</strong> (Commissioner)<br>
+          <a href="mailto:adam.miller.22@gmail.com" style="color:var(--navy);font-weight:600">adam.miller.22@gmail.com</a></p>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- CAPTAIN APP                                                        -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="captain-app">
+  <div class="app-header">
+    <div class="app-header-brand">
+      <img id="captain-app-logo" class="app-header-logo" src="" onerror="this.style.display='none'">
+      <div>
+        <div class="app-header-title" id="captain-app-team">—</div>
+        <div class="app-header-sub">Captain Dashboard</div>
+      </div>
+    </div>
+    <button class="btn btn-outline btn-sm" onclick="window.signOutCaptain()">Change</button>
+  </div>
+
+  <div class="tab-nav">
+    <div class="tab-item active" data-ctab="team" onclick="window.captainTab('team')">My Team</div>
+    <div class="tab-item" data-ctab="roster" onclick="window.captainTab('roster')">Roster</div>
+    <div class="tab-item" data-ctab="schedule" onclick="window.captainTab('schedule')">Schedule</div>
+    <div class="tab-item" data-ctab="scores" onclick="window.captainTab('scores')">Submit Score</div>
+    <div class="tab-item" data-ctab="payments" onclick="window.captainTab('payments')">Payments</div>
+    <div class="tab-item" data-ctab="attendance" onclick="window.captainTab('attendance')">Attendance</div>
+    <div class="tab-item" data-ctab="teamchat" onclick="window.captainTab('teamchat')">Team Chat <span class="tab-badge" id="cbadge-teamchat" hidden></span></div>
+    <div class="tab-item" data-ctab="captchat" onclick="window.captainTab('captchat')">Captains Chat <span class="tab-badge" id="cbadge-captchat" hidden></span></div>
+    <div class="tab-item" data-ctab="announcements" onclick="window.captainTab('announcements')">Announcements</div>
+    <div class="tab-item" data-ctab="help" onclick="window.captainTab('help')">❓ Help</div>
+  </div>
+
+  <div class="main-content">
+    <!-- CAPT: MY TEAM -->
+    <div class="section active" id="csec-team">
+      <div class="welcome-card">
+        <h2 id="capt-welcome">Welcome, Captain</h2>
+        <p>Manage your team, view your schedule, and submit game scores.</p>
+      </div>
+      <div class="stat-grid" id="capt-team-stats">
+        <div class="loading"><div class="spinner spinner-sm"></div> Loading…</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Team Overview</div>
+        <div id="capt-team-info"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
+      </div>
+    </div>
+
+    <!-- CAPT: ROSTER -->
+    <div class="section" id="csec-roster">
+      <div class="section-title">Roster</div>
+      <div class="section-sub">Your team's current roster. For full management (add/edit/delete), use the Captain Portal.</div>
+      <div style="margin-bottom:14px"><a href="/captain.html" class="btn btn-outline btn-sm">Open Full Captain Portal →</a></div>
+      <div id="capt-roster-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading roster…</div></div>
+    </div>
+
+    <!-- CAPT: SCHEDULE -->
+    <div class="section" id="csec-schedule">
+      <div class="section-title">Schedule</div>
+      <div class="section-sub">Your team's upcoming and past games</div>
+      <div id="capt-schedule-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
+    </div>
+
+    <!-- CAPT: SUBMIT SCORE -->
+    <div class="section" id="csec-scores">
+      <div class="section-title">Submit Score</div>
+      <div class="section-sub">Quick final-score entry. For box score and line score details, use the full portal.</div>
+      <div style="margin-bottom:14px"><a href="/captain.html?tab=scores" class="btn btn-outline btn-sm">Open Full Box Score Tool →</a></div>
+      <div id="capt-scores-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading games…</div></div>
+    </div>
+
+    <!-- CAPT: PAYMENTS -->
+    <div class="section" id="csec-payments">
+      <div class="section-title">Payments</div>
+      <div class="section-sub">Track which players have paid their season fees</div>
+      <div id="capt-payments-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
+    </div>
+
+    <!-- CAPT: ATTENDANCE -->
+    <div class="section" id="csec-attendance">
+      <div class="section-title">Attendance</div>
+      <div class="section-sub">See who's in for each game</div>
+      <div id="capt-attendance-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
+    </div>
+
+    <!-- CAPT: TEAM CHAT -->
+    <div class="section" id="csec-teamchat">
+      <div class="section-title">Team Chat</div>
+      <div class="section-sub">Send messages to your team. Players with notifications on get a push.</div>
+      <div class="chat-wrap">
+        <div class="chat-messages" id="cteamchat-messages"><div class="empty">No messages yet.</div></div>
+        <div class="chat-input-row">
+          <input class="chat-input" id="cteamchat-input" placeholder="Message your team…" maxlength="500"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.captainSendTeamMsg()}">
+          <button class="btn btn-primary btn-sm" onclick="window.captainSendTeamMsg()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAPT: CAPTAINS CHAT -->
+    <div class="section" id="csec-captchat">
+      <div class="section-title">Captains Chat</div>
+      <div class="section-sub">Private group chat — all team captains can read and post here.</div>
+      <div class="chat-wrap">
+        <div class="chat-messages" id="ccaptchat-messages"><div class="empty">No messages yet.</div></div>
+        <div class="chat-input-row">
+          <input class="chat-input" id="ccaptchat-input" placeholder="Message all captains…" maxlength="500"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();window.captainSendCaptMsg()}">
+          <button class="btn btn-primary btn-sm" onclick="window.captainSendCaptMsg()">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CAPT: ANNOUNCEMENTS -->
+    <div class="section" id="csec-announcements">
+      <div class="section-title">Announcements</div>
+      <div class="section-sub">League news and updates from the commissioner</div>
+      <div id="capt-announcements-content"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
+    </div>
+
+    <!-- CAPT: HELP -->
+    <div class="section help-section" id="csec-help">
+      <div class="section-title">Captain Help</div>
+      <div class="section-sub">Quick rundown of everything you can do here.</div>
+      <details open>
+        <summary>1. Submit Game Scores</summary>
+        <div class="help-body">
+          <p>After each game, one captain (either side) submits the final score. The other captain confirms. Once both agree, the game is marked final and the league-wide scores/standings/stats update automatically.</p>
+          <p>For the full box score tool (batting, pitching, innings), use <strong>Open Full Box Score Tool</strong> in the Submit Score tab.</p>
+        </div>
+      </details>
+      <details>
+        <summary>2. Track Payments</summary>
+        <div class="help-body">
+          <p>In the <strong>Payments</strong> tab, tap the checkbox next to each player's name as they pay. Adam can see paid totals for league accounting.</p>
+        </div>
+      </details>
+      <details>
+        <summary>3. Team Chat & Captains Chat</summary>
+        <div class="help-body">
+          <p><strong>Team Chat</strong> — messages go to your roster only. Players with notifications on get pinged.</p>
+          <p><strong>Captains Chat</strong> — private group chat with all captains + the commissioner. Great for game-day coordination, rainouts, etc.</p>
+        </div>
+      </details>
+      <details>
+        <summary>4. Availability</summary>
+        <div class="help-body">
+          <p>The <strong>Attendance</strong> tab shows you each player's Yes / Maybe / No for every upcoming game. Players set these from their own portal.</p>
+        </div>
+      </details>
+      <details>
+        <summary>Still stuck?</summary>
+        <div class="help-body">
+          <p><strong>Adam Miller</strong> (Commissioner)<br>
+          <a href="mailto:adam.miller.22@gmail.com" style="color:var(--navy);font-weight:600">adam.miller.22@gmail.com</a></p>
+        </div>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toast-container"></div>
+
+<script type="module">
+// ═══════════════════════════════════════════════════════════════════
+// Firebase setup
+// ═══════════════════════════════════════════════════════════════════
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, onSnapshot, serverTimestamp, limit, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const app = initializeApp({
+  apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
+  authDomain: "dvsl-292dd.firebaseapp.com",
+  projectId: "dvsl-292dd",
+  storageBucket: "dvsl-292dd.firebasestorage.app",
+  messagingSenderId: "145862305559",
+  appId: "1:145862305559:web:153ec455bad57e17517952"
+});
+const db = getFirestore(app);
+
+const PUSH_SECRET = 'dvsl-push-2026-rkj3849f';
+
+// ═══════════════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════════════
+let MODE = null; // 'player' | 'captain'
+let ALL_TEAMS = [];
+let MY_TEAM = null;
+
+// Player state
+let MY_PLAYERS = [], MY_GAMES = [], _rsvps = {};
+let _playerChatUnsub = null;
+
+// Captain state
+let captainData = null;
+let CAPT_ALL_PLAYERS = [], CAPT_ALL_GAMES = [], CAPT_SUBMISSIONS = [];
+let CAPT_PAYMENTS = {}, CAPT_ANNOUNCEMENTS = [], CAPT_CAPTAINS = [];
+let _unsubTeamChat = null, _unsubCaptChat = null;
+
+// ═══════════════════════════════════════════════════════════════════
+// Utilities
+// ═══════════════════════════════════════════════════════════════════
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : s;
+  return d.innerHTML;
+}
+
+function toast(msg, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.animation = 'toastOut .3s ease forwards'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+window.toast = toast;
+
+function showScreen(id) {
+  const ids = ['screen-loading','screen-chooser','screen-player-picker','screen-player-pw','screen-captain-picker','player-app','captain-app'];
+  ids.forEach(i => {
+    const el = document.getElementById(i);
+    if (el) el.classList.toggle('active', i === id);
+  });
+}
+
+function getTeamName(id) {
+  const t = ALL_TEAMS.find(t => t.id === id);
+  return t ? (t.short || t.name) : (id || '???').toUpperCase();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Initial Identity Detection
+// ═══════════════════════════════════════════════════════════════════
+async function init() {
+  showScreen('screen-loading');
+  try {
+    const snap = await getDocs(query(collection(db, 'teams'), orderBy('name')));
+    ALL_TEAMS = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+
+    // 1) Captain session?
+    const captTeamId = localStorage.getItem('dvsl-captain-team');
+    if (captTeamId) {
+      const t = ALL_TEAMS.find(x => x.id === captTeamId);
+      if (t) {
+        MY_TEAM = t; MODE = 'captain';
+        captainData = { team_id: t.id, team_name: t.name, email: t.name };
+        await enterCaptainApp();
+        return;
+      }
+    }
+
+    // 2) Player session?
+    const playerTeamId = localStorage.getItem('player_portal_last_team');
+    if (playerTeamId) {
+      const t = ALL_TEAMS.find(x => x.id === playerTeamId);
+      if (t) {
+        const stored = t.player_password || t.password || '';
+        const savedPw = localStorage.getItem('player_portal_pw_' + playerTeamId) || '';
+        if (!stored || savedPw.toLowerCase() === stored.toLowerCase()) {
+          MY_TEAM = t; MODE = 'player';
+          await enterPlayerApp();
+          return;
+        }
+      }
+    }
+
+    // 3) No session — show chooser
+    buildTeamGrids();
+    showScreen('screen-chooser');
+  } catch (e) {
+    console.error('Init failed:', e);
+    buildTeamGrids();
+    showScreen('screen-chooser');
+    toast('Could not load teams: ' + e.message, 'error');
+  }
+}
+
+function buildTeamGrids() {
+  const cardHtml = (t, handler) => `
+    <div class="team-card" onclick="${handler}('${t.id}')">
+      <div class="team-card-logo">
+        <img src="logos/${t.id}.png" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+        <div class="team-card-fallback" style="background:${t.color||'#002D72'}">${(t.short||t.name||'?').slice(0,3)}</div>
+      </div>
+      <div class="team-card-name" style="color:${t.color||'#002D72'}">${esc(t.short || t.name)}</div>
+    </div>`;
+  const pGrid = document.getElementById('player-team-grid');
+  const cGrid = document.getElementById('captain-team-grid');
+  if (pGrid) pGrid.innerHTML = ALL_TEAMS.map(t => cardHtml(t, 'window.pickPlayerTeam')).join('');
+  if (cGrid) cGrid.innerHTML = ALL_TEAMS.map(t => cardHtml(t, 'window.pickCaptainTeam')).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Chooser navigation
+// ═══════════════════════════════════════════════════════════════════
+window.showChooser = function() { showScreen('screen-chooser'); };
+window.startPlayerFlow = function() { showScreen('screen-player-picker'); };
+window.startCaptainFlow = function() { showScreen('screen-captain-picker'); };
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER AUTH FLOW
+// ═══════════════════════════════════════════════════════════════════
+window.pickPlayerTeam = function(teamId) {
+  MY_TEAM = ALL_TEAMS.find(t => t.id === teamId);
+  if (!MY_TEAM) return;
+  const stored = MY_TEAM.player_password || MY_TEAM.password || '';
+  if (!stored) {
+    try { localStorage.setItem('player_portal_last_team', MY_TEAM.id); } catch(_) {}
+    MODE = 'player';
+    enterPlayerApp();
+    return;
+  }
+  document.getElementById('pw-logo').src = 'logos/' + teamId + '.png';
+  document.getElementById('pw-team-name').textContent = MY_TEAM.name;
+  document.getElementById('pw-error').style.display = 'none';
+  document.getElementById('pw-input').value = '';
+  showScreen('screen-player-pw');
+  setTimeout(() => document.getElementById('pw-input').focus(), 100);
+};
+
+window.checkPlayerPassword = function() {
+  const entered = document.getElementById('pw-input').value.trim();
+  const stored = MY_TEAM?.player_password || MY_TEAM?.password || '';
+  if (entered.toLowerCase() === stored.toLowerCase()) {
+    try {
+      localStorage.setItem('player_portal_last_team', MY_TEAM.id);
+      localStorage.setItem('player_portal_pw_' + MY_TEAM.id, entered);
+    } catch(_) {}
+    MODE = 'player';
+    enterPlayerApp();
+  } else {
+    document.getElementById('pw-error').style.display = 'block';
+    document.getElementById('pw-input').value = '';
+    document.getElementById('pw-input').focus();
+  }
+};
+
+window.backToPlayerPicker = function() {
+  try {
+    if (MY_TEAM?.id) localStorage.removeItem('player_portal_pw_' + MY_TEAM.id);
+    localStorage.removeItem('player_portal_last_team');
+  } catch(_) {}
+  showScreen('screen-player-picker');
+};
+
+window.signOutPlayer = function() {
+  try {
+    if (MY_TEAM?.id) localStorage.removeItem('player_portal_pw_' + MY_TEAM.id);
+    localStorage.removeItem('player_portal_last_team');
+  } catch(_) {}
+  if (_playerChatUnsub) { _playerChatUnsub(); _playerChatUnsub = null; }
+  MY_TEAM = null; MODE = null; MY_PLAYERS = []; MY_GAMES = []; _rsvps = {};
+  buildTeamGrids();
+  showScreen('screen-chooser');
+};
+
+async function enterPlayerApp() {
+  const label = MY_TEAM.short || MY_TEAM.name || MY_TEAM.id;
+  document.getElementById('player-app-logo').src = 'logos/' + MY_TEAM.id + '.png';
+  document.getElementById('player-app-team').textContent = label;
+  document.getElementById('player-app-team').title = MY_TEAM.name || '';
+  showScreen('player-app');
+  await loadPlayerData();
+  renderPlayerAvail();
+}
+
+async function loadPlayerData() {
+  try {
+    const [pSnap, gSnap] = await Promise.all([
+      getDocs(query(collection(db, 'players'), where('team', '==', MY_TEAM.id))),
+      getDocs(collection(db, 'games'))
+    ]);
+    MY_PLAYERS = pSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.active !== false).sort((a,b) => (a.num||0)-(b.num||0));
+    const all = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    MY_GAMES = all.filter(g => g.away === MY_TEAM.id || g.home === MY_TEAM.id);
+
+    const sel = document.getElementById('player-name-select');
+    sel.innerHTML = '<option value="">— Select your name —</option>';
+    MY_PLAYERS.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id; o.textContent = p.name + (p.num ? ' (#' + p.num + ')' : '');
+      sel.appendChild(o);
+    });
+    const saved = localStorage.getItem('player_portal_' + MY_TEAM.id);
+    if (saved) sel.value = saved;
+  } catch(e) {
+    document.getElementById('pavail-content').innerHTML = '<div class="empty">Failed to load: ' + esc(e.message) + '</div>';
+  }
+}
+
+window.onPlayerNameChange = function() {
+  const pid = document.getElementById('player-name-select').value;
+  if (pid) localStorage.setItem('player_portal_' + MY_TEAM.id, pid);
+  renderPlayerAvail();
+  // If chat visible, re-activate
+  const chatPanel = document.getElementById('ptab-chat');
+  if (chatPanel && chatPanel.style.display !== 'none') activatePlayerChat();
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER — Tab switching
+// ═══════════════════════════════════════════════════════════════════
+window.playerTab = function(tab) {
+  document.querySelectorAll('[data-ptab]').forEach(b => b.classList.toggle('active', b.dataset.ptab === tab));
+  ['avail','chat','notif','photos','help'].forEach(id => {
+    const el = document.getElementById('ptab-' + id);
+    if (el) el.style.display = id === tab ? '' : 'none';
+  });
+  if (tab === 'chat')   activatePlayerChat();
+  if (tab === 'notif')  renderNotificationsTab();
+  if (tab === 'photos') loadPlayerMedia();
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER — Availability
+// ═══════════════════════════════════════════════════════════════════
+async function renderPlayerAvail() {
+  const el = document.getElementById('pavail-content');
+  const pid = document.getElementById('player-name-select').value;
+  if (!pid) { el.innerHTML = '<div class="empty">Select your name above to get started.</div>'; return; }
+  const player = MY_PLAYERS.find(p => p.id === pid);
+  el.innerHTML = '<div class="loading"><div class="spinner spinner-sm"></div> Loading…</div>';
+
+  try {
+    const snap = await getDocs(query(collection(db, 'availability'),
+      where('player_id', '==', pid), where('team_id', '==', MY_TEAM.id)));
+    _rsvps = {};
+    snap.docs.forEach(d => { _rsvps[d.data().game_id] = d.data().status; });
+  } catch(_) { _rsvps = {}; }
+
+  const upcoming = MY_GAMES.filter(g => !g.done).sort((a,b) => (a.wk||0)-(b.wk||0));
+  const recent = MY_GAMES.filter(g => g.done).sort((a,b) => (b.wk||0)-(a.wk||0)).slice(0, 5);
+
+  const gameBlock = (games, label) => {
+    if (!games.length) return '';
+    return `<div style="margin-bottom:22px">
+      <div class="panel-title">${label}</div>
+      ${games.map(g => {
+        const oppId = g.away === MY_TEAM.id ? g.home : g.away;
+        const opp = ALL_TEAMS.find(t => t.id === oppId);
+        const oppName = opp?.short || opp?.name || oppId?.toUpperCase() || 'TBD';
+        const ha = g.home === MY_TEAM.id ? 'vs' : '@';
+        const st = _rsvps[g.id] || '';
+        return `<div class="game-card">
+          <div class="game-info">
+            <div class="game-opp">Wk ${g.wk} · ${ha} <span style="color:${opp?.color||'var(--navy)'}">${esc(oppName)}</span></div>
+            <div class="game-meta">${esc(g.date||'')} ${g.day?'· '+esc(g.day):''} ${g.time?'· '+esc(g.time):''} ${g.field?'· '+esc(g.field):''}</div>
+          </div>
+          ${g.done
+            ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Final${st?' · you marked '+st:''}</span>`
+            : `<div class="avail-btns" id="avail-row-${g.id}">
+                <button class="ab ab-yes ${st==='yes'?'on':''}" onclick="window.setAvail('${g.id}','yes')">✓ Yes</button>
+                <button class="ab ab-maybe ${st==='maybe'?'on':''}" onclick="window.setAvail('${g.id}','maybe')">? Maybe</button>
+                <button class="ab ab-no ${st==='no'?'on':''}" onclick="window.setAvail('${g.id}','no')">✕ No</button>
+              </div>`}
+        </div>`;
+      }).join('')}
+    </div>`;
+  };
+
+  el.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:14px">Marking as: <span style="color:var(--navy)">${esc(player?.name||'')}</span></div>`
+    + (upcoming.length ? gameBlock(upcoming, 'Upcoming Games') : '<div class="empty">No upcoming games scheduled.</div>')
+    + (recent.length ? gameBlock(recent, 'Recent Games') : '');
+}
+
+function rebuildAvailRow(gameId) {
+  const el = document.getElementById('avail-row-' + gameId);
+  if (!el) return;
+  const st = _rsvps[gameId] || '';
+  el.innerHTML = `<button class="ab ab-yes ${st==='yes'?'on':''}" onclick="window.setAvail('${gameId}','yes')">✓ Yes</button>
+    <button class="ab ab-maybe ${st==='maybe'?'on':''}" onclick="window.setAvail('${gameId}','maybe')">? Maybe</button>
+    <button class="ab ab-no ${st==='no'?'on':''}" onclick="window.setAvail('${gameId}','no')">✕ No</button>`;
+}
+
+window.setAvail = async function(gameId, status) {
+  const pid = document.getElementById('player-name-select').value;
+  if (!pid) return;
+  const player = MY_PLAYERS.find(p => p.id === pid);
+  const docId = MY_TEAM.id + '_' + gameId + '_' + pid;
+  try {
+    if (_rsvps[gameId] === status) {
+      await deleteDoc(doc(db, 'availability', docId));
+      delete _rsvps[gameId];
+    } else {
+      await setDoc(doc(db, 'availability', docId), {
+        game_id: gameId, player_id: pid, player_name: player?.name || '',
+        team_id: MY_TEAM.id, status, updated_at: new Date().toISOString()
+      });
+      _rsvps[gameId] = status;
+    }
+    rebuildAvailRow(gameId);
+  } catch(e) { toast('Could not save: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER — Chat
+// ═══════════════════════════════════════════════════════════════════
+function activatePlayerChat() {
+  if (!MY_TEAM) return;
+  const pid = document.getElementById('player-name-select').value;
+  const need = document.getElementById('pchat-need-identity');
+  const box = document.getElementById('pchat-box');
+  if (!pid) {
+    need.style.display = 'block'; box.style.display = 'none';
+    if (_playerChatUnsub) { _playerChatUnsub(); _playerChatUnsub = null; }
+    return;
+  }
+  need.style.display = 'none'; box.style.display = 'flex';
+  subscribePlayerChat();
+}
+
+function subscribePlayerChat() {
+  if (_playerChatUnsub) _playerChatUnsub();
+  const q = query(
+    collection(db, 'team_messages'),
+    where('team_id', '==', MY_TEAM.id),
+    orderBy('timestamp', 'asc'),
+    limit(100)
+  );
+  _playerChatUnsub = onSnapshot(q, snap => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderPlayerChat(msgs);
+  }, err => {
+    document.getElementById('pchat-messages').innerHTML = '<div class="empty">Could not load: ' + esc(err.message) + '</div>';
+  });
+}
+
+function fmtTime(d) {
+  if (!d) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+    d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function renderPlayerChat(msgs) {
+  const el = document.getElementById('pchat-messages');
+  const pid = document.getElementById('player-name-select').value;
+  const me = MY_PLAYERS.find(p => p.id === pid);
+  const myName = me?.name || '';
+  if (!msgs.length) { el.innerHTML = '<div class="empty">No messages yet. Say hello! 👋</div>'; return; }
+  el.innerHTML = msgs.map(m => {
+    const mine = m.sender_name === myName || m.sender_id === pid;
+    const ts = m.timestamp?.toDate?.() || null;
+    const delBtn = mine ? `<button class="chat-del" onclick="window.playerDelChat('${m.id}')">×</button>` : '';
+    return `<div class="chat-msg ${mine?'mine':'theirs'}">
+      ${!mine ? `<div class="chat-meta">${esc(m.sender_name||'Unknown')}</div>` : ''}
+      <div class="chat-bubble">${esc(m.text||'')}${delBtn}</div>
+      <div class="chat-meta">${fmtTime(ts)}</div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+window.playerSendChat = async function() {
+  const input = document.getElementById('pchat-input');
+  const text = input.value.trim();
+  if (!text || !MY_TEAM) return;
+  const pid = document.getElementById('player-name-select').value;
+  const me = MY_PLAYERS.find(p => p.id === pid);
+  if (!me) { toast('Pick your name first', 'error'); return; }
+  input.value = '';
+  try {
+    await addDoc(collection(db, 'team_messages'), {
+      team_id: MY_TEAM.id,
+      sender_id: pid,
+      sender_name: me.name,
+      text,
+      timestamp: serverTimestamp()
+    });
+    // Fire push notification
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+      body: JSON.stringify({
+        title: (MY_TEAM.short || MY_TEAM.name) + ' · ' + me.name,
+        body: text.length > 100 ? text.slice(0,100) + '…' : text,
+        category: 'team_chat',
+        teams: [MY_TEAM.id],
+        url: '/profile.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    }).catch(() => {});
+  } catch(e) {
+    toast('Send failed: ' + e.message, 'error');
+    input.value = text;
+  }
+};
+
+window.playerDelChat = async function(msgId) {
+  if (!confirm('Delete this message?')) return;
+  try { await deleteDoc(doc(db, 'team_messages', msgId)); }
+  catch(e) { toast('Delete failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER — Notifications tab
+// ═══════════════════════════════════════════════════════════════════
+function renderNotificationsTab() {
+  const el = document.getElementById('pnotif-content');
+  const isPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  const hasToken = !!localStorage.getItem('dvsl-notif-token');
+
+  let html = '';
+
+  if (!isPwa) {
+    html += `<div class="notif-install-banner">
+      <strong>🔔 Install the app to enable push notifications</strong><br>
+      On iPhone: tap the Share button in Safari, then "Add to Home Screen."<br>
+      On Android: tap the browser menu, then "Install app."<br>
+      Push notifications only work once you've installed.
+    </div>`;
+  }
+
+  html += `<div class="notif-card">
+    <div class="notif-card-title">Push Notifications</div>
+    <div class="section-sub" style="margin-bottom:12px">
+      ${isPwa
+        ? (hasToken
+            ? 'You\'re subscribed. You\'ll get pings for team chat, schedule changes, and scores.'
+            : 'Not subscribed yet. Enable to get pinged about your games.')
+        : 'Open the Notifications page to see what\'s there and manage your subscription preferences.'}
+    </div>
+    ${isPwa
+      ? (hasToken
+          ? `<button class="btn btn-outline btn-sm" onclick="window.openNotifSettings()">Manage notifications in Inbox →</button>`
+          : `<button class="btn btn-primary btn-sm" onclick="window.openNotifSettings()">Enable Notifications</button>`)
+      : `<a href="/inbox.html" class="btn btn-primary btn-sm" style="text-decoration:none;display:inline-block">Open Notifications →</a>
+         <a href="/notifications.html" class="btn btn-outline btn-sm" style="text-decoration:none;display:inline-block;margin-left:8px">Notification Settings</a>`}
+  </div>`;
+
+  html += `<div class="notif-card">
+    <div class="notif-card-title">Recent</div>
+    <div id="pnotif-recent">
+      <div class="loading"><div class="spinner spinner-sm"></div> Checking…</div>
+    </div>
+  </div>`;
+
+  el.innerHTML = html;
+  loadPendingNotifications();
+}
+
+async function loadPendingNotifications() {
+  const el = document.getElementById('pnotif-recent');
+  if (!el) return;
+  const token = localStorage.getItem('dvsl-notif-token');
+  if (!token) {
+    el.innerHTML = '<div class="empty" style="padding:16px">Enable notifications to see recent pings.</div>';
+    return;
+  }
+  try {
+    const resp = await fetch('/api/check-pending-nav', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (!resp.ok) { el.innerHTML = '<div class="empty" style="padding:16px">Could not load recent.</div>'; return; }
+    const data = await resp.json();
+    const items = Array.isArray(data && data.items) ? data.items : [];
+    if (!items.length) {
+      el.innerHTML = '<div class="empty" style="padding:16px">No recent notifications.</div>';
+      return;
+    }
+    el.innerHTML = items.slice(0, 20).map(it => `
+      <a href="${esc(it.url || '#')}" class="notif-item" style="text-decoration:none;color:inherit">
+        <div class="notif-item-ico">🔔</div>
+        <div class="notif-item-body">
+          <div class="notif-item-title">${esc(it.title || 'Notification')}</div>
+          <div class="notif-item-sub">${esc(it.body || '')}</div>
+        </div>
+      </a>`).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty" style="padding:16px">Could not load: ' + esc(e.message) + '</div>';
+  }
+}
+
+window.openNotifSettings = function() { window.location.href = '/inbox.html'; };
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER — Media / Photos
+// ═══════════════════════════════════════════════════════════════════
+async function loadPlayerMedia() {
+  const el = document.getElementById('pmedia-grid');
+  try {
+    const snap = await getDocs(query(collection(db, 'team_media'),
+      where('team_id', '==', MY_TEAM.id), orderBy('timestamp', 'desc'), limit(60)));
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    if (!items.length) { el.innerHTML = '<div class="empty">No photos yet. Share the first!</div>'; return; }
+    el.innerHTML = items.map(it => {
+      if (it.youtube) {
+        const vid = extractYoutubeId(it.youtube);
+        if (vid) return `<div class="media-item">
+          <iframe src="https://www.youtube.com/embed/${vid}" allowfullscreen></iframe>
+          <div class="media-item-meta">
+            ${it.caption ? `<div class="media-item-caption">${esc(it.caption)}</div>` : ''}
+            <div class="media-item-author">${esc(it.author || 'Anonymous')}</div>
+          </div>
+        </div>`;
+      }
+      if (it.image_url) {
+        return `<div class="media-item">
+          <img src="${esc(it.image_url)}" loading="lazy">
+          <div class="media-item-meta">
+            ${it.caption ? `<div class="media-item-caption">${esc(it.caption)}</div>` : ''}
+            <div class="media-item-author">${esc(it.author || 'Anonymous')}</div>
+          </div>
+        </div>`;
+      }
+      return '';
+    }).join('');
+  } catch(e) { el.innerHTML = '<div class="empty">Failed to load: ' + esc(e.message) + '</div>'; }
+}
+
+function extractYoutubeId(url) {
+  const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/))([\w-]{11})/);
+  return m ? m[1] : null;
+}
+
+window.uploadMedia = async function() {
+  const file = document.getElementById('pmedia-file').files?.[0];
+  const yt = document.getElementById('pmedia-yt').value.trim();
+  const caption = document.getElementById('pmedia-caption').value.trim();
+  if (!file && !yt) { toast('Pick a photo or paste a YouTube link', 'error'); return; }
+  const pid = document.getElementById('player-name-select').value;
+  const me = MY_PLAYERS.find(p => p.id === pid);
+  const authorName = me?.name || 'Anonymous';
+  const payload = {
+    team_id: MY_TEAM.id, author: authorName, caption,
+    timestamp: serverTimestamp()
+  };
+  try {
+    if (yt) {
+      payload.youtube = yt;
+    } else if (file) {
+      // Read file as data URL and store directly in Firestore (simple path, no storage bucket setup needed).
+      // For large files this is suboptimal; clamp at ~800KB.
+      if (file.size > 900 * 1024) { toast('Photo too large (max 900KB). Try a smaller one.', 'error'); return; }
+      payload.image_url = await new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+    await addDoc(collection(db, 'team_media'), payload);
+    toast('Shared!');
+    document.getElementById('pmedia-file').value = '';
+    document.getElementById('pmedia-yt').value = '';
+    document.getElementById('pmedia-caption').value = '';
+    loadPlayerMedia();
+  } catch(e) { toast('Upload failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN AUTH FLOW
+// ═══════════════════════════════════════════════════════════════════
+window.pickCaptainTeam = function(teamId) {
+  const team = ALL_TEAMS.find(t => t.id === teamId);
+  if (!team) return;
+  MY_TEAM = team;
+  captainData = { team_id: team.id, team_name: team.name, email: team.name };
+  try { localStorage.setItem('dvsl-captain-team', team.id); } catch(_) {}
+  MODE = 'captain';
+  enterCaptainApp();
+};
+
+window.signOutCaptain = function() {
+  if (_unsubTeamChat) { _unsubTeamChat(); _unsubTeamChat = null; }
+  if (_unsubCaptChat) { _unsubCaptChat(); _unsubCaptChat = null; }
+  try { localStorage.removeItem('dvsl-captain-team'); } catch(_) {}
+  MY_TEAM = null; captainData = null; MODE = null;
+  buildTeamGrids();
+  showScreen('screen-chooser');
+};
+
+async function enterCaptainApp() {
+  const label = MY_TEAM.short || MY_TEAM.name || MY_TEAM.id;
+  document.getElementById('captain-app-logo').src = 'logos/' + MY_TEAM.id + '.png';
+  document.getElementById('captain-app-team').textContent = label;
+  document.getElementById('captain-app-team').title = MY_TEAM.name || '';
+  document.getElementById('capt-welcome').textContent = 'Welcome, ' + label + ' Captain';
+  showScreen('captain-app');
+  await loadCaptainData();
+  renderCaptainTeamTab();
+}
+
+async function loadCaptainData() {
+  try {
+    const [gSnap, pSnap, sSnap, aSnap, cSnap, paySnap] = await Promise.all([
+      getDocs(query(collection(db, 'games'), orderBy('wk'))),
+      getDocs(collection(db, 'players')),
+      getDocs(collection(db, 'score_submissions')).catch(() => ({docs:[]})),
+      getDocs(collection(db, 'announcements')).catch(() => ({docs:[]})),
+      getDocs(collection(db, 'captains')).catch(() => ({docs:[]})),
+      getDocs(collection(db, 'payments')).catch(() => ({docs:[]})),
+    ]);
+    CAPT_ALL_GAMES = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    CAPT_ALL_PLAYERS = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    CAPT_SUBMISSIONS = sSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    CAPT_ANNOUNCEMENTS = aSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    CAPT_CAPTAINS = cSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    CAPT_PAYMENTS = {};
+    paySnap.docs.forEach(d => { CAPT_PAYMENTS[d.id] = { id: d.id, ...d.data() }; });
+  } catch(e) {
+    toast('Failed to load: ' + e.message, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Tab switching
+// ═══════════════════════════════════════════════════════════════════
+window.captainTab = function(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('[data-ctab]').forEach(t => t.classList.remove('active'));
+  const sec = document.getElementById('csec-' + name);
+  const tab = document.querySelector(`[data-ctab="${name}"]`);
+  if (sec) sec.classList.add('active');
+  if (tab) tab.classList.add('active');
+  try { sessionStorage.setItem('dvsl-profile-captab', name); } catch(_) {}
+
+  if (name === 'team')          renderCaptainTeamTab();
+  if (name === 'roster')        renderCaptainRoster();
+  if (name === 'schedule')      renderCaptainSchedule();
+  if (name === 'scores')        renderCaptainScores();
+  if (name === 'payments')      renderCaptainPayments();
+  if (name === 'attendance')    renderCaptainAttendance();
+  if (name === 'teamchat')      activateCaptainTeamChat();
+  if (name === 'captchat')      activateCaptainCaptChat();
+  if (name === 'announcements') renderCaptainAnnouncements();
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — My Team
+// ═══════════════════════════════════════════════════════════════════
+function renderCaptainTeamTab() {
+  const teamFromAll = ALL_TEAMS.find(t => t.id === MY_TEAM.id) || MY_TEAM;
+  const myGames = CAPT_ALL_GAMES.filter(g => g.away === MY_TEAM.id || g.home === MY_TEAM.id);
+  const done = myGames.filter(g => g.done);
+  const upcoming = myGames.filter(g => !g.done).length;
+  const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false);
+  const w = teamFromAll.w ?? 0, l = teamFromAll.l ?? 0;
+  const rs = teamFromAll.rs ?? 0, ra = teamFromAll.ra ?? 0;
+
+  document.getElementById('capt-team-stats').innerHTML = `
+    <div class="stat-card"><div class="val">${w}-${l}</div><div class="lbl">Record</div></div>
+    <div class="stat-card"><div class="val">${roster.length}</div><div class="lbl">Players</div></div>
+    <div class="stat-card"><div class="val">${upcoming}</div><div class="lbl">Upcoming</div></div>
+    <div class="stat-card"><div class="val">${done.length}</div><div class="lbl">Games Played</div></div>
+    <div class="stat-card"><div class="val">${rs}</div><div class="lbl">Runs Scored</div></div>
+    <div class="stat-card"><div class="val">${ra}</div><div class="lbl">Runs Against</div></div>
+  `;
+
+  const nextGame = myGames.filter(g => !g.done).sort((a,b) => (a.wk||0)-(b.wk||0))[0];
+  document.getElementById('capt-team-info').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:10px;font-size:14px">
+      <div><strong>Team:</strong> ${esc(teamFromAll.name||MY_TEAM.id)}</div>
+      ${teamFromAll.short ? `<div><strong>Short:</strong> ${esc(teamFromAll.short)}</div>` : ''}
+      ${nextGame
+        ? `<div><strong>Next Game:</strong> Wk ${nextGame.wk} · ${nextGame.home===MY_TEAM.id?'vs':'@'} ${esc(getTeamName(nextGame.home===MY_TEAM.id?nextGame.away:nextGame.home))} · ${esc(nextGame.date||'')} ${esc(nextGame.time||'')} ${esc(nextGame.field||'')}</div>`
+        : `<div><strong>Next Game:</strong> None scheduled</div>`}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Roster
+// ═══════════════════════════════════════════════════════════════════
+function renderCaptainRoster() {
+  const el = document.getElementById('capt-roster-content');
+  const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false)
+    .sort((a,b) => (a.num||999) - (b.num||999));
+  if (!roster.length) { el.innerHTML = '<div class="empty">No players yet.</div>'; return; }
+  el.innerHTML = `<div class="tbl-wrap"><div class="tbl-scroll"><table class="tbl">
+    <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Email</th></tr></thead>
+    <tbody>${roster.map(p => `
+      <tr>
+        <td style="font-weight:700">${p.num || '-'}</td>
+        <td>${esc(p.name||'')}</td>
+        <td>${esc(p.position||'-')}</td>
+        <td style="color:var(--muted);font-size:12px">${esc(p.email||'-')}</td>
+      </tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Schedule
+// ═══════════════════════════════════════════════════════════════════
+function renderCaptainSchedule() {
+  const el = document.getElementById('capt-schedule-content');
+  const myGames = CAPT_ALL_GAMES.filter(g => g.away === MY_TEAM.id || g.home === MY_TEAM.id)
+    .sort((a,b) => (a.wk||0)-(b.wk||0));
+  if (!myGames.length) { el.innerHTML = '<div class="empty">No games scheduled.</div>'; return; }
+  el.innerHTML = myGames.map(g => {
+    const oppId = g.away === MY_TEAM.id ? g.home : g.away;
+    const ha = g.home === MY_TEAM.id ? 'vs' : '@';
+    const scoreText = g.done ? `${g.away_score}-${g.home_score}` : (g.time || 'TBD');
+    return `<div class="game-card">
+      <div class="game-info">
+        <div class="game-opp">Wk ${g.wk} · ${ha} ${esc(getTeamName(oppId))}</div>
+        <div class="game-meta">${esc(g.date||'')} ${g.day?'· '+esc(g.day):''} ${g.time?'· '+esc(g.time):''} ${g.field?'· '+esc(g.field):''}</div>
+      </div>
+      <div class="score-display">${esc(scoreText)}</div>
+      <div>${g.done ? '<span class="badge badge-done">Final</span>' : '<span class="badge badge-info">Scheduled</span>'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Submit Score (simple flow)
+// ═══════════════════════════════════════════════════════════════════
+function renderCaptainScores() {
+  const el = document.getElementById('capt-scores-content');
+  const pending = CAPT_ALL_GAMES.filter(g => (g.away === MY_TEAM.id || g.home === MY_TEAM.id) && !g.done)
+    .sort((a,b) => (a.wk||0)-(b.wk||0));
+  if (!pending.length) { el.innerHTML = '<div class="empty">No pending games.</div>'; return; }
+  el.innerHTML = pending.map(g => {
+    const mySub = CAPT_SUBMISSIONS.find(s => s.game_id === g.id && s.submitted_by === MY_TEAM.id);
+    const otherSub = CAPT_SUBMISSIONS.find(s => s.game_id === g.id && s.submitted_by !== MY_TEAM.id);
+    return `<div class="panel">
+      <div style="font-weight:700;font-size:15px;margin-bottom:4px">Wk ${g.wk} · ${esc(getTeamName(g.away))} @ ${esc(getTeamName(g.home))}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${esc(g.date||'')} ${esc(g.time||'')} ${esc(g.field||'')}</div>
+      ${mySub ? `<div class="badge badge-pending">You submitted: ${mySub.away_score}-${mySub.home_score}</div>` : ''}
+      ${otherSub ? `<div class="badge badge-info" style="margin-left:6px">Opponent submitted: ${otherSub.away_score}-${otherSub.home_score}</div>` : ''}
+      <div class="score-input-row">
+        <label style="font-size:13px">${esc(getTeamName(g.away))}</label>
+        <input class="score-input" id="sc-${g.id}-a" type="number" min="0" max="99" value="${mySub?.away_score ?? ''}">
+        <span style="font-size:16px;color:var(--muted);font-weight:700">—</span>
+        <input class="score-input" id="sc-${g.id}-h" type="number" min="0" max="99" value="${mySub?.home_score ?? ''}">
+        <label style="font-size:13px">${esc(getTeamName(g.home))}</label>
+      </div>
+      <div style="margin-top:10px">
+        <button class="btn btn-primary btn-sm" onclick="window.submitQuickScore('${g.id}')">${mySub ? 'Update' : 'Submit'} Score</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.submitQuickScore = async function(gameId) {
+  const a = parseInt(document.getElementById('sc-' + gameId + '-a').value, 10);
+  const h = parseInt(document.getElementById('sc-' + gameId + '-h').value, 10);
+  if (isNaN(a) || isNaN(h) || a < 0 || h < 0) { toast('Enter valid scores', 'error'); return; }
+  const g = CAPT_ALL_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  const subId = gameId + '_' + MY_TEAM.id;
+  try {
+    await setDoc(doc(db, 'score_submissions', subId), {
+      game_id: gameId, submitted_by: MY_TEAM.id, submitted_by_name: MY_TEAM.name,
+      away_score: a, home_score: h, timestamp: serverTimestamp()
+    });
+    toast('Score submitted');
+    // Check if other captain also submitted matching
+    const otherSub = CAPT_SUBMISSIONS.find(s => s.game_id === gameId && s.submitted_by !== MY_TEAM.id);
+    if (otherSub && otherSub.away_score === a && otherSub.home_score === h) {
+      await updateDoc(doc(db, 'games', gameId), { away_score: a, home_score: h, done: true });
+      toast('Both captains match — game is final!');
+    }
+    // Reload
+    await loadCaptainData();
+    renderCaptainScores();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Payments
+// ═══════════════════════════════════════════════════════════════════
+function renderCaptainPayments() {
+  const el = document.getElementById('capt-payments-content');
+  const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false)
+    .sort((a,b) => (a.num||999)-(b.num||999));
+  if (!roster.length) { el.innerHTML = '<div class="empty">No players on roster.</div>'; return; }
+  const paid = roster.filter(p => CAPT_PAYMENTS[p.id]?.paid).length;
+  el.innerHTML = `<div class="pay-summary">
+      <div><strong>${paid}</strong> of <strong>${roster.length}</strong> paid</div>
+    </div>
+    <div class="tbl-wrap"><div class="tbl-scroll"><table class="tbl">
+      <thead><tr><th>#</th><th>Name</th><th>Paid?</th></tr></thead>
+      <tbody>${roster.map(p => {
+        const rec = CAPT_PAYMENTS[p.id];
+        const isPaid = rec?.paid;
+        return `<tr>
+          <td style="font-weight:700">${p.num||'-'}</td>
+          <td>${esc(p.name||'')}</td>
+          <td>
+            <div class="pay-status" onclick="window.togglePayment('${p.id}','${esc(p.name||'')}')">
+              <span class="pay-check ${isPaid?'paid':''}"></span>
+              <span>${isPaid ? 'Paid' : 'Unpaid'}</span>
+            </div>
+          </td>
+        </tr>`;
+      }).join('')}</tbody></table></div></div>`;
+}
+
+window.togglePayment = async function(playerId, playerName) {
+  const rec = CAPT_PAYMENTS[playerId];
+  const newPaid = !rec?.paid;
+  try {
+    await setDoc(doc(db, 'payments', playerId), {
+      player_id: playerId, player_name: playerName, team_id: MY_TEAM.id,
+      paid: newPaid, updated_at: new Date().toISOString()
+    }, { merge: true });
+    CAPT_PAYMENTS[playerId] = { ...rec, player_id: playerId, player_name: playerName, team_id: MY_TEAM.id, paid: newPaid };
+    renderCaptainPayments();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Attendance
+// ═══════════════════════════════════════════════════════════════════
+async function renderCaptainAttendance() {
+  const el = document.getElementById('capt-attendance-content');
+  const upcoming = CAPT_ALL_GAMES.filter(g => (g.away === MY_TEAM.id || g.home === MY_TEAM.id) && !g.done)
+    .sort((a,b) => (a.wk||0)-(b.wk||0));
+  if (!upcoming.length) { el.innerHTML = '<div class="empty">No upcoming games.</div>'; return; }
+  el.innerHTML = '<div class="loading"><div class="spinner spinner-sm"></div> Loading availability…</div>';
+  try {
+    const snap = await getDocs(query(collection(db, 'availability'),
+      where('team_id', '==', MY_TEAM.id)));
+    const by = {}; // game_id → { yes:[], no:[], maybe:[] }
+    snap.docs.forEach(d => {
+      const a = d.data();
+      if (!by[a.game_id]) by[a.game_id] = { yes: [], no: [], maybe: [] };
+      (by[a.game_id][a.status] || (by[a.game_id][a.status] = [])).push(a.player_name || '?');
+    });
+    el.innerHTML = upcoming.map(g => {
+      const oppId = g.away === MY_TEAM.id ? g.home : g.away;
+      const ha = g.home === MY_TEAM.id ? 'vs' : '@';
+      const r = by[g.id] || { yes: [], no: [], maybe: [] };
+      return `<div class="panel">
+        <div style="font-weight:700;font-size:15px">Wk ${g.wk} · ${ha} ${esc(getTeamName(oppId))}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${esc(g.date||'')} ${esc(g.time||'')} ${esc(g.field||'')}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:13px">
+          <div><strong style="color:var(--green)">✓ In (${r.yes.length})</strong><div style="margin-top:4px;color:var(--text)">${r.yes.map(esc).join('<br>')||'—'}</div></div>
+          <div><strong style="color:#f59e0b">? Maybe (${r.maybe.length})</strong><div style="margin-top:4px;color:var(--text)">${r.maybe.map(esc).join('<br>')||'—'}</div></div>
+          <div><strong style="color:var(--red)">✕ Out (${r.no.length})</strong><div style="margin-top:4px;color:var(--text)">${r.no.map(esc).join('<br>')||'—'}</div></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { el.innerHTML = '<div class="empty">Failed to load: ' + esc(e.message) + '</div>'; }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Team Chat
+// ═══════════════════════════════════════════════════════════════════
+function activateCaptainTeamChat() {
+  if (_unsubTeamChat) _unsubTeamChat();
+  const q = query(collection(db, 'team_messages'),
+    where('team_id', '==', MY_TEAM.id),
+    orderBy('timestamp', 'asc'), limit(100));
+  _unsubTeamChat = onSnapshot(q, snap => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderCaptainTeamChat(msgs);
+  });
+}
+
+function renderCaptainTeamChat(msgs) {
+  const el = document.getElementById('cteamchat-messages');
+  if (!msgs.length) { el.innerHTML = '<div class="empty">No messages yet.</div>'; return; }
+  el.innerHTML = msgs.map(m => {
+    const mine = m.sender_name === captainData?.team_name || m.sender_id === MY_TEAM.id;
+    const ts = m.timestamp?.toDate?.() || null;
+    const delBtn = mine ? `<button class="chat-del" onclick="window.captainDelTeamMsg('${m.id}')">×</button>` : '';
+    return `<div class="chat-msg ${mine?'mine':'theirs'}">
+      ${!mine ? `<div class="chat-meta">${esc(m.sender_name||'Unknown')}</div>` : ''}
+      <div class="chat-bubble">${esc(m.text||'')}${delBtn}</div>
+      <div class="chat-meta">${fmtTime(ts)}</div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+window.captainSendTeamMsg = async function() {
+  const input = document.getElementById('cteamchat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  try {
+    await addDoc(collection(db, 'team_messages'), {
+      team_id: MY_TEAM.id,
+      sender_id: MY_TEAM.id,
+      sender_name: (MY_TEAM.short || MY_TEAM.name) + ' (Captain)',
+      text, is_captain: true,
+      timestamp: serverTimestamp()
+    });
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+      body: JSON.stringify({
+        title: (MY_TEAM.short || MY_TEAM.name) + ' · Captain',
+        body: text.length > 100 ? text.slice(0,100) + '…' : text,
+        category: 'team_chat',
+        teams: [MY_TEAM.id],
+        url: '/profile.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    }).catch(() => {});
+  } catch(e) { toast('Send failed: ' + e.message, 'error'); input.value = text; }
+};
+
+window.captainDelTeamMsg = async function(id) {
+  if (!confirm('Delete this message?')) return;
+  try { await deleteDoc(doc(db, 'team_messages', id)); }
+  catch(e) { toast('Delete failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Captains Chat
+// ═══════════════════════════════════════════════════════════════════
+function activateCaptainCaptChat() {
+  if (_unsubCaptChat) _unsubCaptChat();
+  const q = query(collection(db, 'captain_chat'),
+    orderBy('timestamp', 'asc'), limit(200));
+  _unsubCaptChat = onSnapshot(q, snap => {
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderCaptainCaptChat(msgs);
+  });
+}
+
+function renderCaptainCaptChat(msgs) {
+  const el = document.getElementById('ccaptchat-messages');
+  if (!msgs.length) { el.innerHTML = '<div class="empty">No messages yet.</div>'; return; }
+  el.innerHTML = msgs.map(m => {
+    const mine = m.sender_team_id === MY_TEAM.id;
+    const ts = m.timestamp?.toDate?.() || null;
+    const delBtn = mine ? `<button class="chat-del" onclick="window.captainDelCaptMsg('${m.id}')">×</button>` : '';
+    return `<div class="chat-msg ${mine?'mine':'theirs'}">
+      ${!mine ? `<div class="chat-meta">${esc(m.sender_name||'Unknown')}</div>` : ''}
+      <div class="chat-bubble">${esc(m.text||'')}${delBtn}</div>
+      <div class="chat-meta">${fmtTime(ts)}</div>
+    </div>`;
+  }).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+window.captainSendCaptMsg = async function() {
+  const input = document.getElementById('ccaptchat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  try {
+    await addDoc(collection(db, 'captain_chat'), {
+      sender_team_id: MY_TEAM.id,
+      sender_name: MY_TEAM.short || MY_TEAM.name,
+      text, timestamp: serverTimestamp()
+    });
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+      body: JSON.stringify({
+        title: 'Captains · ' + (MY_TEAM.short || MY_TEAM.name),
+        body: text.length > 100 ? text.slice(0,100) + '…' : text,
+        category: 'captain_chat',
+        captainsOnly: true,
+        url: '/profile.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    }).catch(() => {});
+  } catch(e) { toast('Send failed: ' + e.message, 'error'); input.value = text; }
+};
+
+window.captainDelCaptMsg = async function(id) {
+  if (!confirm('Delete this message?')) return;
+  try { await deleteDoc(doc(db, 'captain_chat', id)); }
+  catch(e) { toast('Delete failed: ' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN — Announcements
+// ═══════════════════════════════════════════════════════════════════
+function renderCaptainAnnouncements() {
+  const el = document.getElementById('capt-announcements-content');
+  const items = CAPT_ANNOUNCEMENTS.sort((a,b) => {
+    const ta = a.timestamp?.toMillis?.() || 0;
+    const tb = b.timestamp?.toMillis?.() || 0;
+    return tb - ta;
+  });
+  if (!items.length) { el.innerHTML = '<div class="empty">No announcements yet.</div>'; return; }
+  el.innerHTML = items.map(a => {
+    const ts = a.timestamp?.toDate?.();
+    return `<div class="announcement-card">
+      <div class="ann-subject">${esc(a.subject||'Announcement')}</div>
+      <div class="ann-body">${esc(a.body||'')}</div>
+      <div class="ann-meta">${ts ? ts.toLocaleString() : ''}${a.author ? ' · ' + esc(a.author) : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// GO
+// ═══════════════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
