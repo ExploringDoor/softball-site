@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v62-scores-mobile-cleanup-and-team-chat';
+const VERSION = 'dvsl-v63-scores-header-week-picker-tabbar-fixes';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

@@ -159,10 +159,15 @@
                  content area gets 8px of top pad AND 14px of pad below the
                  system safe-area, so icons float ~14px higher than before. */
               height: calc(74px + env(safe-area-inset-bottom)) !important;
-              padding-top: 8px !important;
+              /* Adam: move the 5 bottom-bar icons down a touch. Nudge top
+                 padding up and bottom padding down so icons sit closer to
+                 the physical bottom edge (still comfortably above the iOS
+                 home indicator because env(safe-area-inset-bottom) is
+                 non-zero on notched devices). */
+              padding-top: 16px !important;
               padding-left: max(8px, env(safe-area-inset-left)) !important;
               padding-right: max(8px, env(safe-area-inset-right)) !important;
-              padding-bottom: calc(env(safe-area-inset-bottom) + 14px) !important;
+              padding-bottom: calc(env(safe-area-inset-bottom) + 6px) !important;
               margin: 0 !important;
               display: flex !important;
               align-items: stretch !important;
@@ -366,9 +371,22 @@
         window.addEventListener('popstate', _dvslSyncActiveTab);
         // Also poll briefly after goPage-style navs (pushState doesn't fire
         // hashchange). Cheap enough — runs on any tab-bar click.
+        // Also: if user taps the ALREADY-active tab, swallow the click so
+        // the anchor's href doesn't re-trigger navigation (which in some
+        // cases on iOS PWA was bouncing users back to Home). Adam reported
+        // double-tapping Scores/Schedule routed to the main page.
         document.addEventListener('click', (e) => {
           const a = e.target && e.target.closest && e.target.closest('#dvsl-tabbar [data-tab]');
-          if (a) setTimeout(_dvslSyncActiveTab, 50);
+          if (!a) return;
+          const current = _dvslCurrentTab();
+          if (a.dataset.tab === current) {
+            // No-op: already on this tab. Prevent the <a> href from firing
+            // a duplicate navigation.
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          setTimeout(_dvslSyncActiveTab, 50);
         });
 
         // ── More sheet ────────────────────────────────────────────────
@@ -1158,7 +1176,7 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   /* Mobile: page header padding + safe-area-inset-top so the h1 and
      week navigator always clear the fixed ticker + nav on iPhone PWA
      (notch pushes nav bottom down ~50px beyond the 110px flat stack). */
-  .page-header-pad{padding:calc(120px + env(safe-area-inset-top, 0px)) 18px 20px!important}
+  .page-header-pad{padding:calc(150px + env(safe-area-inset-top, 44px)) 18px 20px!important}
   /* Adam asked to drop the in-page "Scores | Schedule" toggle on mobile
      because the bottom tab bar already covers that navigation. Keep the
      big "Season Scores" / "Season Schedule" heading — just no duplicate
@@ -2635,10 +2653,17 @@ thead th.sorted-col .sarrow{opacity:1}
   .game-block .gb-field{font-size:12px!important;color:var(--muted)!important;}
 
   /* Week nav */
-  #dnSlots{overflow-x:auto!important;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;}
+  #dnSlots{overflow-x:auto!important;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;position:relative;z-index:5;pointer-events:auto!important;}
   #dnSlots::-webkit-scrollbar{display:none}
-  .dn-slot{flex-shrink:0!important;min-width:60px;}
+  /* Bump tap target height + tighter horizontal padding so more week
+     buttons fit. Also ensure pointer-events are live in case a sibling
+     (.page-header-pad, or the sb-wrap below) overlaps this row. Adam
+     reported week buttons weren't tappable on iPhone. */
+  .dn-slot{flex-shrink:0!important;min-width:64px!important;padding:12px 10px!important;min-height:48px!important;position:relative;z-index:5;pointer-events:auto!important;}
   #pg-scores > div:first-child{padding:80px 12px 0!important;}
+  /* Drop the 48px side padding on the week-nav wrapper so the arrows
+     and several week slots actually fit within a 390px viewport. */
+  #pg-scores > div:nth-child(2){padding:0 8px 0!important;}
   #pg-scores .sb-wrap{padding:16px 12px 80px!important;}
   .sb-week-head{font-size:16px!important;padding:12px 0 8px!important;}
   .sb-day-head{font-size:12px!important;}
