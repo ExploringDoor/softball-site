@@ -32,6 +32,32 @@
         }).catch(() => {});
         navigator.serviceWorker.addEventListener('message', (e) => {
           if (!e.data) return;
+          // Notification click can ask the already-open PWA to jump to a
+          // specific page/hash (e.g. /#game/<id> for a box score). The SW
+          // only focuses tabs whose URL matches; for same-pathname-but-
+          // different-hash it posts NAVIGATE and we route client-side here
+          // so the PWA doesn't lose state with a full reload.
+          if (e.data.type === 'NAVIGATE' && typeof e.data.url === 'string') {
+            try {
+              const u = new URL(e.data.url, location.origin);
+              if (u.origin !== location.origin) return;
+              const wantPath = u.pathname + u.search;
+              const curPath  = location.pathname + location.search;
+              if (wantPath === curPath) {
+                // Same page — just change the hash. Our hashchange listener
+                // already dispatches #game/<id> → openGameById.
+                if (u.hash && u.hash !== location.hash) {
+                  location.hash = u.hash;
+                } else if (!u.hash && location.hash) {
+                  history.replaceState(null, '', u.pathname + u.search);
+                }
+              } else {
+                // Different page — full navigate.
+                location.href = u.href;
+              }
+            } catch (_) {}
+            return;
+          }
           if (e.data.type === 'VERSION' && typeof e.data.version === 'string') {
             // Only render the build tag on /rules.html, and only in the
             // normal document flow (not a fixed overlay). User wants a single

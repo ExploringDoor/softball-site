@@ -112,17 +112,37 @@ self.addEventListener('notificationclick', function(event) {
 
     const allClients = await clients.matchAll({ type: 'window', includeUncontrolled: true });
 
-    // 1. If a tab is already open at the exact target URL → just focus it.
+    // 1. If a tab is already open at the EXACT target URL (including hash) →
+    //    just focus it. User is already looking at the right page.
     for (const c of allClients) {
       try {
         const cu = new URL(c.url);
-        if (cu.origin === target.origin && cu.pathname === target.pathname && cu.search === target.search) {
+        if (
+          cu.origin === target.origin &&
+          cu.pathname === target.pathname &&
+          cu.search === target.search &&
+          cu.hash === target.hash
+        ) {
           return c.focus();
         }
       } catch (_) {}
     }
 
-    // 2. postMessage every in-scope client as a fast path.
+    // 2. Same pathname+search but different hash (e.g. PWA is on "/" and we
+    //    want "/#game/<id>"): post a NAVIGATE message so the page routes
+    //    client-side, then focus. Listeners in index.html handle this.
+    for (const c of allClients) {
+      try {
+        const cu = new URL(c.url);
+        if (cu.origin === target.origin && cu.pathname === target.pathname && cu.search === target.search) {
+          try { c.postMessage({ type: 'NAVIGATE', url: target.href }); } catch (_) {}
+          return c.focus();
+        }
+      } catch (_) {}
+    }
+
+    // 3. postMessage every other in-scope client as a fast path — if any is
+    //    already running the page it can jump without a reload.
     for (const c of allClients) {
       try {
         const cu = new URL(c.url);
@@ -132,13 +152,13 @@ self.addEventListener('notificationclick', function(event) {
       } catch (_) {}
     }
 
-    // 3. openWindow brings the PWA to foreground. Page polling picks up
+    // 4. openWindow brings the PWA to foreground. Page polling picks up
     //    the pending URL from Cache API and navigates there.
     return clients.openWindow(target.href);
   })());
 });
 
-const VERSION = 'dvsl-v59-home-recent-scores-by-date';
+const VERSION = 'dvsl-v60-push-deeplink-to-boxscore';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

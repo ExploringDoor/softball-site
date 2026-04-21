@@ -7235,7 +7235,10 @@ function sendScorerFinalPush(gameId, awayTeam, homeTeam, awayScore, homeScore, w
       body: parts.join(' · ') || 'Game final',
       category: 'scores',
       teams: [awayTeam?.id, homeTeam?.id].filter(Boolean),
-      url: '/#scores',
+      // Deep-link to the box-score modal for this specific game (routes
+      // through index.html's "#game/<id>" handler). Fallback to /#scores
+      // if gameId is missing.
+      url: gameId ? `/#game/${gameId}` : '/#scores',
       excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
     }),
   }).catch(e => console.warn('Final score push failed:', e));

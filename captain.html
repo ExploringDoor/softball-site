@@ -1216,7 +1216,10 @@ function sendFinalScorePush(g, awayScore, homeScore) {
       body: parts.join(' · ') || 'Game final',
       category: 'scores',
       teams: [g.away, g.home],
-      url: '/#scores',
+      // Deep-link to the box-score modal for this specific game. index.html
+      // routes "#game/<id>" → openGameById → openBsm. Falls back to #scores
+      // if we somehow don't have an id.
+      url: g.id ? `/#game/${g.id}` : '/#scores',
       excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
     }),
   }).catch(e => console.warn('Final score push failed:', e));
@@ -1244,7 +1247,7 @@ function sendScoreSubmittedPush(g, awayScore, homeScore, submittedBy) {
       body: parts.join(' · ') || 'Awaiting confirmation from the other captain',
       category: 'scores',
       teams: [g.away, g.home],
-      url: '/#scores',
+      url: g.id ? `/#game/${g.id}` : '/#scores',
       excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
     }),
   }).catch(e => console.warn('Score submitted push failed:', e));
