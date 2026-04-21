@@ -1643,7 +1643,18 @@ async function enterCaptainApp() {
   document.getElementById('capt-welcome').textContent = 'Welcome, ' + label + ' Captain';
   showScreen('captain-app');
   await loadCaptainData();
-  renderCaptainTeamTab();
+  // If arrived with a tab hint (#tab or ?tab, or sessionStorage from prior visit),
+  // land on that tab — otherwise default to My Team.
+  let wantTab = '';
+  try {
+    const hash = (location.hash || '').replace(/^#/, '').trim();
+    const qp = new URLSearchParams(location.search).get('tab') || '';
+    const ss = sessionStorage.getItem('dvsl-profile-captab') || '';
+    wantTab = hash || qp || ss || 'team';
+  } catch(_) { wantTab = 'team'; }
+  const valid = ['team','notif','roster','schedule','scores','attendance','teamchat','captchat','payments','announcements','help'];
+  if (!valid.includes(wantTab)) wantTab = 'team';
+  window.captainTab(wantTab);
 }
 
 async function loadCaptainData() {
