@@ -135,11 +135,11 @@
                  felt like they were hugging the home-indicator. Here the inner
                  content area gets 8px of top pad AND 14px of pad below the
                  system safe-area, so icons float ~14px higher than before. */
-              height: calc(74px + env(safe-area-inset-bottom)) !important;
-              padding-top: 8px !important;
+              height: calc(56px + env(safe-area-inset-bottom)) !important;
+              padding-top: 2px !important;
               padding-left: max(8px, env(safe-area-inset-left)) !important;
               padding-right: max(8px, env(safe-area-inset-right)) !important;
-              padding-bottom: calc(env(safe-area-inset-bottom) + 14px) !important;
+              padding-bottom: calc(env(safe-area-inset-bottom) + 6px) !important;
               margin: 0 !important;
               display: flex !important;
               align-items: stretch !important;
@@ -317,7 +317,7 @@
           const hasTabBar = !!document.getElementById('dvsl-tabbar');
           if (mobile && hasTabBar) {
             // 74px bar + 8px top pad + 14px bottom pad + ~8px gap = 104px clearance.
-            document.body.style.paddingBottom = 'calc(104px + env(safe-area-inset-bottom))';
+            document.body.style.paddingBottom = 'calc(78px + env(safe-area-inset-bottom))';
           } else {
             document.body.style.paddingBottom = '';
           }
@@ -6884,8 +6884,11 @@ function initWaiversSection() {
   const sel = document.getElementById('waiver-team-select');
   if (!sel) return;
   const current = sel.value;
+  // Sort teams alphabetically so Goldsteins doesn't hide at the bottom
+  // of the seed order.
+  const sorted = [...TEAMS].sort((a,b) => (a.name||'').localeCompare(b.name||''));
   sel.innerHTML = '<option value="">— All Teams —</option>' +
-    TEAMS.map(t => `<option value="${t.id}"${t.id === current ? ' selected' : ''}>${t.name}</option>`).join('');
+    sorted.map(t => `<option value="${t.id}"${t.id === current ? ' selected' : ''}>${t.name}</option>`).join('');
 }
 
 window.loadWaivers = async function() {
