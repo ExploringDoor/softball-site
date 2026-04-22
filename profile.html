@@ -1236,12 +1236,44 @@ window.backToPlayerPicker = function() {
   showScreen('screen-player-picker');
 };
 
-window.signOutPlayer = function() {
+// Remove `teamId` from the notification_tokens doc(s) attached to this
+// device's FCM token, so a player who signs out of a team stops getting
+// that team's push notifications. We don't delete the whole token — the
+// same device might still be signed in to another team, and the base
+// league-wide categories (scores, rainouts, etc.) should keep working.
+async function _dvslDetachTeamFromPushToken(teamId) {
+  if (!teamId) return;
+  let token = '';
+  try { token = localStorage.getItem('dvsl-notif-token') || ''; } catch(_) {}
+  if (!token) return;
   try {
-    if (MY_TEAM?.id) localStorage.removeItem('player_portal_pw_' + MY_TEAM.id);
+    const snap = await getDocs(query(collection(db, 'notification_tokens'),
+      where('token', '==', token)));
+    for (const d of snap.docs) {
+      const teams = Array.isArray(d.data().teams) ? d.data().teams : [];
+      if (!teams.includes(teamId)) continue;
+      const next = teams.filter(t => t !== teamId);
+      await updateDoc(doc(db, 'notification_tokens', d.id), { teams: next });
+    }
+    // Mirror the change in the localStorage team picker.
+    try {
+      const saved = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
+      const next = saved.filter(t => t !== teamId);
+      localStorage.setItem('dvsl-notif-teams', JSON.stringify(next));
+    } catch(_) {}
+  } catch(_) { /* best effort */ }
+}
+
+window.signOutPlayer = function() {
+  const teamId = MY_TEAM?.id;
+  try {
+    if (teamId) localStorage.removeItem('player_portal_pw_' + teamId);
     localStorage.removeItem('player_portal_last_team');
   } catch(_) {}
   if (_playerChatUnsub) { _playerChatUnsub(); _playerChatUnsub = null; }
+  // Fire-and-forget: detach this team from the push token so they stop
+  // receiving its chat/rainout/schedule notifications.
+  _dvslDetachTeamFromPushToken(teamId);
   MY_TEAM = null; MODE = null; MY_PLAYERS = []; MY_GAMES = []; _rsvps = {};
   buildTeamGrids();
   showScreen('screen-chooser');
@@ -1557,7 +1589,9 @@ window.playerSendChat = async function() {
         body: text.length > 100 ? text.slice(0,100) + '…' : text,
         category: 'team_chat',
         teams: [MY_TEAM.id],
-        url: '/profile.html',
+        // v101: include hash so a logged-out tap routes straight to the
+        // chat tab instead of dumping the user on the chooser screen.
+        url: '/profile.html#chat',
         excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
       }),
     }).catch(() => {});
@@ -2122,12 +2156,15 @@ window.backToCaptainPicker = function() {
 };
 
 window.signOutCaptain = function() {
+  const teamId = MY_TEAM?.id;
   if (_unsubTeamChat) { _unsubTeamChat(); _unsubTeamChat = null; }
   if (_unsubCaptChat) { _unsubCaptChat(); _unsubCaptChat = null; }
   try {
-    if (MY_TEAM?.id) localStorage.removeItem('dvsl-captain-pw-' + MY_TEAM.id);
+    if (teamId) localStorage.removeItem('dvsl-captain-pw-' + teamId);
     localStorage.removeItem('dvsl-captain-team');
   } catch(_) {}
+  // Stop delivering this team's pushes to this device.
+  _dvslDetachTeamFromPushToken(teamId);
   MY_TEAM = null; captainData = null; MODE = null;
   buildTeamGrids();
   showScreen('screen-chooser');
@@ -3413,17 +3450,31 @@ window.captPayFillDefaultOwed = async function() {
   if (!empties.length) { toast('Every player already has an owed amount.'); return; }
   if (!confirm(`Set owed amount to $${amt} for ${empties.length} player(s) without one?`)) return;
   try {
-    for (const p of empties) {
-      const prev = CAPT_PAYMENTS[p.id] || {};
-      const paid = Number(prev.amount_paid) || 0;
-      const next = {
-        player_id: p.id, player_name: p.name || '', team_id: MY_TEAM.id,
-        amount_owed: amt, amount_paid: paid,
-        paid: paid >= amt, updated_at: new Date().toISOString(),
-      };
-      await setDoc(doc(db, 'payments', `${MY_TEAM.id}_${p.id}`), next, { merge: true });
-      CAPT_PAYMENTS[p.id] = { ...prev, ...next };
+    // Batch the writes so a big roster goes out as one network round-trip
+    // instead of N sequential setDocs. Firestore caps writeBatch at 500 ops
+    // — well above any roster size, but we chunk just in case a future
+    // feature reuses this helper with more players.
+    const BATCH_SIZE = 450;
+    const pending = [];
+    for (let i = 0; i < empties.length; i += BATCH_SIZE) {
+      const slice = empties.slice(i, i + BATCH_SIZE);
+      const batch = writeBatch(db);
+      for (const p of slice) {
+        const prev = CAPT_PAYMENTS[p.id] || {};
+        const paid = Number(prev.amount_paid) || 0;
+        const next = {
+          player_id: p.id, player_name: p.name || '', team_id: MY_TEAM.id,
+          amount_owed: amt, amount_paid: paid,
+          paid: paid >= amt, updated_at: new Date().toISOString(),
+        };
+        batch.set(doc(db, 'payments', `${MY_TEAM.id}_${p.id}`), next, { merge: true });
+        pending.push({ id: p.id, prev, next });
+      }
+      await batch.commit();
     }
+    // Only mutate the local cache after the commit succeeds so a failed
+    // batch doesn't leave the UI showing numbers that aren't in Firestore.
+    pending.forEach(({ id, prev, next }) => { CAPT_PAYMENTS[id] = { ...prev, ...next }; });
     toast(`Set owed = $${amt} for ${empties.length} player(s)`);
     renderCaptainPayments();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
@@ -3487,16 +3538,35 @@ async function captRenderAvailSummary() {
   try {
     const snap = await getDocs(query(collection(db, 'availability'),
       where('team_id', '==', MY_TEAM.id)));
-    const byGame = {};
-    snap.docs.forEach(d => {
-      const a = d.data();
-      if (!byGame[a.game_id]) byGame[a.game_id] = { yes: [], no: [], maybe: [] };
-      if (a.status === 'yes' || a.status === 'maybe' || a.status === 'no') {
-        byGame[a.game_id][a.status].push(a.player_name || '?');
-      }
-    });
+    // Roster lookup by player_id — lets us resolve a canonical name
+    // even if the availability doc has a stale player_name. Also the
+    // source of truth for dedupe: two different player_ids can share
+    // the same display name (e.g. two "Mike S" on the same roster).
     const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false);
     const total = roster.length;
+    const rosterById = {};
+    roster.forEach(p => { rosterById[p.id] = p; });
+    const byGame = {};
+    // Track seen player_ids per game+status so we never double-count
+    // when a player has multiple availability docs (legacy or duplicate writes).
+    const seen = {};
+    snap.docs.forEach(d => {
+      const a = d.data();
+      if (!a.game_id || !a.player_id) return;
+      if (a.status !== 'yes' && a.status !== 'maybe' && a.status !== 'no') return;
+      if (!byGame[a.game_id]) byGame[a.game_id] = { yes: [], no: [], maybe: [] };
+      const key = a.game_id + '|' + a.status + '|' + a.player_id;
+      if (seen[key]) return;
+      seen[key] = 1;
+      const rosterEntry = rosterById[a.player_id];
+      const name = (rosterEntry && rosterEntry.name) || a.player_name || '?';
+      // Disambiguate same-named players by appending jersey number if present.
+      const sameName = roster.filter(p => (p.name||'') === name);
+      const label = (sameName.length > 1 && rosterEntry && rosterEntry.num)
+        ? `${name} #${rosterEntry.num}`
+        : name;
+      byGame[a.game_id][a.status].push(label);
+    });
     const namePills = (names, color) => names.length
       ? names.map(n => `<span style="display:inline-block;background:${color}18;color:${color};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin:2px">${esc(n)}</span>`).join('')
       : `<span style="font-size:11px;color:var(--muted);font-style:italic">None yet</span>`;
@@ -3738,7 +3808,7 @@ window.captainSendTeamMsg = async function() {
         body: text.length > 100 ? text.slice(0,100) + '…' : text,
         category: 'team_chat',
         teams: [MY_TEAM.id],
-        url: '/profile.html',
+        url: '/profile.html#chat',
         excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
       }),
     }).catch(() => {});
@@ -3795,7 +3865,8 @@ window.captainRemindWaiting = async function(gameId, btn) {
         title, body,
         category: 'team_chat',
         teams: [MY_TEAM.id],
-        url: '/profile.html',
+        // Route straight to the availability tab since that's the CTA.
+        url: '/profile.html#attendance',
         excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
       }),
     });
@@ -3858,7 +3929,7 @@ window.captainSendCaptMsg = async function() {
         body: text.length > 100 ? text.slice(0,100) + '…' : text,
         category: 'captain_chat',
         captainsOnly: true,
-        url: '/profile.html',
+        url: '/profile.html#captains-chat',
         excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
       }),
     }).catch(() => {});
