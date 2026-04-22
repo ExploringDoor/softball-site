@@ -633,6 +633,20 @@ footer{padding:40px 48px;border-top:1px solid var(--border);display:flex;align-i
   .hero-inner{padding:0 20px 32px}
   footer{flex-direction:column;padding:32px 20px}
 }
+/* v106: hide top chrome + sticky section-tabs on scroll-down so the
+   user can actually read rules content without the header hogging
+   screen real estate. Adam: "league rules and ground rules by field
+   stay there at the top and also the DSL logo stays there at the top". */
+@media(max-width:768px){
+  #score-ticker, nav, .sec-tabs {
+    transition: transform .22s ease, opacity .22s ease !important;
+  }
+  #score-ticker.scroll-hidden, nav.scroll-hidden, .sec-tabs.scroll-hidden {
+    transform: translateY(-160%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:rgba(0,45,114,.25);border-radius:2px}
@@ -1534,6 +1548,27 @@ const hbg=document.getElementById('hbg');
 const mob=document.getElementById('mobMenu');
 hbg.addEventListener('click',()=>{ hbg.classList.toggle('open');mob.classList.toggle('open'); });
 mob.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{hbg.classList.remove('open');mob.classList.remove('open');}));
+
+// v106: scroll-hide top chrome + sticky section-tabs on mobile. Keeps
+// reading rules from being blocked by the DVSL logo + tab row.
+(function(){
+  const ticker = document.getElementById('score-ticker');
+  const navEl  = document.querySelector('nav');
+  const tabs   = document.querySelector('.sec-tabs');
+  if (!ticker && !navEl && !tabs) return;
+  const all = [ticker, navEl, tabs].filter(Boolean);
+  let lastY = 0, raf = null;
+  function tick(){
+    const y = window.scrollY || 0;
+    const mobile = window.matchMedia('(max-width: 768px)').matches;
+    if (!mobile) { all.forEach(el => el.classList.remove('scroll-hidden')); lastY = y; raf = null; return; }
+    if (y <= 8)             all.forEach(el => el.classList.remove('scroll-hidden'));
+    else if (y > lastY + 4) all.forEach(el => el.classList.add('scroll-hidden'));
+    else if (y < lastY - 4) all.forEach(el => el.classList.remove('scroll-hidden'));
+    lastY = y; raf = null;
+  }
+  window.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(tick); }, { passive: true });
+})();
 
 function showPanel(name,btn){
   // Tab activation

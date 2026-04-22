@@ -602,6 +602,18 @@ footer{margin-top:80px;padding:40px 48px;border-top:1px solid var(--border);disp
   nav{padding:0 18px}
   .nav-links{display:none}
   #hbg{display:flex!important}
+  /* v106: hide top DVSL ticker + nav when scrolling down so gallery
+     content has room to breathe. Adam: "the DVSL logo thing on top of
+     the page stays there even when you scroll". Matches the bell's
+     scroll-hide pattern from index.html. */
+  #score-ticker, nav {
+    transition: transform .22s ease, opacity .22s ease !important;
+  }
+  #score-ticker.scroll-hidden, nav.scroll-hidden {
+    transform: translateY(-120%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
 }
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
@@ -804,6 +816,37 @@ window.addEventListener('scroll',()=>{
   const el=document.getElementById('logoParallax');
   if(el) el.style.transform=`translateY(${window.scrollY*0.35}px)`;
 },{passive:true});
+
+// v106: hide top DVSL ticker + nav on scroll-down (mobile only).
+// Matches index.html's bell scroll-hide. Keeps top chrome out of the
+// way while browsing the gallery, reappears on scroll-up.
+(function(){
+  const ticker = document.getElementById('score-ticker');
+  const navEl  = document.querySelector('nav');
+  if (!ticker && !navEl) return;
+  let lastY = 0, raf = null;
+  function tick(){
+    const y = window.scrollY || 0;
+    const mobile = window.matchMedia('(max-width: 768px)').matches;
+    if (!mobile) {
+      ticker && ticker.classList.remove('scroll-hidden');
+      navEl  && navEl.classList.remove('scroll-hidden');
+      lastY = y; raf = null; return;
+    }
+    if (y <= 8) {
+      ticker && ticker.classList.remove('scroll-hidden');
+      navEl  && navEl.classList.remove('scroll-hidden');
+    } else if (y > lastY + 4) {
+      ticker && ticker.classList.add('scroll-hidden');
+      navEl  && navEl.classList.add('scroll-hidden');
+    } else if (y < lastY - 4) {
+      ticker && ticker.classList.remove('scroll-hidden');
+      navEl  && navEl.classList.remove('scroll-hidden');
+    }
+    lastY = y; raf = null;
+  }
+  window.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(tick); }, { passive: true });
+})();
 
 // Scroll reveal
 const revealObs=new IntersectionObserver(entries=>{
