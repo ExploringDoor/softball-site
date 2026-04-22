@@ -524,6 +524,25 @@
         setInterval(() => {
           if (document.visibilityState === 'visible') _dvslCheckPendingNav();
         }, 5000);
+
+        // Hide mobile notification bell while scrolling down; show again at top / scroll up.
+        (function setupBellScrollHide(){
+          const bell = document.getElementById('nav-notif-btn');
+          if (!bell) return;
+          let lastY = window.scrollY || 0;
+          let ticking = false;
+          function onScroll(){
+            const y = window.scrollY || 0;
+            if (y <= 8) bell.classList.remove('scroll-hidden');
+            else if (y > lastY + 4) bell.classList.add('scroll-hidden');
+            else if (y < lastY - 4) bell.classList.remove('scroll-hidden');
+            lastY = y;
+            ticking = false;
+          }
+          window.addEventListener('scroll', () => {
+            if (!ticking) { window.requestAnimationFrame(onScroll); ticking = true; }
+          }, { passive:true });
+        })();
       });
     }
   </script>
@@ -1156,6 +1175,27 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .nav-brand{display:none!important;}
   .nav-links,.nav-signup-btn{display:none}
   #darkToggle{display:none}
+  /* Notification bell: fixed top-right, just left of hamburger. Hides on scroll. */
+  #nav-notif-btn{
+    position:fixed!important;
+    top:calc(74px + env(safe-area-inset-top, 0px))!important;
+    right:62px!important;
+    left:auto!important;
+    z-index:600!important;
+    background:rgba(0,0,0,.55)!important;
+    border:none!important;
+    color:#fff!important;
+    border-radius:7px!important;
+    padding:8px 10px!important;
+    font-size:16px!important;
+    line-height:1!important;
+    transition:transform .22s ease, opacity .22s ease!important;
+  }
+  #nav-notif-btn.scroll-hidden{
+    transform:translateY(-120%)!important;
+    opacity:0!important;
+    pointer-events:none!important;
+  }
   /* Hamburger pinned directly to viewport — immune to nav/ticker positioning */
   #hbg{display:flex!important;}
   .hamburger span{background:#fff!important;}
