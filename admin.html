@@ -2375,8 +2375,200 @@ function renderDashboard() {
 // ═══════════════════════════════════════════════════════════════════
 // SCORES
 // ═══════════════════════════════════════════════════════════════════
+// v97: captain-submission inbox — loaded on first Scores render and
+// refreshed each time. Shows pending box-score and scoresheet uploads
+// submitted from profile.html's 4-button captain row. Admin can review
+// each submission, apply it to the game, or dismiss.
+let CAPT_SUBMISSION_INBOX = { boxes: [], uploads: [] };
+let _captInboxLoaded = false;
+
+async function _loadCaptInbox() {
+  try {
+    const [bsSnap, upSnap] = await Promise.all([
+      getDocs(collection(db, 'box_scores')),
+      getDocs(query(collection(db, 'score_uploads'), where('status', '==', 'pending_review')))
+    ]);
+    // captain box-score docs have a team_id field and IDs shaped {gameId}_{teamId}
+    CAPT_SUBMISSION_INBOX.boxes = bsSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(b => b.team_id && b.id.includes('_'));
+    CAPT_SUBMISSION_INBOX.uploads = upSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _captInboxLoaded = true;
+  } catch (e) {
+    console.warn('[capt-inbox] load failed', e);
+  }
+}
+
+function _renderCaptInboxPanel() {
+  const boxes = CAPT_SUBMISSION_INBOX.boxes || [];
+  const uploads = CAPT_SUBMISSION_INBOX.uploads || [];
+  const total = boxes.length + uploads.length;
+  if (!total) return '';
+  const items = [
+    ...boxes.map(b => {
+      const g = GAMES.find(x => x.id === b.game_id);
+      const awayName = g ? getTeamName(g.away) : '?';
+      const homeName = g ? getTeamName(g.home) : '?';
+      const side = g && b.team_id === g.home ? 'home' : 'away';
+      return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:#fff">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+          <div>
+            <div style="font-weight:700;font-size:13px">📋 Box Score — ${esc(b.team_name||'?')} (${side})</div>
+            <div style="font-size:11px;color:var(--muted)">Wk ${g?.wk||'?'} · ${esc(awayName)} @ ${esc(homeName)} · ${(b.batters||[]).length} batters</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="captInboxOpenBox('${b.id}')">Review</button>
+            <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="captInboxDismissBox('${b.id}')">Dismiss</button>
+          </div>
+        </div>
+      </div>`;
+    }),
+    ...uploads.map(u => {
+      const g = GAMES.find(x => x.id === u.game_id);
+      const awayName = g ? getTeamName(g.away) : '?';
+      const homeName = g ? getTeamName(g.home) : '?';
+      const scoreStr = (u.away_score != null || u.home_score != null)
+        ? ` · Captain reports ${u.away_score ?? '?'}–${u.home_score ?? '?'}` : '';
+      return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:#fff">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+          <div>
+            <div style="font-weight:700;font-size:13px">📄 Sheet Upload — ${esc(u.team_name||'?')}</div>
+            <div style="font-size:11px;color:var(--muted)">Wk ${g?.wk||'?'} · ${esc(awayName)} @ ${esc(homeName)}${scoreStr}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="captInboxOpenUpload('${u.id}')">Review</button>
+            <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="captInboxDismissUpload('${u.id}')">Dismiss</button>
+          </div>
+        </div>
+      </div>`;
+    })
+  ];
+  return `<div class="panel" style="background:#fffbeb;border:1px solid #d97706;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="captInboxToggle()">
+      <div style="font-weight:800;font-size:15px;color:#92400e">📥 Captain Submissions Inbox <span class="badge" style="background:#d97706;color:#fff;margin-left:6px">${total}</span></div>
+      <div id="capt-inbox-chev" style="font-size:14px;color:#92400e">▾</div>
+    </div>
+    <div id="capt-inbox-list" style="margin-top:12px">${items.join('')}</div>
+  </div>`;
+}
+
+window.captInboxToggle = function() {
+  const list = document.getElementById('capt-inbox-list');
+  const chev = document.getElementById('capt-inbox-chev');
+  if (!list) return;
+  const open = list.style.display !== 'none';
+  list.style.display = open ? 'none' : 'block';
+  if (chev) chev.textContent = open ? '▸' : '▾';
+};
+
+window.captInboxOpenBox = async function(docId) {
+  const b = CAPT_SUBMISSION_INBOX.boxes.find(x => x.id === docId);
+  if (!b) return;
+  const g = GAMES.find(x => x.id === b.game_id);
+  if (!g) { toast('Game not found', 'error'); return; }
+  // Open the master box-score editor; tell the user the captain's batters
+  // are available in the inbox item so they can copy/cross-reference.
+  const batterLines = (b.batters||[]).map(bt =>
+    `${bt.player_name}: ${bt.AB||0} AB, ${bt.H||0} H, ${bt.R||0} R, ${bt.RBI||0} RBI${bt.HR?`, ${bt.HR} HR`:''}${bt.BB?`, ${bt.BB} BB`:''}${bt.SO?`, ${bt.SO} K`:''}`
+  ).join('\n');
+  const msg = `Captain's ${b.team_name} box-score submission:\n\n${batterLines}\n\nOpening the master box editor — paste these lines into the appropriate team's batters. When done, dismiss the inbox item.`;
+  alert(msg);
+  await openBoxScore(b.game_id);
+};
+
+window.captInboxDismissBox = async function(docId) {
+  if (!confirm('Dismiss this captain box-score submission? (The doc will be deleted.)')) return;
+  try {
+    await deleteDoc(doc(db, 'box_scores', docId));
+    CAPT_SUBMISSION_INBOX.boxes = CAPT_SUBMISSION_INBOX.boxes.filter(x => x.id !== docId);
+    renderScores();
+    toast('Dismissed ✓');
+  } catch (e) { toast('Could not dismiss: ' + e.message, 'error'); }
+};
+
+window.captInboxOpenUpload = function(docId) {
+  const u = CAPT_SUBMISSION_INBOX.uploads.find(x => x.id === docId);
+  if (!u) return;
+  const g = GAMES.find(x => x.id === u.game_id);
+  const awayName = g ? getTeamName(g.away) : '?';
+  const homeName = g ? getTeamName(g.home) : '?';
+  const view = document.getElementById('box-score-view');
+  document.getElementById('sec-scores').querySelector('.main-header').style.display = 'none';
+  document.getElementById('scores-content').style.display = 'none';
+  view.style.display = 'block';
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const isPdf = u.file_type === 'application/pdf';
+  view.innerHTML = `
+    <div style="padding:20px 0">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px">
+        <a href="#" onclick="closeCaptUploadView();return false" style="font-size:13px;color:var(--muted);text-decoration:none">← Back to Scores</a>
+      </div>
+      <div style="background:#001a3e;border-radius:12px;padding:16px 24px;margin-bottom:16px">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#fff;text-transform:uppercase">${esc(awayName)} vs ${esc(homeName)}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">Captain scoresheet from ${esc(u.team_name||'?')} · ${esc(u.file_name||'')}</div>
+      </div>
+      <div class="panel" style="background:#fffbeb;border:1px solid #d97706">
+        <div style="font-weight:700;color:#92400e;margin-bottom:8px">Captain says:</div>
+        <div style="font-size:14px">Final: <strong>${u.away_score ?? '?'}</strong> – <strong>${u.home_score ?? '?'}</strong></div>
+        ${u.notes ? `<div style="font-size:13px;margin-top:6px;color:#555">"${esc(u.notes)}"</div>` : ''}
+      </div>
+      <div style="margin:16px 0;padding:10px;background:#f9fafb;border:1px solid var(--border);border-radius:10px">
+        ${isPdf
+          ? `<embed src="${u.data_url}" type="application/pdf" style="width:100%;height:70vh;border:none;border-radius:8px">
+             <div style="font-size:11px;color:var(--muted);margin-top:6px">If PDF doesn't render above, <a href="${u.data_url}" download="${esc(u.file_name||'sheet.pdf')}">download it</a>.</div>`
+          : `<img src="${u.data_url}" style="max-width:100%;border-radius:8px;display:block">`}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="captInboxApplyUpload('${u.id}')">✅ Apply ${u.away_score ?? '?'}–${u.home_score ?? '?'} as final</button>
+        <button class="btn btn-outline" onclick="openBoxScore('${u.game_id}');closeCaptUploadView()">📋 Open Box Editor</button>
+        <button class="btn btn-outline" style="color:#e65100;border-color:#e65100" onclick="captInboxDismissUpload('${u.id}');closeCaptUploadView()">Dismiss</button>
+      </div>
+    </div>
+  `;
+};
+
+window.closeCaptUploadView = function() {
+  document.getElementById('box-score-view').style.display = 'none';
+  document.getElementById('sec-scores').querySelector('.main-header').style.display = '';
+  document.getElementById('scores-content').style.display = '';
+};
+
+window.captInboxApplyUpload = async function(docId) {
+  const u = CAPT_SUBMISSION_INBOX.uploads.find(x => x.id === docId);
+  if (!u) return;
+  if (u.away_score == null || u.home_score == null) {
+    toast('Captain did not fill both scores — use Box Editor', 'error'); return;
+  }
+  if (!confirm(`Apply final score ${u.away_score}–${u.home_score} to this game and mark it done?`)) return;
+  try {
+    await updateDoc(doc(db, 'games', u.game_id), {
+      away_score: u.away_score, home_score: u.home_score, done: true,
+      score_conflict: false, score_pending: false, score_confirmed: true, has_discrepancy: false
+    });
+    const g = GAMES.find(x => x.id === u.game_id);
+    if (g) { g.away_score = u.away_score; g.home_score = u.home_score; g.done = true; g.score_conflict = false; g.score_pending = false; }
+    await updateDoc(doc(db, 'score_uploads', docId), { status: 'applied', applied_at: serverTimestamp() });
+    CAPT_SUBMISSION_INBOX.uploads = CAPT_SUBMISSION_INBOX.uploads.filter(x => x.id !== docId);
+    closeCaptUploadView();
+    renderScores(); renderDashboard(); renderStandings();
+    toast('Score applied ✓');
+  } catch (e) { toast('Could not apply: ' + e.message, 'error'); }
+};
+
+window.captInboxDismissUpload = async function(docId) {
+  if (!confirm('Dismiss this scoresheet upload?')) return;
+  try {
+    await updateDoc(doc(db, 'score_uploads', docId), { status: 'dismissed', dismissed_at: serverTimestamp() });
+    CAPT_SUBMISSION_INBOX.uploads = CAPT_SUBMISSION_INBOX.uploads.filter(x => x.id !== docId);
+    renderScores();
+    toast('Dismissed ✓');
+  } catch (e) { toast('Could not dismiss: ' + e.message, 'error'); }
+};
+
 function renderScores() {
   const el = document.getElementById('scores-content');
+  // v97: lazy-load captain submission inbox on first render
+  if (!_captInboxLoaded) _loadCaptInbox().then(() => renderScores());
   // Captain mode locks the view to the captain's own team.
   // Admin mode honors the "Filter by Team" dropdown (default: all games).
   const filterTeam = !captainMode
@@ -2406,7 +2598,8 @@ function renderScores() {
     );
   });
 
-  el.innerHTML = weeks.map(w => `
+  const inboxHtml = !captainMode ? _renderCaptInboxPanel() : '';
+  el.innerHTML = inboxHtml + weeks.map(w => `
     <div class="week-group">
       <div class="week-header">Week ${w}</div>
       ${byWeek[w].map(g => {
