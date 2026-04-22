@@ -2643,10 +2643,13 @@ window.captSubmitScore = async function(gameId) {
     away_hits: awayH, home_hits: homeH,
     away_errors: awayE, home_errors: homeE,
     score_only: true,
-    notes: notes || undefined,
     submitted_by: MY_TEAM.name, submitted_by_id: MY_TEAM.id,
     status: 'approved', timestamp: Timestamp.now(),
   };
+  // Firestore rejects undefined field values, so only include optional fields
+  // when we actually have something. (Re-enter-final view supplies an empty
+  // hidden notes input, which was serializing as notes:undefined and blowing up.)
+  if (notes) boxScoreData.notes = notes;
   if (awayLS) boxScoreData.away_linescore = awayLS;
   if (homeLS) boxScoreData.home_linescore = homeLS;
 
