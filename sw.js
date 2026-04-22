@@ -1,4 +1,11 @@
-// DVSL Service Worker — offline mode + push notifications
+// League Service Worker — offline mode + push notifications
+//
+// Loads /config.js first so we can read league id + display name. If config
+// fails to load (shouldn't), we fall back to DVSL defaults so the SW still
+// boots — safer than refusing to register.
+try { importScripts('/config.js'); } catch (_) {}
+var LEAGUE = (self.LEAGUE_CONFIG) || { id: 'dvsl', name: 'DVSL' };
+
 //
 // Strategy:
 //   - Firestore / Firebase API calls  → network-only, never cache (live data)
@@ -35,7 +42,7 @@ self.addEventListener('push', (event) => {
     payload ||
     {};
   const rawUrl = d.url;
-  const title  = d.title || 'DVSL';
+  const title  = d.title || LEAGUE.name;
   const body   = d.body || '';
   const url    = rawUrl || '/';
 
@@ -158,9 +165,9 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v94-drop-commissioner-label';
-const CORE_CACHE = `dvsl-core-${VERSION}`;
-const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
+const VERSION = `${LEAGUE.id}-v95-monorepo-config`;
+const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
+const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
 // Team codes used across schedule.html / stats.html / standings / index.
 // Logos are referenced dynamically as `logos/<code>.svg` or `logos/<code>.png`,
@@ -219,17 +226,22 @@ self.addEventListener('install', (event) => {
 });
 
 // ---- activate: wipe old caches --------------------------------------------
-// Only delete caches that are OLD versions of ours (prefix dvsl-core- or
-// dvsl-runtime-) — NEVER touch ancillary caches like dvsl-pending-nav that
+// Only delete caches that are OLD versions of ours (prefix <id>-core- or
+// <id>-runtime-) — NEVER touch ancillary caches like <id>-pending-nav that
 // other parts of the SW may rely on across version changes.
 self.addEventListener('activate', (event) => {
+  const corePrefix = `${LEAGUE.id}-core-`;
+  const runtimePrefix = `${LEAGUE.id}-runtime-`;
   event.waitUntil(
     caches.keys()
       .then((keys) =>
         Promise.all(
           keys
             .filter((k) =>
-              (k.startsWith('dvsl-core-') || k.startsWith('dvsl-runtime-')) &&
+              (k.startsWith(corePrefix) || k.startsWith(runtimePrefix) ||
+               // Legacy hardcoded prefix — clean up on first activate after
+               // monorepo refactor. Safe to remove a few months from now.
+               k.startsWith('dvsl-core-') || k.startsWith('dvsl-runtime-')) &&
               k !== CORE_CACHE && k !== RUNTIME_CACHE
             )
             .map((k) => caches.delete(k))
