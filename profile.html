@@ -1487,20 +1487,18 @@ function activatePlayerChat() {
 
 function subscribePlayerChat() {
   if (_playerChatUnsub) _playerChatUnsub();
-  // v97: use asc + limitToLast so Firestore reuses the EXISTING asc
-  // composite index (where team_id + orderBy timestamp asc). v96 switched
-  // to desc which required a brand-new index and broke chat until the
-  // index was created. limitToLast(N) returns the newest N in
-  // chronological order — exactly what we want, no new index required.
+  // v98: NO orderBy — avoids needing a composite Firestore index entirely.
+  // A single `where('team_id', '==', X)` uses the built-in single-field
+  // index Firestore creates by default. We sort + slice the newest 100
+  // client-side instead. This is what the site did before v96.
   const q = query(
     collection(db, 'team_messages'),
-    where('team_id', '==', MY_TEAM.id),
-    orderBy('timestamp', 'asc'),
-    limitToLast(100)
+    where('team_id', '==', MY_TEAM.id)
   );
   _playerChatUnsub = onSnapshot(q, snap => {
     const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderPlayerChat(msgs);
+    msgs.sort((a,b) => (a.timestamp?.toMillis?.() ?? 0) - (b.timestamp?.toMillis?.() ?? 0));
+    renderPlayerChat(msgs.slice(-100));
   }, err => {
     document.getElementById('pchat-messages').innerHTML = '<div class="empty">Could not load: ' + esc(err.message) + '</div>';
   });
@@ -3630,13 +3628,15 @@ window.captClearPlayerAvail = async function(gameId, playerId) {
 // ═══════════════════════════════════════════════════════════════════
 function activateCaptainTeamChat() {
   if (_unsubTeamChat) _unsubTeamChat();
-  // v97: asc + limitToLast so we use the existing composite index.
+  // v98: drop orderBy so Firestore doesn't require a composite index —
+  // single-field where(team_id) uses the default built-in index.
+  // Sort + trim newest 100 on the client.
   const q = query(collection(db, 'team_messages'),
-    where('team_id', '==', MY_TEAM.id),
-    orderBy('timestamp', 'asc'), limitToLast(100));
+    where('team_id', '==', MY_TEAM.id));
   _unsubTeamChat = onSnapshot(q, snap => {
     const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderCaptainTeamChat(msgs);
+    msgs.sort((a,b) => (a.timestamp?.toMillis?.() ?? 0) - (b.timestamp?.toMillis?.() ?? 0));
+    renderCaptainTeamChat(msgs.slice(-100));
   });
 }
 
