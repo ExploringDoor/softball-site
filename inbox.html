@@ -699,6 +699,39 @@ let LAST_UNREAD = []; // most recent fetch — used for tab switching without re
 const ARCHIVE_KEY = 'dvsl-inbox-archive';
 const ARCHIVE_MAX = 100;
 
+// Locally-dismissed id set. Adam asked that tapping a notification move
+// it to Archive immediately, without having to press the X — but the
+// dismiss POST races against the page navigation and sometimes loses,
+// so the server keeps returning the doc and the item "comes back" in
+// the unread list. Keeping our own set lets us filter out anything the
+// user has tapped, regardless of whether the server ack'd. Cap/evict
+// so this doesn't grow forever.
+const DISMISSED_KEY = 'dvsl-inbox-dismissed-ids';
+const DISMISSED_MAX = 500;
+
+function loadDismissed() {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (_) { return []; }
+}
+function saveDismissed(arr) {
+  try {
+    const trimmed = arr.slice(-DISMISSED_MAX);
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(trimmed));
+  } catch (_) {}
+}
+function markDismissedLocal(id) {
+  if (!id) return;
+  const arr = loadDismissed();
+  if (arr.indexOf(id) === -1) { arr.push(id); saveDismissed(arr); }
+}
+function isDismissedLocal(id) {
+  if (!id) return false;
+  return loadDismissed().indexOf(id) !== -1;
+}
+
 function loadArchive() {
   try {
     const raw = localStorage.getItem(ARCHIVE_KEY);
@@ -946,6 +979,7 @@ function render(items, mode = 'unread') {
         // the doc was already deleted when it was dismissed the first time.
         removeFromArchive(item.id);
       } else {
+        markDismissedLocal(item.id);
         dismiss(item);
         // Unread dismiss: also remove id from LAST_UNREAD so tab counts update.
         LAST_UNREAD = LAST_UNREAD.filter(it => it.id !== item.id);
@@ -971,9 +1005,22 @@ function render(items, mode = 'unread') {
     });
 
     card.addEventListener('click', () => {
-      // Archive-mode tap: re-navigate without server dismiss (doc is gone).
-      // Unread-mode tap: keep existing behavior — dismiss + navigate.
-      if (mode !== 'archive') dismiss(item);
+      // Adam asked that tapping a notification move it to Archive right
+      // away — don't require pressing the × first. So in unread mode:
+      //   1. snapshot into archive (guaranteed, even if it wasn't
+      //      snapshotted on the last refresh),
+      //   2. mark locally-dismissed so render() filters it out even if
+      //      the server dismiss POST loses the race with page nav,
+      //   3. prune it from LAST_UNREAD,
+      //   4. fire the server dismiss (sendBeacon, best-effort),
+      //   5. navigate to the notification's target URL.
+      // Archive-mode tap: just re-navigate (doc is already gone from server).
+      if (mode !== 'archive') {
+        archiveSnapshot([item]);
+        markDismissedLocal(item.id);
+        LAST_UNREAD = LAST_UNREAD.filter(it => it.id !== item.id);
+        dismiss(item);
+      }
       try {
         const t = new URL(item.url || '/', location.origin);
         window.location.href = t.href;
@@ -1015,11 +1062,17 @@ tabUnread .addEventListener('click', () => setTab('unread'));
 tabArchive.addEventListener('click', () => setTab('archive'));
 
 async function refresh() {
-  const items = await fetchItems();
+  const raw = await fetchItems();
+  // Snapshot everything we saw (regardless of dismiss state) so the archive
+  // is complete. Even if the user dismisses immediately, we'll still have
+  // a copy there for later reference.
+  archiveSnapshot(raw);
+  // Filter out ids the user has already tapped — guards against the race
+  // where the dismiss POST is cancelled by the page navigation and the
+  // server keeps returning the doc for another few seconds.
+  const dismissed = new Set(loadDismissed());
+  const items = raw.filter(it => it && it.id && !dismissed.has(it.id));
   LAST_UNREAD = items;
-  // Snapshot any newly-seen items into the archive cache. Even if the user
-  // dismisses immediately, we'll still have a copy.
-  archiveSnapshot(items);
   render(CURRENT_TAB === 'archive' ? loadArchive() : items, CURRENT_TAB);
 }
 

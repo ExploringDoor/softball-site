@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v84-score-push-use-team-abbreviations';
+const VERSION = 'dvsl-v85-inbox-tap-archive-bell-edge-notif-tab-tabs';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 

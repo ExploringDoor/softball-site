@@ -1472,57 +1472,158 @@ window.playerDelChat = async function(msgId) {
 // ═══════════════════════════════════════════════════════════════════
 // PLAYER — Notifications tab
 // ═══════════════════════════════════════════════════════════════════
+// Unified archive / dismissed-id helpers — share the same localStorage keys
+// as inbox.html so that dismissing in one place is instantly reflected in
+// the other. (User saw duplicate UX: "notifications" tab had only a flat
+// list, /inbox.html had tabs. Make them match.)
+const _NOTIF_ARCHIVE_KEY = 'dvsl-inbox-archive';
+const _NOTIF_ARCHIVE_MAX = 100;
+const _NOTIF_DISMISSED_KEY = 'dvsl-inbox-dismissed-ids';
+const _NOTIF_DISMISSED_MAX = 500;
+
+function _notifLoadArchive() {
+  try {
+    const raw = localStorage.getItem(_NOTIF_ARCHIVE_KEY);
+    const a = raw ? JSON.parse(raw) : [];
+    return Array.isArray(a) ? a : [];
+  } catch(_) { return []; }
+}
+function _notifSaveArchive(arr) {
+  try {
+    const trimmed = arr.slice().sort((a,b) => (b.ts||0)-(a.ts||0)).slice(0, _NOTIF_ARCHIVE_MAX);
+    localStorage.setItem(_NOTIF_ARCHIVE_KEY, JSON.stringify(trimmed));
+  } catch(_) {}
+}
+function _notifArchiveSnapshot(items) {
+  if (!Array.isArray(items) || !items.length) return;
+  const existing = _notifLoadArchive();
+  const byId = new Map(existing.map(it => [it.id, it]));
+  let changed = false;
+  items.forEach(it => {
+    if (!it || !it.id || byId.has(it.id)) return;
+    byId.set(it.id, {
+      id: it.id, title: it.title||'', body: it.body||'', url: it.url||'/',
+      ts: it.ts||Date.now(), category: it.category||'', image_data_url: it.image_data_url||'',
+      archivedAt: Date.now(),
+    });
+    changed = true;
+  });
+  if (changed) _notifSaveArchive(Array.from(byId.values()));
+}
+function _notifRemoveFromArchive(id) {
+  if (!id) return;
+  _notifSaveArchive(_notifLoadArchive().filter(it => it.id !== id));
+}
+function _notifClearArchive() { try { localStorage.removeItem(_NOTIF_ARCHIVE_KEY); } catch(_) {} }
+function _notifLoadDismissed() {
+  try {
+    const a = JSON.parse(localStorage.getItem(_NOTIF_DISMISSED_KEY) || '[]');
+    return Array.isArray(a) ? a : [];
+  } catch(_) { return []; }
+}
+function _notifMarkDismissed(id) {
+  if (!id) return;
+  const a = _notifLoadDismissed();
+  if (a.indexOf(id) === -1) {
+    a.push(id);
+    try { localStorage.setItem(_NOTIF_DISMISSED_KEY, JSON.stringify(a.slice(-_NOTIF_DISMISSED_MAX))); } catch(_) {}
+  }
+}
+function _notifServerDismiss(id) {
+  const token = localStorage.getItem('dvsl-notif-token');
+  if (!token || !id) return;
+  const payload = JSON.stringify({ token, id });
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      if (navigator.sendBeacon('/api/dismiss-pending-nav', blob)) return;
+    }
+  } catch(_) {}
+  fetch('/api/dismiss-pending-nav', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: payload, keepalive: true,
+  }).catch(() => {});
+}
+function _notifAgo(ts) {
+  const s = Math.max(0, Math.floor((Date.now() - (ts||0))/1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+const _NOTIF_CAT_LABEL = {
+  scores: 'Scores', rainouts: 'Rainout', schedule: 'Schedule change',
+  playoffs: 'Playoffs', announcements: 'League announcement', live: 'Live game',
+  pregame: 'Pre-game', photos: 'Team photos', team_chat: 'Team chat',
+  captains_chat: 'Captains chat', admin: 'Admin alert',
+};
+
+// Track which subtab (unread / archive / settings) is active per containerId.
+const _notifSubtabState = {};
+
 function renderNotificationsTab(containerId = 'pnotif-content', recentId = 'pnotif-recent') {
   const el = document.getElementById(containerId);
   if (!el) return;
-  const isPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
-  const hasToken = !!localStorage.getItem('dvsl-notif-token');
-
-  let html = '';
-
-  if (!isPwa) {
-    html += `<div class="notif-install-banner">
-      <strong>🔔 Install the app to enable push notifications</strong><br>
-      On iPhone: tap the Share button in Safari, then "Add to Home Screen."<br>
-      On Android: tap the browser menu, then "Install app."<br>
-      Push notifications only work once you've installed.
-    </div>`;
-  }
-
-  html += `<div class="notif-card">
-    <div class="notif-card-title">Push Notifications</div>
-    <div class="section-sub" style="margin-bottom:12px">
-      ${isPwa
-        ? (hasToken
-            ? 'You\'re subscribed. You\'ll get pings for team chat, schedule changes, and scores.'
-            : 'Not subscribed yet. Enable to get pinged about your games.')
-        : 'Open the Notifications page to see what\'s there and manage your subscription preferences.'}
+  const sub = _notifSubtabState[containerId] || 'unread';
+  _notifSubtabState[containerId] = sub;
+  const tabBtn = (id, label) => {
+    const active = sub === id;
+    return `<button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}"
+      style="flex:1"
+      onclick="window._notifSetSubtab('${containerId}','${recentId}','${id}')">${label}</button>`;
+  };
+  el.innerHTML = `
+    <div class="section-title">Notifications</div>
+    <div style="display:flex;gap:6px;margin:8px 0 14px">
+      ${tabBtn('unread','Unread')}
+      ${tabBtn('archive','Archive')}
+      ${tabBtn('settings','Settings')}
     </div>
-    ${isPwa
-      ? (hasToken
-          ? `<button class="btn btn-outline btn-sm" onclick="window.openNotifSettings()">Manage notifications in Inbox →</button>`
-          : `<button class="btn btn-primary btn-sm" onclick="window.openNotifSettings()">Enable Notifications</button>`)
-      : `<a href="/inbox.html" class="btn btn-primary btn-sm" style="text-decoration:none;display:inline-block">Open Notifications →</a>
-         <a href="/notifications.html" class="btn btn-outline btn-sm" style="text-decoration:none;display:inline-block;margin-left:8px">Notification Settings</a>`}
-  </div>`;
-
-  html += `<div class="notif-card">
-    <div class="notif-card-title">Recent</div>
-    <div id="${recentId}">
-      <div class="loading"><div class="spinner spinner-sm"></div> Checking…</div>
-    </div>
-  </div>`;
-
-  el.innerHTML = html;
-  loadPendingNotifications(recentId);
+    <div id="${recentId}"><div class="loading"><div class="spinner spinner-sm"></div> Loading…</div></div>
+  `;
+  if (sub === 'settings')      _notifRenderSettings(recentId);
+  else if (sub === 'archive')  _notifRenderArchive(recentId);
+  else                         _notifRenderUnread(recentId);
 }
 
-async function loadPendingNotifications(recentId = 'pnotif-recent') {
+window._notifSetSubtab = function(containerId, recentId, sub) {
+  _notifSubtabState[containerId] = sub;
+  renderNotificationsTab(containerId, recentId);
+};
+
+function _notifCardHtml(it, archived) {
+  const titleEsc = esc(it.title || 'Notification');
+  const bodyEsc = it.body ? esc(it.body) : '';
+  const catLabel = it.category ? (_NOTIF_CAT_LABEL[it.category] || it.category) : '';
+  return `
+    <div class="notif-card-row ${archived ? 'archived' : ''}" data-id="${esc(it.id)}"
+         style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:#fff;${archived ? 'opacity:.72' : ''}">
+      ${archived ? '' : '<div style="width:8px;height:8px;border-radius:50%;background:var(--navy);margin-top:7px;flex-shrink:0"></div>'}
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="window._notifCardClick('${esc(it.id)}', ${archived ? 'true' : 'false'})">
+        <div style="font-weight:700;font-size:14px;line-height:1.3">${titleEsc}</div>
+        ${bodyEsc ? `<div style="font-size:13px;color:var(--muted);margin-top:2px;line-height:1.4">${bodyEsc}</div>` : ''}
+        ${it.image_data_url ? `<img src="${esc(it.image_data_url)}" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:8px" loading="lazy">` : ''}
+        <div style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">
+          ${catLabel ? `<span style="font-weight:700">${esc(catLabel)}</span>` : ''}
+          <span>${_notifAgo(it.ts)}</span>
+        </div>
+      </div>
+      <button class="icon-btn" aria-label="Dismiss"
+              style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px"
+              onclick="event.stopPropagation();window._notifDismissCard('${esc(it.id)}', ${archived ? 'true' : 'false'})">×</button>
+    </div>
+  `;
+}
+
+async function _notifRenderUnread(recentId) {
   const el = document.getElementById(recentId);
   if (!el) return;
   const token = localStorage.getItem('dvsl-notif-token');
   if (!token) {
-    el.innerHTML = '<div class="empty" style="padding:16px">Enable notifications to see recent pings.</div>';
+    el.innerHTML = `<div class="empty" style="padding:20px;text-align:center">
+      <div style="font-size:14px;margin-bottom:10px">Enable notifications to see unread pings.</div>
+      <button class="btn btn-primary btn-sm" onclick="window.openNotifSettings()">Enable Notifications</button>
+    </div>`;
     return;
   }
   try {
@@ -1531,25 +1632,114 @@ async function loadPendingNotifications(recentId = 'pnotif-recent') {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     });
-    if (!resp.ok) { el.innerHTML = '<div class="empty" style="padding:16px">Could not load recent.</div>'; return; }
-    const data = await resp.json();
-    const items = Array.isArray(data && data.items) ? data.items : [];
+    const data = resp.ok ? await resp.json() : { items: [] };
+    const raw = Array.isArray(data.items) ? data.items : [];
+    _notifArchiveSnapshot(raw);
+    const dismissed = new Set(_notifLoadDismissed());
+    const items = raw.filter(it => it && it.id && !dismissed.has(it.id));
     if (!items.length) {
-      el.innerHTML = '<div class="empty" style="padding:16px">No recent notifications.</div>';
+      el.innerHTML = '<div class="empty" style="padding:20px;text-align:center">🎉 You\'re all caught up. No unread notifications.</div>';
       return;
     }
-    el.innerHTML = items.slice(0, 20).map(it => `
-      <div class="notif-item" style="cursor:pointer" onclick="dvslOpenNotif(${JSON.stringify(it.url||'').replace(/"/g,'&quot;')}, ${JSON.stringify(it.category||'').replace(/"/g,'&quot;')}, ${JSON.stringify(it.title||'').replace(/"/g,'&quot;')})">
-        <div class="notif-item-ico">🔔</div>
-        <div class="notif-item-body">
-          <div class="notif-item-title">${esc(it.title || 'Notification')}</div>
-          <div class="notif-item-sub">${esc(it.body || '')}</div>
-        </div>
-      </div>`).join('');
+    el.innerHTML = items.map(it => _notifCardHtml(it, false)).join('');
   } catch(e) {
     el.innerHTML = '<div class="empty" style="padding:16px">Could not load: ' + esc(e.message) + '</div>';
   }
 }
+
+function _notifRenderArchive(recentId) {
+  const el = document.getElementById(recentId);
+  if (!el) return;
+  const items = _notifLoadArchive();
+  if (!items.length) {
+    el.innerHTML = '<div class="empty" style="padding:20px;text-align:center">No archived notifications yet.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button class="btn btn-outline btn-sm" onclick="window._notifClearArchiveUi()">Clear all</button>
+    </div>
+    ${items.map(it => _notifCardHtml(it, true)).join('')}
+  `;
+}
+
+function _notifRenderSettings(recentId) {
+  const el = document.getElementById(recentId);
+  if (!el) return;
+  const isPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  const hasToken = !!localStorage.getItem('dvsl-notif-token');
+  let html = '';
+  if (!isPwa) {
+    html += `<div class="notif-install-banner" style="background:#fef3c7;border:1px solid #d97706;color:#92400e;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.5;margin-bottom:14px">
+      <strong>🔔 Install the app to enable push notifications</strong><br>
+      On iPhone: tap the Share button in Safari, then "Add to Home Screen."<br>
+      On Android: tap the browser menu, then "Install app."<br>
+      Push only works once installed.
+    </div>`;
+  }
+  html += `<div class="notif-card" style="border:1px solid var(--border);border-radius:10px;padding:14px">
+    <div style="font-weight:700;font-size:14px;margin-bottom:6px">Push Notifications</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">
+      ${isPwa
+        ? (hasToken
+            ? 'You\'re subscribed. Team chat, schedule changes, scores, and announcements will ping this device.'
+            : 'Not subscribed yet. Enable to get pinged about your games.')
+        : 'Install the app first, then enable notifications.'}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${isPwa
+        ? (hasToken
+            ? '<button class="btn btn-outline btn-sm" onclick="window.openNotifSettings()">Manage subscription →</button>'
+            : '<button class="btn btn-primary btn-sm" onclick="window.openNotifSettings()">Enable Notifications</button>')
+        : '<a href="/notifications.html" class="btn btn-outline btn-sm" style="text-decoration:none;display:inline-block">Notification Settings</a>'}
+      <a href="/inbox.html" class="btn btn-outline btn-sm" style="text-decoration:none;display:inline-block">Open full Inbox →</a>
+    </div>
+  </div>`;
+  el.innerHTML = html;
+}
+
+// Card click in profile Notifications tab: archive + dismiss + follow link.
+window._notifCardClick = function(id, archived) {
+  const items = archived ? _notifLoadArchive() : _notifLoadArchive(); // archive has both
+  // The unread list may not be in the archive cache yet if the snapshot
+  // hasn't run, but _notifRenderUnread always snapshots before rendering,
+  // so lookup by id from archive is reliable.
+  const item = items.find(it => it.id === id);
+  const url = item && item.url;
+  if (!archived) {
+    _notifMarkDismissed(id);
+    _notifServerDismiss(id);
+    // Re-render unread list immediately so the tapped card disappears
+    // even if navigation is cancelled (e.g., same-page hash change).
+    const containerId = (MODE === 'captain') ? 'cnotif-content' : 'pnotif-content';
+    const recentId    = (MODE === 'captain') ? 'cnotif-recent'  : 'pnotif-recent';
+    _notifRenderUnread(recentId);
+  }
+  if (url && url !== '#') {
+    // Use dvslOpenNotif so same-page deep links switch tabs instead of full nav.
+    dvslOpenNotif(url, (item && item.category) || '', (item && item.title) || '');
+  }
+};
+
+window._notifDismissCard = function(id, archived) {
+  if (archived) {
+    _notifRemoveFromArchive(id);
+  } else {
+    _notifMarkDismissed(id);
+    _notifServerDismiss(id);
+  }
+  const containerId = (MODE === 'captain') ? 'cnotif-content' : 'pnotif-content';
+  const recentId    = (MODE === 'captain') ? 'cnotif-recent'  : 'pnotif-recent';
+  if (archived) _notifRenderArchive(recentId);
+  else          _notifRenderUnread(recentId);
+};
+
+window._notifClearArchiveUi = function() {
+  if (!confirm('Clear all archived notifications? This only affects this device.')) return;
+  _notifClearArchive();
+  const recentId = (MODE === 'captain') ? 'cnotif-recent' : 'pnotif-recent';
+  _notifRenderArchive(recentId);
+};
 
 window.openNotifSettings = function() { window.location.href = '/inbox.html'; };
 
