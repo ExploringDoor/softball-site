@@ -2578,20 +2578,30 @@ function renderCaptainSchedule() {
   if (!myGames.length) { el.innerHTML = '<div class="empty">No games scheduled.</div>'; return; }
   // v100: find the first non-final game (today or later) so we can
   // auto-scroll to it — matches index.html's schedule behavior so
-  // captains don't have to scroll past old weeks.
-  const upcomingIdx = myGames.findIndex(g => !g.done);
+  // captains don't have to scroll past old weeks. PPD games count as
+  // "non-final" for scroll purposes since they still need attention.
+  const upcomingIdx = myGames.findIndex(g => !g.done && !(g.ppd || g.rained_out));
   el.innerHTML = myGames.map((g, i) => {
     const oppId = g.away === MY_TEAM.id ? g.home : g.away;
     const ha = g.home === MY_TEAM.id ? 'vs' : '@';
-    const scoreText = g.done ? `${g.away_score}-${g.home_score}` : (g.time || 'TBD');
+    const isPpd = !!(g.ppd || g.rained_out);
+    const ppdResched = g.ppd_rescheduled_to || '';
+    const scoreText = isPpd
+      ? 'PPD'
+      : (g.done ? `${g.away_score}-${g.home_score}` : (g.time || 'TBD'));
     const anchorAttr = i === upcomingIdx ? ' id="capt-sched-upcoming"' : '';
+    const badge = isPpd
+      ? `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706">🌧 PPD${ppdResched ? ' · → ' + esc(ppdResched) : ''}</span>`
+      : (g.done
+          ? '<span class="badge badge-done">Final</span>'
+          : '<span class="badge badge-info">Scheduled</span>');
     return `<div class="game-card"${anchorAttr}>
       <div class="game-info">
         <div class="game-opp">Wk ${g.wk} · ${ha} ${esc(getTeamName(oppId))}</div>
         <div class="game-meta">${esc(g.date||'')} ${g.day?'· '+esc(g.day):''} ${g.time?'· '+esc(g.time):''} ${g.field?'· '+esc(g.field):''}</div>
       </div>
       <div class="score-display">${esc(scoreText)}</div>
-      <div>${g.done ? '<span class="badge badge-done">Final</span>' : '<span class="badge badge-info">Scheduled</span>'}</div>
+      <div>${badge}</div>
     </div>`;
   }).join('');
   if (upcomingIdx >= 0) {
@@ -2651,6 +2661,30 @@ function renderCaptainScores() {
     const hasConflict = g.score_conflict === true;
     const mySubAway = g[`score_submitted_${myRole}_away`] ?? '';
     const mySubHome = g[`score_submitted_${myRole}_home`] ?? '';
+    const isPpd = !!(g.ppd || g.rained_out);
+    const ppdResched = g.ppd_rescheduled_to || '';
+
+    // PPD short-circuit: don't show score entry for a postponed game.
+    // One button (Un-mark PPD) so the captain can reverse it if they
+    // marked it by mistake or the game ends up playing anyway.
+    if (isPpd) {
+      return `<div class="panel" id="capt-submit-panel-${g.id}" style="background:#fffbeb;border:1px solid #d97706">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-weight:700;font-size:15px">Wk ${g.wk||'?'} · ${esc(awayName)} @ ${esc(homeName)}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(g.date||'')} ${esc(g.day||'')} ${esc(g.time||'')} ${esc(g.field||'')}</div>
+          </div>
+          <span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706">🌧 PPD${ppdResched ? ' · → ' + esc(ppdResched) : ''}</span>
+        </div>
+        <div style="margin-top:10px;font-size:13px;color:#78350f">
+          This game is postponed. ${ppdResched ? 'Rescheduled to <strong>' + esc(ppdResched) + '</strong>.' : 'Reschedule TBD.'}
+          ${ppdResched ? '' : ' Admin will reschedule — no score entry until then.'}
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="captTogglePpd('${g.id}')">↺ Un-mark PPD</button>
+        </div>
+      </div>`;
+    }
 
     let otherInfo = '';
     if (otherHasSubmitted) {
@@ -2680,6 +2714,9 @@ function renderCaptainScores() {
         <button class="btn btn-outline btn-sm" style="font-weight:700;padding:12px 8px" onclick="captToggleBoxScore('${g.id}')">📋 Box Score</button>
         <button class="btn btn-outline btn-sm" style="font-weight:700;padding:12px 8px" onclick="captToggleUploadSheet('${g.id}')">📄 Upload Sheet</button>
         <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700;padding:12px 8px" onclick="window.open('scorer.html?game=${g.id}&team=${MY_TEAM.id}&from=profile','_blank')">⚡ Live Score</button>
+      </div>
+      <div style="margin:4px 0 6px">
+        <button class="btn btn-outline btn-sm" style="width:100%;font-weight:700;padding:10px;color:#92400e;border-color:#d97706" onclick="captTogglePpd('${g.id}')">🌧 Mark PPD (rainout / postponed)</button>
       </div>
       <div id="capt-boxscore-${g.id}" style="display:none;margin-top:10px;padding:12px;background:#f9fafb;border:1px solid var(--border);border-radius:8px">
         <div style="font-weight:700;font-size:14px;margin-bottom:8px">📋 Box Score — enter batting stats for your team</div>
@@ -2823,6 +2860,73 @@ window.captToggleScoreEntry = function(gameId) {
   const el = document.getElementById('capt-score-entry-' + gameId);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// captTogglePpd — captain can mark/unmark a game as PPD (rainout or
+// postponement). Mirrors admin.html togglePpd: writes both the new
+// `ppd` flag and the legacy `rained_out` field for backward compat,
+// plus optional `ppd_rescheduled_to` when we know the new date.
+// Fires a `rainouts` push so both teams see it.
+// ═══════════════════════════════════════════════════════════════════
+window.captTogglePpd = async function(gameId) {
+  const g = CAPT_ALL_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  // Only captains of the two teams involved can flip PPD on a game.
+  if (g.away !== MY_TEAM.id && g.home !== MY_TEAM.id) {
+    alert('Only captains of the two teams involved can mark this game PPD.');
+    return;
+  }
+  const awayName = getTeamName(g.away);
+  const homeName = getTeamName(g.home);
+  const currentlyPpd = !!(g.ppd || g.rained_out);
+  if (currentlyPpd) {
+    if (!confirm(`Un-mark PPD for "${awayName} @ ${homeName}"? The game will go back to scheduled.`)) return;
+    try {
+      await updateDoc(doc(db, 'games', gameId), {
+        ppd: false, rained_out: false,
+        ppd_rescheduled_to: null, ppd_at: null, ppd_by: null,
+      });
+      Object.assign(g, { ppd: false, rained_out: false, ppd_rescheduled_to: null });
+      renderCaptainScores();
+      renderCaptainSchedule && renderCaptainSchedule();
+    } catch(e) { alert('Failed: ' + e.message); }
+    return;
+  }
+  const rescheduleInput = prompt(
+    `Mark "${awayName} @ ${homeName}" as PPD.\n\n` +
+    `Optional: enter a reschedule date (e.g. "Apr 28" or "TBD").\n` +
+    `Leave blank if it'll be rescheduled later.`,
+    ''
+  );
+  if (rescheduleInput === null) return;
+  const rescheduledTo = (rescheduleInput || '').trim() || null;
+  try {
+    await updateDoc(doc(db, 'games', gameId), {
+      ppd: true,
+      rained_out: true,
+      ppd_rescheduled_to: rescheduledTo,
+      ppd_at: new Date().toISOString(),
+      ppd_by: MY_TEAM.id || 'captain',
+    });
+    Object.assign(g, { ppd: true, rained_out: true, ppd_rescheduled_to: rescheduledTo });
+    // Fire rainouts push to both teams — admin's flow does the same.
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+      body: JSON.stringify({
+        title: `🌧 PPD: ${awayName} @ ${homeName}`,
+        body: `Week ${g.wk||'?'} · ${g.date||''} ${g.time||''} @ ${g.field||''} is postponed.` +
+              (rescheduledTo ? ` Rescheduled to ${rescheduledTo}.` : ' Reschedule TBD.'),
+        category: 'rainouts',
+        teams: [g.away, g.home].filter(Boolean),
+        url: '/schedule.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    }).catch(e => console.warn('PPD push failed:', e));
+    renderCaptainScores();
+    renderCaptainSchedule && renderCaptainSchedule();
+  } catch(e) { alert('Failed: ' + e.message); }
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3027,6 +3131,9 @@ async function captRecalcStandingsFromAllGames() {
     doneGames.forEach(g => {
       // v96: skip games with null/missing scores so they don't get counted as 0-0 ties.
       if (g.away_score == null || g.home_score == null) return;
+      // v105: skip PPD games — they carry `done:true` historically via the
+      // legacy rainout flow but shouldn't contribute w/l/rs/ra to standings.
+      if (g.ppd || g.rained_out) return;
       const as = g.away_score, hs = g.home_score;
       if (stats[g.away]) {
         stats[g.away].rs += as; stats[g.away].ra += hs;

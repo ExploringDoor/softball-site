@@ -4059,6 +4059,7 @@ async function loadAllData() {
         away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
         home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
         as: g.away_score, hs: g.home_score, done: g.done||false,
+        ppd: !!(g.ppd || g.rained_out), ppdResched: g.ppd_rescheduled_to || '',
         live: (g.live||false) && (() => {
           if (!g.liveAt) return false; // no timestamp = old stale data, hide badge
           const ts = g.liveAt.toDate ? g.liveAt.toDate() : new Date(g.liveAt);
@@ -4170,6 +4171,7 @@ async function refreshVolatileData() {
       away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
       home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
       as: g.away_score, hs: g.home_score, done: g.done||false,
+      ppd: !!(g.ppd || g.rained_out), ppdResched: g.ppd_rescheduled_to || '',
       live: (g.live||false) && (() => {
         if (!g.liveAt) return false;
         const ts = g.liveAt.toDate ? g.liveAt.toDate() : new Date(g.liveAt);
@@ -5014,6 +5016,7 @@ function buildSchedule(){
     const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
     return `<div class="preview-card">
       <div class="preview-time">${g.day?g.day.slice(0,3).toUpperCase()+' ':''}${g.date||''}${g.date?' · ':''}${g.time||'TBD'}${g.field?` · ${g.field}`:''}</div>
+      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${g.ppdResched}`:' · Reschedule TBD'}</div>`:''}
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,atm?.short||g.away)}</div>
@@ -5199,7 +5202,9 @@ function buildSchedRows(t, tgames){
       ?`<span style="display:inline-block;padding:3px 9px;background:#002D72;color:#fff;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">HOME</span>`
       :`<span style="display:inline-block;padding:3px 9px;background:#fff;color:#666;border:1.5px solid #d1d5db;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">AWAY</span>`;
     const oppLabel=`${isH?'VS':'@'} ${oppTeam?.short||opp}`.toUpperCase();
-    const scoreCol=g.done
+    const scoreCol=g.ppd
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;line-height:1;color:#92400e">PPD</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#92400e;margin-top:2px">🌧 ${g.ppdResched||'TBD'}</div></div>`
+      :g.done
       ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${myS}–${oppS}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${won?'#22c55e':'#ef4444'};margin-top:2px">${won?'WIN':'LOSS'}</div></div>`
       :'';
     const rowClick=g.done?`onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}')"`:'' ;
@@ -6804,6 +6809,7 @@ function scheduleBlock(g, isNext){
     const timeField=datePart+timeStr+(g.field?` · ${g.field}`:'');
     return `<div class="preview-card${isNext?' next':''}">
       <div class="preview-time">${timeField}${g.live?' <span class="live-badge">🔴 LIVE</span>':''}</div>
+      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${g.ppdResched}`:' · Reschedule TBD'}</div>`:''}
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,aShort)}</div>

@@ -4715,8 +4715,12 @@ async function recalcStandingsFromGames() {
   const stats = {};
   TEAMS.forEach(t => { stats[t.id] = { w:0, l:0, t:0, rs:0, ra:0, results:[] }; });
 
-  // Sort games by week for streak calc
-  const doneGames = GAMES.filter(g => g.done).sort((a,b) => (a.wk||0) - (b.wk||0));
+  // Sort games by week for streak calc.
+  // PPD / rained-out games never count toward W/L/RS/RA even if some stale
+  // field combination leaves g.done truthy — the ppd flag wins.
+  const doneGames = GAMES
+    .filter(g => g.done && !g.ppd && !g.rained_out)
+    .sort((a,b) => (a.wk||0) - (b.wk||0));
   doneGames.forEach(g => {
     const as = g.away_score || 0, hs = g.home_score || 0;
     if (stats[g.away]) {
@@ -5294,7 +5298,7 @@ window.editGame = function(gameId) {
       <div class="form-row" style="gap:8px;flex-wrap:wrap">
         <button class="btn btn-success" onclick="saveEditGame('${gameId}')" style="flex:1 1 120px;min-height:44px">Save</button>
         <button class="btn btn-outline" onclick="closeScheduleEdit()" style="flex:1 1 100px;min-height:44px">Cancel</button>
-        <button class="btn" style="background:#64748b;color:#fff;flex:1 1 140px;min-height:44px" onclick="toggleRainout('${gameId}')" title="Mark this game as rained out and push a rainout alert to subscribers">🌧 ${g.rained_out ? 'Un-Rainout' : 'Mark Rainout'}</button>
+        <button class="btn" style="background:#64748b;color:#fff;flex:1 1 140px;min-height:44px" onclick="togglePpd('${gameId}')" title="Mark this game as PPD (rainout or postponement) and push a notification to subscribers">🌧 ${(g.ppd || g.rained_out) ? 'Un-Mark PPD' : 'Mark PPD'}</button>
       </div>
     </div>`;
   // Scroll the panel into view so the admin doesn't have to hunt for it
@@ -5310,38 +5314,74 @@ window.closeScheduleEdit = function() {
   panel.innerHTML = '';
 };
 
-// Mark a game as rained out (or un-mark it). Toggles g.rained_out and fires
-// a push under the `rainouts` category the first time it flips on.
-window.toggleRainout = async function(gameId) {
+// Mark a game as PPD — covers rainouts AND any postponement/reschedule.
+// Sets canonical `ppd:true` plus legacy `rained_out:true` for any reader
+// that hasn't been updated yet. Also captures an OPTIONAL reschedule
+// date/note so the public schedule can show "PPD · Rescheduled to Apr 28"
+// instead of just "PPD". Push goes out under the existing `rainouts`
+// category (subscribers already opted into it).
+window.togglePpd = async function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
   if (!g) return;
-  const nextVal = !g.rained_out;
-  if (nextVal && !confirm(`Mark "${getTeamName(g.away)} @ ${getTeamName(g.home)}" as RAINED OUT and push a notification to both teams?`)) return;
+  const currentlyPpd = !!(g.ppd || g.rained_out);
+  if (currentlyPpd) {
+    if (!confirm(`Un-mark PPD for "${getTeamName(g.away)} @ ${getTeamName(g.home)}"? The game will go back to its previous status.`)) return;
+    try {
+      await updateDoc(doc(db, 'games', gameId), {
+        ppd: false, rained_out: false,
+        ppd_rescheduled_to: null, ppd_at: null, ppd_by: null,
+      });
+      Object.assign(g, { ppd: false, rained_out: false, ppd_rescheduled_to: null });
+      toast('PPD cleared');
+      await logActivity('Schedule', `Cleared PPD: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk||'?'}`);
+      renderSchedule(); renderDashboard();
+      if (typeof window.closeScheduleEdit === 'function') window.closeScheduleEdit();
+    } catch(e) { toast('Failed: ' + e.message, 'error'); }
+    return;
+  }
+  // Marking NEW PPD — ask for optional reschedule date.
+  const rescheduleInput = prompt(
+    `Mark "${getTeamName(g.away)} @ ${getTeamName(g.home)}" as PPD.\n\n` +
+    `Optional: enter a reschedule date (e.g. "Apr 28" or "TBD").\n` +
+    `Leave blank if it'll be rescheduled later.`,
+    ''
+  );
+  if (rescheduleInput === null) return; // user canceled
+  const rescheduledTo = (rescheduleInput || '').trim() || null;
   try {
-    await updateDoc(doc(db, 'games', gameId), { rained_out: nextVal });
-    g.rained_out = nextVal;
-    toast(nextVal ? 'Marked rainout' : 'Rainout cleared');
-    await logActivity('Schedule', `${nextVal ? 'Marked' : 'Cleared'} rainout: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk||'?'}`);
-    if (nextVal) {
-      fetch('/api/send-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
-        body: JSON.stringify({
-          title: `🌧 Rainout: ${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
-          body: `Week ${g.wk||'?'} · ${g.date||''} ${g.time||''} @ ${g.field||''} is canceled due to weather.`,
-          category: 'rainouts',
-          teams: [g.away, g.home].filter(Boolean),
-          url: '/schedule.html',
-          excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
-        }),
-      }).catch(e => console.warn('Rainout push failed:', e));
-    }
+    await updateDoc(doc(db, 'games', gameId), {
+      ppd: true,
+      rained_out: true, // keep legacy field in sync so older readers still see it
+      ppd_rescheduled_to: rescheduledTo,
+      ppd_at: new Date().toISOString(),
+      ppd_by: 'admin',
+    });
+    Object.assign(g, {
+      ppd: true, rained_out: true,
+      ppd_rescheduled_to: rescheduledTo,
+    });
+    toast('Marked PPD');
+    await logActivity('Schedule', `Marked PPD: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk||'?'}${rescheduledTo ? ' (→ ' + rescheduledTo + ')' : ''}`);
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
+      body: JSON.stringify({
+        title: `🌧 PPD: ${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
+        body: `Week ${g.wk||'?'} · ${g.date||''} ${g.time||''} @ ${g.field||''} is postponed.` +
+              (rescheduledTo ? ` Rescheduled to ${rescheduledTo}.` : ' Reschedule TBD.'),
+        category: 'rainouts',
+        teams: [g.away, g.home].filter(Boolean),
+        url: '/schedule.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    }).catch(e => console.warn('PPD push failed:', e));
     renderSchedule();
     renderDashboard();
-    // Close the edit panel so the status change is obvious on the list.
     if (typeof window.closeScheduleEdit === 'function') window.closeScheduleEdit();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
 };
+// Backward-compat alias — a few older handlers might still call toggleRainout.
+window.toggleRainout = window.togglePpd;
 
 // Bulk rainout — mark every game on a single date as rained out. Used when
 // the weather kills the whole night. Opens an inline panel at the top of
@@ -5406,10 +5446,16 @@ window.confirmRainOutDay = async function() {
   if (!confirm(`Rain out ALL ${affected.length} game${affected.length===1?'':'s'} on ${human}?\n\nEach game will be marked rained-out and push a notification to both teams' subscribers. This cannot be undone in bulk — you'd need to un-rainout games individually.`)) return;
 
   let ok = 0, fail = 0;
+  const nowIso = new Date().toISOString();
   for (const g of affected) {
     try {
-      await updateDoc(doc(db, 'games', g.id), { rained_out: true });
-      g.rained_out = true;
+      // Also set ppd:true (canonical) alongside legacy rained_out:true so
+      // new renderers can consume either flag.
+      await updateDoc(doc(db, 'games', g.id), {
+        ppd: true, rained_out: true,
+        ppd_at: nowIso, ppd_by: 'admin', ppd_rescheduled_to: null,
+      });
+      Object.assign(g, { ppd: true, rained_out: true });
       // Fire push — fire-and-forget since we'd rather finish the loop than
       // abort on a single push failure. /api/send-notification internally
       // prunes dead tokens.
@@ -5417,14 +5463,14 @@ window.confirmRainOutDay = async function() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_ADMIN_SECRET },
         body: JSON.stringify({
-          title: `🌧 Rainout: ${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
-          body: `Week ${g.wk||'?'} · ${g.date||''} ${g.time||''} @ ${g.field||''} is canceled due to weather.`,
+          title: `🌧 PPD: ${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
+          body: `Week ${g.wk||'?'} · ${g.date||''} ${g.time||''} @ ${g.field||''} is postponed. Reschedule TBD.`,
           category: 'rainouts',
           teams: [g.away, g.home].filter(Boolean),
           url: '/schedule.html',
           excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
         }),
-      }).catch(e => console.warn('Rainout push failed for', g.id, e));
+      }).catch(e => console.warn('PPD push failed for', g.id, e));
       ok++;
     } catch(e) {
       console.warn('Rainout failed for', g.id, e);
