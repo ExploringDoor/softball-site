@@ -3043,6 +3043,28 @@ async function captRenderAvailSummary() {
 }
 
 // Captain edit — shows all players × upcoming games with yes/maybe/no buttons per pair
+// Local cache of availability statuses keyed by `${playerId}_${gameId}`.
+// Lets captSetPlayerAvail / captClearPlayerAvail do a targeted DOM update
+// (just that one cell) instead of nuking el.innerHTML — which was jumping
+// scroll to the top on every click.
+const _captAvailMap = {};
+
+function _captAvailCellHtml(gameId, playerId, status) {
+  const btnStyle = (active, color, bg) => `padding:5px 10px;border-radius:6px;border:2px solid ${active?color:'var(--border)'};background:${active?bg:'transparent'};color:${active?color:'var(--muted)'};font-weight:700;font-size:11px;cursor:pointer;transition:all .15s`;
+  return `
+    <button onclick="captSetPlayerAvail('${gameId}','${playerId}','yes')" style="${btnStyle(status==='yes','#16a34a','rgba(34,197,94,.12)')}">✓</button>
+    <button onclick="captSetPlayerAvail('${gameId}','${playerId}','maybe')" style="${btnStyle(status==='maybe','#f59e0b','rgba(245,158,11,.12)')}">?</button>
+    <button onclick="captSetPlayerAvail('${gameId}','${playerId}','no')" style="${btnStyle(status==='no','#dc2626','rgba(200,16,46,.1)')}">✕</button>
+    ${status ? `<button onclick="captClearPlayerAvail('${gameId}','${playerId}')" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:10px;cursor:pointer" title="Clear">×</button>` : ''}
+  `;
+}
+
+function _captAvailUpdateCell(gameId, playerId, status) {
+  _captAvailMap[playerId + '_' + gameId] = status || '';
+  const cell = document.getElementById(`cae-cell-${gameId}-${playerId}`);
+  if (cell) cell.innerHTML = _captAvailCellHtml(gameId, playerId, status);
+}
+
 async function captRenderAvailEdit() {
   const el = document.getElementById('capt-avail-body');
   if (!el) return;
@@ -3052,30 +3074,25 @@ async function captRenderAvailEdit() {
   try {
     const snap = await getDocs(query(collection(db, 'availability'),
       where('team_id', '==', MY_TEAM.id)));
-    const rsvpMap = {};
+    // Seed local cache from the fresh snapshot.
+    for (const k of Object.keys(_captAvailMap)) delete _captAvailMap[k];
     snap.docs.forEach(d => {
       const r = d.data();
-      rsvpMap[r.player_id + '_' + r.game_id] = r.status;
+      _captAvailMap[r.player_id + '_' + r.game_id] = r.status;
     });
     const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false)
       .sort((a,b) => (a.num||999) - (b.num||999));
     if (!roster.length) { el.innerHTML = '<div class="empty">No players on roster.</div>'; return; }
-    const btnStyle = (active, color, bg) => `padding:5px 10px;border-radius:6px;border:2px solid ${active?color:'var(--border)'};background:${active?bg:'transparent'};color:${active?color:'var(--muted)'};font-weight:700;font-size:11px;cursor:pointer;transition:all .15s`;
     const rows = roster.map(p => {
       const gameButtons = upcoming.map(g => {
-        const status = rsvpMap[p.id + '_' + g.id] || '';
+        const status = _captAvailMap[p.id + '_' + g.id] || '';
         const oppId = g.away === MY_TEAM.id ? g.home : g.away;
         const oppTeam = ALL_TEAMS.find(t => t.id === oppId);
         const oppShort = oppTeam?.short || (oppId||'').slice(0,6).toUpperCase() || 'TBD';
         const ha = g.home === MY_TEAM.id ? 'vs' : '@';
         return `<div style="background:#f8f9fb;border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-width:140px">
           <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">Wk ${g.wk} ${ha} ${esc(oppShort)}</div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap">
-            <button onclick="captSetPlayerAvail('${g.id}','${p.id}','yes')" style="${btnStyle(status==='yes','#16a34a','rgba(34,197,94,.12)')}">✓</button>
-            <button onclick="captSetPlayerAvail('${g.id}','${p.id}','maybe')" style="${btnStyle(status==='maybe','#f59e0b','rgba(245,158,11,.12)')}">?</button>
-            <button onclick="captSetPlayerAvail('${g.id}','${p.id}','no')" style="${btnStyle(status==='no','#dc2626','rgba(200,16,46,.1)')}">✕</button>
-            ${status ? `<button onclick="captClearPlayerAvail('${g.id}','${p.id}')" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:10px;cursor:pointer" title="Clear">×</button>` : ''}
-          </div>
+          <div id="cae-cell-${g.id}-${p.id}" style="display:flex;gap:5px;flex-wrap:wrap">${_captAvailCellHtml(g.id, p.id, status)}</div>
         </div>`;
       }).join('');
       return `<div class="panel" style="margin-bottom:10px">
@@ -3094,6 +3111,10 @@ async function captRenderAvailEdit() {
 window.captSetPlayerAvail = async function(gameId, playerId, status) {
   const player = CAPT_ALL_PLAYERS.find(p => p.id === playerId);
   const docId = MY_TEAM.id + '_' + gameId + '_' + playerId;
+  // Optimistic UI: update the cell immediately so the tap feels instant
+  // and scroll stays put. If Firestore rejects, we roll back below.
+  const prev = _captAvailMap[playerId + '_' + gameId] || '';
+  _captAvailUpdateCell(gameId, playerId, status);
   try {
     await setDoc(doc(db, 'availability', docId), {
       game_id: gameId, player_id: playerId,
@@ -3102,17 +3123,23 @@ window.captSetPlayerAvail = async function(gameId, playerId, status) {
       status, updated_at: new Date().toISOString(),
     });
     toast('Saved ✓', 'success');
-    await captRenderAvailEdit();
-  } catch(e) { toast('Could not save: ' + e.message, 'error'); }
+  } catch(e) {
+    _captAvailUpdateCell(gameId, playerId, prev);
+    toast('Could not save: ' + e.message, 'error');
+  }
 };
 
 window.captClearPlayerAvail = async function(gameId, playerId) {
   const docId = MY_TEAM.id + '_' + gameId + '_' + playerId;
+  const prev = _captAvailMap[playerId + '_' + gameId] || '';
+  _captAvailUpdateCell(gameId, playerId, '');
   try {
     await deleteDoc(doc(db, 'availability', docId));
     toast('Cleared', 'success');
-    await captRenderAvailEdit();
-  } catch(e) { toast('Could not clear: ' + e.message, 'error'); }
+  } catch(e) {
+    _captAvailUpdateCell(gameId, playerId, prev);
+    toast('Could not clear: ' + e.message, 'error');
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════

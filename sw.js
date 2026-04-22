@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v86-standings-rs-ra-no-avg-desktop-nav-cleanup';
+const VERSION = 'dvsl-v87-attendance-edit-no-scroll-jump';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
