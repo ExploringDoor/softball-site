@@ -3935,9 +3935,12 @@ async function loadAllData() {
         pl.sac = b.sac; pl.sf = b.sf; pl.roe = b.roe; pl.fc = b.fc;
         pl.h   = b.s + b.d + b.tri + b.hr;
         pl.avg = pl.ab > 0 ? pl.h / pl.ab : 0;
-        const obp = (pl.ab + pl.bb) > 0 ? (pl.h + pl.bb) / (pl.ab + pl.bb) : 0;
+        // v96: proper OBP = (H + BB) / (AB + BB + SF). Slow-pitch — no HBP in league stats.
+        // Previously omitted SF entirely which inflated OBP for players with sac flies.
+        const obpDen = pl.ab + pl.bb + (pl.sf || 0);
+        const obp = obpDen > 0 ? (pl.h + pl.bb) / obpDen : 0;
         const slg = pl.ab > 0 ? (b.s + 2*b.d + 3*b.tri + 4*b.hr) / pl.ab : 0;
-        pl.slg = slg; pl.ops = obp + slg;
+        pl.obp = obp; pl.slg = slg; pl.ops = obp + slg;
       });
 
       // Apply game log to PLAYERS
@@ -4250,11 +4253,13 @@ async function refreshVolatileData() {
         const tAB = b.ab;
         pl.ab = tAB; pl.h = tH; pl.hr = b.hr; pl.rbi = b.rbi;
         pl.r = b.r; pl.bb = b.bb; pl.d = b.d; pl.t = b.tri;
-        pl.gp = b.gp;
+        pl.gp = b.gp; pl.sf = b.sf || 0;
         pl.avg = tAB > 0 ? tH / tAB : 0;
-        const obp = (tAB + b.bb) > 0 ? (tH + b.bb) / (tAB + b.bb) : 0;
+        // v96: proper OBP = (H + BB) / (AB + BB + SF).
+        const obpDen = tAB + b.bb + (b.sf || 0);
+        const obp = obpDen > 0 ? (tH + b.bb) / obpDen : 0;
         const slg = tAB > 0 ? (b.s + 2*b.d + 3*b.tri + 4*b.hr) / tAB : 0;
-        pl.slg = slg; pl.ops = obp + slg;
+        pl.obp = obp; pl.slg = slg; pl.ops = obp + slg;
       });
       // Overlay pitching stats onto PLAYERS
       PLAYERS.forEach(pl => {
