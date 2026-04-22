@@ -4593,7 +4593,7 @@ function renderStandings() {
   if (!TEAMS.length) { el.innerHTML = '<div class="empty">No teams found</div>'; return; }
   const sorted = [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th title="Points: 3 per win + 2 per tie + 1 per loss — matches the public standings page">PTS</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Player Password</th><th>Actions</th></tr></thead>
+    <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th title="Points: 3 per win + 2 per tie + 1 per loss — matches the public standings page">PTS</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th title="Legacy team-level player password (kept for backward compat — prefer per-player passwords on Roster tab)">Team PW</th><th title="Captain password for this team (used on profile.html captain flow)">Captain PW</th><th>Actions</th></tr></thead>
     <tbody>${sorted.map((t, i) => `<tr id="standing-row-${t.id}">
       <td>${i+1}</td>
       <td><strong>${esc(t.name)}</strong></td>
@@ -4606,7 +4606,8 @@ function renderStandings() {
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.rs||0}" id="st-rs-${t.id}" min="0"></td>
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.ra||0}" id="st-ra-${t.id}" min="0"></td>
       <td>${t.streak||'-'}</td>
-      <td><input type="text" class="form-input" style="width:110px;padding:5px" placeholder="set password" value="${esc(t.player_password||'')}" id="st-pw-${t.id}"></td>
+      <td><input type="text" class="form-input" style="width:110px;padding:5px" placeholder="(legacy)" value="${esc(t.player_password||'')}" id="st-pw-${t.id}"></td>
+      <td><input type="text" class="form-input" style="width:120px;padding:5px" placeholder="set captain pw" value="${esc(t.captain_password||'')}" id="st-cpw-${t.id}"></td>
       <td><button class="btn btn-outline btn-sm" onclick="saveOneStanding('${t.id}')">Save</button></td>
     </tr>`).join('')}</tbody>
   </table></div>`;
@@ -4620,12 +4621,14 @@ window.saveOneStanding = async function(teamId) {
   const ra = parseInt(document.getElementById('st-ra-' + teamId).value) || 0;
   const pct = (w + l + ties) > 0 ? parseFloat(((w + ties * 0.5) / (w + l + ties)).toFixed(3)) : 0;
   const pw = (document.getElementById('st-pw-' + teamId)?.value || '').trim();
+  const cpw = (document.getElementById('st-cpw-' + teamId)?.value || '').trim();
   try {
     const update = { w, l, t: ties, pct, rs, ra };
     if (pw !== undefined) update.player_password = pw;
+    if (cpw !== undefined) update.captain_password = cpw;
     await updateDoc(doc(db, 'teams', teamId), update);
     const tm = TEAMS.find(x => x.id === teamId);
-    if (tm) { tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra; tm.player_password = pw; }
+    if (tm) { tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra; tm.player_password = pw; tm.captain_password = cpw; }
     // Refresh the row's PTS cell (3·W + 2·T + 1·L, matching front-end).
     const ptsCell = document.getElementById('st-pts-' + teamId);
     if (ptsCell) ptsCell.textContent = (w*3 + ties*2 + l*1);
@@ -5497,9 +5500,15 @@ window.loadRoster = function() {
     el.innerHTML = `<div class="empty">No players found for this team</div>`;
     return;
   }
-  el.innerHTML = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">${teamPlayers.length} player(s)</div>
+  el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+      <div style="font-size:13px;color:var(--muted)">${teamPlayers.length} player(s)</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="genAllPlayerPasswords('${teamId}')" title="Assign a random 6-character password to every player on this team that doesn't already have one">🔑 Generate Missing PWs</button>
+        <button class="btn btn-outline btn-sm" onclick="copyPlayerPasswordList('${teamId}')" title="Copy a text list of every player's name + password for handing out">📋 Copy PW List</button>
+      </div>
+    </div>
     <div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Added</th><th>Actions</th></tr></thead>
+    <thead><tr><th>#</th><th>Name</th><th>Position</th><th>Password</th><th>Added</th><th>Actions</th></tr></thead>
     <tbody>${teamPlayers.map(p => {
       let added = '—';
       if (p.added_at) {
@@ -5510,13 +5519,14 @@ window.loadRoster = function() {
       }
       return `<tr id="player-row-${p.id}">
       <td>${p.num||'-'}</td><td><strong>${esc(p.name)}</strong></td><td>${esc(p.pos||'-')}</td>
+      <td><input type="text" class="form-input" style="width:110px;padding:5px" placeholder="set password" value="${esc(p.password||'')}" id="pl-pw-${p.id}" onchange="savePlayerPwInline('${p.id}')"></td>
       <td style="font-size:12px;color:var(--muted2);white-space:nowrap">${added}</td>
       <td class="actions">
         <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
         <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>
       </td>
     </tr>
-    <tr id="player-edit-${p.id}" style="display:none"><td colspan="5" id="player-edit-cell-${p.id}"></td></tr>`;
+    <tr id="player-edit-${p.id}" style="display:none"><td colspan="6" id="player-edit-cell-${p.id}"></td></tr>`;
     }).join('')}
     </tbody></table></div>`;
 };
@@ -5533,6 +5543,7 @@ window.openAddPlayer = function() {
       <div class="form-col"><label class="form-label">Position</label><select class="form-input" id="ap-pos">${posOptionsHtmlAdmin('')}</select></div>
       <div class="form-col"><label class="form-label">Email</label><input type="email" class="form-input" id="ap-email" placeholder="player@email.com"></div>
       <div class="form-col"><label class="form-label">Phone</label><input type="tel" class="form-input" id="ap-phone" placeholder="555-555-5555"></div>
+      <div class="form-col"><label class="form-label">Password</label><input type="text" class="form-input" id="ap-password" placeholder="(optional)"></div>
       <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
         <button class="btn btn-success btn-sm" onclick="saveNewPlayer()">Add</button>
         <button class="btn btn-outline btn-sm" onclick="document.getElementById('add-player-form').style.display='none'">Cancel</button>
@@ -5550,6 +5561,7 @@ window.saveNewPlayer = async function() {
     pos: document.getElementById('ap-pos').value.trim(),
     email: document.getElementById('ap-email').value.trim(),
     phone: document.getElementById('ap-phone').value.trim(),
+    password: (document.getElementById('ap-password')?.value || '').trim(),
     team: teamId,
     added_at: Timestamp.now()
   };
@@ -5580,6 +5592,7 @@ window.editPlayer = function(playerId) {
         <div class="form-col"><label class="form-label">Position</label><select class="form-input" id="ep-pos-${playerId}">${posOptionsHtmlAdmin(p.pos||'')}</select></div>
         <div class="form-col"><label class="form-label">Email</label><input type="email" class="form-input" id="ep-email-${playerId}" value="${esc(p.email||'')}"></div>
         <div class="form-col"><label class="form-label">Phone</label><input type="tel" class="form-input" id="ep-phone-${playerId}" value="${esc(p.phone||'')}"></div>
+        <div class="form-col"><label class="form-label">Password</label><input type="text" class="form-input" id="ep-password-${playerId}" value="${esc(p.password||'')}" placeholder="(optional)"></div>
         <div style="display:flex;gap:8px;align-items:flex-end;padding-bottom:2px">
           <button class="btn btn-success btn-sm" onclick="saveEditPlayer('${playerId}')">Save</button>
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('player-edit-${playerId}').style.display='none'">Cancel</button>
@@ -5594,7 +5607,8 @@ window.saveEditPlayer = async function(playerId) {
     num: parseInt(document.getElementById('ep-num-' + playerId).value) || 0,
     pos: document.getElementById('ep-pos-' + playerId).value.trim(),
     email: document.getElementById('ep-email-' + playerId).value.trim(),
-    phone: document.getElementById('ep-phone-' + playerId).value.trim()
+    phone: document.getElementById('ep-phone-' + playerId).value.trim(),
+    password: (document.getElementById('ep-password-' + playerId)?.value || '').trim()
   };
   if (!data.name) { toast('Enter a name', 'error'); return; }
   try {
@@ -5605,6 +5619,60 @@ window.saveEditPlayer = async function(playerId) {
     await logActivity('Roster', `Edited ${data.name}`);
     window.loadRoster();
   } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.savePlayerPwInline = async function(playerId) {
+  const input = document.getElementById('pl-pw-' + playerId);
+  if (!input) return;
+  const pw = (input.value || '').trim();
+  try {
+    await updateDoc(doc(db, 'players', playerId), { password: pw });
+    const p = PLAYERS.find(x => x.id === playerId);
+    if (p) p.password = pw;
+    toast('Password saved');
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+function _randomPlayerPw(len) {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789'; // no 0/o/1/l/i confusion
+  let s = '';
+  for (let i = 0; i < (len || 6); i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+  return s;
+}
+
+window.genAllPlayerPasswords = async function(teamId) {
+  const teamPlayers = PLAYERS.filter(p => p.team === teamId);
+  const missing = teamPlayers.filter(p => !(p.password || '').trim());
+  if (!missing.length) { toast('Every player on this team already has a password.'); return; }
+  if (!confirm(`Assign a random 6-character password to ${missing.length} player(s) without one?`)) return;
+  try {
+    for (const p of missing) {
+      const pw = _randomPlayerPw(6);
+      await updateDoc(doc(db, 'players', p.id), { password: pw });
+      p.password = pw;
+    }
+    toast(`Generated ${missing.length} password(s)`);
+    await logActivity('Roster', `Generated ${missing.length} player passwords for ${getTeamFull(teamId)}`);
+    window.loadRoster();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+window.copyPlayerPasswordList = async function(teamId) {
+  const teamPlayers = PLAYERS.filter(p => p.team === teamId).sort((a,b) => (a.num||99) - (b.num||99));
+  if (!teamPlayers.length) { toast('No players on this team', 'error'); return; }
+  const lines = teamPlayers.map(p => {
+    const num = p.num ? `#${p.num} ` : '';
+    const pw = (p.password || '').trim() || '(no password set)';
+    return `${num}${p.name} — ${pw}`;
+  });
+  const text = `${getTeamFull(teamId)} — player passwords\n` + lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Password list copied to clipboard');
+  } catch(e) {
+    // Fallback prompt so Adam can still copy it
+    window.prompt('Copy this list:', text);
+  }
 };
 
 window.removePlayer = async function(playerId) {

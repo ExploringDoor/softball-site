@@ -701,6 +701,37 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: CAPTAIN PASSWORD                                           -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-captain-pw">
+  <div class="pw-wrap">
+    <img id="cpw-logo" class="pw-logo" src="" onerror="this.style.display='none'">
+    <div class="pw-team-name" id="cpw-team-name"></div>
+    <div class="pw-sub">Enter your captain password to continue.</div>
+    <div class="pw-error" id="cpw-error">Incorrect password. Try again.</div>
+    <input type="password" class="pw-input" id="cpw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')window.checkCaptainPassword()">
+    <button class="pw-btn" onclick="window.checkCaptainPassword()">Enter</button>
+    <button class="pw-back" onclick="window.backToCaptainPicker()">← Choose a different team</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: PER-PLAYER PASSWORD                                         -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="player-pw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:12px;max-width:360px;width:100%;padding:24px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.2)">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;color:var(--navy);margin-bottom:4px" id="ppw-name">Player</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:18px">Enter your player password to continue.</div>
+    <div id="ppw-error" style="display:none;background:var(--red-bg);color:var(--red);font-size:13px;padding:10px;border-radius:8px;margin-bottom:10px">Incorrect password. Try again.</div>
+    <input type="password" class="pw-input" id="ppw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')window.checkPlayerPersonalPassword()">
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-outline btn-sm" style="flex:1" onclick="window.cancelPlayerPersonalPassword()">Cancel</button>
+      <button class="btn btn-primary btn-sm" style="flex:1" onclick="window.checkPlayerPersonalPassword()">Enter</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
 <!-- PLAYER APP                                                         -->
 <!-- ══════════════════════════════════════════════════════════════════ -->
 <div class="screen" id="player-app">
@@ -1076,7 +1107,7 @@ function toast(msg, type = 'success') {
 window.toast = toast;
 
 function showScreen(id) {
-  const ids = ['screen-loading','screen-chooser','screen-player-picker','screen-player-pw','screen-captain-picker','player-app','captain-app'];
+  const ids = ['screen-loading','screen-chooser','screen-player-picker','screen-player-pw','screen-captain-picker','screen-captain-pw','player-app','captain-app'];
   ids.forEach(i => {
     const el = document.getElementById(i);
     if (el) el.classList.toggle('active', i === id);
@@ -1102,10 +1133,17 @@ async function init() {
     if (captTeamId) {
       const t = ALL_TEAMS.find(x => x.id === captTeamId);
       if (t) {
-        MY_TEAM = t; MODE = 'captain';
-        captainData = { team_id: t.id, team_name: t.name, email: t.name };
-        await enterCaptainApp();
-        return;
+        const cStored = (t.captain_password || '').trim();
+        const cSaved = (localStorage.getItem('dvsl-captain-pw-' + captTeamId) || '').trim();
+        if (!cStored || cSaved.toLowerCase() === cStored.toLowerCase()) {
+          MY_TEAM = t; MODE = 'captain';
+          captainData = { team_id: t.id, team_name: t.name, email: t.name };
+          await enterCaptainApp();
+          return;
+        } else {
+          // Password rotated — clear stale and fall through to prompt again
+          try { localStorage.removeItem('dvsl-captain-pw-' + captTeamId); } catch(_) {}
+        }
       }
     }
 
@@ -1256,19 +1294,86 @@ async function loadPlayerData() {
       sel.appendChild(o);
     });
     const saved = localStorage.getItem('player_portal_' + MY_TEAM.id);
-    if (saved) sel.value = saved;
+    if (saved) {
+      // Respect per-player password — only auto-pick if authed (or no password set)
+      const sp = MY_PLAYERS.find(x => x.id === saved);
+      const sStored = (sp?.password || '').trim();
+      const sSaved = (localStorage.getItem('dvsl-player-pw-' + saved) || '').trim();
+      if (!sStored || sSaved.toLowerCase() === sStored.toLowerCase()) {
+        sel.value = saved;
+      } else {
+        // Stale auth — clear selection so the user re-picks and enters pw
+        localStorage.removeItem('player_portal_' + MY_TEAM.id);
+      }
+    }
   } catch(e) {
     document.getElementById('pavail-content').innerHTML = '<div class="empty">Failed to load: ' + esc(e.message) + '</div>';
   }
 }
 
 window.onPlayerNameChange = function() {
-  const pid = document.getElementById('player-name-select').value;
-  if (pid) localStorage.setItem('player_portal_' + MY_TEAM.id, pid);
+  const sel = document.getElementById('player-name-select');
+  const pid = sel.value;
+  if (!pid) {
+    localStorage.removeItem('player_portal_' + MY_TEAM.id);
+    renderPlayerAvail();
+    return;
+  }
+  // Per-player password gate
+  const p = MY_PLAYERS.find(x => x.id === pid);
+  const stored = (p?.password || '').trim();
+  if (stored) {
+    const saved = (localStorage.getItem('dvsl-player-pw-' + pid) || '').trim();
+    if (saved.toLowerCase() !== stored.toLowerCase()) {
+      // Show password modal; stash pending pid
+      _pendingPlayerPid = pid;
+      _pendingPlayerPrev = localStorage.getItem('player_portal_' + MY_TEAM.id) || '';
+      document.getElementById('ppw-name').textContent = p.name + (p.num ? ' (#' + p.num + ')' : '');
+      document.getElementById('ppw-error').style.display = 'none';
+      document.getElementById('ppw-input').value = '';
+      const modal = document.getElementById('player-pw-modal');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('ppw-input').focus(), 100);
+      return;
+    }
+  }
+  localStorage.setItem('player_portal_' + MY_TEAM.id, pid);
   renderPlayerAvail();
   // If chat visible, re-activate
   const chatPanel = document.getElementById('ptab-chat');
   if (chatPanel && chatPanel.style.display !== 'none') activatePlayerChat();
+};
+
+let _pendingPlayerPid = '';
+let _pendingPlayerPrev = '';
+
+window.checkPlayerPersonalPassword = function() {
+  const entered = (document.getElementById('ppw-input').value || '').trim();
+  const p = MY_PLAYERS.find(x => x.id === _pendingPlayerPid);
+  const stored = (p?.password || '').trim();
+  if (stored && entered.toLowerCase() === stored.toLowerCase()) {
+    try {
+      localStorage.setItem('dvsl-player-pw-' + _pendingPlayerPid, entered);
+      localStorage.setItem('player_portal_' + MY_TEAM.id, _pendingPlayerPid);
+    } catch(_) {}
+    document.getElementById('player-pw-modal').style.display = 'none';
+    _pendingPlayerPid = ''; _pendingPlayerPrev = '';
+    renderPlayerAvail();
+    const chatPanel = document.getElementById('ptab-chat');
+    if (chatPanel && chatPanel.style.display !== 'none') activatePlayerChat();
+  } else {
+    document.getElementById('ppw-error').style.display = 'block';
+    document.getElementById('ppw-input').value = '';
+    document.getElementById('ppw-input').focus();
+  }
+};
+
+window.cancelPlayerPersonalPassword = function() {
+  document.getElementById('player-pw-modal').style.display = 'none';
+  // Revert dropdown to previous selection (or empty)
+  const sel = document.getElementById('player-name-select');
+  if (sel) sel.value = _pendingPlayerPrev || '';
+  _pendingPlayerPid = ''; _pendingPlayerPrev = '';
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1975,15 +2080,55 @@ window.pickCaptainTeam = function(teamId) {
   if (!team) return;
   MY_TEAM = team;
   captainData = { team_id: team.id, team_name: team.name, email: team.name };
+  const stored = (team.captain_password || '').trim();
+  // Previously saved pw on this device still matches? Skip prompt.
+  const savedPw = (localStorage.getItem('dvsl-captain-pw-' + team.id) || '').trim();
+  if (stored && savedPw.toLowerCase() !== stored.toLowerCase()) {
+    // Needs to enter captain password.
+    document.getElementById('cpw-logo').src = 'logos/' + teamId + '.png';
+    document.getElementById('cpw-team-name').textContent = team.name;
+    document.getElementById('cpw-error').style.display = 'none';
+    document.getElementById('cpw-input').value = '';
+    showScreen('screen-captain-pw');
+    setTimeout(() => document.getElementById('cpw-input').focus(), 100);
+    return;
+  }
   try { localStorage.setItem('dvsl-captain-team', team.id); } catch(_) {}
   MODE = 'captain';
   enterCaptainApp();
 };
 
+window.checkCaptainPassword = function() {
+  const entered = (document.getElementById('cpw-input').value || '').trim();
+  const stored = (MY_TEAM?.captain_password || '').trim();
+  if (stored && entered.toLowerCase() === stored.toLowerCase()) {
+    try {
+      localStorage.setItem('dvsl-captain-team', MY_TEAM.id);
+      localStorage.setItem('dvsl-captain-pw-' + MY_TEAM.id, entered);
+    } catch(_) {}
+    MODE = 'captain';
+    enterCaptainApp();
+  } else {
+    document.getElementById('cpw-error').style.display = 'block';
+    document.getElementById('cpw-input').value = '';
+    document.getElementById('cpw-input').focus();
+  }
+};
+
+window.backToCaptainPicker = function() {
+  try {
+    if (MY_TEAM?.id) localStorage.removeItem('dvsl-captain-pw-' + MY_TEAM.id);
+  } catch(_) {}
+  showScreen('screen-captain-picker');
+};
+
 window.signOutCaptain = function() {
   if (_unsubTeamChat) { _unsubTeamChat(); _unsubTeamChat = null; }
   if (_unsubCaptChat) { _unsubCaptChat(); _unsubCaptChat = null; }
-  try { localStorage.removeItem('dvsl-captain-team'); } catch(_) {}
+  try {
+    if (MY_TEAM?.id) localStorage.removeItem('dvsl-captain-pw-' + MY_TEAM.id);
+    localStorage.removeItem('dvsl-captain-team');
+  } catch(_) {}
   MY_TEAM = null; captainData = null; MODE = null;
   buildTeamGrids();
   showScreen('screen-chooser');
@@ -3065,6 +3210,10 @@ function _captAvailUpdateCell(gameId, playerId, status) {
   if (cell) cell.innerHTML = _captAvailCellHtml(gameId, playerId, status);
 }
 
+// Which game is selected in the Captain Edit dropdown.
+// '' (empty) = "All games" (original grid view).
+let _captAvailGameFilter = '';
+
 async function captRenderAvailEdit() {
   const el = document.getElementById('capt-avail-body');
   if (!el) return;
@@ -3083,30 +3232,85 @@ async function captRenderAvailEdit() {
     const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false)
       .sort((a,b) => (a.num||999) - (b.num||999));
     if (!roster.length) { el.innerHTML = '<div class="empty">No players on roster.</div>'; return; }
-    const rows = roster.map(p => {
-      const gameButtons = upcoming.map(g => {
-        const status = _captAvailMap[p.id + '_' + g.id] || '';
+
+    // If the currently-selected game is no longer in the upcoming list, reset to All.
+    if (_captAvailGameFilter && !upcoming.find(g => g.id === _captAvailGameFilter)) {
+      _captAvailGameFilter = '';
+    }
+
+    // Build the game dropdown
+    const gameOptions = ['<option value="">All upcoming games</option>'].concat(
+      upcoming.map(g => {
         const oppId = g.away === MY_TEAM.id ? g.home : g.away;
         const oppTeam = ALL_TEAMS.find(t => t.id === oppId);
         const oppShort = oppTeam?.short || (oppId||'').slice(0,6).toUpperCase() || 'TBD';
         const ha = g.home === MY_TEAM.id ? 'vs' : '@';
-        return `<div style="background:#f8f9fb;border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-width:140px">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">Wk ${g.wk} ${ha} ${esc(oppShort)}</div>
+        const label = `Wk ${g.wk} · ${ha} ${oppShort}` + (g.date ? ` · ${g.date}` : '');
+        const sel = g.id === _captAvailGameFilter ? ' selected' : '';
+        return `<option value="${esc(g.id)}"${sel}>${esc(label)}</option>`;
+      })
+    ).join('');
+
+    const header = `
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;padding:10px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;border-left:3px solid var(--navy)">
+        ✏️ <strong>Captain view</strong> — edit any player's availability on their behalf. Changes save immediately.
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <label style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">Game</label>
+        <select id="capt-avail-game-filter" onchange="window.captAvailPickGame(this.value)"
+          style="flex:1;min-width:220px;padding:10px 12px;font-size:14px;border:1px solid var(--border);border-radius:8px;background:#fff">
+          ${gameOptions}
+        </select>
+      </div>`;
+
+    let body = '';
+    if (_captAvailGameFilter) {
+      // SINGLE-GAME MODE: one row per player with yes/maybe/no buttons for just that game.
+      const g = upcoming.find(x => x.id === _captAvailGameFilter);
+      const oppId = g.away === MY_TEAM.id ? g.home : g.away;
+      const oppTeam = ALL_TEAMS.find(t => t.id === oppId);
+      const oppShort = oppTeam?.short || (oppId||'').slice(0,6).toUpperCase() || 'TBD';
+      const ha = g.home === MY_TEAM.id ? 'vs' : '@';
+      const subtitle = `Wk ${g.wk} · ${ha} ${esc(oppShort)}` + (g.date ? ` · ${esc(g.date)}` : '') + (g.time ? ` · ${esc(g.time)}` : '') + (g.field ? ` · ${esc(g.field)}` : '');
+      const rows = roster.map(p => {
+        const status = _captAvailMap[p.id + '_' + g.id] || '';
+        return `<div class="panel" style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="font-weight:700;font-size:14px">${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:12px">#${p.num||'–'}</span></div>
           <div id="cae-cell-${g.id}-${p.id}" style="display:flex;gap:5px;flex-wrap:wrap">${_captAvailCellHtml(g.id, p.id, status)}</div>
         </div>`;
       }).join('');
-      return `<div class="panel" style="margin-bottom:10px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:10px">${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:12px">#${p.num||'–'}</span></div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;overflow-x:auto">${gameButtons||'<span style="color:var(--muted);font-size:12px">No upcoming games.</span>'}</div>
-      </div>`;
-    }).join('');
-    el.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;border-left:3px solid var(--navy)">
-      ✏️ <strong>Captain view</strong> — edit any player's availability on their behalf. Changes save immediately.
-    </div>${rows}`;
+      body = `<div style="font-weight:800;font-size:14px;margin-bottom:10px;color:var(--navy)">${subtitle}</div>${rows}`;
+    } else {
+      // ALL-GAMES MODE: original grid (every player × every upcoming game).
+      body = roster.map(p => {
+        const gameButtons = upcoming.map(g => {
+          const status = _captAvailMap[p.id + '_' + g.id] || '';
+          const oppId = g.away === MY_TEAM.id ? g.home : g.away;
+          const oppTeam = ALL_TEAMS.find(t => t.id === oppId);
+          const oppShort = oppTeam?.short || (oppId||'').slice(0,6).toUpperCase() || 'TBD';
+          const ha = g.home === MY_TEAM.id ? 'vs' : '@';
+          return `<div style="background:#f8f9fb;border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-width:140px">
+            <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">Wk ${g.wk} ${ha} ${esc(oppShort)}</div>
+            <div id="cae-cell-${g.id}-${p.id}" style="display:flex;gap:5px;flex-wrap:wrap">${_captAvailCellHtml(g.id, p.id, status)}</div>
+          </div>`;
+        }).join('');
+        return `<div class="panel" style="margin-bottom:10px">
+          <div style="font-weight:700;font-size:14px;margin-bottom:10px">${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:12px">#${p.num||'–'}</span></div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;overflow-x:auto">${gameButtons||'<span style="color:var(--muted);font-size:12px">No upcoming games.</span>'}</div>
+        </div>`;
+      }).join('');
+    }
+
+    el.innerHTML = header + body;
   } catch(e) {
     el.innerHTML = '<div class="empty">Could not load: ' + esc(e.message) + '</div>';
   }
 }
+
+window.captAvailPickGame = function(gameId) {
+  _captAvailGameFilter = gameId || '';
+  captRenderAvailEdit();
+};
 
 window.captSetPlayerAvail = async function(gameId, playerId, status) {
   const player = CAPT_ALL_PLAYERS.find(p => p.id === playerId);
