@@ -2505,8 +2505,12 @@ async function captRecalcStandingsFromAllGames() {
 // ───────────────────────────────────────────────────────────────────
 function _captSendFinalScorePush(g, awayScore, homeScore) {
   if (!g || !g.away || !g.home) return;
-  const awayName = ALL_TEAMS.find(t => t.id === g.away)?.name || g.away;
-  const homeName = ALL_TEAMS.find(t => t.id === g.home)?.name || g.home;
+  // Use team abbreviations (short) to keep the push title compact — "Final:
+  // DN 5, BOR 4" reads far better than "Final: Dark Knights 5, Bourbon 4".
+  const _aT = ALL_TEAMS.find(t => t.id === g.away);
+  const _hT = ALL_TEAMS.find(t => t.id === g.home);
+  const awayName = (_aT?.short || _aT?.name || g.away || '').toString();
+  const homeName = (_hT?.short || _hT?.name || g.home || '').toString();
   const parts = [];
   if (g.wk) parts.push(`Week ${g.wk}`);
   if (g.date) parts.push(g.date);
@@ -2526,8 +2530,12 @@ function _captSendFinalScorePush(g, awayScore, homeScore) {
 
 function _captSendScoreSubmittedPush(g, awayScore, homeScore, submittedBy) {
   if (!g || !g.away || !g.home) return;
-  const awayName = ALL_TEAMS.find(t => t.id === g.away)?.name || g.away;
-  const homeName = ALL_TEAMS.find(t => t.id === g.home)?.name || g.home;
+  // Use team abbreviations (short) to keep the push title compact — "Final:
+  // DN 5, BOR 4" reads far better than "Final: Dark Knights 5, Bourbon 4".
+  const _aT = ALL_TEAMS.find(t => t.id === g.away);
+  const _hT = ALL_TEAMS.find(t => t.id === g.home);
+  const awayName = (_aT?.short || _aT?.name || g.away || '').toString();
+  const homeName = (_hT?.short || _hT?.name || g.home || '').toString();
   const parts = [];
   if (submittedBy) parts.push(`by ${submittedBy}`);
   if (g.wk) parts.push(`Week ${g.wk}`);
