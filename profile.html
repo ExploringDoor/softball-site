@@ -3065,33 +3065,143 @@ window.captSubmitScore = async function(gameId) {
 // ═══════════════════════════════════════════════════════════════════
 // CAPTAIN — Payments
 // ═══════════════════════════════════════════════════════════════════
+function _captPayStatus(rec) {
+  const owed = Number(rec?.amount_owed) || 0;
+  const paid = Number(rec?.amount_paid) || 0;
+  if (owed === 0 && paid === 0 && !rec?.paid) return { label: '—', color: 'var(--muted)', bg: '#f3f4f6' };
+  if (rec?.paid || (owed > 0 && paid >= owed)) return { label: 'Paid', color: '#16a34a', bg: 'rgba(34,197,94,.12)' };
+  if (paid > 0 && paid < owed) return { label: 'Partial', color: '#d97706', bg: 'rgba(217,119,6,.12)' };
+  return { label: 'Unpaid', color: '#dc2626', bg: 'rgba(220,38,38,.10)' };
+}
+
 function renderCaptainPayments() {
   const el = document.getElementById('capt-payments-content');
   const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false)
     .sort((a,b) => (a.num||999)-(b.num||999));
   if (!roster.length) { el.innerHTML = '<div class="empty">No players on roster.</div>'; return; }
-  const paid = roster.filter(p => CAPT_PAYMENTS[p.id]?.paid).length;
-  el.innerHTML = `<div class="pay-summary">
-      <div><strong>${paid}</strong> of <strong>${roster.length}</strong> paid</div>
+
+  let totOwed = 0, totPaid = 0, fullyPaidCount = 0;
+  roster.forEach(p => {
+    const rec = CAPT_PAYMENTS[p.id] || {};
+    const owed = Number(rec.amount_owed) || 0;
+    const paid = Number(rec.amount_paid) || 0;
+    totOwed += owed; totPaid += paid;
+    if (rec.paid || (owed > 0 && paid >= owed)) fullyPaidCount++;
+  });
+  const balance = Math.max(0, totOwed - totPaid);
+  const fmt = (n) => '$' + (n||0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+  el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">
+      <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px">Players Paid</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#16a34a">${fullyPaidCount}<span style="color:var(--muted);font-size:14px;font-weight:600"> / ${roster.length}</span></div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px">Total Owed</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:var(--navy)">${fmt(totOwed)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px">Collected</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#16a34a">${fmt(totPaid)}</div>
+      </div>
+      <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:2px">Balance</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:${balance>0?'#dc2626':'#16a34a'}">${fmt(balance)}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:10px">
+      <div style="font-size:12px;color:var(--muted)">Enter how much each player owes and how much they've paid. Changes save when you tab out of a field.</div>
+      <div style="display:flex;gap:6px">
+        <input type="number" class="form-input" id="capt-pay-default-owed" placeholder="Default owed ($)" min="0" step="0.01" style="width:140px;padding:6px 10px;font-size:13px">
+        <button class="btn btn-outline btn-sm" onclick="window.captPayFillDefaultOwed()" title="Set every player's owed amount to the number in the box (skips players who already have a value)">Fill Empty Owed</button>
+      </div>
     </div>
     <div class="tbl-wrap"><div class="tbl-scroll"><table class="tbl">
-      <thead><tr><th>#</th><th>Name</th><th>Paid?</th></tr></thead>
+      <thead><tr><th style="width:40px">#</th><th>Name</th><th style="width:110px">Owed</th><th style="width:110px">Paid</th><th style="width:90px">Balance</th><th style="width:90px">Status</th></tr></thead>
       <tbody>${roster.map(p => {
-        const rec = CAPT_PAYMENTS[p.id];
-        const isPaid = rec?.paid;
+        const rec = CAPT_PAYMENTS[p.id] || {};
+        const owed = Number(rec.amount_owed) || 0;
+        const paid = Number(rec.amount_paid) || 0;
+        const bal = Math.max(0, owed - paid);
+        const st = _captPayStatus(rec);
         return `<tr>
           <td style="font-weight:700">${p.num||'-'}</td>
           <td>${esc(p.name||'')}</td>
-          <td>
-            <div class="pay-status" onclick="window.togglePayment('${p.id}','${esc(p.name||'')}')">
-              <span class="pay-check ${isPaid?'paid':''}"></span>
-              <span>${isPaid ? 'Paid' : 'Unpaid'}</span>
-            </div>
-          </td>
+          <td><input type="number" min="0" step="0.01" class="form-input" id="pay-owed-${p.id}" value="${owed||''}" placeholder="0.00" style="width:95px;padding:6px 8px;font-size:13px;text-align:right" onchange="window.captPaySave('${p.id}','${esc(p.name||'')}')"></td>
+          <td><input type="number" min="0" step="0.01" class="form-input" id="pay-paid-${p.id}" value="${paid||''}" placeholder="0.00" style="width:95px;padding:6px 8px;font-size:13px;text-align:right" onchange="window.captPaySave('${p.id}','${esc(p.name||'')}')"></td>
+          <td style="font-weight:700;color:${bal>0?'#dc2626':'#16a34a'};text-align:right" id="pay-bal-${p.id}">${fmt(bal)}</td>
+          <td><span id="pay-status-${p.id}" style="display:inline-block;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;background:${st.bg};color:${st.color}">${st.label}</span></td>
         </tr>`;
       }).join('')}</tbody></table></div></div>`;
 }
 
+window.captPaySave = async function(playerId, playerName) {
+  const owedInp = document.getElementById('pay-owed-' + playerId);
+  const paidInp = document.getElementById('pay-paid-' + playerId);
+  const owed = parseFloat(owedInp?.value) || 0;
+  const paid = parseFloat(paidInp?.value) || 0;
+  if (owed < 0 || paid < 0) { toast('Amounts must be ≥ 0', 'error'); return; }
+  const prev = CAPT_PAYMENTS[playerId] || {};
+  const next = {
+    player_id: playerId,
+    player_name: playerName,
+    team_id: MY_TEAM.id,
+    amount_owed: owed,
+    amount_paid: paid,
+    paid: owed > 0 && paid >= owed,
+    updated_at: new Date().toISOString(),
+  };
+  // Optimistic UI — update the balance cell + status pill immediately
+  CAPT_PAYMENTS[playerId] = { ...prev, ...next };
+  const bal = Math.max(0, owed - paid);
+  const balCell = document.getElementById('pay-bal-' + playerId);
+  if (balCell) {
+    balCell.textContent = '$' + bal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    balCell.style.color = bal > 0 ? '#dc2626' : '#16a34a';
+  }
+  const stEl = document.getElementById('pay-status-' + playerId);
+  if (stEl) {
+    const st = _captPayStatus(CAPT_PAYMENTS[playerId]);
+    stEl.textContent = st.label;
+    stEl.style.background = st.bg;
+    stEl.style.color = st.color;
+  }
+  try {
+    await setDoc(doc(db, 'payments', playerId), next, { merge: true });
+    toast('Saved ✓');
+  } catch(e) {
+    CAPT_PAYMENTS[playerId] = prev;
+    toast('Could not save: ' + e.message, 'error');
+    renderCaptainPayments();
+  }
+};
+
+window.captPayFillDefaultOwed = async function() {
+  const input = document.getElementById('capt-pay-default-owed');
+  const amt = parseFloat(input?.value);
+  if (!amt || amt <= 0) { toast('Enter a dollar amount first', 'error'); return; }
+  const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false);
+  const empties = roster.filter(p => !Number(CAPT_PAYMENTS[p.id]?.amount_owed));
+  if (!empties.length) { toast('Every player already has an owed amount.'); return; }
+  if (!confirm(`Set owed amount to $${amt} for ${empties.length} player(s) without one?`)) return;
+  try {
+    for (const p of empties) {
+      const prev = CAPT_PAYMENTS[p.id] || {};
+      const paid = Number(prev.amount_paid) || 0;
+      const next = {
+        player_id: p.id, player_name: p.name || '', team_id: MY_TEAM.id,
+        amount_owed: amt, amount_paid: paid,
+        paid: paid >= amt, updated_at: new Date().toISOString(),
+      };
+      await setDoc(doc(db, 'payments', p.id), next, { merge: true });
+      CAPT_PAYMENTS[p.id] = { ...prev, ...next };
+    }
+    toast(`Set owed = $${amt} for ${empties.length} player(s)`);
+    renderCaptainPayments();
+  } catch(e) { toast('Failed: ' + e.message, 'error'); }
+};
+
+// Legacy (kept so any old UI still works; unused by new form)
 window.togglePayment = async function(playerId, playerName) {
   const rec = CAPT_PAYMENTS[playerId];
   const newPaid = !rec?.paid;
