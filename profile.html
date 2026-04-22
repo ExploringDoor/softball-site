@@ -2355,6 +2355,131 @@ window.captAddInning = function(gameId) {
 };
 
 // Unified box-score upsert (parallels captain.html's submitBoxScoreUnified)
+// ───────────────────────────────────────────────────────────────────
+// Standings recalc — ported from captain.html. Runs whenever a game
+// flips to done so the league standings (w/l/pct/rs/ra/gb/streak) on
+// the `teams` collection stay fresh. Without this, the BOR 22-3 final
+// got saved to games/ but BOR's teams/{id}.w never incremented.
+// ───────────────────────────────────────────────────────────────────
+async function captRecalcStandingsFromAllGames() {
+  try {
+    const gamesSnap = await getDocs(query(collection(db, 'games'), where('done', '==', true)));
+    const teamsSnap = await getDocs(collection(db, 'teams'));
+    const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+    const stats = {};
+    allTeams.forEach(t => { stats[t.id] = { w:0, l:0, rs:0, ra:0, results:[] }; });
+
+    const doneGames = gamesSnap.docs.map(d => d.data()).sort((a,b) => (a.wk||0) - (b.wk||0));
+    doneGames.forEach(g => {
+      const as = g.away_score || 0, hs = g.home_score || 0;
+      if (stats[g.away]) {
+        stats[g.away].rs += as; stats[g.away].ra += hs;
+        if (as > hs) { stats[g.away].w++; stats[g.away].results.push('W'); }
+        else if (as < hs) { stats[g.away].l++; stats[g.away].results.push('L'); }
+      }
+      if (stats[g.home]) {
+        stats[g.home].rs += hs; stats[g.home].ra += as;
+        if (hs > as) { stats[g.home].w++; stats[g.home].results.push('W'); }
+        else if (hs < as) { stats[g.home].l++; stats[g.home].results.push('L'); }
+      }
+    });
+
+    let maxWinDiff = -Infinity;
+    Object.values(stats).forEach(s => {
+      s.pct = (s.w + s.l) > 0 ? (s.w / (s.w + s.l)) : 0;
+      const wd = s.w - s.l;
+      if (wd > maxWinDiff) maxWinDiff = wd;
+      const r = s.results;
+      if (r.length > 0) {
+        let last = r[r.length - 1], count = 0;
+        for (let i = r.length - 1; i >= 0 && r[i] === last; i--) count++;
+        s.streak = last + count;
+      } else { s.streak = '-'; }
+    });
+    Object.values(stats).forEach(s => {
+      const diff = maxWinDiff - (s.w - s.l);
+      s.gb = diff === 0 ? '-' : (diff / 2).toString();
+    });
+
+    for (const t of allTeams) {
+      const s = stats[t.id]; if (!s) continue;
+      await updateDoc(doc(db, 'teams', t.id), {
+        w: s.w, l: s.l, pct: parseFloat(s.pct.toFixed(3)),
+        rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
+      }).catch(() => {});
+    }
+  } catch(e) { console.warn('standings recalc failed:', e); }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// Score-submit push notifications (ported from captain.html).
+// The old captain page fired pushes on every score submit — that was
+// dropped when captain features moved into profile.html, so captains
+// & Adam stopped getting "Final:" / "Score submitted:" notifications.
+// These restore that behavior. Silently ignore failures.
+// ───────────────────────────────────────────────────────────────────
+function _captSendFinalScorePush(g, awayScore, homeScore) {
+  if (!g || !g.away || !g.home) return;
+  const awayName = ALL_TEAMS.find(t => t.id === g.away)?.name || g.away;
+  const homeName = ALL_TEAMS.find(t => t.id === g.home)?.name || g.home;
+  const parts = [];
+  if (g.wk) parts.push(`Week ${g.wk}`);
+  if (g.date) parts.push(g.date);
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+    body: JSON.stringify({
+      title: `Final: ${awayName} ${awayScore}, ${homeName} ${homeScore}`,
+      body: parts.join(' · ') || 'Game final',
+      category: 'scores',
+      teams: [g.away, g.home],
+      url: g.id ? `/#game/${g.id}` : '/#scores',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Final score push failed:', e));
+}
+
+function _captSendScoreSubmittedPush(g, awayScore, homeScore, submittedBy) {
+  if (!g || !g.away || !g.home) return;
+  const awayName = ALL_TEAMS.find(t => t.id === g.away)?.name || g.away;
+  const homeName = ALL_TEAMS.find(t => t.id === g.home)?.name || g.home;
+  const parts = [];
+  if (submittedBy) parts.push(`by ${submittedBy}`);
+  if (g.wk) parts.push(`Week ${g.wk}`);
+  if (g.date) parts.push(g.date);
+  return fetch('/api/send-notification', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+    body: JSON.stringify({
+      title: `Score submitted: ${awayName} ${awayScore}, ${homeName} ${homeScore}`,
+      body: parts.join(' · ') || 'Awaiting confirmation from the other captain',
+      category: 'scores',
+      teams: [g.away, g.home],
+      url: g.id ? `/#game/${g.id}` : '/#scores',
+      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+    }),
+  }).catch(e => console.warn('Score submitted push failed:', e));
+}
+
+function _captSendScoreConflictAlert(g, awayFinal, homeFinal, otherAway, otherHome) {
+  try {
+    const awayName = ALL_TEAMS.find(t => t.id === g.away)?.name || g.away;
+    const homeName = ALL_TEAMS.find(t => t.id === g.home)?.name || g.home;
+    return fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+      body: JSON.stringify({
+        title: `🔔 Score conflict: ${awayName} @ ${homeName}`,
+        body: `Captains disagree — one says ${awayFinal}-${homeFinal}, other says ${otherAway}-${otherHome}. Review on admin.`,
+        category: 'admin',
+        adminOnly: true,
+        url: '/admin.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    }).catch(e => console.warn('Conflict alert failed:', e));
+  } catch(e) { console.warn('Conflict alert skipped:', e); }
+}
+
 async function captSubmitBoxScoreUnified(gameId, boxScoreData, myRole) {
   const ref = doc(db, 'box_scores', gameId);
   const snap = await getDoc(ref);
@@ -2470,6 +2595,29 @@ window.captSubmitScore = async function(gameId) {
     }
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     Object.assign(g, gameUpdate);
+
+    // Push notifications — restore behavior from old captain.html:
+    // • Game flips to done for the first time → "Final:" push
+    // • First captain submits, game still pending → "Score submitted:" push
+    // • Discrepancy with already-final result → admin-only conflict alert
+    if (gameUpdate.done && !wasDone) {
+      _captSendFinalScorePush(g, gameUpdate.away_score, gameUpdate.home_score);
+    } else if (!gameUpdate.done) {
+      _captSendScoreSubmittedPush(g, a, h, MY_TEAM.name);
+    }
+    if (gameUpdate.has_discrepancy) {
+      const storedAway = typeof g.away_score === 'number' ? g.away_score : a;
+      const storedHome = typeof g.home_score === 'number' ? g.home_score : h;
+      _captSendScoreConflictAlert(g, a, h, storedAway, storedHome);
+    }
+
+    // Recalc standings when the game becomes final (or a discrepancy
+    // changed the stored away_score/home_score). Updates BOTH teams
+    // (winner + loser) from all done games — that's what was missing
+    // for BOR 22-3 DN: the score saved, but w/l/rs/ra never updated.
+    if (gameUpdate.done) {
+      await captRecalcStandingsFromAllGames();
+    }
 
     const msg = !wasDone
       ? 'Score submitted — game is now final!'
