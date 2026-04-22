@@ -2210,7 +2210,28 @@ function renderCaptainScores() {
     const myRole = g.home === MY_TEAM.id ? 'home' : 'away';
     return g[`score_submitted_${myRole}_away`] === undefined;
   }).sort((a,b) => (a.wk||0)-(b.wk||0));
-  if (!pending.length) { el.innerHTML = '<div class="empty">All your games have final scores. Nothing to submit.</div>'; return; }
+  // Also surface games I've already submitted, so I can re-enter (fix typo,
+  // retrigger standings recalc) any time. Previously these were hidden and
+  // became unreachable once the score was in.
+  const alreadyFinal = CAPT_ALL_GAMES.filter(g => {
+    if (g.away !== MY_TEAM.id && g.home !== MY_TEAM.id) return false;
+    if (!g.done) return false;
+    const myRole = g.home === MY_TEAM.id ? 'home' : 'away';
+    return g[`score_submitted_${myRole}_away`] !== undefined;
+  }).sort((a,b) => (b.wk||0)-(a.wk||0));
+
+  const rebuildBtnHtml = `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button class="btn btn-outline btn-sm" onclick="captRebuildStandings(this)" title="Recalculate standings from all final games — use if the standings table looks stale">🔁 Rebuild Standings</button>
+  </div>`;
+
+  if (!pending.length && !alreadyFinal.length) {
+    el.innerHTML = rebuildBtnHtml + '<div class="empty">No games on your schedule yet.</div>';
+    return;
+  }
+  if (!pending.length) {
+    el.innerHTML = rebuildBtnHtml + '<div class="empty" style="margin-bottom:14px">All your games have final scores. Nothing new to submit.</div>' + _captRenderFinalizedSection(alreadyFinal);
+    return;
+  }
   el.innerHTML = pending.map(g => {
     const isHome = g.home === MY_TEAM.id;
     const myRole = isHome ? 'home' : 'away';
@@ -2299,7 +2320,71 @@ function renderCaptainScores() {
       </div>
     </div>`;
   }).join('');
+  el.innerHTML = rebuildBtnHtml + el.innerHTML + _captRenderFinalizedSection(alreadyFinal);
 }
+
+// Compact list of games I've already finalized. Each row has a "Re-enter"
+// button that opens the same score-entry form (values pre-filled) so a
+// captain can correct a typo or retrigger standings recalc any time.
+function _captRenderFinalizedSection(games) {
+  if (!games.length) return '';
+  const rows = games.map(g => {
+    const awayName = getTeamName(g.away);
+    const homeName = getTeamName(g.home);
+    const isHome = g.home === MY_TEAM.id;
+    const myRole = isHome ? 'home' : 'away';
+    const mySubAway = g[`score_submitted_${myRole}_away`] ?? g.away_score ?? '';
+    const mySubHome = g[`score_submitted_${myRole}_home`] ?? g.home_score ?? '';
+    return `<div class="panel" style="padding:12px 14px;margin-top:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:700;font-size:14px">Wk ${g.wk||'?'} · ${esc(awayName)} ${g.away_score ?? '?'} – ${esc(homeName)} ${g.home_score ?? '?'}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(g.date||'')} ${esc(g.field||'')} · Final</div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="captReopenFinalEntry('${g.id}')">📝 Re-enter</button>
+      </div>
+      <div id="capt-reedit-${g.id}" style="display:none;margin-top:12px">
+        <div class="score-input-row">
+          <label style="font-size:13px"><strong>${esc(awayName)}</strong></label>
+          <input class="score-input" id="csc-${g.id}-a" type="number" min="0" max="99" value="${mySubAway}" placeholder="0">
+          <span style="font-size:16px;color:var(--muted);font-weight:700">—</span>
+          <input class="score-input" id="csc-${g.id}-h" type="number" min="0" max="99" value="${mySubHome}" placeholder="0">
+          <label style="font-size:13px"><strong>${esc(homeName)}</strong></label>
+        </div>
+        <input type="hidden" id="csc-${g.id}-notes" value="">
+        <!-- line score grid deliberately omitted from re-enter view;
+             resubmitting the final score is enough to rerun recalc. -->
+        <table id="capt-ls-tbl-${g.id}" data-innings="7" style="display:none"></table>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn btn-success btn-sm" onclick="captSubmitScore('${g.id}')">✅ Re-submit</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('capt-reedit-${g.id}').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:22px">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Finalized Games</div>
+    ${rows}
+  </div>`;
+}
+
+window.captReopenFinalEntry = function(gameId) {
+  const el = document.getElementById('capt-reedit-' + gameId);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.captRebuildStandings = async function(btn) {
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Rebuilding…'; }
+  try {
+    await captRecalcStandingsFromAllGames();
+    toast('Standings rebuilt from all final games ✓', 'success');
+  } catch(e) {
+    toast('Rebuild failed: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+  }
+};
 
 window.captToggleScoreEntry = function(gameId) {
   const el = document.getElementById('capt-score-entry-' + gameId);

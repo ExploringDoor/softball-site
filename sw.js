@@ -158,7 +158,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = 'dvsl-v81-captain-score-push-and-standings-recalc';
+const VERSION = 'dvsl-v82-captain-rebuild-standings-and-reedit-final';
 const CORE_CACHE = `dvsl-core-${VERSION}`;
 const RUNTIME_CACHE = `dvsl-runtime-${VERSION}`;
 
