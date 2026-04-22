@@ -6606,6 +6606,9 @@ function shiftNav(d){
 function setView(v){
   document.title = v==='schedule' ? 'Schedule — DVSL Softball' : 'Scores — DVSL Softball';
   weekOffset=-1; // reset to auto-select correct week for each view
+  // On (re-)entry to the Schedule view, clear any stale day pick so we
+  // auto-land on today's date (or the next upcoming day).
+  if(v==='schedule') selectedDay=null;
   view=v;
   // Sync URL so the hash reflects which tab is active
   try {
@@ -6842,19 +6845,44 @@ function renderScores(){
       +doneGames.map(g=>scheduleBlock(g,false)).join('')
       +`</div>`;
   } else {
-    const off=Math.min(Math.max(0,weekOffset<0?(()=>{const i=allWks.findIndex(w=>w.games.some(g=>!g.done));return i>=0?i:0;})():weekOffset),allWks.length-1);
+    // Pick the "target day" — today if today has a scheduled game, else the
+    // next upcoming day. Everything else (week index, day pill, day-filtered
+    // game list) is anchored to this.
+    const MONTHS2={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const pd=s=>{const[m,d]=String(s||'').split(' ');return new Date(2026,MONTHS2[m]||0,parseInt(d)||1);};
+    const todayMid=(()=>{const d=new Date();d.setHours(0,0,0,0);return d;})();
+    // First game date on/after today (chronologically). Fall back to the last
+    // scheduled game if the season is over.
+    const orderedDates=[...new Set(SCHEDULE_PREVIEW.map(g=>g.date).filter(Boolean))]
+      .sort((a,b)=>pd(a)-pd(b));
+    const targetDate=orderedDates.find(d=>pd(d)>=todayMid) || orderedDates[orderedDates.length-1] || null;
+    const targetWkNum=targetDate ? (SCHEDULE_PREVIEW.find(g=>g.date===targetDate)?.wk) : null;
+
+    const off=Math.min(Math.max(0,weekOffset<0?(()=>{
+      // Prefer the week that owns targetDate; else first week with an undone
+      // game; else 0.
+      if(targetWkNum!=null){const i=allWks.findIndex(w=>String(w.wk)===String(targetWkNum));if(i>=0)return i;}
+      const i=allWks.findIndex(w=>w.games.some(g=>!g.done));
+      return i>=0?i:0;
+    })():weekOffset),allWks.length-1);
     weekOffset=off;
     const w=allWks[off];
     const wkLabel=String(w.wk).startsWith('PL')?'Playoffs':('Week '+w.wk);
 
     // Build sorted unique days for this week
-    const MONTHS2={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-    const pd=s=>{const[m,d]=s.split(' ');return new Date(2026,MONTHS2[m]||0,parseInt(d)||1);};
     const uniqueDays=[...new Set(w.games.map(g=>g.date).filter(Boolean))].sort((a,b)=>pd(a)-pd(b));
     const multiDay=uniqueDays.length>1;
 
-    // Auto-select first day if none selected or day not in this week
-    if(!selectedDay||!uniqueDays.includes(selectedDay)) selectedDay=uniqueDays[0]||null;
+    // Auto-select day — prefer targetDate (today or next upcoming); else
+    // first day >= today in this week; else first day of week.
+    if(!selectedDay||!uniqueDays.includes(selectedDay)){
+      if(targetDate && uniqueDays.includes(targetDate)){
+        selectedDay=targetDate;
+      } else {
+        const nextInWk=uniqueDays.find(d=>pd(d)>=todayMid);
+        selectedDay=nextInWk || uniqueDays[0] || null;
+      }
+    }
 
     const shownGames=multiDay&&selectedDay ? w.games.filter(g=>g.date===selectedDay) : w.games;
 
