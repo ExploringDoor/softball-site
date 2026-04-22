@@ -3401,11 +3401,16 @@ function handlePitch(type) {
     flashFeedback('FOUL', 'var(--orange)');
     renderAll();
   } else if (type === 'hbp') {
-    endAtBat('walk');
+    // v96: pass sub-type so endAtBat's walk branch credits HBP to the batter
+    // (not BB) and HBP to the pitcher (not BB). Runner-advance still mirrors a walk.
+    endAtBat('walk', { walkType: 'hbp' });
   } else if (type === 'iw') {
-    endAtBat('walk');
+    // Intentional walk — still a walk for both batter and pitcher.
+    endAtBat('walk', { walkType: 'iw' });
   } else if (type === 'ci') {
-    endAtBat('walk');
+    // Catcher's interference — batter reaches on interference, no AB, no BB, no HBP.
+    // Runner advance mirrors a walk; pitcher is not charged a BB.
+    endAtBat('walk', { walkType: 'ci' });
   }
 }
 
@@ -3450,7 +3455,16 @@ function endAtBat(result, details) {
   const locStr = location ? ` to ${location.toUpperCase()}` : '';
 
   if (result === 'walk') {
-    if (sid) { stats.bb++; }
+    // v96: credit the correct batter stat based on walkType.
+    //   walkType 'hbp' → stats.hbp++, not bb++
+    //   walkType 'ci'  → neither bb++ nor hbp++ (reached on interference only)
+    //   default (ball-4 walk) or 'iw' → stats.bb++
+    const walkType = details?.walkType || 'walk';
+    if (sid) {
+      if (walkType === 'hbp') { stats.hbp = (stats.hbp || 0) + 1; }
+      else if (walkType === 'ci') { /* no batter stat credited */ }
+      else { stats.bb++; }
+    }
     // Force runners
     if (G.runners[1]) {
       if (G.runners[2]) {
@@ -3480,11 +3494,24 @@ function endAtBat(result, details) {
     if (rbis > 0 && G._twoOutBatter && G._twoOutTeam === team) {
       G.twoOutRbiLog.push({ name: G._twoOutBatter, team, rbi: rbis });
     }
+    // v96: pitcher stat depends on walkType too.
+    //   hbp → pStats.hbp++, not bb++
+    //   ci  → no pitcher stat (catcher's interference is on the catcher, not pitcher)
+    //   default/iw → pStats.bb++
     const pStatsBB = currentPitcherStats(fieldingTeam());
-    if (pStatsBB) pStatsBB.bb++;
-    logPlay('Walk', rbis > 0 ? `BB — Walk, scores a run` : 'BB — Base on balls');
+    if (pStatsBB) {
+      if (walkType === 'hbp') pStatsBB.hbp = (pStatsBB.hbp || 0) + 1;
+      else if (walkType === 'ci') { /* no pitcher charge */ }
+      else pStatsBB.bb++;
+    }
+    const playLabel = walkType === 'hbp' ? 'HBP' : walkType === 'ci' ? 'CI' : 'Walk';
+    const playDesc  = walkType === 'hbp' ? 'HBP — Hit by pitch' + (rbis > 0 ? ', scores a run' : '')
+                    : walkType === 'ci'  ? 'CI — Catcher interference' + (rbis > 0 ? ', scores a run' : '')
+                    : (rbis > 0 ? `BB — Walk, scores a run` : 'BB — Base on balls');
+    logPlay(playLabel, playDesc);
     advanceLineup(team);
-    flashFeedback('WALK', 'var(--blue)');
+    const fbLabel = walkType === 'hbp' ? 'HBP' : walkType === 'ci' ? 'CI' : 'WALK';
+    flashFeedback(fbLabel, 'var(--blue)');
   } else if (result === 'single') {
     G.halfInningHits++;
     if (sid) { stats.h++; stats.singles = (stats.singles||0)+1; }
@@ -3566,7 +3593,8 @@ function endAtBat(result, details) {
     advanceLineup(team);
   } else if (result === 'error') {
     G.halfInningErrors++;
-    if (sid) stats.ab++;
+    // v96: AB is already incremented at the top of endAtBat (isHit || 'error' branch).
+    // The duplicate increment here was causing reached-on-error to count as 2 AB.
     G.runners[1] = b ? { name: b.name, num: b.num, pid: sid } : { name:'Batter', num:'?', pid:null };
     logPlay('Error', `E — Reached on error${locStr}`);
     advanceLineup(team);
@@ -4372,7 +4400,8 @@ function triggerHR(batter, sid, team, isItphr) {
       }
       G.playerStats[team][sid].r  = (G.playerStats[team][sid].r  || 0) + 1;
       G.playerStats[team][sid].rbi = (G.playerStats[team][sid].rbi || 0) + runs;
-      G.playerStats[team][sid].ab  = (G.playerStats[team][sid].ab  || 0) + 1;
+      // v96: AB is already incremented in endAtBat() at the top (isHit branch),
+      // so we do NOT increment it here again — that caused HRs to be counted as 2 AB.
     }
 
     if (team === 'away') G.awayScore += runs;
