@@ -1487,14 +1487,17 @@ function activatePlayerChat() {
 
 function subscribePlayerChat() {
   if (_playerChatUnsub) _playerChatUnsub();
+  // v96: fetch the most-recent 100 messages (desc), then reverse for chronological render.
+  // Previously used asc+limit(100) which capped at the OLDEST 100 messages — once a team hit
+  // 101 messages nothing new ever appeared and users thought chat was broken.
   const q = query(
     collection(db, 'team_messages'),
     where('team_id', '==', MY_TEAM.id),
-    orderBy('timestamp', 'asc'),
+    orderBy('timestamp', 'desc'),
     limit(100)
   );
   _playerChatUnsub = onSnapshot(q, snap => {
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
     renderPlayerChat(msgs);
   }, err => {
     document.getElementById('pchat-messages').innerHTML = '<div class="empty">Could not load: ' + esc(err.message) + '</div>';
@@ -2783,20 +2786,24 @@ async function captRecalcStandingsFromAllGames() {
     const teamsSnap = await getDocs(collection(db, 'teams'));
     const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
     const stats = {};
-    allTeams.forEach(t => { stats[t.id] = { w:0, l:0, rs:0, ra:0, results:[] }; });
+    allTeams.forEach(t => { stats[t.id] = { w:0, l:0, ti:0, rs:0, ra:0, results:[] }; });
 
     const doneGames = gamesSnap.docs.map(d => d.data()).sort((a,b) => (a.wk||0) - (b.wk||0));
     doneGames.forEach(g => {
-      const as = g.away_score || 0, hs = g.home_score || 0;
+      // v96: skip games with null/missing scores so they don't get counted as 0-0 ties.
+      if (g.away_score == null || g.home_score == null) return;
+      const as = g.away_score, hs = g.home_score;
       if (stats[g.away]) {
         stats[g.away].rs += as; stats[g.away].ra += hs;
         if (as > hs) { stats[g.away].w++; stats[g.away].results.push('W'); }
         else if (as < hs) { stats[g.away].l++; stats[g.away].results.push('L'); }
+        else { stats[g.away].ti++; stats[g.away].results.push('T'); }
       }
       if (stats[g.home]) {
         stats[g.home].rs += hs; stats[g.home].ra += as;
         if (hs > as) { stats[g.home].w++; stats[g.home].results.push('W'); }
         else if (hs < as) { stats[g.home].l++; stats[g.home].results.push('L'); }
+        else { stats[g.home].ti++; stats[g.home].results.push('T'); }
       }
     });
 
@@ -2820,7 +2827,7 @@ async function captRecalcStandingsFromAllGames() {
     for (const t of allTeams) {
       const s = stats[t.id]; if (!s) continue;
       await updateDoc(doc(db, 'teams', t.id), {
-        w: s.w, l: s.l, pct: parseFloat(s.pct.toFixed(3)),
+        w: s.w, l: s.l, ti: s.ti, pct: parseFloat(s.pct.toFixed(3)),
         rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
       }).catch(() => {});
     }
@@ -3457,11 +3464,12 @@ window.captClearPlayerAvail = async function(gameId, playerId) {
 // ═══════════════════════════════════════════════════════════════════
 function activateCaptainTeamChat() {
   if (_unsubTeamChat) _unsubTeamChat();
+  // v96: desc + reverse so we always show the NEWEST 100 (not oldest 100).
   const q = query(collection(db, 'team_messages'),
     where('team_id', '==', MY_TEAM.id),
-    orderBy('timestamp', 'asc'), limit(100));
+    orderBy('timestamp', 'desc'), limit(100));
   _unsubTeamChat = onSnapshot(q, snap => {
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
     renderCaptainTeamChat(msgs);
   });
 }
@@ -3579,10 +3587,11 @@ window.captainRemindWaiting = async function(gameId, btn) {
 // ═══════════════════════════════════════════════════════════════════
 function activateCaptainCaptChat() {
   if (_unsubCaptChat) _unsubCaptChat();
+  // v96: desc + reverse so we always show the NEWEST 200 (not oldest 200).
   const q = query(collection(db, 'captain_chat'),
-    orderBy('timestamp', 'asc'), limit(200));
+    orderBy('timestamp', 'desc'), limit(200));
   _unsubCaptChat = onSnapshot(q, snap => {
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
     renderCaptainCaptChat(msgs);
   });
 }
