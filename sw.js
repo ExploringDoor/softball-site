@@ -88,7 +88,16 @@ self.addEventListener('notificationclick', function(event) {
 
   // Resolve against this SW's origin so relative paths ("/team-chat.html?...")
   // work and we can compare pathname+search against any open DVSL tab.
-  const target = new URL(rawUrl, self.location.origin);
+  let target = new URL(rawUrl, self.location.origin);
+
+  // Same-origin clamp. The push `url` field is attacker-controllable
+  // (anyone with the client-visible PUSH_SECRET could craft a push with
+  // url: 'https://evil.example/phish'). inbox.html enforces this on the
+  // in-app path; the SW has to enforce it on the notificationclick path
+  // or a user who taps the system banner lands off-site.
+  if (target.origin !== self.location.origin) {
+    target = new URL('/', self.location.origin);
+  }
 
   event.waitUntil((async () => {
     // DIAGNOSTIC: write click count + URL + timestamp to cache EVERY time.
@@ -165,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v102-low-sev-sweep`;
+const VERSION = `${LEAGUE.id}-v103-audit-crit-high`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

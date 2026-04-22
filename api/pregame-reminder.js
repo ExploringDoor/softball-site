@@ -22,9 +22,19 @@ export default async function handler(req, res) {
   const authHeader   = req.headers['authorization'] || '';
   const bearerToken  = authHeader.replace(/^Bearer\s+/i, '');
   const sentSecret   = req.headers['x-admin-secret'];
+  // Fail closed. The previous guard only ran when at least one secret was
+  // set; with neither set (fresh or purged env), the endpoint was open to
+  // anyone on the internet — they could trigger a fan-out of pregame pushes
+  // AND mark games as pregame_reminder_sent (blocking the real reminder).
+  if (!CRON_SECRET && !ADMIN_SECRET) {
+    return res.status(503).json({
+      error: 'Pregame reminder not configured',
+      detail: 'Set CRON_SECRET (or ADMIN_SEND_SECRET) env var in Vercel.',
+    });
+  }
   const okCron  = CRON_SECRET && bearerToken === CRON_SECRET;
   const okAdmin = ADMIN_SECRET && sentSecret === ADMIN_SECRET;
-  if ((CRON_SECRET || ADMIN_SECRET) && !okCron && !okAdmin) {
+  if (!okCron && !okAdmin) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

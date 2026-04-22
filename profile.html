@@ -3174,14 +3174,28 @@ async function captSubmitBoxScoreUnified(gameId, boxScoreData, myRole) {
     });
   }
   const mergeUpdate = {
-    [`${myRole}_score`]: boxScoreData[`${myRole}_score`],
     second_submitter: myRole,
     has_discrepancy: discrepancies.length > 0,
     discrepancies,
     second_submitted_at: new Date().toISOString(),
   };
-  const lsForSide = boxScoreData[`${myRole}_linescore`];
-  if (lsForSide) mergeUpdate[`${myRole}_linescore`] = lsForSide;
+  if (discrepancies.length > 0) {
+    // Two captains disagree on the score. Do NOT overwrite just one
+    // side — that leaves away_score = first-submitter's claim AND
+    // home_score = second-submitter's claim, a Frankenstein record
+    // that matches NEITHER submission and poisons downstream stats.
+    // Null both scores (same pattern as the games-doc rollback) so
+    // fan views and leaders stop reading mixed numbers until admin
+    // resolves. Preserve the raw claims in `discrepancies[]` and
+    // `score_submissions/{gameId}_{teamId}` for the review UI.
+    mergeUpdate.away_score = null;
+    mergeUpdate.home_score = null;
+  } else {
+    // Agreement — second submitter may have richer linescore data for
+    // their own side; merge it in without touching the first side.
+    const lsForSide = boxScoreData[`${myRole}_linescore`];
+    if (lsForSide) mergeUpdate[`${myRole}_linescore`] = lsForSide;
+  }
   await updateDoc(ref, mergeUpdate);
   if (discrepancies.length > 0) {
     await updateDoc(doc(db, 'games', gameId), { has_discrepancy: true }).catch(() => {});
@@ -3927,8 +3941,11 @@ window.captainSendCaptMsg = async function() {
       body: JSON.stringify({
         title: 'Captains · ' + (MY_TEAM.short || MY_TEAM.name),
         body: text.length > 100 ? text.slice(0,100) + '…' : text,
-        category: 'captain_chat',
-        captainsOnly: true,
+        // Must match the category every other path uses (admin.html,
+        // captain.html, notifications.html, inbox.html, profile.html init).
+        // Was 'captain_chat' (singular) — which matched zero subscribers,
+        // so captain-chat pushes from profile.html were silently dropped.
+        category: 'captains_chat',
         url: '/profile.html#captains-chat',
         excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
       }),

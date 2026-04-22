@@ -959,12 +959,43 @@ window.enableNotifications = async function() {
     // Save token to Firestore — backend filters on (categories, teams)
     // to decide which tokens to push a given event to. An empty teams
     // array means "all teams".
-    await addDoc(collection(db, 'notification_tokens'), {
-      token,
-      categories,
-      teams,
-      timestamp: new Date()
-    });
+    //
+    // Upsert by FCM token. The previous version unconditionally addDoc'd
+    // a new row every time Enable was tapped, so users who enabled +
+    // disabled + re-enabled (or who hit the button twice) accumulated
+    // duplicate rows and received 2×/3×/N× copies of every push. Also
+    // the admin fanout is hard-capped at pageSize=300, so unchecked
+    // duplicates could push real subscribers out of delivery.
+    try {
+      const existingSnap = await getDocs(query(
+        collection(db, 'notification_tokens'),
+        where('token', '==', token)
+      ));
+      if (existingSnap.empty) {
+        await addDoc(collection(db, 'notification_tokens'), {
+          token, categories, teams, timestamp: new Date()
+        });
+      } else {
+        // Update the first doc we find, and prune any duplicates that
+        // already snuck in before this fix shipped. Safe because we're
+        // filtering on the FCM token — every matched doc IS this device.
+        const [keep, ...dupes] = existingSnap.docs;
+        await updateDoc(doc(db, 'notification_tokens', keep.id), {
+          categories, teams, timestamp: new Date()
+        });
+        for (const d of dupes) {
+          try { await deleteDoc(doc(db, 'notification_tokens', d.id)); } catch(_) {}
+        }
+      }
+    } catch(e) {
+      // Fall back to the old behavior rather than fail the whole flow —
+      // worst case the user gets a duplicate, which is better than
+      // silently losing push access.
+      console.warn('Token upsert failed, falling back to addDoc:', e);
+      await addDoc(collection(db, 'notification_tokens'), {
+        token, categories, teams, timestamp: new Date()
+      });
+    }
 
     localStorage.setItem('dvsl-notif-token', token);
     localStorage.setItem('dvsl-notif-categories', JSON.stringify(categories));

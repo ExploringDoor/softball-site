@@ -49,7 +49,16 @@ export default async function handler(req, res) {
       detail: 'Set FCM_PROJECT_ID and FCM_SERVICE_ACCOUNT_JSON env vars in Vercel.',
     });
   }
-  if (SECRET && req.headers['x-admin-secret'] !== SECRET) {
+  // Fail closed. If ADMIN_SEND_SECRET is missing/empty the gate used to
+  // be bypassed entirely, leaving the endpoint open to the internet to
+  // fan-bomb every subscriber. Now we refuse to run until it's set.
+  if (!SECRET) {
+    return res.status(503).json({
+      error: 'Push notifications not configured',
+      detail: 'Set ADMIN_SEND_SECRET env var in Vercel.',
+    });
+  }
+  if (req.headers['x-admin-secret'] !== SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
