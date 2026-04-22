@@ -4619,11 +4619,20 @@ window.saveOneStanding = async function(teamId) {
   const cpw = (document.getElementById('st-cpw-' + teamId)?.value || '').trim();
   try {
     const update = { w, l, t: ties, pct, rs, ra };
-    if (pw !== undefined) update.player_password = pw;
-    if (cpw !== undefined) update.captain_password = cpw;
+    // v96: only write passwords when the input is non-empty. Previously we wrote
+    // `pw !== undefined` which was always true (`.value.trim()` is always a string),
+    // so clearing the input to save numeric changes would wipe the captain's login.
+    // To explicitly clear a password, delete it directly in Firebase or add a
+    // dedicated "clear password" action.
+    if (pw) update.player_password = pw;
+    if (cpw) update.captain_password = cpw;
     await updateDoc(doc(db, 'teams', teamId), update);
     const tm = TEAMS.find(x => x.id === teamId);
-    if (tm) { tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra; tm.player_password = pw; tm.captain_password = cpw; }
+    if (tm) {
+      tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra;
+      if (pw)  tm.player_password = pw;
+      if (cpw) tm.captain_password = cpw;
+    }
     // Refresh the row's PTS cell (3·W + 2·T + 1·L, matching front-end).
     const ptsCell = document.getElementById('st-pts-' + teamId);
     if (ptsCell) ptsCell.textContent = (w*3 + ties*2 + l*1);
@@ -6218,15 +6227,24 @@ window.approveScore = async function(submissionId) {
     if (gameId) {
       const _preG = GAMES.find(x => x.id === gameId);
       const wasDone = !!_preG?.done;
-      // Update the game directly
+      // v96: also clear conflict/pending flags so approved games stop showing
+      // as disputed on the Scores tab. Previously approveScore only set done+scores.
       await updateDoc(doc(db, 'games', gameId), {
         away_score: s.away_score,
         home_score: s.home_score,
-        done: true
+        done: true,
+        score_conflict: false,
+        score_pending: false,
+        score_confirmed: true,
+        has_discrepancy: false
       });
       // Update local GAMES state
       const g = GAMES.find(x => x.id === gameId);
-      if (g) { g.away_score = s.away_score; g.home_score = s.home_score; g.done = true; }
+      if (g) {
+        g.away_score = s.away_score; g.home_score = s.home_score; g.done = true;
+        g.score_conflict = false; g.score_pending = false;
+        g.score_confirmed = true; g.has_discrepancy = false;
+      }
       // Push only if this approval is what newly finalizes the game.
       if (!wasDone && g) sendScorePush(g, s.away_score, s.home_score);
     }
