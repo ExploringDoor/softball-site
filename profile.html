@@ -2172,7 +2172,17 @@ async function loadCaptainData() {
     CAPT_ANNOUNCEMENTS = aSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     CAPT_CAPTAINS = cSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     CAPT_PAYMENTS = {};
-    paySnap.docs.forEach(d => { CAPT_PAYMENTS[d.id] = { id: d.id, ...d.data() }; });
+    // v100: key by player_id (not doc id) and filter to MY_TEAM only so
+    // that a player who plays on two teams (sub, trade) keeps separate
+    // payment ledgers per team. Legacy docs (no team_id) are accepted
+    // since they were written before this change and belong to whichever
+    // team the player was on at the time.
+    paySnap.docs.forEach(d => {
+      const data = d.data() || {};
+      if (data.team_id && data.team_id !== MY_TEAM.id) return;
+      const pid = data.player_id || d.id;
+      CAPT_PAYMENTS[pid] = { id: d.id, ...data };
+    });
     // Calendar share URL for this captain's team
     try {
       const cals = calSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -2501,8 +2511,20 @@ window.captRemovePlayer = async function(playerId) {
   const p = CAPT_ALL_PLAYERS.find(x => x.id === playerId);
   if (!confirm(`Remove ${p?.name || 'this player'} from the roster?`)) return;
   try {
-    await deleteDoc(doc(db, 'players', playerId));
-    CAPT_ALL_PLAYERS = CAPT_ALL_PLAYERS.filter(x => x.id !== playerId);
+    // v100: SOFT-delete. Hard-delete previously orphaned historical box
+    // scores, attendance, payment rows that reference the player by id,
+    // and broke name-fallback matching for past games. `active:false`
+    // hides them from all the captain roster + attendance filters
+    // (`.filter(p => p.active !== false)`), same as if deleted, but
+    // preserves history. Admin can hard-delete from Firestore if really
+    // needed.
+    await updateDoc(doc(db, 'players', playerId), {
+      active: false,
+      removed_at: new Date().toISOString(),
+      removed_by: captainData?.team_name || MY_TEAM.id,
+    });
+    const cur = CAPT_ALL_PLAYERS.find(x => x.id === playerId);
+    if (cur) cur.active = false;
     toast('Player removed from roster.');
     renderCaptainRoster();
     renderCaptainTeamTab && renderCaptainTeamTab();
@@ -2517,11 +2539,16 @@ function renderCaptainSchedule() {
   const myGames = CAPT_ALL_GAMES.filter(g => g.away === MY_TEAM.id || g.home === MY_TEAM.id)
     .sort((a,b) => (a.wk||0)-(b.wk||0));
   if (!myGames.length) { el.innerHTML = '<div class="empty">No games scheduled.</div>'; return; }
-  el.innerHTML = myGames.map(g => {
+  // v100: find the first non-final game (today or later) so we can
+  // auto-scroll to it — matches index.html's schedule behavior so
+  // captains don't have to scroll past old weeks.
+  const upcomingIdx = myGames.findIndex(g => !g.done);
+  el.innerHTML = myGames.map((g, i) => {
     const oppId = g.away === MY_TEAM.id ? g.home : g.away;
     const ha = g.home === MY_TEAM.id ? 'vs' : '@';
     const scoreText = g.done ? `${g.away_score}-${g.home_score}` : (g.time || 'TBD');
-    return `<div class="game-card">
+    const anchorAttr = i === upcomingIdx ? ' id="capt-sched-upcoming"' : '';
+    return `<div class="game-card"${anchorAttr}>
       <div class="game-info">
         <div class="game-opp">Wk ${g.wk} · ${ha} ${esc(getTeamName(oppId))}</div>
         <div class="game-meta">${esc(g.date||'')} ${g.day?'· '+esc(g.day):''} ${g.time?'· '+esc(g.time):''} ${g.field?'· '+esc(g.field):''}</div>
@@ -2530,6 +2557,13 @@ function renderCaptainSchedule() {
       <div>${g.done ? '<span class="badge badge-done">Final</span>' : '<span class="badge badge-info">Scheduled</span>'}</div>
     </div>`;
   }).join('');
+  if (upcomingIdx >= 0) {
+    // Defer until after paint so the node exists.
+    setTimeout(() => {
+      const node = document.getElementById('capt-sched-upcoming');
+      if (node) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3187,8 +3221,18 @@ window.captSubmitScore = async function(gameId) {
       const storedAway = typeof g.away_score === 'number' ? g.away_score : a;
       const storedHome = typeof g.home_score === 'number' ? g.home_score : h;
       if (storedAway !== a || storedHome !== h) {
+        // v100: when a second captain submits conflicting numbers, ROLL BACK
+        // done + displayed score so fan views (index.html) stop showing the
+        // wrong value. Admin resolves the conflict and re-finalizes.
+        // (Previously we kept done:true with the first captain's numbers
+        // visible until admin noticed, which silently showed a wrong score.)
         gameUpdate.score_conflict = true;
         gameUpdate.has_discrepancy = true;
+        gameUpdate.done = false;
+        gameUpdate.score_pending = true;
+        gameUpdate.score_confirmed = false;
+        gameUpdate.away_score = null;
+        gameUpdate.home_score = null;
       }
     }
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
@@ -3294,8 +3338,8 @@ function renderCaptainPayments() {
         return `<tr>
           <td style="font-weight:700">${p.num||'-'}</td>
           <td>${esc(p.name||'')}</td>
-          <td><input type="number" min="0" step="0.01" class="form-input" id="pay-owed-${p.id}" value="${owed||''}" placeholder="0.00" style="width:95px;padding:6px 8px;font-size:13px;text-align:right" onchange="window.captPaySave('${p.id}','${esc(p.name||'')}')"></td>
-          <td><input type="number" min="0" step="0.01" class="form-input" id="pay-paid-${p.id}" value="${paid||''}" placeholder="0.00" style="width:95px;padding:6px 8px;font-size:13px;text-align:right" onchange="window.captPaySave('${p.id}','${esc(p.name||'')}')"></td>
+          <td><input type="number" min="0" step="0.01" class="form-input" id="pay-owed-${p.id}" value="${owed||''}" placeholder="0.00" style="width:95px;padding:6px 8px;font-size:13px;text-align:right" oninput="window.captPaySaveDebounced('${p.id}','${esc(p.name||'')}')" onchange="window.captPaySave('${p.id}','${esc(p.name||'')}')"></td>
+          <td><input type="number" min="0" step="0.01" class="form-input" id="pay-paid-${p.id}" value="${paid||''}" placeholder="0.00" style="width:95px;padding:6px 8px;font-size:13px;text-align:right" oninput="window.captPaySaveDebounced('${p.id}','${esc(p.name||'')}')" onchange="window.captPaySave('${p.id}','${esc(p.name||'')}')"></td>
           <td style="font-weight:700;color:${bal>0?'#dc2626':'#16a34a'};text-align:right" id="pay-bal-${p.id}">${fmt(bal)}</td>
           <td><span id="pay-status-${p.id}" style="display:inline-block;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:700;background:${st.bg};color:${st.color}">${st.label}</span></td>
         </tr>`;
@@ -3334,13 +3378,30 @@ window.captPaySave = async function(playerId, playerName) {
     stEl.style.color = st.color;
   }
   try {
-    await setDoc(doc(db, 'payments', playerId), next, { merge: true });
+    // v100: namespace the doc key per team so a player on two teams gets
+    // separate ledgers. Old unnamespaced doc (keyed just by playerId) is
+    // left alone — loader accepts both patterns. Next edit writes to the
+    // new key, which silently deprecates the old one.
+    const docKey = `${MY_TEAM.id}_${playerId}`;
+    await setDoc(doc(db, 'payments', docKey), next, { merge: true });
     toast('Saved ✓');
   } catch(e) {
     CAPT_PAYMENTS[playerId] = prev;
     toast('Could not save: ' + e.message, 'error');
     renderCaptainPayments();
   }
+};
+
+// v100: debounced save so a captain typing "$25" and swiping away
+// doesn't lose the edit (onchange only fires on blur, so losing focus
+// via tab-switch previously dropped the value).
+let _captPaySaveTimers = {};
+window.captPaySaveDebounced = function(playerId, playerName) {
+  clearTimeout(_captPaySaveTimers[playerId]);
+  _captPaySaveTimers[playerId] = setTimeout(() => {
+    delete _captPaySaveTimers[playerId];
+    window.captPaySave(playerId, playerName);
+  }, 450);
 };
 
 window.captPayFillDefaultOwed = async function() {
@@ -3360,7 +3421,7 @@ window.captPayFillDefaultOwed = async function() {
         amount_owed: amt, amount_paid: paid,
         paid: paid >= amt, updated_at: new Date().toISOString(),
       };
-      await setDoc(doc(db, 'payments', p.id), next, { merge: true });
+      await setDoc(doc(db, 'payments', `${MY_TEAM.id}_${p.id}`), next, { merge: true });
       CAPT_PAYMENTS[p.id] = { ...prev, ...next };
     }
     toast(`Set owed = $${amt} for ${empties.length} player(s)`);
@@ -3373,7 +3434,7 @@ window.togglePayment = async function(playerId, playerName) {
   const rec = CAPT_PAYMENTS[playerId];
   const newPaid = !rec?.paid;
   try {
-    await setDoc(doc(db, 'payments', playerId), {
+    await setDoc(doc(db, 'payments', `${MY_TEAM.id}_${playerId}`), {
       player_id: playerId, player_name: playerName, team_id: MY_TEAM.id,
       paid: newPaid, updated_at: new Date().toISOString()
     }, { merge: true });

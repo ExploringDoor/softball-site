@@ -1024,7 +1024,12 @@ function render(items, mode = 'unread') {
         dismiss(item);
       }
       try {
-        const t = new URL(item.url || '/', location.origin);
+        // v100: open-redirect guard. A push sender (admin) could put an
+        // arbitrary https://evil.com URL in the notification; before this
+        // guard we'd follow it off-site. Force same-origin or fall back
+        // to the home page.
+        let t = new URL(item.url || '/', location.origin);
+        if (t.origin !== location.origin) t = new URL('/', location.origin);
         window.location.href = t.href;
       } catch (_) { window.location.href = '/'; }
     });

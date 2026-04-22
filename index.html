@@ -6523,7 +6523,10 @@ function fakeScore(away,home,seed){
 
 function getWeekList(){
   const MONTHS={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-  const parseDate=s=>{const [m,d]=s.split(' ');return new Date(2026,MONTHS[m]||0,parseInt(d)||1);};
+  // v100: pull season year from config so the site doesn't treat 2027+ games
+  // as 2026. Fall back to the current year if config missing.
+  const _seasonYr=(window.LEAGUE_CONFIG?.season?.year)||new Date().getFullYear();
+  const parseDate=s=>{const [m,d]=s.split(' ');return new Date(_seasonYr,MONTHS[m]||0,parseInt(d)||1);};
   const wkMap={};
   SCHEDULE_PREVIEW.forEach(g=>{
     if(!wkMap[g.wk])wkMap[g.wk]={wk:g.wk,dates:[],hasDone:false};
@@ -6552,12 +6555,25 @@ function buildScoresNav(){
   if(!wks.length){document.getElementById('dnSlots').innerHTML='';return;}
   let autoIdx=wks.length-1; // default: last week (for scores = most recent completed)
   if(view==='schedule'){
-    // auto-select first week with upcoming games
-    const upIdx=wks.findIndex(w=>{
+    // v100: match renderScores' targetDate logic so the nav + the page body
+    // agree on which week to land on. Previously the nav picked the FIRST
+    // week with any undone game (so a rained-out week-3 game kept the nav
+    // parked in July on week 3), while renderScores preferred the week
+    // containing today — fighting each other.
+    const _M={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const _yr = (window.LEAGUE_CONFIG?.season?.year) || new Date().getFullYear();
+    const _pd=s=>{const[m,d]=String(s||'').split(' ');return new Date(_yr,_M[m]||0,parseInt(d)||1);};
+    const _todayMid=(()=>{const d=new Date();d.setHours(0,0,0,0);return d;})();
+    const _orderedDates=[...new Set(SCHEDULE_PREVIEW.map(g=>g.date).filter(Boolean))].sort((a,b)=>_pd(a)-_pd(b));
+    const _targetDate=_orderedDates.find(d=>_pd(d)>=_todayMid) || _orderedDates[_orderedDates.length-1] || null;
+    const _targetWk=_targetDate ? (SCHEDULE_PREVIEW.find(g=>g.date===_targetDate)?.wk) : null;
+    let tgtIdx=-1;
+    if(_targetWk!=null) tgtIdx=wks.findIndex(w=>String(w.wk)===String(_targetWk));
+    if(tgtIdx<0) tgtIdx=wks.findIndex(w=>{
       const wkGames=SCHEDULE_PREVIEW.filter(g=>g.wk===w.wk);
       return wkGames.some(g=>!g.done);
     });
-    if(upIdx>=0) autoIdx=upIdx;
+    if(tgtIdx>=0) autoIdx=tgtIdx;
   }
   const off=Math.min(Math.max(0,weekOffset<0?autoIdx:weekOffset),wks.length-1);
   if(weekOffset<0)weekOffset=off;
@@ -6866,7 +6882,8 @@ function renderScores(){
     // next upcoming day. Everything else (week index, day pill, day-filtered
     // game list) is anchored to this.
     const MONTHS2={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
-    const pd=s=>{const[m,d]=String(s||'').split(' ');return new Date(2026,MONTHS2[m]||0,parseInt(d)||1);};
+    const _yr2=(window.LEAGUE_CONFIG?.season?.year)||new Date().getFullYear();
+    const pd=s=>{const[m,d]=String(s||'').split(' ');return new Date(_yr2,MONTHS2[m]||0,parseInt(d)||1);};
     const todayMid=(()=>{const d=new Date();d.setHours(0,0,0,0);return d;})();
     // First game date on/after today (chronologically). Fall back to the last
     // scheduled game if the season is over.

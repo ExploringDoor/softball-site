@@ -5845,9 +5845,29 @@ window.savePlayerPwInline = async function(playerId) {
 
 function _randomPlayerPw(len) {
   const chars = 'abcdefghjkmnpqrstuvwxyz23456789'; // no 0/o/1/l/i confusion
-  let s = '';
-  for (let i = 0; i < (len || 6); i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
-  return s;
+  const n = len || 6;
+  // v100: use crypto.getRandomValues instead of Math.random(). Math.random
+  // is a (fast) PRNG that produces predictable output if an attacker can
+  // observe a few generated passwords — for account passwords that's a
+  // real risk. Rejection-sampling to avoid modulo bias on 31 chars.
+  const out = [];
+  const crypto = window.crypto || window.msCrypto;
+  if (crypto && crypto.getRandomValues) {
+    const buf = new Uint8Array(n * 2); // oversample for rejection
+    let i = 0, bi = 0;
+    while (out.length < n) {
+      if (bi >= buf.length) { crypto.getRandomValues(buf); bi = 0; }
+      const b = buf[bi++];
+      if (b < 248) { // 248 = 8 * 31, largest multiple of 31 under 256
+        out.push(chars[b % chars.length]);
+      }
+      if (++i > 10000) break;
+    }
+  } else {
+    // Fallback for ancient environments; shouldn't hit in any modern browser.
+    for (let i = 0; i < n; i++) out.push(chars.charAt(Math.floor(Math.random() * chars.length)));
+  }
+  return out.join('');
 }
 
 window.genAllPlayerPasswords = async function(teamId) {
