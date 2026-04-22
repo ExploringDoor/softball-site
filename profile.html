@@ -1058,7 +1058,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 // Firebase setup
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, onSnapshot, serverTimestamp, limit, Timestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, onSnapshot, serverTimestamp, limit, limitToLast, Timestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const app = initializeApp(window.LEAGUE_CONFIG.firebase);
 const db = getFirestore(app);
@@ -1487,17 +1487,19 @@ function activatePlayerChat() {
 
 function subscribePlayerChat() {
   if (_playerChatUnsub) _playerChatUnsub();
-  // v96: fetch the most-recent 100 messages (desc), then reverse for chronological render.
-  // Previously used asc+limit(100) which capped at the OLDEST 100 messages — once a team hit
-  // 101 messages nothing new ever appeared and users thought chat was broken.
+  // v97: use asc + limitToLast so Firestore reuses the EXISTING asc
+  // composite index (where team_id + orderBy timestamp asc). v96 switched
+  // to desc which required a brand-new index and broke chat until the
+  // index was created. limitToLast(N) returns the newest N in
+  // chronological order — exactly what we want, no new index required.
   const q = query(
     collection(db, 'team_messages'),
     where('team_id', '==', MY_TEAM.id),
-    orderBy('timestamp', 'desc'),
-    limit(100)
+    orderBy('timestamp', 'asc'),
+    limitToLast(100)
   );
   _playerChatUnsub = onSnapshot(q, snap => {
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderPlayerChat(msgs);
   }, err => {
     document.getElementById('pchat-messages').innerHTML = '<div class="empty">Could not load: ' + esc(err.message) + '</div>';
@@ -2604,9 +2606,37 @@ function renderCaptainScores() {
       </div>
       ${otherInfo}
       ${conflictInfo}
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 6px">
-        <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&team=${MY_TEAM.id}&from=profile','_blank')">⚡ Score Live</button>
-        <button class="btn btn-outline btn-sm" onclick="captToggleScoreEntry('${g.id}')">📝 ${alreadySubmitted ? 'Re-enter' : 'Enter'} Score</button>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0 6px">
+        <button class="btn btn-outline btn-sm" style="font-weight:700;padding:12px 8px" onclick="captToggleScoreEntry('${g.id}')">📝 ${alreadySubmitted ? 'Re-enter' : 'Score Only'}</button>
+        <button class="btn btn-outline btn-sm" style="font-weight:700;padding:12px 8px" onclick="captToggleBoxScore('${g.id}')">📋 Box Score</button>
+        <button class="btn btn-outline btn-sm" style="font-weight:700;padding:12px 8px" onclick="captToggleUploadSheet('${g.id}')">📄 Upload Sheet</button>
+        <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700;padding:12px 8px" onclick="window.open('scorer.html?game=${g.id}&team=${MY_TEAM.id}&from=profile','_blank')">⚡ Live Score</button>
+      </div>
+      <div id="capt-boxscore-${g.id}" style="display:none;margin-top:10px;padding:12px;background:#f9fafb;border:1px solid var(--border);border-radius:8px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:8px">📋 Box Score — enter batting stats for your team</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Only fill in players who batted. Leave blank for anyone who didn't play.</div>
+        <div id="capt-boxscore-body-${g.id}"><div class="empty" style="padding:10px">Loading roster…</div></div>
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-success btn-sm" onclick="captSubmitBoxScore('${g.id}')">✅ Submit Box Score</button>
+          <button class="btn btn-outline btn-sm" onclick="captToggleBoxScore('${g.id}')">Cancel</button>
+        </div>
+      </div>
+      <div id="capt-upload-${g.id}" style="display:none;margin-top:10px;padding:12px;background:#f9fafb;border:1px solid var(--border);border-radius:8px">
+        <div style="font-weight:700;font-size:14px;margin-bottom:8px">📄 Upload Scorebook Sheet</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Snap a photo or upload a PDF of your scorebook. Admin will enter it manually.</div>
+        <input type="file" id="capt-upload-file-${g.id}" accept="image/*,application/pdf" style="display:block;margin-bottom:10px;font-size:13px">
+        <div class="score-input-row" style="margin-bottom:8px">
+          <label style="font-size:13px"><strong>${esc(awayName)}</strong></label>
+          <input class="score-input" id="cup-${g.id}-a" type="number" min="0" max="99" placeholder="0">
+          <span style="font-size:16px;color:var(--muted);font-weight:700">—</span>
+          <input class="score-input" id="cup-${g.id}-h" type="number" min="0" max="99" placeholder="0">
+          <label style="font-size:13px"><strong>${esc(homeName)}</strong></label>
+        </div>
+        <input type="text" class="form-input" id="cup-${g.id}-notes" placeholder="Notes for admin (optional)" style="font-size:13px;margin-bottom:10px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-success btn-sm" onclick="captSubmitUploadSheet('${g.id}')">✅ Submit Upload</button>
+          <button class="btn btn-outline btn-sm" onclick="captToggleUploadSheet('${g.id}')">Cancel</button>
+        </div>
       </div>
       <div id="capt-score-entry-${g.id}" style="display:${alreadySubmitted ? 'none' : 'block'}">
         <div class="score-input-row" style="margin-top:10px">
@@ -2724,6 +2754,142 @@ window.captToggleScoreEntry = function(gameId) {
   const el = document.getElementById('capt-score-entry-' + gameId);
   if (!el) return;
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// Box-score entry — captain enters per-batter AB/R/H/RBI/BB/SO/2B/3B/HR
+// for their team's lineup. Saved to `box_scores/{gameId}_{teamId}`.
+// Admin stitches both teams together for the public box on index.html.
+// ═══════════════════════════════════════════════════════════════════
+window.captToggleBoxScore = function(gameId) {
+  const el = document.getElementById('capt-boxscore-' + gameId);
+  if (!el) return;
+  const willOpen = el.style.display === 'none';
+  el.style.display = willOpen ? 'block' : 'none';
+  if (willOpen) _captRenderBoxScoreRoster(gameId);
+};
+
+function _captRenderBoxScoreRoster(gameId) {
+  const body = document.getElementById('capt-boxscore-body-' + gameId);
+  if (!body) return;
+  const roster = CAPT_ALL_PLAYERS
+    .filter(p => p.team === MY_TEAM.id && p.active !== false)
+    .sort((a,b) => (parseInt(a.number)||99) - (parseInt(b.number)||99));
+  if (!roster.length) {
+    body.innerHTML = '<div class="empty" style="padding:10px">No active roster yet.</div>';
+    return;
+  }
+  const cols = ['AB','R','H','RBI','BB','SO','2B','3B','HR'];
+  body.innerHTML = `
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px">
+        <thead>
+          <tr style="background:#fff">
+            <th style="text-align:left;padding:6px 8px;font-weight:700;color:var(--muted);font-size:11px;border-bottom:1px solid var(--border)">Player</th>
+            ${cols.map(c=>`<th style="padding:6px 4px;font-weight:700;color:var(--muted);font-size:11px;border-bottom:1px solid var(--border);width:44px">${c}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${roster.map(p => `
+            <tr data-pid="${p.id}" data-pname="${esc(p.name||'')}">
+              <td style="padding:5px 8px;border-bottom:1px solid #f0f0f0;white-space:nowrap"><span style="font-weight:700;color:var(--muted)">#${esc(p.number||'?')}</span> ${esc(p.name||'')}</td>
+              ${cols.map(c => `<td style="padding:3px 2px;border-bottom:1px solid #f0f0f0"><input type="number" min="0" max="20" class="capt-box-${gameId}" data-stat="${c}" style="width:100%;text-align:center;padding:5px 2px;border:1px solid var(--border);border-radius:4px;font-size:13px;box-sizing:border-box"></td>`).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+window.captSubmitBoxScore = async function(gameId) {
+  try {
+    const panel = document.getElementById('capt-boxscore-' + gameId);
+    if (!panel) return;
+    const rows = panel.querySelectorAll('tbody tr');
+    const batters = [];
+    rows.forEach(tr => {
+      const pid = tr.getAttribute('data-pid');
+      const pname = tr.getAttribute('data-pname');
+      const stats = {};
+      let anyFilled = false;
+      tr.querySelectorAll('input').forEach(inp => {
+        const v = parseInt(inp.value);
+        if (!isNaN(v) && v >= 0) {
+          stats[inp.getAttribute('data-stat')] = v;
+          anyFilled = true;
+        }
+      });
+      if (anyFilled) batters.push({ player_id: pid, player_name: pname, ...stats });
+    });
+    if (!batters.length) { toast('Enter at least one batting line', 'error'); return; }
+    const docId = `${gameId}_${MY_TEAM.id}`;
+    await setDoc(doc(db, 'box_scores', docId), {
+      game_id: gameId,
+      team_id: MY_TEAM.id,
+      team_name: MY_TEAM.name,
+      batters,
+      submitted_by: captainData?.email || MY_TEAM.id,
+      submitted_at: serverTimestamp()
+    }, { merge: true });
+    toast('Box score submitted ✓', 'success');
+    panel.style.display = 'none';
+  } catch (e) {
+    toast('Could not submit: ' + e.message, 'error');
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// Scorebook-sheet upload — captain snaps a photo / picks a PDF of
+// their paper scorebook. We compress images client-side and stash
+// as base64 in Firestore (`score_uploads`). Admin reviews & enters.
+// ═══════════════════════════════════════════════════════════════════
+window.captToggleUploadSheet = function(gameId) {
+  const el = document.getElementById('capt-upload-' + gameId);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+};
+
+window.captSubmitUploadSheet = async function(gameId) {
+  try {
+    const fileInput = document.getElementById('capt-upload-file-' + gameId);
+    const file = fileInput?.files?.[0];
+    if (!file) { toast('Pick a photo or PDF first', 'error'); return; }
+    const away = parseInt(document.getElementById(`cup-${gameId}-a`)?.value || '');
+    const home = parseInt(document.getElementById(`cup-${gameId}-h`)?.value || '');
+    const notes = document.getElementById(`cup-${gameId}-notes`)?.value?.trim() || '';
+    let dataUrl;
+    if (file.type.startsWith('image/')) {
+      dataUrl = await _playerCompressImage(file);
+    } else if (file.type === 'application/pdf') {
+      if (file.size > 800 * 1024) { toast('PDF too large (>800KB). Try a photo instead.', 'error'); return; }
+      dataUrl = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = e => res(e.target.result);
+        r.onerror = () => rej(new Error('Could not read PDF'));
+        r.readAsDataURL(file);
+      });
+    } else {
+      toast('File must be an image or PDF', 'error'); return;
+    }
+    await addDoc(collection(db, 'score_uploads'), {
+      game_id: gameId,
+      team_id: MY_TEAM.id,
+      team_name: MY_TEAM.name,
+      file_type: file.type,
+      file_name: file.name,
+      data_url: dataUrl,
+      away_score: isNaN(away) ? null : away,
+      home_score: isNaN(home) ? null : home,
+      notes,
+      submitted_by: captainData?.email || MY_TEAM.id,
+      submitted_at: serverTimestamp(),
+      status: 'pending_review'
+    });
+    toast('Scoresheet uploaded ✓ — admin will review', 'success');
+    document.getElementById('capt-upload-' + gameId).style.display = 'none';
+  } catch (e) {
+    toast('Upload failed: ' + e.message, 'error');
+  }
 };
 
 window.captToggleLineScore = function(gameId) {
@@ -3464,12 +3630,12 @@ window.captClearPlayerAvail = async function(gameId, playerId) {
 // ═══════════════════════════════════════════════════════════════════
 function activateCaptainTeamChat() {
   if (_unsubTeamChat) _unsubTeamChat();
-  // v96: desc + reverse so we always show the NEWEST 100 (not oldest 100).
+  // v97: asc + limitToLast so we use the existing composite index.
   const q = query(collection(db, 'team_messages'),
     where('team_id', '==', MY_TEAM.id),
-    orderBy('timestamp', 'desc'), limit(100));
+    orderBy('timestamp', 'asc'), limitToLast(100));
   _unsubTeamChat = onSnapshot(q, snap => {
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderCaptainTeamChat(msgs);
   });
 }
@@ -3587,11 +3753,11 @@ window.captainRemindWaiting = async function(gameId, btn) {
 // ═══════════════════════════════════════════════════════════════════
 function activateCaptainCaptChat() {
   if (_unsubCaptChat) _unsubCaptChat();
-  // v96: desc + reverse so we always show the NEWEST 200 (not oldest 200).
+  // v97: asc + limitToLast so we use the existing asc index (no new index required).
   const q = query(collection(db, 'captain_chat'),
-    orderBy('timestamp', 'desc'), limit(200));
+    orderBy('timestamp', 'asc'), limitToLast(200));
   _unsubCaptChat = onSnapshot(q, snap => {
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderCaptainCaptChat(msgs);
   });
 }
