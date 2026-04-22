@@ -3771,8 +3771,16 @@ window.captClearPlayerAvail = async function(gameId, playerId) {
 // ═══════════════════════════════════════════════════════════════════
 // CAPTAIN — Team Chat
 // ═══════════════════════════════════════════════════════════════════
+// Which team the current _unsubTeamChat subscription is bound to. Lets
+// us short-circuit re-subscribing on every tab switch when the team
+// hasn't changed — each re-subscribe was costing a Firestore round-trip
+// and flashing an empty state for a split second before the snapshot
+// arrived. Only tear down + re-subscribe when team id actually changes.
+let _teamChatBoundTeam = null;
 function activateCaptainTeamChat() {
+  if (_unsubTeamChat && _teamChatBoundTeam === MY_TEAM.id) return;
   if (_unsubTeamChat) _unsubTeamChat();
+  _teamChatBoundTeam = MY_TEAM.id;
   // v98: drop orderBy so Firestore doesn't require a composite index —
   // single-field where(team_id) uses the default built-in index.
   // Sort + trim newest 100 on the client.
@@ -3898,7 +3906,10 @@ window.captainRemindWaiting = async function(gameId, btn) {
 // CAPTAIN — Captains Chat
 // ═══════════════════════════════════════════════════════════════════
 function activateCaptainCaptChat() {
-  if (_unsubCaptChat) _unsubCaptChat();
+  // Captain-chat subscription is league-wide (no per-team filter), so
+  // once set up it stays valid across tab switches. No need to tear
+  // down and re-subscribe every time the Captains tab is activated.
+  if (_unsubCaptChat) return;
   // v97: asc + limitToLast so we use the existing asc index (no new index required).
   const q = query(collection(db, 'captain_chat'),
     orderBy('timestamp', 'asc'), limitToLast(200));

@@ -3773,7 +3773,13 @@ async function loadAllData() {
     ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
 
     // Map players — sort by avg desc
+    // Skip soft-deleted players (active:false). Captains can remove
+    // players from their roster via the captain portal; those docs stay
+    // in Firestore but get an `active:false` flag. Without this filter,
+    // removed players would keep showing in fan-facing stats/leaders/
+    // team pages even after the captain dropped them.
     PLAYERS = players
+      .filter(p => p.active !== false)
       .map(p => ({
         id: p.id, name: p.name, num: p.num, team: p.team, pos: p.pos,
         avg: parseFloat(p.avg)||0, hr: p.hr||0, rbi: p.rbi||0,

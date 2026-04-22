@@ -864,7 +864,7 @@ select.form-input{cursor:pointer;appearance:auto}
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, addDoc, query, where, orderBy, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, setDoc, doc, query, where, orderBy, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
 const app = initializeApp(FIREBASE_CONFIG);
@@ -1004,8 +1004,14 @@ window.submitRegistration = async () => {
       } catch(_dupErr) { /* if the check fails, fall through — don't block signup */ }
     }
 
-    // Write directly to players collection — auto-adds to roster
-    await addDoc(collection(db, 'players'), {
+    // Write directly to players collection — auto-adds to roster.
+    //
+    // When an email is present we use a deterministic doc ID
+    // (team__emailSlug__season) so two tabs submitting within the
+    // dup-check window collapse to a single row via setDoc merge,
+    // instead of both slipping through as separate addDoc writes.
+    // Empty-email signups fall back to addDoc (no dedupe key).
+    const playerRecord = {
       first_name: first,
       last_name:  last,
       name,
@@ -1018,7 +1024,14 @@ window.submitRegistration = async () => {
       waiver_signed:    true,
       waiver_signed_at: now,
       added_at:         now,
-    });
+    };
+    if (email) {
+      const emailSlug = email.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 64);
+      const regKey = `reg__${teamId}__${emailSlug}__${SEASON}`;
+      await setDoc(doc(db, 'players', regKey), playerRecord, { merge: true });
+    } else {
+      await addDoc(collection(db, 'players'), playerRecord);
+    }
 
     // Admin-only push alert so Adam knows someone signed up without having
     // to check the dashboard. Best-effort; silently swallows failures.

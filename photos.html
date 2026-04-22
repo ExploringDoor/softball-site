@@ -916,8 +916,14 @@ async function loadPlayerPhotos() {
     grid.innerHTML = '<div class="photo-grid">' + items.map(item => {
       const caption = item.caption || '';
       const by = item.player_name ? 'by ' + item.player_name + (item.team_name ? ' · ' + item.team_name : '') : (item.team_name || '');
+      // Stash url + caption in data-* attrs so a caption/player name
+      // containing a single quote can't break out of the onclick JS
+      // string. esc() handles <>& but not ' or "; the double-quoted
+      // data attrs plus the &quot; escape make both safe.
+      const lbUrl = esc(item.url||'').replace(/"/g,'&quot;');
+      const lbCap = esc(caption + (by ? ' — ' + by : '')).replace(/"/g,'&quot;');
       if (item.type === 'image') {
-        return `<div class="photo-card" onclick="openLb('${esc(item.url)}','${esc(caption + (by ? ' — ' + by : ''))}')">
+        return `<div class="photo-card" data-lb-url="${lbUrl}" data-lb-cap="${lbCap}" onclick="openLb(this.dataset.lbUrl, this.dataset.lbCap)">
           <img src="${esc(item.url)}" alt="${esc(caption||'Player photo')}" loading="lazy">
           <div class="photo-card-glass"></div>
           <div class="photo-card-info">
@@ -928,7 +934,7 @@ async function loadPlayerPhotos() {
       } else if (item.type === 'youtube') {
         const ytId = item.youtube_id || extractYtId(item.url || '');
         const thumb = ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '';
-        return `<div class="photo-card" onclick="window.open('${esc(item.url)}','_blank')">
+        return `<div class="photo-card" data-yt-url="${lbUrl}" onclick="window.open(this.dataset.ytUrl,'_blank')">
           ${thumb ? `<img src="${thumb}" alt="video" loading="lazy">` : '<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:32px">▶</span></div>'}
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
             <div style="width:44px;height:44px;background:rgba(255,0,0,.88);border-radius:10px;display:flex;align-items:center;justify-content:center">

@@ -6185,7 +6185,7 @@ function renderCaptains() {
         <td>${c.phone ? `<a href="tel:${esc(c.phone)}" style="color:var(--blue)">${esc(c.phone)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
         <td class="actions">
           <button class="btn btn-outline btn-sm" onclick="editCaptain('${c.id}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="removeCaptain('${c.id}', '${esc(c.email || c.name || '')}')">Remove</button>
+          <button class="btn btn-danger btn-sm" data-capt-id="${esc(c.id)}" data-capt-label="${esc(c.email || c.name || '').replace(/"/g,'&quot;')}" onclick="removeCaptain(this.dataset.captId, this.dataset.captLabel)">Remove</button>
         </td>
       </tr>`).join('');
     }).join('')}</tbody>
@@ -6820,7 +6820,7 @@ async function loadRegistrations() {
             <td style="font-size:12px">${esc(r.phone||'—')}</td>
             <td style="font-size:12px">${r.num||'—'}</td>
             <td style="font-size:12px">${esc(r.pos||'—')}</td>
-            <td><button class="btn btn-danger btn-sm" onclick="deleteRegistration('${r.id}','${esc(r.name||'')}')">Delete</button></td>
+            <td><button class="btn btn-danger btn-sm" data-reg-id="${esc(r.id)}" data-reg-name="${esc(r.name||'').replace(/"/g,'&quot;')}" onclick="deleteRegistration(this.dataset.regId, this.dataset.regName)">Delete</button></td>
           </tr>`;
         }).join('')}
         </tbody>
@@ -6915,8 +6915,8 @@ window.loadWaivers = async function() {
               <td style="font-size:12px;color:${signed?'var(--green)':'var(--muted2)'};white-space:nowrap">${signed ? dateStr : '<span style="color:var(--red)">Not signed</span>'}</td>
               <td><a href="mailto:${esc(p.email||'')}" style="color:var(--blue);font-size:12px">${esc(p.email||'—')}</a></td>
               <td style="white-space:nowrap;display:flex;gap:6px">
-                ${signed ? `<button class="btn btn-outline btn-sm" onclick="resetWaiver('${p.id}','${esc(p.name||'')}')">↺ Reset</button>` : ''}
-                <button class="btn btn-danger btn-sm" onclick="deleteWaiverPlayer('${p.id}','${esc(p.name||'')}')">Delete</button>
+                ${signed ? `<button class="btn btn-outline btn-sm" data-p-id="${esc(p.id)}" data-p-name="${esc(p.name||'').replace(/"/g,'&quot;')}" onclick="resetWaiver(this.dataset.pId, this.dataset.pName)">↺ Reset</button>` : ''}
+                <button class="btn btn-danger btn-sm" data-p-id="${esc(p.id)}" data-p-name="${esc(p.name||'').replace(/"/g,'&quot;')}" onclick="deleteWaiverPlayer(this.dataset.pId, this.dataset.pName)">Delete</button>
               </td>
             </tr>`;
           }).join('')}
