@@ -864,7 +864,7 @@ select.form-input{cursor:pointer;appearance:auto}
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, addDoc, query, orderBy, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, addDoc, query, where, orderBy, Timestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
 const app = initializeApp(FIREBASE_CONFIG);
@@ -982,6 +982,28 @@ window.submitRegistration = async () => {
   const now      = Timestamp.now();
 
   try {
+    // v99: duplicate-signup guard. A user who refreshes after signup (or
+    // double-taps the submit button on a slow connection) previously got a
+    // second `players` row for themselves. Check for an existing active row
+    // on this team + email before writing.
+    if (email) {
+      try {
+        const dupSnap = await getDocs(query(
+          collection(db, 'players'),
+          where('team', '==', teamId),
+          where('email', '==', email)
+        ));
+        const active = dupSnap.docs.find(d => (d.data()||{}).active !== false);
+        if (active) {
+          btn.disabled = false;
+          btn.textContent = 'Register';
+          errEl.className = 'error-box show';
+          errEl.textContent = `You're already registered on ${teamName} under ${email}. If you meant to update your info, contact your captain or the commissioner.`;
+          return;
+        }
+      } catch(_dupErr) { /* if the check fails, fall through — don't block signup */ }
+    }
+
     // Write directly to players collection — auto-adds to roster
     await addDoc(collection(db, 'players'), {
       first_name: first,
@@ -1014,20 +1036,16 @@ window.submitRegistration = async () => {
       });
     } catch(_e) { /* non-blocking */ }
 
-    // MailerLite sync (best-effort)
+    // MailerLite sync (best-effort) — v99: token moved to server route
+    // so it's no longer exposed in the public HTML bundle. See
+    // /api/mailerlite-subscribe.js. Default group is set server-side via
+    // MAILERLITE_GROUP_ID env var.
     if (email) {
       try {
-        await fetch('https://connect.mailerlite.com/api/subscribers', {
+        await fetch('/api/mailerlite-subscribe', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI0IiwianRpIjoiMzgzYzc0NGFlYzJkYWFjOTA3NDgzY2YzOGFhNzQ1ZDIxNzlkMWIzZDY0YmIwNmM1ZjM1ZGU1YmNlYjc5ODY4OTI3NjEwNmE2YWMxMzYxMTIiLCJpYXQiOjE3NzU2MTA5NzUuMTM2MDAxLCJuYmYiOjE3NzU2MTA5NzUuMTM2MDAzLCJleHAiOjQ5MzEyODQ1NzUuMTI5MTQ3LCJzdWIiOiIyMjcyMTc5Iiwic2NvcGVzIjpbXX0.ai_zNxrFdGYWYrZOI8k6nEPPGzukERNWtMpXvDmv9fARDTR9rw66mSPZ0TJYUCmDQB-wJinj4f57UvsZa8rhwLSyQKsoIDo_nxewyL416-2XLLf36BwBbp0cJptLGnM9_yLIU_dtj8OJixL9rPBEn4QZJKXMDwGXSTQcfNDU1w6RsZ6U-sYEnCLOUMSdiNRGvOiMUwmGwIKxCn_nDAttf3spTENteSNtL6tSz04AnIrJ15T4UPcDgSeGq68okIpGFw6tWOJ4E3UXOlpp8fUBDLRkIB-Dlhy9S9WUiV1CwooG0FnZquhhXbLsdyKZDwuvY12RlIS2yQm1JBfplGeP6rwQd4llSvKhZbuPyIpwCVMH6gnK8gmno4Y36A1yaRfzoVpNl_JKxSkTfoPS_vodxtQHsXkOfVL7ttqDl1f2LZLtMEvm1-h3N7Kr2rX2lMQ7x-cdUjOaMmjVxqOKr-vKQvsTtZjVedX4VGJIlWPpadwR_AEXQ3Q5aoyT4-yprMFFouJRBzvlkuHjbSPAdkUi7OOn1gy3qaMHRneX_YgTd_YgKe3TVLEaarzfhfLIamHhv63OZihq2jcs-EucpZWwqSwWFKgeekl6tqvCde5PfAwwnGhhmKbEFJcKWdrR2LGlxQduPLTFZ7vcHFnL5YaV5iFEuDuOLWadLTblWlCgmsQ'
-          },
-          body: JSON.stringify({
-            email,
-            fields: { name, last_name: last, phone: phone || '' },
-            groups: ['184141516725290868']
-          })
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, name, last, phone: phone || '' })
         });
       } catch(e) { /* silent */ }
     }

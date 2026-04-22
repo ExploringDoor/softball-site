@@ -806,8 +806,6 @@ select.form-input{cursor:pointer}
     <button class="btn btn-outline btn-full" id="login-btn" onclick="doLogin()">Commissioner Sign In</button>
     <div style="margin-top:10px;text-align:center">
       <a href="#" onclick="doPasswordReset();return false" style="font-size:12px;color:#002D72;text-decoration:underline">Forgot password?</a>
-      <span style="color:#ccc;margin:0 6px">·</span>
-      <a href="#" onclick="enterAdminNoPass();return false" style="font-size:12px;color:#aaa;text-decoration:underline">Enter admin without password (read-only)</a>
     </div>
   </div>
 </div>
@@ -2120,15 +2118,9 @@ window.enterCaptainMode = async function() {
   }
 };
 
-window.enterAdminNoPass = async function() {
-  captainMode = false;
-  captainTeamId = null;
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  document.getElementById('sidebar-user').textContent = 'Admin (no auth)';
-  await loadAllData();
-  showSection('dashboard');
-};
+// v99 REMOVED: enterAdminNoPass backdoor. Previously a "read-only" link on
+// the login screen let anyone into the admin app with full write access to
+// every Firestore collection. Real login is now required for every session.
 
 window.enterCaptainModeWithTeam = async function(teamId, teamName) {
   captainMode = true;
@@ -2154,8 +2146,21 @@ window.enterCaptainModeWithTeam = async function(teamId, teamName) {
 };
 
 // Listen for auth state
+// v99: hard allowlist so any stray Firebase Auth user (e.g. a captain
+// who somehow gets an Auth record via a leaked password-reset flow)
+// can't land in the commissioner dashboard. Only emails in this list
+// are treated as admin. Everyone else gets signed out immediately.
+const ADMIN_EMAILS = ['adam.miller.22@gmail.com'];
+
 onAuthStateChanged(auth, async (user) => {
   if (user) {
+    const email = (user.email || '').toLowerCase().trim();
+    if (!ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email)) {
+      console.warn('[admin-auth] unauthorized email, signing out:', email);
+      try { await signOut(auth); } catch(_) {}
+      alert('This account is not authorized for commissioner access.');
+      return;
+    }
     currentUser = user;
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'flex';
@@ -2775,7 +2780,10 @@ window.adminSubmitScoreOnly = async function(gameId) {
     } else {
       const q2 = query(collection(db, 'box_scores'), where('game_id', '==', gameId));
       const snap = await getDocs(q2);
-      if (!snap.empty) await updateDoc(doc(db, 'box_scores', snap.docs[0].id), boxData);
+      // v98 captain submissions also live in box_scores (per-team doc with team_id field).
+      // Exclude those from the "primary box doc" lookup so we only upsert into the game-wide doc.
+      const primary = snap.docs.find(d => !d.data().team_id);
+      if (primary) await updateDoc(doc(db, 'box_scores', primary.id), boxData);
       else await setDoc(primaryRef, boxData);
     }
     await updateDoc(doc(db, 'games', gameId), {
@@ -2840,12 +2848,11 @@ window.resetGame = async function(gameId) {
     delete g.score_submitted_away_away; delete g.score_submitted_away_home; delete g.score_submitted_away_by;
     delete g.score_submitted_home_away; delete g.score_submitted_home_home; delete g.score_submitted_home_by;
 
-    // Delete box score entirely so lineup picker starts fresh on next entry
+    // Delete box score entirely so lineup picker starts fresh on next entry.
+    // Also delete any captain per-team docs (team_id field) attached to this game.
     try {
       const bsSnap = await getDocs(query(collection(db, 'box_scores'), where('game_id', '==', gameId)));
-      if (!bsSnap.empty) {
-        await deleteDoc(doc(db, 'box_scores', bsSnap.docs[0].id));
-      }
+      await Promise.all(bsSnap.docs.map(d => deleteDoc(doc(db, 'box_scores', d.id))));
     } catch(bsErr) { console.warn('Could not delete box score:', bsErr); }
 
     // Delete score_submissions records (both sides) so captain can re-submit and admin queue clears
@@ -3335,7 +3342,9 @@ window.openBoxScore = async function(gameId, skipClear) {
     try {
       const q2 = query(collection(db, 'box_scores'), where('game_id', '==', gameId));
       const snap = await getDocs(q2);
-      if (!snap.empty) { existing = { id: snap.docs[0].id, ...snap.docs[0].data() }; bsBoxScore = existing; }
+      // Ignore captain per-team submissions when looking up the master box doc.
+      const primary = snap.docs.find(d => !d.data().team_id);
+      if (primary) { existing = { id: primary.id, ...primary.data() }; bsBoxScore = existing; }
     } catch(e) {}
 
     // Load rosters
@@ -4308,7 +4317,8 @@ window.saveBoxScore = async function(markFinal) {
     } else {
       const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
       const snap = await getDocs(q2);
-      if(!snap.empty) await updateDoc(doc(db,'box_scores',snap.docs[0].id), boxData);
+      const primary = snap.docs.find(d => !d.data().team_id);
+      if (primary) await updateDoc(doc(db,'box_scores',primary.id), boxData);
       else await setDoc(primaryRef, boxData);
     }
     const _preG = GAMES.find(x=>x.id===bsGameId);
@@ -4352,10 +4362,10 @@ window.bsReopenGame = async function() {
       delete g.score_submitted_home_away; delete g.score_submitted_home_home; delete g.score_submitted_home_by;
     }
     bsGameData.done = false;
-    // Delete box score so lineup picker starts fresh on next entry
+    // Delete every box_scores doc tied to this game (master + any captain per-team docs)
     try {
       const bsSnap = await getDocs(query(collection(db,'box_scores'), where('game_id','==',bsGameId)));
-      if (!bsSnap.empty) await deleteDoc(doc(db,'box_scores',bsSnap.docs[0].id));
+      await Promise.all(bsSnap.docs.map(d => deleteDoc(doc(db,'box_scores',d.id))));
     } catch(e2) { console.warn('Could not delete box score:', e2); }
     // Delete score_submissions records (both sides) so captain can re-submit
     try {
@@ -4390,7 +4400,8 @@ window.bsClearDiscrepancy = async function() {
       // Fallback: query by game_id (captain portal approach uses addDoc)
       const q = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
       const snap = await getDocs(q);
-      if (!snap.empty) await updateDoc(doc(db, 'box_scores', snap.docs[0].id), { has_discrepancy: false, discrepancies: [] });
+      const primary = snap.docs.find(d => !d.data().team_id);
+      if (primary) await updateDoc(doc(db, 'box_scores', primary.id), { has_discrepancy: false, discrepancies: [] });
     }
     await updateDoc(doc(db, 'games', bsGameId), { has_discrepancy: false }).catch(() => {});
     if (bsBoxScore) { bsBoxScore.has_discrepancy = false; bsBoxScore.discrepancies = []; }
@@ -4418,7 +4429,8 @@ window.bsReopenDiscrepancy = async function() {
     else {
       const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
       const qs = await getDocs(q2);
-      if (!qs.empty) await updateDoc(doc(db, 'box_scores', qs.docs[0].id), update);
+      const primary = qs.docs.find(d => !d.data().team_id);
+      if (primary) await updateDoc(doc(db, 'box_scores', primary.id), update);
     }
     await updateDoc(doc(db, 'games', bsGameId), { has_discrepancy: true, discrepancy_resolved: false, discrepancy_partial: false }).catch(() => {});
     if (bsBoxScore) Object.assign(bsBoxScore, update);
@@ -4515,7 +4527,8 @@ async function _bsPersistPicks(picks, extraUpdate = {}) {
   else {
     const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
     const qs = await getDocs(q2);
-    if (!qs.empty) await updateDoc(doc(db, 'box_scores', qs.docs[0].id), update);
+    const primary = qs.docs.find(d => !d.data().team_id);
+    if (primary) await updateDoc(doc(db, 'box_scores', primary.id), update);
   }
   await updateDoc(doc(db, 'games', bsGameId), {
     away_score: finalAway,
@@ -6746,27 +6759,47 @@ async function loadRegistrations() {
   const el = document.getElementById('registrations-content');
   if (!el) return;
   try {
-    const snap = await getDocs(query(collection(db, 'player_signups'), orderBy('signed_up_at', 'desc')));
-    const regs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // v99: registration.html writes signups to `players` (not `player_signups`),
+    // which left this tab perpetually empty. Now we read from `players`, show
+    // anything added in the last ~30 days, sorted newest first.
+    const snap = await getDocs(collection(db, 'players'));
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - THIRTY_DAYS_MS;
+    const regs = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => {
+        const ts = p.waiver_signed_at || p.added_at || p.signed_up_at;
+        if (!ts) return false;
+        const ms = ts.toDate ? ts.toDate().getTime() : new Date(ts).getTime();
+        return !isNaN(ms) && ms >= cutoff;
+      })
+      .sort((a, b) => {
+        const ta = a.waiver_signed_at || a.added_at || a.signed_up_at;
+        const tb = b.waiver_signed_at || b.added_at || b.signed_up_at;
+        const ma = ta?.toDate ? ta.toDate().getTime() : new Date(ta).getTime();
+        const mb = tb?.toDate ? tb.toDate().getTime() : new Date(tb).getTime();
+        return (mb||0) - (ma||0);
+      });
     if (!regs.length) {
-      el.innerHTML = `<div class="empty">No signups yet. They will appear here once someone submits the form at <a href="registration.html" target="_blank" style="color:var(--navy);font-weight:700;text-decoration:underline">registration.html</a>. <span style="display:block;margin-top:6px;font-size:12px;color:var(--muted2)">Share that link (or the "Register" link in the main site's menu) with prospective players.</span></div>`;
+      el.innerHTML = `<div class="empty">No signups in the last 30 days. They will appear here once someone submits the form at <a href="registration.html" target="_blank" style="color:var(--navy);font-weight:700;text-decoration:underline">registration.html</a>. <span style="display:block;margin-top:6px;font-size:12px;color:var(--muted2)">Share that link (or the "Register" link in the main site's menu) with prospective players.</span></div>`;
       return;
     }
+    const teamName = (id) => TEAMS.find(t => t.id === id)?.name || id || '—';
     el.innerHTML = `
-      <div style="margin-bottom:8px;font-size:13px;color:var(--muted)">${regs.length} player signup${regs.length!==1?'s':''}</div>
+      <div style="margin-bottom:8px;font-size:13px;color:var(--muted)">${regs.length} recent signup${regs.length!==1?'s':''} (last 30 days)</div>
       <div class="tbl-wrap"><table class="tbl">
-        <thead><tr><th>Date</th><th>Name</th><th>Team</th><th>Email</th><th>Phone</th><th>Notifications</th><th></th></tr></thead>
+        <thead><tr><th>Date</th><th>Name</th><th>Team</th><th>Email</th><th>Phone</th><th>#</th><th>Pos</th><th></th></tr></thead>
         <tbody>${regs.map(r => {
-          const ts = r.signed_up_at;
+          const ts = r.waiver_signed_at || r.added_at || r.signed_up_at;
           const date = ts ? (ts.toDate ? ts.toDate().toLocaleDateString() : new Date(ts).toLocaleDateString()) : '—';
-          const notifs = r.notifications ? Object.entries(r.notifications).filter(([,v])=>v).map(([k])=>k.replace('_',' ')).join(', ') || 'none' : '—';
           return `<tr>
             <td style="font-size:12px;color:var(--muted2);white-space:nowrap">${date}</td>
             <td><strong>${esc(r.name||'—')}</strong></td>
-            <td style="font-size:13px">${esc(r.team_name||'—')}</td>
+            <td style="font-size:13px">${esc(teamName(r.team))}</td>
             <td><a href="mailto:${esc(r.email||'')}" style="color:var(--blue);font-size:12px">${esc(r.email||'—')}</a></td>
             <td style="font-size:12px">${esc(r.phone||'—')}</td>
-            <td style="font-size:11px;color:var(--muted2)">${esc(notifs)}</td>
+            <td style="font-size:12px">${r.num||'—'}</td>
+            <td style="font-size:12px">${esc(r.pos||'—')}</td>
             <td><button class="btn btn-danger btn-sm" onclick="deleteRegistration('${r.id}','${esc(r.name||'')}')">Delete</button></td>
           </tr>`;
         }).join('')}
@@ -6895,9 +6928,11 @@ window.deleteWaiverPlayer = async function(id, name) {
 };
 
 window.deleteRegistration = async function(id, name) {
-  if (!confirm(`Delete signup for ${name || 'this player'}? This cannot be undone.`)) return;
+  if (!confirm(`Delete signup for ${name || 'this player'}? This removes them from the players roster — use Players tab to re-add if needed.`)) return;
   try {
-    await deleteDoc(doc(db, 'player_signups', id));
+    // v99: signups live in `players` now (not `player_signups`). Delete from
+    // there so the roster stays consistent with what's shown here.
+    await deleteDoc(doc(db, 'players', id));
     toast('Signup deleted');
     await logActivity('Registrations', `Deleted signup: ${name}`);
     loadRegistrations();
