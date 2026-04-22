@@ -91,6 +91,7 @@
           {
             label: 'Compete',
             items: [
+              { icon: '👥', label: 'Teams',       href: '/#players' },
               { icon: '🏆', label: 'Standings',   href: '/#standings' },
               { icon: '📊', label: 'Stats',       href: '/#stats' },
               { icon: '🥇', label: 'Leaders',     href: '/#leaders' },
@@ -101,9 +102,12 @@
           {
             label: 'Account',
             items: [
+              // v97: "My Profile" covers both player and captain modes (profile.html
+              // unified both). Dropped the separate Captain Dashboard entry since
+              // /captain.html just redirects to /profile.html. Notifications now
+              // deep-links to the profile's Notifications tab.
               { icon: '👤', label: 'My Profile',        href: '/profile.html' },
-              { icon: '🔔', label: 'Notifications',     href: '/inbox.html' },
-              { icon: '⚾', label: 'Captain Dashboard', href: '/captain.html' },
+              { icon: '🔔', label: 'Notifications',     href: '/profile.html#notif' },
               { icon: '✍️', label: 'Player Sign-Up',    href: '/registration.html' },
               { icon: '🛠️', label: 'Admin Access',      href: '/admin.html' },
             ],
@@ -160,16 +164,19 @@
                  Adam said v32's 68px/6px pad change wasn't enough — icons still
                  felt like they were hugging the home-indicator. Here the inner
                  content area gets 8px of top pad AND 14px of pad below the
-                 system safe-area, so icons float ~14px higher than before. */
-              height: calc(74px + env(safe-area-inset-bottom)) !important;
+                 system safe-area, so icons float ~14px higher than before.
+                 v97: bumped bar height 74 → 86 so the extra 12px of top
+                 padding doesn't squish the icons. */
+              height: calc(86px + env(safe-area-inset-bottom)) !important;
               /* Adam: move the 5 bottom-bar icons down a touch. Nudge top
                  padding up and bottom padding down so icons sit closer to
                  the physical bottom edge (still comfortably above the iOS
                  home indicator because env(safe-area-inset-bottom) is
-                 non-zero on notched devices). v91: pushed another ~10px
-                 lower — top padding 16 → 26, bottom padding 6 → 2 (still
-                 inside env safe-area so home indicator stays clear). */
-              padding-top: 26px !important;
+                 non-zero on notched devices).
+                 v91: top padding 16 → 26, bottom 6 → 2.
+                 v97: pushed further — top padding 26 → 38. Physical bottom
+                 padding stays env-safe so home indicator is still clear. */
+              padding-top: 38px !important;
               padding-left: max(8px, env(safe-area-inset-left)) !important;
               padding-right: max(8px, env(safe-area-inset-right)) !important;
               padding-bottom: calc(env(safe-area-inset-bottom) + 2px) !important;
@@ -2866,14 +2873,16 @@ thead th.sorted-col .sarrow{opacity:1}
     <li class="nav-dd-wrap" id="more-dd-wrap">
       <span style="cursor:pointer">More<svg class="nav-dd-arrow" viewBox="0 0 9 6" fill="none"><path d="M1 1l3.5 4L8 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       <div class="nav-dropdown nav-dropdown-right" id="more-dropdown">
+        <!-- v97: removed redundant Player Portal + Captain Dashboard
+             entries (both redirect into profile.html). Single "My Profile"
+             covers both roles; the page switches on who's signed in. -->
         <a class="nav-dd-item" href="watch.html" style="color:var(--red);font-weight:700">🔴 Watch Live</a>
+        <a class="nav-dd-item" href="profile.html" style="color:var(--navy);font-weight:700">👤 My Profile</a>
         <a class="nav-dd-item" href="leaders.html">🥇 Leaders</a>
         <a class="nav-dd-item" href="playoffs.html">🏆 Brackets</a>
-        <a class="nav-dd-item" href="rules.html">📋 Field Guide</a>
+        <a class="nav-dd-item" href="rules.html">📋 Rules</a>
         <a class="nav-dd-item" href="photos.html">📷 Gallery</a>
         <a class="nav-dd-item" href="registration.html">📝 Player Signup</a>
-        <a class="nav-dd-item" href="player.html">🙋 Player Portal</a>
-        <a class="nav-dd-item" href="captain.html">⚾ Captain Dashboard</a>
         <a class="nav-dd-item" href="admin.html" style="color:rgba(0,45,114,.6)">⚙ Admin</a>
       </div>
     </li>
@@ -2886,7 +2895,7 @@ thead th.sorted-col .sarrow{opacity:1}
          (inbox of received notifications) is still reachable via the
          More sheet → Account → Notifications. -->
     <button class="nav-signup-btn" onclick="window.location='profile.html'">👤 Profile</button>
-    <button id="nav-notif-btn" onclick="window.location='inbox.html'" title="Notifications" aria-label="Notifications" style="position:relative;background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:16px;transition:all .2s;line-height:1">🔔<span id="nav-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;background:#dc2626;color:#fff;border-radius:9px;font-size:11px;font-weight:700;padding:0 5px;line-height:18px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span></button>
+    <button id="nav-notif-btn" onclick="window.location='profile.html#notif'" title="Notifications" aria-label="Notifications" style="position:relative;background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:16px;transition:all .2s;line-height:1">🔔<span id="nav-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;background:#dc2626;color:#fff;border-radius:9px;font-size:11px;font-weight:700;padding:0 5px;line-height:18px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span></button>
     <!-- Dark/light toggle removed per Adam (2026-04-21). Keeping the
          toggleDarkMode() function and CSS vars for any lingering .dark
          class on body, but the button is gone from both desktop and mobile. -->
@@ -2894,24 +2903,27 @@ thead th.sorted-col .sarrow{opacity:1}
 </nav>
 <button class="hamburger" id="hbg" style="position:fixed;top:calc(74px + env(safe-area-inset-top, 0px));right:14px;z-index:600;display:none;background:rgba(0,0,0,.55);border-radius:7px;padding:8px 10px"><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span><span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px;transition:all .3s"></span></button>
 <div class="mob-menu" id="mobMenu">
+  <!-- v97: cleaned up — removed stale entries (player.html/captain.html
+       are both redirects into profile.html, so only one profile entry).
+       MY STUFF section pinned to the top; league browsing in the middle;
+       admin quiet at the bottom. -->
+  <a href="profile.html" style="display:block;font-size:24px;padding:12px 0;border-bottom:1px solid var(--border);font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--navy);text-decoration:none">👤 My Profile</a>
+  <a href="watch.html" style="display:block;font-size:24px;padding:12px 0;border-bottom:1px solid var(--border);font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--red);text-decoration:none">🔴 Watch Live</a>
   <span onclick="goPage('home');closeMob()">Home</span>
   <span onclick="goPage('scores');closeMob()">Scores</span>
   <span onclick="goPage('scores');setTimeout(()=>setView('schedule'),100);closeMob()">Schedule</span>
   <span onclick="goPage('standings');closeMob()">Standings</span>
   <span onclick="goPage('stats');closeMob()">Stats</span>
   <span onclick="goPage('players');closeMob()">Teams</span>
-  <a href="watch.html" style="display:block;font-size:24px;padding:12px 0;border-bottom:1px solid var(--border);font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--red);text-decoration:none">🔴 Watch Live</a>
-  <a href="captain.html" style="display:block;font-size:24px;padding:12px 0;border-bottom:1px solid var(--border);font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--navy);text-decoration:none">⚾ Captain Dashboard</a>
   <span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='flex'?'none':'flex'" style="display:flex;align-items:center;justify-content:space-between">More <span style="font-size:18px;opacity:.5">›</span></span>
   <div style="display:none;flex-direction:column;padding-left:20px;border-bottom:1px solid var(--border)">
     <a href="leaders.html" style="font-size:20px;padding:10px 0;border-bottom:none">🥇 Leaders</a>
     <a href="playoffs.html" style="font-size:20px;padding:10px 0;border-bottom:none">🏆 Brackets</a>
-    <a href="rules.html" style="font-size:20px;padding:10px 0;border-bottom:none">📋 Field Guide</a>
+    <a href="rules.html" style="font-size:20px;padding:10px 0;border-bottom:none">📋 Rules</a>
     <a href="photos.html" style="font-size:20px;padding:10px 0;border-bottom:none">📷 Gallery</a>
     <a href="registration.html" style="font-size:20px;padding:10px 0;border-bottom:none">📝 Player Signup</a>
-    <a href="player.html" style="font-size:20px;padding:10px 0;border-bottom:none">🙋 Player Portal</a>
   </div>
-  <a href="admin.html" style="color:rgba(0,45,114,.7)">⚙ Admin / Score Entry</a>
+  <a href="admin.html" style="color:rgba(0,45,114,.7)">⚙ Admin</a>
 </div>
 
 <!-- ═══ HOME PAGE ═══ -->
@@ -4421,6 +4433,11 @@ let currentTeamId=null, currentTeamTab='roster';
 function goPage(name,extra,skipHistory){
   // Skip intro if navigating away from home
   if(name!=='home') document.body.classList.add('intro-done');
+  // v97: bell is home-only. Toggle visibility based on the page name.
+  try {
+    const _bell = document.getElementById('nav-notif-btn');
+    if (_bell) _bell.style.display = (name === 'home') ? '' : 'none';
+  } catch(_) {}
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('show'));
   var pg=document.getElementById('pg-'+name);
   if(!pg){var ext={playoffs:'playoffs.html',rules:'rules.html',photos:'photos.html'};if(ext[name])window.location=ext[name];return;}
