@@ -76,7 +76,7 @@
     // Team abbreviations that have a matching logo PNG in /logos/<abbr>.png.
     // Used only as a has-logo cache — any team not in this set falls back to
     // a text avatar. Update when you add a new team logo.
-    logoTeams: ['aj', 'ba', 'bob', 'bor', 'bsb', 'bsmc', 'btbj', 'cha', 'dn', 'gjc', 'gold', 'ki', 'oa', 'sa', 'tsbka', 'tsmc', 'tsg', 'tbimc', 'tbir']
+    logoTeams: ['aj', 'ba', 'bob', 'bor', 'bsb', 'bsmc', 'btbj', 'cha', 'dn', 'gjc', 'gold', 'ki', 'oa', 'sa', 'toast', 'tsbka', 'tsmc', 'tsg', 'tbimc', 'tbir']
   };
 
   // Works in both window (pages) and self (service worker) contexts.
