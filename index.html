@@ -5150,12 +5150,15 @@ function buildSchedule(){
     wkMap[g.wk].push(g);
   });
   const allWkNums=Object.keys(wkMap).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
-  let currentWk=allWkNums.find(w=>wkMap[w].some(g=>!g.done));
+  // PPD games are stuck at done=false until they're rescheduled, so exclude
+  // them from "has upcoming games" — otherwise the Upcoming Schedule block
+  // clings to a week whose real games already wrapped up.
+  let currentWk=allWkNums.find(w=>wkMap[w].some(g=>!g.done && !g.ppd));
   if(!currentWk) currentWk=allWkNums[allWkNums.length-1];
   if(!currentWk){ wrap.innerHTML=''; return; }
 
   const weekGames=wkMap[currentWk];
-  const upGames=weekGames.filter(g=>!g.done);
+  const upGames=weekGames.filter(g=>!g.done && !g.ppd);
   const gamesToShow=upGames.length?upGames:weekGames;
 
   // Render as preview cards (reuse scheduleBlock which now outputs preview-card for upcoming)
@@ -6321,7 +6324,9 @@ function getTickerGames(){
   Object.values(wkMap).forEach(arr => arr.sort(sortByDateTime));
 
   const allWks=Object.keys(wkMap).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
-  const curWk=allWks.find(w=>wkMap[w].some(g=>!g.done));
+  // Same PPD caveat as buildSchedule — a week with only done+ppd games is
+  // effectively complete; move the ticker on to the next week.
+  const curWk=allWks.find(w=>wkMap[w].some(g=>!g.done && !g.ppd));
   if(!curWk) return SCHEDULE_PREVIEW.slice().sort(sortByDateTime).slice(-10); // all done, show last 10
   // Show current week + next week
   const curIdx=allWks.indexOf(curWk);
@@ -6379,7 +6384,11 @@ function buildTicker2(){
     const done = g.done && g.as !== null && g.hs !== null;
     const aWin = done && g.as > g.hs;
     const hWin = done && g.hs > g.as;
-    const status = done ? 'Final' : (g.live ? '<span class="live-badge">🔴 LIVE</span>' : (g.date+' · '+g.time));
+    // PPD takes precedence over Final/LIVE/datetime so postponed games are
+    // immediately obvious (red PPD badge + reschedule target if known).
+    const status = g.ppd
+      ? '<span style="color:#ff4d4d;font-weight:900;letter-spacing:.05em">PPD'+(g.ppdResched?' · → '+g.ppdResched:'')+'</span>'
+      : (done ? 'Final' : (g.live ? '<span class="live-badge">🔴 LIVE</span>' : (g.date+' · '+g.time)));
     const field = g.field||'';
     const timeStr = g.time||'TBD';
     const awayLabel = isMob ? getMobileAbbr(g.away) : g.away;
