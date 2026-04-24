@@ -1112,6 +1112,14 @@ function toast(msg, type = 'success') {
 }
 window.toast = toast;
 
+// Canonical DVSL field list (mirrors captain.html so the captain Schedule tab
+// can offer the same dropdown when editing a game).
+const DVSL_FIELDS = ['Mondauk 4','Mondauk 5','Lukens 2','Plymouth','Sunnybrook','Cedar Hill','TBD'];
+function fieldOptionsHtml(selected=''){
+  return '<option value="">-- Select Field --</option>' +
+    DVSL_FIELDS.map(f=>`<option value="${f}"${f===selected?' selected':''}>${f}</option>`).join('');
+}
+
 function showScreen(id) {
   const ids = ['screen-loading','screen-chooser','screen-player-picker','screen-player-pw','screen-captain-picker','screen-captain-pw','player-app','captain-app'];
   ids.forEach(i => {
@@ -2606,13 +2614,19 @@ function renderCaptainSchedule() {
       : (g.done
           ? '<span class="badge badge-done">Final</span>'
           : '<span class="badge badge-info">Scheduled</span>');
-    return `<div class="game-card"${anchorAttr}>
+    // Only non-final games are editable by the captain (date/time/field).
+    const canEdit = !g.done;
+    const editBtn = canEdit
+      ? `<button class="btn btn-outline btn-sm" style="margin-left:8px" onclick="captToggleEditGame('${g.id}')">✏️ Edit</button>`
+      : '';
+    return `<div class="game-card"${anchorAttr} style="flex-wrap:wrap">
       <div class="game-info">
         <div class="game-opp">Wk ${g.wk} · ${ha} ${esc(getTeamName(oppId))}</div>
         <div class="game-meta">${esc(g.date||'')} ${g.day?'· '+esc(g.day):''} ${g.time?'· '+esc(g.time):''} ${g.field?'· '+esc(g.field):''}</div>
       </div>
       <div class="score-display">${esc(scoreText)}</div>
-      <div>${badge}</div>
+      <div style="display:flex;align-items:center">${badge}${editBtn}</div>
+      ${canEdit ? `<div id="capt-sched-edit-${g.id}" style="display:none;flex-basis:100%;width:100%"></div>` : ''}
     </div>`;
   }).join('');
   if (upcomingIdx >= 0) {
@@ -2623,6 +2637,88 @@ function renderCaptainSchedule() {
     }, 80);
   }
 }
+
+// Captain inline edit for an upcoming game — mirrors captain.html's editor:
+// date, time, field. Appears below the game card row when ✏️ Edit is tapped.
+window.captToggleEditGame = function(gameId) {
+  const el = document.getElementById('capt-sched-edit-' + gameId);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+  const g = CAPT_ALL_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  // Best-effort parse date_iso from display string (e.g. "May 7") if missing.
+  let dateIsoVal = g.date_iso || '';
+  if (!dateIsoVal && g.date) {
+    try {
+      const d = new Date(g.date + ' 2026');
+      if (!isNaN(d)) dateIsoVal = d.toISOString().slice(0,10);
+    } catch(e) {}
+  }
+  // Best-effort parse 24h time from "6:15 PM" → "18:15".
+  let time24Val = g.time_24 || '';
+  if (!time24Val && g.time) {
+    try {
+      const m = g.time.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (m) {
+        let h = parseInt(m[1]); const min = m[2]; const ampm = m[3].toUpperCase();
+        if (ampm === 'PM' && h !== 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        time24Val = `${String(h).padStart(2,'0')}:${min}`;
+      }
+    } catch(e) {}
+  }
+  const oppName = getTeamName(g.home === MY_TEAM.id ? g.away : g.home);
+  el.style.display = 'block';
+  el.innerHTML = `<div style="padding:12px;background:#f8f9fb;border-top:1px solid var(--border);margin-top:8px;border-radius:6px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><label class="form-label">Date</label><input type="date" class="form-input" id="ceg-date-${gameId}" value="${esc(dateIsoVal)}"></div>
+      <div><label class="form-label">Time</label><input type="time" class="form-input" id="ceg-time-${gameId}" value="${esc(time24Val)}"></div>
+    </div>
+    <div style="margin-bottom:8px"><label class="form-label">Field</label><select class="form-input" id="ceg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
+    <div style="margin-bottom:10px;font-size:13px;color:var(--muted)">vs <strong>${esc(oppName)}</strong></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success btn-sm" onclick="captSaveEditGame('${gameId}')">Save</button>
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('capt-sched-edit-${gameId}').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+};
+
+window.captSaveEditGame = async function(gameId) {
+  const dateIso = document.getElementById('ceg-date-' + gameId)?.value;
+  const time24  = document.getElementById('ceg-time-' + gameId)?.value;
+  const field   = document.getElementById('ceg-field-' + gameId)?.value;
+  // ISO date → display ("May 7") and weekday ("Thu").
+  let dateDisplay = '', dayDisplay = '';
+  if (dateIso) {
+    const d = new Date(dateIso + 'T12:00:00');
+    dateDisplay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+    dayDisplay  = d.toLocaleDateString('en-US', { weekday:'short' });
+  }
+  // 24h → "6:15 PM".
+  let timeDisplay = '';
+  if (time24) {
+    const [hh, mm] = time24.split(':').map(Number);
+    const suffix = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 || 12;
+    timeDisplay = `${h12}:${String(mm).padStart(2,'0')} ${suffix}`;
+  }
+  try {
+    await updateDoc(doc(db, 'games', gameId), {
+      date: dateDisplay, day: dayDisplay,
+      time: timeDisplay, time_24: time24||'',
+      date_iso: dateIso||'', field: field||''
+    });
+    // Reflect locally so the next render shows the new values.
+    const g = CAPT_ALL_GAMES.find(x => x.id === gameId);
+    if (g) {
+      g.date = dateDisplay; g.day = dayDisplay;
+      g.time = timeDisplay; g.time_24 = time24||'';
+      g.date_iso = dateIso||''; g.field = field||'';
+    }
+    toast('Game updated!');
+    renderCaptainSchedule();
+  } catch(e) { toast('Failed to save: ' + e.message, 'error'); }
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // CAPTAIN — Submit Score (simple flow)
