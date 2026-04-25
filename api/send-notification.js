@@ -215,14 +215,17 @@ async function listMatchingTokens({ projectId, accessToken, category, team, team
     const cats = (f.categories?.arrayValue?.values || []).map(v => v.stringValue);
     if (cats.length && !cats.includes(category)) continue;
     const tokTeams = (f.teams?.arrayValue?.values || []).map(v => v.stringValue);
-    // Private chat rooms (team_chat) REQUIRE an explicit team-list match on
-    // both sides — otherwise a subscriber with no favorite-teams picked
-    // would receive every team's chat (old "empty = all teams" default
-    // leaked private messages across teams).
+    // authed_teams: set by profile.html when a player signs in with Firebase
+    // Auth and their doc is linked to a team. Used ONLY to gate team_chat
+    // pushes — prevents a subscriber who picked "all teams" for score
+    // notifications from receiving private team chat messages they aren't
+    // actually a member of.
+    const tokAuthedTeams = (f.authed_teams?.arrayValue?.values || []).map(v => v.stringValue);
     const isTeamChat = category === 'team_chat';
     if (isTeamChat) {
-      if (!teamWanted.length || !tokTeams.length) continue;
-      if (!teamWanted.some(t => tokTeams.includes(t))) continue;
+      // Only push to devices whose authenticated player is on the target team.
+      if (!teamWanted.length || !tokAuthedTeams.length) continue;
+      if (!teamWanted.some(t => tokAuthedTeams.includes(t))) continue;
     } else {
       // Empty subscriber teams = "all teams" (always match). Otherwise we need
       // at least one overlap between what we're targeting and what they follow.

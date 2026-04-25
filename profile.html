@@ -405,6 +405,10 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 .pw-btn:hover{background:#003d99}
 .pw-error{display:none;background:var(--red-bg);color:var(--red);font-size:13px;padding:10px;border-radius:8px;margin-bottom:12px}
 .pw-back{display:inline-block;margin-top:16px;color:var(--navy);font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;background:none;border:0}
+.pw-wrap-input{position:relative}
+.pw-wrap-input .pw-input{padding-right:64px;margin-bottom:0}
+.pw-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:transparent;border:0;color:var(--navy);font-size:12px;font-weight:700;text-transform:uppercase;cursor:pointer;padding:6px 10px;letter-spacing:.04em}
+.pw-eye:hover{text-decoration:underline}
 
 /* ── BUTTONS ── */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;border-radius:8px;padding:11px 22px;cursor:pointer;transition:all .15s;text-decoration:none}
@@ -684,18 +688,75 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
   </div>
 </div>
 
+
 <!-- ══════════════════════════════════════════════════════════════════ -->
-<!-- SCREEN: PLAYER PASSWORD                                            -->
+<!-- SCREEN: PLAYER NAME PICKER (after team is selected)                -->
+<!-- Shows roster dropdown + "Not on roster? Add me" button.            -->
 <!-- ══════════════════════════════════════════════════════════════════ -->
-<div class="screen" id="screen-player-pw">
+<div class="screen" id="screen-player-name-picker">
   <div class="pw-wrap">
-    <img id="pw-logo" class="pw-logo" src="" onerror="this.style.display='none'">
-    <div class="pw-team-name" id="pw-team-name"></div>
-    <div class="pw-sub">Enter your team's password to continue.</div>
-    <div class="pw-error" id="pw-error">Incorrect password. Try again.</div>
-    <input type="password" class="pw-input" id="pw-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')window.checkPlayerPassword()">
-    <button class="pw-btn" onclick="window.checkPlayerPassword()">Enter</button>
+    <img id="pnp-logo" class="pw-logo" src="" onerror="this.style.display='none'">
+    <div class="pw-team-name" id="pnp-team-name"></div>
+    <div class="pw-sub">Pick your name from the roster.</div>
+    <select id="pnp-select" class="pw-input" style="padding:12px" onchange="window.pickPlayerName()">
+      <option value="">— Select your name —</option>
+    </select>
+    <div style="margin:14px 0;color:var(--muted);font-size:13px">— or —</div>
+    <button class="pw-btn" style="background:var(--navy)" onclick="window.showAddSelf()">Don't see your name? Add me</button>
     <button class="pw-back" onclick="window.backToPlayerPicker()">← Choose a different team</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: PLAYER AUTH (sign in OR create account for a picked name)  -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-player-auth">
+  <div class="pw-wrap">
+    <img id="pa-logo" class="pw-logo" src="" onerror="this.style.display='none'">
+    <div class="pw-team-name" id="pa-name"></div>
+    <div class="pw-sub" id="pa-sub">Create your account — you'll only do this once.</div>
+    <div class="pw-error" id="pa-error" style="display:none"></div>
+    <input type="email" class="pw-input" id="pa-email" placeholder="Your email" autocomplete="email" style="margin-bottom:10px">
+    <div class="pw-wrap-input"><input type="password" class="pw-input" id="pa-password" placeholder="Password (min 6 chars)" autocomplete="new-password" onkeydown="if(event.key==='Enter')window.submitPlayerAuth()"><button type="button" class="pw-eye" onclick="window.togglePw('pa-password', this)">Show</button></div>
+    <div id="pa-confirm-wrap" class="pw-wrap-input" style="margin-top:10px"><input type="password" class="pw-input" id="pa-password2" placeholder="Re-type password" autocomplete="new-password" onkeydown="if(event.key==='Enter')window.submitPlayerAuth()"><button type="button" class="pw-eye" onclick="window.togglePw('pa-password2', this)">Show</button></div>
+    <button class="pw-btn" id="pa-submit" style="margin-top:14px" onclick="window.submitPlayerAuth()">Create Account</button>
+    <button class="pw-back" id="pa-forgot" onclick="window.playerForgotPassword()" style="display:block;margin-top:20px;font-weight:900;color:#fff;background:#c62828;font-size:18px;padding:14px 16px;border-radius:10px;text-decoration:none;width:100%">🔑 Forgot password? Tap to reset</button>
+    <div style="font-size:15px;color:#c62828;margin-top:10px;font-weight:800;line-height:1.4;background:#FFF3E0;border:2px solid #c62828;border-radius:10px;padding:12px;text-align:center">⚠️ Check your JUNK / SPAM folder — reset emails usually go there!</div>
+    <div id="pa-already" style="display:none;font-size:15px;color:var(--navy);margin-top:14px;line-height:1.5;font-weight:600;background:#E8F0FE;border-radius:10px;padding:12px;text-align:center">Already signed up before? Type your email above and tap the red <strong>🔑 Forgot password?</strong> button — we'll email you a reset link.</div>
+    <button class="pw-back" onclick="window.backToNamePicker()" style="margin-top:18px;font-size:15px">← Back</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: PLAYER ADD SELF (not on roster yet — captain approves)     -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-player-addself">
+  <div class="pw-wrap" style="max-width:420px">
+    <img id="pas-logo" class="pw-logo" src="" onerror="this.style.display='none'">
+    <div class="pw-team-name" id="pas-team-name"></div>
+    <div class="pw-sub">Fill out the info below. Your captain will see your request and approve it.</div>
+    <div class="pw-error" id="pas-error" style="display:none"></div>
+    <input type="text" class="pw-input" id="pas-first" placeholder="First name" autocomplete="given-name" style="margin-bottom:10px">
+    <input type="text" class="pw-input" id="pas-last" placeholder="Last name" autocomplete="family-name" style="margin-bottom:10px">
+    <input type="number" class="pw-input" id="pas-num" placeholder="Jersey # (optional)" style="margin-bottom:10px">
+    <input type="email" class="pw-input" id="pas-email" placeholder="Your email" autocomplete="email" style="margin-bottom:10px">
+    <div class="pw-wrap-input"><input type="password" class="pw-input" id="pas-password" placeholder="Create password (min 6 chars)" autocomplete="new-password"><button type="button" class="pw-eye" onclick="window.togglePw('pas-password', this)">Show</button></div>
+    <div class="pw-wrap-input" style="margin-top:10px"><input type="password" class="pw-input" id="pas-password2" placeholder="Re-type password" autocomplete="new-password"><button type="button" class="pw-eye" onclick="window.togglePw('pas-password2', this)">Show</button></div>
+    <button class="pw-btn" id="pas-submit" style="margin-top:14px" onclick="window.submitAddSelf()">Request to Join</button>
+    <button class="pw-back" onclick="window.backToNamePicker()">← Back</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCREEN: POST-AUTH CONFIRMATION                                     -->
+<!-- Brief explainer after Create Account / Request to Join succeeds.    -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div class="screen" id="screen-player-welcome">
+  <div class="pw-wrap">
+    <div style="font-size:56px;margin-bottom:10px" id="welcome-ico">🎉</div>
+    <div class="pw-team-name" id="welcome-title">Welcome!</div>
+    <div class="pw-sub" id="welcome-body" style="line-height:1.55"></div>
+    <button class="pw-btn" style="margin-top:14px" onclick="window.welcomeContinue()">Continue</button>
   </div>
 </div>
 
@@ -1070,9 +1131,14 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, onSnapshot, serverTimestamp, limit, limitToLast, Timestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence, fetchSignInMethodsForEmail } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const app = initializeApp(window.LEAGUE_CONFIG.firebase);
 const db = getFirestore(app);
+const auth = getAuth(app);
+// Local persistence = session survives browser restart / app close. This is
+// what makes "type password once per device, stays signed in forever" work.
+try { setPersistence(auth, browserLocalPersistence); } catch(_) {}
 
 const PUSH_SECRET = window.LEAGUE_CONFIG.push.adminSecret;
 
@@ -1121,7 +1187,7 @@ function fieldOptionsHtml(selected=''){
 }
 
 function showScreen(id) {
-  const ids = ['screen-loading','screen-chooser','screen-player-picker','screen-player-pw','screen-captain-picker','screen-captain-pw','player-app','captain-app'];
+  const ids = ['screen-loading','screen-chooser','screen-player-picker','screen-player-name-picker','screen-player-auth','screen-player-addself','screen-player-welcome','screen-captain-picker','screen-captain-pw','player-app','captain-app'];
   ids.forEach(i => {
     const el = document.getElementById(i);
     if (el) el.classList.toggle('active', i === id);
@@ -1136,13 +1202,18 @@ function getTeamName(id) {
 // ═══════════════════════════════════════════════════════════════════
 // Initial Identity Detection
 // ═══════════════════════════════════════════════════════════════════
+// Tracks the current signed-in player (the roster doc linked by auth_uid).
+// Exposed on window so other modules (team chat, availability) can read it.
+let MY_AUTH_PLAYER = null;
+window.MY_AUTH_PLAYER = null;
+
 async function init() {
   showScreen('screen-loading');
   try {
     const snap = await getDocs(query(collection(db, 'teams'), orderBy('name')));
     ALL_TEAMS = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
 
-    // 1) Captain session?
+    // Captain session uses the legacy team-captain password (unchanged).
     const captTeamId = localStorage.getItem('dvsl-captain-team');
     if (captTeamId) {
       const t = ALL_TEAMS.find(x => x.id === captTeamId);
@@ -1155,35 +1226,117 @@ async function init() {
           await enterCaptainApp();
           return;
         } else {
-          // Password rotated — clear stale and fall through to prompt again
           try { localStorage.removeItem('dvsl-captain-pw-' + captTeamId); } catch(_) {}
         }
       }
     }
 
-    // 2) Player session?
-    const playerTeamId = localStorage.getItem('player_portal_last_team');
-    if (playerTeamId) {
-      const t = ALL_TEAMS.find(x => x.id === playerTeamId);
-      if (t) {
-        const stored = t.player_password || t.password || '';
-        const savedPw = localStorage.getItem('player_portal_pw_' + playerTeamId) || '';
-        if (!stored || savedPw.toLowerCase() === stored.toLowerCase()) {
-          MY_TEAM = t; MODE = 'player';
-          await enterPlayerApp();
-          return;
-        }
-      }
-    }
-
-    // 3) No session — show chooser
+    // Player session: rely on Firebase Auth. If a user is already signed in
+    // (survived browser restart via browserLocalPersistence), look up their
+    // linked player doc and drop them straight into the app.
+    // onAuthStateChanged is wired below — it handles both the initial
+    // hydration AND any future sign-in / sign-out during this session.
     buildTeamGrids();
-    showScreen('screen-chooser');
+    // Let onAuthStateChanged decide: if there's a user, it enters the app;
+    // if not, we fall back to the chooser after a brief moment.
+    let routed = false;
+    onAuthStateChanged(auth, async (user) => {
+      if (routed) {
+        // Subsequent sign-in / sign-out during this page session.
+        if (user && MODE !== 'captain') {
+          await _routeFromAuthUser(user);
+        } else if (!user && MODE === 'player') {
+          MY_AUTH_PLAYER = null; window.MY_AUTH_PLAYER = null;
+          MY_TEAM = null; MODE = null;
+          buildTeamGrids();
+          showScreen('screen-chooser');
+        }
+        return;
+      }
+      routed = true;
+      if (user) {
+        await _routeFromAuthUser(user);
+      } else {
+        showScreen('screen-chooser');
+      }
+    });
   } catch (e) {
     console.error('Init failed:', e);
     buildTeamGrids();
     showScreen('screen-chooser');
     toast('Could not load teams: ' + e.message, 'error');
+  }
+}
+
+// Given a signed-in Firebase Auth user, find their linked player doc and
+// drop them into the player app. If no linked doc exists (e.g. captain
+// revoked their claim), sign them out and show an error.
+async function _routeFromAuthUser(user) {
+  try {
+    const snap = await getDocs(query(collection(db, 'players'), where('auth_uid', '==', user.uid)));
+    if (snap.empty) {
+      await signOut(auth);
+      toast('Your roster spot is no longer on this team. Please request to join again.', 'error');
+      buildTeamGrids();
+      showScreen('screen-chooser');
+      return;
+    }
+    const pDoc = snap.docs[0];
+    const p = { id: pDoc.id, ...pDoc.data() };
+    MY_AUTH_PLAYER = p; window.MY_AUTH_PLAYER = p;
+    const team = ALL_TEAMS.find(t => t.id === p.team);
+    if (!team) {
+      toast('Your team was not found.', 'error');
+      buildTeamGrids();
+      showScreen('screen-chooser');
+      return;
+    }
+    MY_TEAM = team; MODE = 'player';
+    try { localStorage.setItem('player_portal_last_team', team.id); } catch(_) {}
+    try { localStorage.setItem('player_portal_' + team.id, p.id); } catch(_) {}
+    // Link this auth'd player to their push token so team_chat gating works.
+    _dvslAttachAuthedTeamToPushToken(team.id).catch(()=>{});
+
+    // If they just created an account, intercept before entering the app so
+    // they see an explicit success screen explaining what happens next. The
+    // Continue button on that screen drops them into the app.
+    if (PENDING_WELCOME) {
+      const kind = PENDING_WELCOME;
+      PENDING_WELCOME = null;
+      const teamLabel = team.short || team.name || team.id;
+      if (kind === 'claimed') {
+        document.getElementById('welcome-ico').textContent = '✅';
+        document.getElementById('welcome-title').textContent = 'Account Created!';
+        document.getElementById('welcome-body').innerHTML =
+          `You're signed in as <strong>${esc(p.name||'')}</strong> on <strong>${esc(teamLabel)}</strong>.<br><br>` +
+          `You can now:<br>` +
+          `• Mark availability for games<br>` +
+          `• Chat with your team<br>` +
+          `• Get push notifications<br><br>` +
+          `Your password is saved on this device — you won't have to re-type it here.`;
+      } else if (kind === 'pending') {
+        document.getElementById('welcome-ico').textContent = '⏳';
+        document.getElementById('welcome-title').textContent = 'Request Sent';
+        document.getElementById('welcome-body').innerHTML =
+          `We sent a request to the <strong>${esc(teamLabel)}</strong> captain to add <strong>${esc(p.name||'')}</strong> to the roster.<br><br>` +
+          `You can use the app now — you'll be officially on the roster once the captain approves.`;
+      }
+      showScreen('screen-player-welcome');
+      // Continue button → enter app
+      window.welcomeContinue = async function() {
+        await enterPlayerApp();
+      };
+      return;
+    }
+
+    if (p.pending_approval) {
+      toast('Waiting for captain approval — you can still use the app.', 'success');
+    }
+    await enterPlayerApp();
+  } catch (e) {
+    console.error('Auth routing failed:', e);
+    toast('Sign-in error: ' + e.message, 'error');
+    showScreen('screen-chooser');
   }
 }
 
@@ -1210,50 +1363,261 @@ window.startPlayerFlow = function() { showScreen('screen-player-picker'); };
 window.startCaptainFlow = function() { showScreen('screen-captain-picker'); };
 
 // ═══════════════════════════════════════════════════════════════════
-// PLAYER AUTH FLOW
+// PLAYER AUTH FLOW — Firebase Auth (email + password, per-player)
 // ═══════════════════════════════════════════════════════════════════
-window.pickPlayerTeam = function(teamId) {
+// Flow:
+//   1. Pick team
+//   2. Pick own name from roster  OR  click "Add me" (not on roster)
+//   3a. If picked name has NO auth_uid yet → prompt for email + create password
+//       (this claims the roster spot)
+//   3b. If picked name already has auth_uid → prompt for password only
+//       (sign in to existing account)
+//   3c. If adding self → enter name/# + email + password; creates pending player
+//       doc that the captain must approve
+//   4. After successful auth, `onAuthStateChanged` routes the user into
+//      the player app automatically on every subsequent page load.
+//
+// Roster claim protection: once a player doc has an auth_uid set, only that
+// uid can access it (enforced client-side — Firestore rules should also be
+// hardened, but this is a two-step so the honest-case flow is tight).
+
+let PENDING_PICK_PID = '';      // the roster id the user is signing in / signing up to
+let PENDING_AUTH_MODE = '';     // 'signin' | 'signup'
+
+window.pickPlayerTeam = async function(teamId) {
   MY_TEAM = ALL_TEAMS.find(t => t.id === teamId);
   if (!MY_TEAM) return;
-  const stored = MY_TEAM.player_password || MY_TEAM.password || '';
-  if (!stored) {
-    try { localStorage.setItem('player_portal_last_team', MY_TEAM.id); } catch(_) {}
-    MODE = 'player';
-    enterPlayerApp();
-    return;
+  try { localStorage.setItem('player_portal_last_team', MY_TEAM.id); } catch(_) {}
+  // Show the name picker populated with this team's roster.
+  document.getElementById('pnp-logo').src = 'logos/' + teamId + '.png';
+  document.getElementById('pnp-team-name').textContent = MY_TEAM.name;
+  const sel = document.getElementById('pnp-select');
+  sel.innerHTML = '<option value="">— Select your name —</option><option disabled>Loading…</option>';
+  showScreen('screen-player-name-picker');
+  try {
+    const snap = await getDocs(query(collection(db, 'players'), where('team', '==', teamId)));
+    const roster = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => p.active !== false && !p.pending_approval)
+      .sort((a,b) => (a.num||999)-(b.num||999));
+    sel.innerHTML = '<option value="">— Select your name —</option>' +
+      roster.map(p => `<option value="${p.id}">${esc(p.name)}${p.num?' (#'+p.num+')':''}</option>`).join('');
+    // Stash roster on the select so pickPlayerName can grab the player doc
+    sel._roster = roster;
+  } catch (e) {
+    sel.innerHTML = '<option value="">— Select your name —</option>';
+    toast('Could not load roster: ' + e.message, 'error');
   }
-  document.getElementById('pw-logo').src = 'logos/' + teamId + '.png';
-  document.getElementById('pw-team-name').textContent = MY_TEAM.name;
-  document.getElementById('pw-error').style.display = 'none';
-  document.getElementById('pw-input').value = '';
-  showScreen('screen-player-pw');
-  setTimeout(() => document.getElementById('pw-input').focus(), 100);
 };
 
-window.checkPlayerPassword = function() {
-  const entered = document.getElementById('pw-input').value.trim();
-  const stored = MY_TEAM?.player_password || MY_TEAM?.password || '';
-  if (entered.toLowerCase() === stored.toLowerCase()) {
-    try {
-      localStorage.setItem('player_portal_last_team', MY_TEAM.id);
-      localStorage.setItem('player_portal_pw_' + MY_TEAM.id, entered);
-    } catch(_) {}
-    MODE = 'player';
-    enterPlayerApp();
+window.pickPlayerName = async function() {
+  const sel = document.getElementById('pnp-select');
+  const pid = sel.value;
+  if (!pid) return;
+  const roster = sel._roster || [];
+  const p = roster.find(x => x.id === pid) || null;
+  if (!p) return;
+  PENDING_PICK_PID = pid;
+  const hasAuth = !!p.auth_uid;
+  PENDING_AUTH_MODE = hasAuth ? 'signin' : 'signup';
+  document.getElementById('pa-logo').src = 'logos/' + MY_TEAM.id + '.png';
+  document.getElementById('pa-name').textContent = p.name + (p.num ? ' (#' + p.num + ')' : '');
+  document.getElementById('pa-error').style.display = 'none';
+  document.getElementById('pa-email').value = p.email || '';
+  document.getElementById('pa-password').value = '';
+  document.getElementById('pa-password2').value = '';
+  const confirmWrap = document.getElementById('pa-confirm-wrap');
+  if (hasAuth) {
+    // Sign in: hide confirm-password field, show Forgot password prominently
+    document.getElementById('pa-sub').textContent = 'Welcome back! Sign in with your password.';
+    document.getElementById('pa-email').readOnly = !!p.email;
+    document.getElementById('pa-password').setAttribute('autocomplete','current-password');
+    document.getElementById('pa-submit').textContent = 'Sign In';
+    document.getElementById('pa-forgot').style.display = 'block';
+    const helper = document.getElementById('pa-already'); if (helper) helper.style.display = 'none';
+    if (confirmWrap) confirmWrap.style.display = 'none';
   } else {
-    document.getElementById('pw-error').style.display = 'block';
-    document.getElementById('pw-input').value = '';
-    document.getElementById('pw-input').focus();
+    // Sign up: show confirm-password field. Keep "Forgot password?" visible
+    // anyway — someone might have already created an account in a previous
+    // attempt, or tried with this email on another page, and we don't want
+    // them stuck. The helper text explains.
+    document.getElementById('pa-sub').textContent = 'Create your account — you\'ll only do this once.';
+    document.getElementById('pa-email').readOnly = false;
+    document.getElementById('pa-password').setAttribute('autocomplete','new-password');
+    document.getElementById('pa-submit').textContent = 'Create Account';
+    document.getElementById('pa-forgot').style.display = 'block';
+    const helper = document.getElementById('pa-already'); if (helper) helper.style.display = 'block';
+    if (confirmWrap) confirmWrap.style.display = 'block';
   }
+  // Reset any eye toggles back to masked
+  ['pa-password','pa-password2'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.type = 'password';
+    const btn = el && el.parentElement && el.parentElement.querySelector('.pw-eye');
+    if (btn) btn.textContent = 'Show';
+  });
+  showScreen('screen-player-auth');
+  setTimeout(() => {
+    const firstEmpty = !document.getElementById('pa-email').value
+      ? document.getElementById('pa-email')
+      : document.getElementById('pa-password');
+    firstEmpty.focus();
+  }, 100);
+};
+
+// Generic show/hide toggle for any password field. Caller passes the input
+// id + the clicked button, so we flip `type` and update the button text.
+window.togglePw = function(inputId, btn) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  if (el.type === 'password') { el.type = 'text'; btn.textContent = 'Hide'; }
+  else { el.type = 'password'; btn.textContent = 'Show'; }
+};
+
+// Controls the post-auth flow. When set, _routeFromAuthUser shows the
+// welcome screen with this kind of message before letting them into the app.
+// Possible values: 'claimed' | 'pending' | null
+let PENDING_WELCOME = null;
+
+window.submitPlayerAuth = async function() {
+  const emailEl = document.getElementById('pa-email');
+  const pwEl = document.getElementById('pa-password');
+  const pw2El = document.getElementById('pa-password2');
+  const errEl = document.getElementById('pa-error');
+  const submitBtn = document.getElementById('pa-submit');
+  const email = (emailEl.value || '').trim().toLowerCase();
+  const pw = pwEl.value || '';
+  const pw2 = pw2El ? (pw2El.value || '') : '';
+  errEl.style.display = 'none';
+  if (!email || !email.includes('@')) { errEl.textContent = 'Enter a valid email.'; errEl.style.display='block'; return; }
+  if (pw.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display='block'; return; }
+  if (PENDING_AUTH_MODE === 'signup' && pw !== pw2) {
+    errEl.textContent = 'Passwords do not match — re-type the same password in both boxes.';
+    errEl.style.display = 'block';
+    return;
+  }
+  submitBtn.disabled = true; submitBtn.textContent = '...';
+  try {
+    if (PENDING_AUTH_MODE === 'signup') {
+      // Claim roster spot: create auth user, link uid + email onto player doc.
+      // If the email is already registered (user's previous attempt was
+      // interrupted, or they reset their password), silently sign them in
+      // with the password they just typed instead — same end result, no
+      // confusing "your account exists" speed bump.
+      let cred;
+      try {
+        cred = await createUserWithEmailAndPassword(auth, email, pw);
+      } catch (e) {
+        if (/already-in-use/i.test(e.message||'')) {
+          cred = await signInWithEmailAndPassword(auth, email, pw);
+        } else {
+          throw e;
+        }
+      }
+      await updateDoc(doc(db, 'players', PENDING_PICK_PID), {
+        auth_uid: cred.user.uid,
+        email: email,
+        claimed_at: new Date().toISOString(),
+      });
+      PENDING_WELCOME = 'claimed';
+      // onAuthStateChanged will route via _routeFromAuthUser → welcome screen.
+    } else {
+      // Sign in to existing account — go straight in, no welcome screen.
+      await signInWithEmailAndPassword(auth, email, pw);
+      toast('Signed in!', 'success');
+    }
+  } catch (e) {
+    let msg = e.message || String(e);
+    if (/wrong-password|invalid-credential/i.test(msg)) msg = 'Wrong password. Try again, or tap "🔑 Forgot password?" to reset.';
+    else if (/user-not-found/i.test(msg)) msg = 'No account found for that email.';
+    else if (/weak-password/i.test(msg)) msg = 'Password too weak — use at least 6 characters.';
+    errEl.textContent = msg; errEl.style.display = 'block';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = PENDING_AUTH_MODE === 'signup' ? 'Create Account' : 'Sign In';
+  }
+};
+
+window.playerForgotPassword = async function() {
+  const email = (document.getElementById('pa-email').value || '').trim().toLowerCase();
+  if (!email) { toast('Type your email above first.', 'error'); return; }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    // Show a blocking alert so the junk-folder warning is impossible to miss
+    // (toasts disappear after 3 seconds and users wouldn't see the message
+    // by the time they open their email app).
+    alert('Reset email sent to ' + email + '.\n\n⚠️ IMPORTANT: Check your JUNK / SPAM folder — Firebase reset emails almost always end up there!\n\nOnce you find it, click the link, set a new password, then come back here and sign in.');
+  } catch (e) {
+    alert('Could not send reset email: ' + e.message);
+  }
+};
+
+window.showAddSelf = function() {
+  if (!MY_TEAM) return;
+  document.getElementById('pas-logo').src = 'logos/' + MY_TEAM.id + '.png';
+  document.getElementById('pas-team-name').textContent = MY_TEAM.name;
+  document.getElementById('pas-error').style.display = 'none';
+  ['pas-first','pas-last','pas-num','pas-email','pas-password'].forEach(id => { document.getElementById(id).value = ''; });
+  showScreen('screen-player-addself');
+  setTimeout(() => document.getElementById('pas-first').focus(), 100);
+};
+
+window.submitAddSelf = async function() {
+  const first = (document.getElementById('pas-first').value || '').trim();
+  const last  = (document.getElementById('pas-last').value  || '').trim();
+  const num   = parseInt(document.getElementById('pas-num').value, 10);
+  const email = (document.getElementById('pas-email').value || '').trim().toLowerCase();
+  const pw    = document.getElementById('pas-password').value || '';
+  const pw2   = document.getElementById('pas-password2').value || '';
+  const errEl = document.getElementById('pas-error');
+  const btn   = document.getElementById('pas-submit');
+  errEl.style.display = 'none';
+  if (!first || !last) { errEl.textContent = 'First and last name are required.'; errEl.style.display='block'; return; }
+  if (!email || !email.includes('@')) { errEl.textContent = 'Enter a valid email.'; errEl.style.display='block'; return; }
+  if (pw.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; errEl.style.display='block'; return; }
+  if (pw !== pw2) { errEl.textContent = 'Passwords do not match — re-type the same password in both boxes.'; errEl.style.display='block'; return; }
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pw);
+    const fullName = first + ' ' + last;
+    await addDoc(collection(db, 'players'), {
+      name: fullName,
+      team: MY_TEAM.id,
+      num: Number.isFinite(num) ? num : null,
+      email: email,
+      auth_uid: cred.user.uid,
+      active: true,
+      pending_approval: true,           // captain must approve to land on roster
+      self_added: true,
+      created_at: new Date().toISOString(),
+    });
+    PENDING_WELCOME = 'pending';
+    // onAuthStateChanged handles routing → welcome screen.
+  } catch (e) {
+    let msg = e.message || String(e);
+    if (/already-in-use/i.test(msg)) msg = 'That email is already registered. Use "Don\'t see your name?" only if you\'re NEW to this team. Otherwise go back and pick your name.';
+    else if (/weak-password/i.test(msg)) msg = 'Password too weak — use at least 6 characters.';
+    errEl.textContent = msg; errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Request to Join';
+  }
+};
+
+window.backToNamePicker = function() {
+  showScreen('screen-player-name-picker');
+};
+
+// Default no-op — overwritten inside _routeFromAuthUser once a welcome
+// message is staged. Safety net in case the screen is reached directly.
+window.welcomeContinue = function() {
+  if (MODE === 'player' && MY_TEAM) enterPlayerApp();
+  else showScreen('screen-chooser');
 };
 
 window.backToPlayerPicker = function() {
-  try {
-    if (MY_TEAM?.id) localStorage.removeItem('player_portal_pw_' + MY_TEAM.id);
-    localStorage.removeItem('player_portal_last_team');
-  } catch(_) {}
   showScreen('screen-player-picker');
 };
+
 
 // Remove `teamId` from the notification_tokens doc(s) attached to this
 // device's FCM token, so a player who signs out of a team stops getting
@@ -1283,20 +1647,64 @@ async function _dvslDetachTeamFromPushToken(teamId) {
   } catch(_) { /* best effort */ }
 }
 
-window.signOutPlayer = function() {
+window.signOutPlayer = async function() {
   const teamId = MY_TEAM?.id;
   try {
     if (teamId) localStorage.removeItem('player_portal_pw_' + teamId);
     localStorage.removeItem('player_portal_last_team');
   } catch(_) {}
   if (_playerChatUnsub) { _playerChatUnsub(); _playerChatUnsub = null; }
-  // Fire-and-forget: detach this team from the push token so they stop
-  // receiving its chat/rainout/schedule notifications.
+  // Detach team from push token so chat/rainout/schedule notifications stop
+  // for this team on this device.
   _dvslDetachTeamFromPushToken(teamId);
+  _dvslDetachAuthedTeamFromPushToken(teamId);
+  // Sign out of Firebase Auth — onAuthStateChanged will clear state + chooser.
+  try { await signOut(auth); } catch(_) {}
+  MY_AUTH_PLAYER = null; window.MY_AUTH_PLAYER = null;
   MY_TEAM = null; MODE = null; MY_PLAYERS = []; MY_GAMES = []; _rsvps = {};
   buildTeamGrids();
   showScreen('screen-chooser');
 };
+
+// Attach the current auth'd player's team_id to the notification_tokens doc
+// under an authed_teams array. Server-side, team_chat pushes filter on this
+// (not the subscription `teams` field) — so subscribing to all teams'
+// score notifications no longer leaks team chat messages across teams.
+async function _dvslAttachAuthedTeamToPushToken(teamId) {
+  if (!teamId) return;
+  let token = '';
+  try { token = localStorage.getItem('dvsl-notif-token') || ''; } catch(_) {}
+  if (!token) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'notification_tokens'),
+      where('token', '==', token)));
+    for (const d of snap.docs) {
+      const at = Array.isArray(d.data().authed_teams) ? d.data().authed_teams : [];
+      if (at.includes(teamId)) continue;
+      await updateDoc(doc(db, 'notification_tokens', d.id), {
+        authed_teams: [...at, teamId],
+      });
+    }
+  } catch(_) { /* best effort */ }
+}
+
+async function _dvslDetachAuthedTeamFromPushToken(teamId) {
+  if (!teamId) return;
+  let token = '';
+  try { token = localStorage.getItem('dvsl-notif-token') || ''; } catch(_) {}
+  if (!token) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'notification_tokens'),
+      where('token', '==', token)));
+    for (const d of snap.docs) {
+      const at = Array.isArray(d.data().authed_teams) ? d.data().authed_teams : [];
+      if (!at.includes(teamId)) continue;
+      await updateDoc(doc(db, 'notification_tokens', d.id), {
+        authed_teams: at.filter(t => t !== teamId),
+      });
+    }
+  } catch(_) { /* best effort */ }
+}
 
 async function enterPlayerApp() {
   const label = MY_TEAM.short || MY_TEAM.name || MY_TEAM.id;
@@ -1360,18 +1768,33 @@ async function loadPlayerData() {
 window.onPlayerNameChange = function() {
   const sel = document.getElementById('player-name-select');
   const pid = sel.value;
+  // If Firebase Auth is in play, the signed-in user's identity is the source
+  // of truth. Don't let the in-app dropdown change identity — force it back
+  // to the authed player. This also skips the legacy per-player password modal.
+  if (window.MY_AUTH_PLAYER && window.MY_AUTH_PLAYER.id) {
+    if (pid !== window.MY_AUTH_PLAYER.id) {
+      sel.value = window.MY_AUTH_PLAYER.id;
+      toast('You\'re signed in as ' + (window.MY_AUTH_PLAYER.name || 'yourself') + '. Sign out to switch.', 'error');
+    } else {
+      localStorage.setItem('player_portal_' + MY_TEAM.id, pid);
+    }
+    renderPlayerAvail();
+    const chatPanel = document.getElementById('ptab-chat');
+    if (chatPanel && chatPanel.style.display !== 'none') activatePlayerChat();
+    return;
+  }
   if (!pid) {
     localStorage.removeItem('player_portal_' + MY_TEAM.id);
     renderPlayerAvail();
     return;
   }
-  // Per-player password gate
+  // Legacy per-player password gate (kept for unclaimed rosters — captains
+  // may still set a shared p.password for their team's old non-authed flow)
   const p = MY_PLAYERS.find(x => x.id === pid);
   const stored = (p?.password || '').trim();
   if (stored) {
     const saved = (localStorage.getItem('dvsl-player-pw-' + pid) || '').trim();
     if (saved.toLowerCase() !== stored.toLowerCase()) {
-      // Show password modal; stash pending pid
       _pendingPlayerPid = pid;
       _pendingPlayerPrev = localStorage.getItem('player_portal_' + MY_TEAM.id) || '';
       document.getElementById('ppw-name').textContent = p.name + (p.num ? ' (#' + p.num + ')' : '');
@@ -1385,7 +1808,6 @@ window.onPlayerNameChange = function() {
   }
   localStorage.setItem('player_portal_' + MY_TEAM.id, pid);
   renderPlayerAvail();
-  // If chat visible, re-activate
   const chatPanel = document.getElementById('ptab-chat');
   if (chatPanel && chatPanel.style.display !== 'none') activatePlayerChat();
 };
@@ -2445,31 +2867,109 @@ function captPosOptionsHtml(selected=''){
 function renderCaptainRoster() {
   const el = document.getElementById('capt-roster-content');
   if (!el) return;
-  const roster = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false)
-    .sort((a,b) => (a.num||999) - (b.num||999));
-  if (!roster.length) {
-    el.innerHTML = '<div class="empty">No players on the roster yet. Click "+ Add Player" above.</div>';
-    return;
-  }
-  el.innerHTML = `
+  const mine = CAPT_ALL_PLAYERS.filter(p => p.team === MY_TEAM.id && p.active !== false);
+  // Split out players who added themselves and are awaiting approval
+  // (self_added + pending_approval). They show in the yellow banner at top
+  // and should NOT appear in the main roster table until approved.
+  const pending = mine.filter(p => p.pending_approval).sort((a,b) => (a.created_at||'').localeCompare(b.created_at||''));
+  const roster  = mine.filter(p => !p.pending_approval).sort((a,b) => (a.num||999) - (b.num||999));
+
+  const pendingHtml = pending.length ? `
+    <div style="background:#FFF8E1;border:2px solid #F9A825;border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#F57F17;margin-bottom:8px">
+        ⚠ ${pending.length} Pending Roster Request${pending.length>1?'s':''}
+      </div>
+      <div style="font-size:12px;color:#795548;margin-bottom:12px">
+        These players added themselves to your team. Approve to add them to the roster, or reject to remove.
+      </div>
+      ${pending.map(p => `
+        <div style="background:#fff;border:1px solid #F9A825;border-radius:8px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <div>
+            <div style="font-weight:700;color:var(--navy)">${esc(p.name||'')}${p.num?' (#'+p.num+')':''}</div>
+            <div style="font-size:12px;color:var(--muted)">${esc(p.email||'no email')}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-success btn-sm" onclick="window.captApproveJoinRequest('${p.id}')">Approve</button>
+            <button class="btn btn-danger btn-sm" onclick="window.captRejectJoinRequest('${p.id}')">Reject</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>` : '';
+
+  const rosterHtml = roster.length ? `
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${roster.length} player(s)</div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>#</th><th>Name</th><th>Pos</th><th class="roster-email-col">Email</th><th>Actions</th></tr></thead>
-      <tbody>${roster.map(p => `<tr>
+      <tbody>${roster.map(p => {
+        // Claimed badge: this roster spot has been linked to a signed-in player
+        const claimed = !!p.auth_uid;
+        const claimBadge = claimed
+          ? `<span title="Claimed by ${esc(p.email||'signed-in user')}" style="display:inline-block;background:#E8F5E9;color:#2E7D32;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px">✓ CLAIMED</span>`
+          : '';
+        const revokeBtn = claimed
+          ? `<button class="btn btn-outline btn-sm" onclick="window.captRevokeClaim('${p.id}')" title="Revoke this player's sign-in access" style="color:#c62828;border-color:#c62828">Revoke</button>`
+          : '';
+        return `<tr>
         <td style="width:36px">${p.num || '-'}</td>
-        <td><strong>${esc(p.name||'')}</strong></td>
+        <td><strong>${esc(p.name||'')}</strong>${claimBadge}</td>
         <td style="width:48px">${esc(p.pos || p.position || '-')}</td>
         <td class="roster-email-col" style="color:var(--muted);font-size:12px">${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
-        <td style="white-space:nowrap;width:120px">
+        <td style="white-space:nowrap;width:180px">
           <button class="btn btn-outline btn-sm" onclick="captEditPlayer('${p.id}')">Edit</button>
+          ${revokeBtn}
           <button class="btn btn-danger btn-sm" onclick="captRemovePlayer('${p.id}')">✕</button>
         </td>
       </tr>
-      <tr id="capt-player-edit-${p.id}" style="display:none"><td colspan="5" id="capt-player-edit-cell-${p.id}" style="padding:0"></td></tr>`).join('')}
+      <tr id="capt-player-edit-${p.id}" style="display:none"><td colspan="5" id="capt-player-edit-cell-${p.id}" style="padding:0"></td></tr>`;
+      }).join('')}
       </tbody>
-    </table></div>
-  `;
+    </table></div>` : '<div class="empty">No players on the roster yet. Click "+ Add Player" above.</div>';
+
+  el.innerHTML = pendingHtml + rosterHtml;
 }
+
+// Approve a self-added player — just flip pending_approval off.
+window.captApproveJoinRequest = async function(playerId) {
+  try {
+    await updateDoc(doc(db, 'players', playerId), {
+      pending_approval: false,
+      approved_at: new Date().toISOString(),
+    });
+    const p = CAPT_ALL_PLAYERS.find(x => x.id === playerId);
+    if (p) { p.pending_approval = false; p.approved_at = new Date().toISOString(); }
+    toast('Player approved and added to roster.', 'success');
+    renderCaptainRoster();
+  } catch(e) { toast('Approve failed: ' + e.message, 'error'); }
+};
+
+// Reject a self-added player — delete the doc. Their auth account stays
+// (they can request to join again), but they have no roster spot.
+window.captRejectJoinRequest = async function(playerId) {
+  if (!confirm('Reject this request? The player will be removed from your team. Their sign-in will be disabled.')) return;
+  try {
+    await deleteDoc(doc(db, 'players', playerId));
+    CAPT_ALL_PLAYERS = CAPT_ALL_PLAYERS.filter(x => x.id !== playerId);
+    toast('Request rejected.', 'success');
+    renderCaptainRoster();
+  } catch(e) { toast('Reject failed: ' + e.message, 'error'); }
+};
+
+// Revoke a player's claim (auth_uid) — they lose sign-in, roster spot stays.
+// Used if someone impersonated a teammate or the wrong person claimed a name.
+window.captRevokeClaim = async function(playerId) {
+  if (!confirm('Revoke this player\'s sign-in? They will be signed out and will need to claim again with a new email.')) return;
+  try {
+    await updateDoc(doc(db, 'players', playerId), {
+      auth_uid: null,
+      claimed_at: null,
+      email: null,
+    });
+    const p = CAPT_ALL_PLAYERS.find(x => x.id === playerId);
+    if (p) { delete p.auth_uid; delete p.claimed_at; delete p.email; }
+    toast('Claim revoked.', 'success');
+    renderCaptainRoster();
+  } catch(e) { toast('Revoke failed: ' + e.message, 'error'); }
+};
 
 window.captOpenAddPlayer = function() {
   const el = document.getElementById('capt-add-player-form');
