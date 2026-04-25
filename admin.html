@@ -2188,19 +2188,38 @@ window.enterCaptainModeWithTeam = async function(teamId, teamName) {
 };
 
 // Listen for auth state
-// v99: hard allowlist so any stray Firebase Auth user (e.g. a captain
-// who somehow gets an Auth record via a leaked password-reset flow)
-// can't land in the commissioner dashboard. Only emails in this list
-// are treated as admin. Everyone else gets signed out immediately.
-const ADMIN_EMAILS = ['adam.miller.22@gmail.com'];
+// v137: admin access is gated by the `is_admin: true` flag on the
+// signed-in user's player doc (matched by auth_uid). The hardcoded
+// SUPER_ADMIN_EMAILS list is a safety net so the league owner can
+// never lock themselves out — e.g. if Firestore is down or someone
+// accidentally clears every is_admin flag. Manage admins from the
+// "Manage admins" panel under Captains.
+const SUPER_ADMIN_EMAILS = ['adam.miller.22@gmail.com'];
+
+async function _isAuthorizedAdmin(user) {
+  const email = (user.email || '').toLowerCase().trim();
+  // Super-admin override (lockout protection).
+  if (SUPER_ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email)) return true;
+  // Look up the player doc linked to this Firebase Auth user.
+  try {
+    const qSnap = await getDocs(query(collection(db, 'players'), where('auth_uid', '==', user.uid)));
+    for (const d of qSnap.docs) {
+      const p = d.data();
+      if (p.is_admin === true) return true;
+    }
+  } catch(e) {
+    console.warn('[admin-auth] Firestore lookup failed:', e);
+  }
+  return false;
+}
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
-    const email = (user.email || '').toLowerCase().trim();
-    if (!ADMIN_EMAILS.map(e => e.toLowerCase()).includes(email)) {
-      console.warn('[admin-auth] unauthorized email, signing out:', email);
+    const ok = await _isAuthorizedAdmin(user);
+    if (!ok) {
+      console.warn('[admin-auth] unauthorized account, signing out:', user.email);
       try { await signOut(auth); } catch(_) {}
-      alert('This account is not authorized for commissioner access.');
+      alert('This account is not authorized for commissioner access. Ask the league owner to grant you admin status from the admin panel.');
       return;
     }
     currentUser = user;
