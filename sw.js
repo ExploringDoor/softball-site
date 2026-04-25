@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v135-signups`;
+const VERSION = `${LEAGUE.id}-v136-captchat-gate`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

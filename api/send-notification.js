@@ -221,11 +221,20 @@ async function listMatchingTokens({ projectId, accessToken, category, team, team
     // notifications from receiving private team chat messages they aren't
     // actually a member of.
     const tokAuthedTeams = (f.authed_teams?.arrayValue?.values || []).map(v => v.stringValue);
+    // is_captain_authed: set by captain.html when a captain successfully
+    // signs in via Firebase Auth. Used to gate captains_chat fanout — the
+    // notifications.html UI shows a captains_chat toggle that anyone can
+    // flip, but this gate ensures only signed-in captains actually receive.
+    const tokIsCaptainAuthed = f.is_captain_authed?.booleanValue === true;
     const isTeamChat = category === 'team_chat';
+    const isCaptainsChat = category === 'captains_chat';
     if (isTeamChat) {
       // Only push to devices whose authenticated player is on the target team.
       if (!teamWanted.length || !tokAuthedTeams.length) continue;
       if (!teamWanted.some(t => tokAuthedTeams.includes(t))) continue;
+    } else if (isCaptainsChat) {
+      // Only deliver to tokens flagged as captain-authed by captain.html.
+      if (!tokIsCaptainAuthed) continue;
     } else {
       // Empty subscriber teams = "all teams" (always match). Otherwise we need
       // at least one overlap between what we're targeting and what they follow.

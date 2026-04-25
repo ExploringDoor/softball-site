@@ -1708,6 +1708,9 @@ window.captainSignOut = async function() {
   captainData = null; currentUser = null;
   CAPTAIN_USER = null; CAPTAIN_PENDING_TEAM = null;
   try { localStorage.removeItem('dvsl-captain-team'); } catch(_) {}
+  // Clear the captain flag on this token so captains_chat pushes stop
+  // arriving once they're no longer signed in here.
+  _dvslSetCaptainFlagOnPushToken(false).catch(() => {});
   try { await signOut(auth); } catch(_) {}
   document.getElementById('app').style.display = 'none';
   document.getElementById('captain-auth').style.display = 'none';
@@ -1731,6 +1734,28 @@ async function _writeCaptainClaim(user, team) {
     revoked: false
   }, { merge: true });
   console.log('[captain_claims] wrote', docId, 'for', user.email);
+  // Best-effort: flag this device's push token as a captain so the
+  // captains_chat gate in api/send-notification.js delivers to them.
+  _dvslSetCaptainFlagOnPushToken(true).catch(() => {});
+}
+
+// Set/clear is_captain_authed on this device's notification_tokens row.
+// Server-side captains_chat fanout filters on this flag (mirrors how
+// team_chat uses authed_teams). Best-effort — failures don't block the
+// captain dashboard from loading.
+async function _dvslSetCaptainFlagOnPushToken(value) {
+  let token = '';
+  try { token = localStorage.getItem('dvsl-notif-token') || ''; } catch(_) {}
+  if (!token) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'notification_tokens'),
+      where('token', '==', token)));
+    for (const d of snap.docs) {
+      await updateDoc(doc(db, 'notification_tokens', d.id), {
+        is_captain_authed: !!value
+      });
+    }
+  } catch(_) { /* best effort */ }
 }
 
 // Listen for Firebase Auth state. Fires on initial page load (after a small
