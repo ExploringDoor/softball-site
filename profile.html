@@ -1429,6 +1429,23 @@ window.pickPlayerName = async function() {
   PENDING_PICK_PID = pid;
   const hasAuth = !!p.auth_uid;
   PENDING_AUTH_MODE = hasAuth ? 'signin' : 'signup';
+
+  // ── Auto-sign-in shortcut ──
+  // If this is a returning user (their roster spot already has an
+  // auth_uid) AND their email matches a credential we previously saved
+  // on this device, try a silent Firebase Auth sign-in. On success,
+  // onAuthStateChanged routes them straight into the app and they never
+  // see the password screen. On a stale-password failure (e.g. they did
+  // a Forgot Password reset since we saved), the saved cred is dropped
+  // silently and we fall through to the normal password screen with
+  // their email pre-filled — no scary "wrong password" toast.
+  if (hasAuth && p.email && _dvslLookupCredentialFor(p.email)) {
+    showScreen('screen-loading');
+    const ok = await _dvslAttemptAutoSignIn(p.email);
+    if (ok) return; // onAuthStateChanged → _routeFromAuthUser → app
+    // Auto-sign-in failed; fall through to the password screen below.
+    // The stale cred (if that's why it failed) was already cleared.
+  }
   document.getElementById('pa-logo').src = 'logos/' + MY_TEAM.id + '.png';
   document.getElementById('pa-name').textContent = p.name + (p.num ? ' (#' + p.num + ')' : '');
   document.getElementById('pa-error').style.display = 'none';
@@ -1533,6 +1550,55 @@ function _dvslPrefillAuthInputs() {
   if (p && !p.value) p.value = c.password;
 }
 document.addEventListener('DOMContentLoaded', _dvslPrefillAuthInputs);
+
+// Look up a saved password for a specific email. Used by pickPlayerName
+// to attempt a silent auto-sign-in when a returning user picks their
+// name. Returns the decoded password or null.
+function _dvslLookupCredentialFor(email) {
+  if (!email) return null;
+  try {
+    const enc = localStorage.getItem(CRED_KEY_PREFIX + email.toLowerCase());
+    if (!enc) return null;
+    return decodeURIComponent(escape(atob(enc)));
+  } catch (_) { return null; }
+}
+
+// Drop a saved credential — called when Firebase Auth rejects the
+// stored password (i.e. it's stale because the user did a Forgot
+// Password reset since we last saved). Silent — we don't surface the
+// "wrong password" error to the user; we just fall through to the
+// password screen so they can type the new one cleanly.
+function _dvslForgetCredential(email) {
+  if (!email) return;
+  try {
+    const k = email.toLowerCase();
+    localStorage.removeItem(CRED_KEY_PREFIX + k);
+    const last = localStorage.getItem('dvsl-creds-last-email');
+    if (last === k) localStorage.removeItem('dvsl-creds-last-email');
+  } catch (_) {}
+}
+
+// Attempt a silent Firebase Auth sign-in using a saved credential for
+// `email`. Resolves to true on success (onAuthStateChanged will route
+// the user into the app); false on any failure. On a stale-password
+// failure (user did a Forgot Password reset since we saved), the
+// stored cred is silently dropped so the next visit doesn't keep
+// retrying with bad creds.
+async function _dvslAttemptAutoSignIn(email) {
+  const password = _dvslLookupCredentialFor(email);
+  if (!password) return false;
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    return true;
+  } catch (e) {
+    const code = e.code || '';
+    const msg = e.message || '';
+    if (/wrong-password|invalid-credential|user-not-found|user-disabled/.test(code + ' ' + msg)) {
+      _dvslForgetCredential(email);
+    }
+    return false;
+  }
+}
 
 window.submitPlayerAuth = async function() {
   const emailEl = document.getElementById('pa-email');
