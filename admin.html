@@ -1322,6 +1322,20 @@ select.form-input{cursor:pointer}
           <div class="loading"><div class="spinner"></div> Loading sign-ups...</div>
         </div>
       </div>
+
+      <!-- Manage admins (is_admin flag — gates Commissioner Alerts receive) -->
+      <div class="panel" style="margin-top:24px">
+        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span>Manage admins</span>
+          <button class="btn btn-outline btn-sm" onclick="loadAdminPlayers()">🔄 Refresh</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+          Flip a player's <code>is_admin</code> flag here to let them receive <strong>Commissioner Alerts</strong> in the notifications page. Only signed-up players (with a Firebase Auth account) appear in this list. Removing a checkmark immediately clears the toggle on their device the next time the notifications page loads.
+        </div>
+        <div id="admin-players-content">
+          <div class="loading"><div class="spinner"></div> Loading...</div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ CONTACTS ═══ -->
@@ -2356,6 +2370,7 @@ async function loadAllData() {
     loadCaptains();
     loadCaptainClaims();
     loadPlayerSignups();
+    loadAdminPlayers();
     loadScoreReviews();
     loadFinancials();
   } catch(e) {
@@ -6419,6 +6434,94 @@ function renderPlayerSignups() {
   }).join('');
   el.innerHTML = summary + rows;
 }
+
+// ── Manage admins (is_admin flag → gates Commissioner Alerts receive) ─────
+let ADMIN_PLAYERS = [];
+
+window.loadAdminPlayers = async function() {
+  const el = document.getElementById('admin-players-content');
+  if (!el) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
+  try {
+    const [pSnap, tSnap] = await Promise.all([
+      getDocs(collection(db, 'players')),
+      getDocs(collection(db, 'teams'))
+    ]);
+    const teamsById = {};
+    tSnap.docs.forEach(d => teamsById[d.id] = d.data());
+    // Only show players who have actually signed in (auth_uid set).
+    ADMIN_PLAYERS = pSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => p.auth_uid && p.active !== false && !p.pending_approval)
+      .map(p => ({ ...p, _team_name: teamsById[p.team || p.team_id]?.name || p.team || p.team_id || '—' }))
+      .sort((a,b) => {
+        // Admins first, then by name.
+        const aAdm = a.is_admin === true ? 0 : 1;
+        const bAdm = b.is_admin === true ? 0 : 1;
+        if (aAdm !== bAdm) return aAdm - bAdm;
+        return (a.name||'').localeCompare(b.name||'');
+      });
+    renderAdminPlayers();
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Could not load: ' + esc(e.message) + '</div>';
+    console.warn('loadAdminPlayers failed:', e);
+  }
+};
+
+function renderAdminPlayers() {
+  const el = document.getElementById('admin-players-content');
+  if (!ADMIN_PLAYERS.length) {
+    el.innerHTML = '<div class="empty">No signed-up players yet. Once players sign in via the profile page, they\'ll show up here so you can grant admin status.</div>';
+    return;
+  }
+  const adminCount = ADMIN_PLAYERS.filter(p => p.is_admin === true).length;
+  const summary = `<div style="background:var(--blue-bg);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px">
+    <strong>${adminCount}</strong> admin${adminCount===1?'':'s'} of <strong>${ADMIN_PLAYERS.length}</strong> signed-up players
+  </div>`;
+  const rows = ADMIN_PLAYERS.map(p => {
+    const checked = p.is_admin === true ? 'checked' : '';
+    const badge = p.is_admin === true
+      ? '<span style="background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;letter-spacing:.5px">ADMIN</span>'
+      : '';
+    return `<label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:#fff;margin-bottom:6px;cursor:pointer">
+      <input type="checkbox" ${checked} onchange="toggleAdminPlayer('${esc(p.id)}', this.checked)" style="width:18px;height:18px;cursor:pointer">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong>${esc(p.name||'(unnamed)')}</strong>${p.num?' <span style="font-size:12px;color:var(--muted)">#'+esc(String(p.num))+'</span>':''}
+          ${badge}
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(p._team_name)} — ${esc(p.email||'no email')}</div>
+      </div>
+    </label>`;
+  }).join('');
+  el.innerHTML = summary + rows;
+}
+
+window.toggleAdminPlayer = async function(playerId, makeAdmin) {
+  const p = ADMIN_PLAYERS.find(x => x.id === playerId);
+  const label = p ? (p.name || p.email || playerId) : playerId;
+  if (makeAdmin && !confirm(`Grant admin status to ${label}?\n\nThey will be able to receive Commissioner Alerts on the notifications page.`)) {
+    renderAdminPlayers(); // re-render to undo the visual check
+    return;
+  }
+  if (!makeAdmin && !confirm(`Remove admin status from ${label}?\n\nTheir Commissioner Alerts toggle will be cleared on their next notifications-page load.`)) {
+    renderAdminPlayers();
+    return;
+  }
+  try {
+    await updateDoc(doc(db, 'players', playerId), {
+      is_admin: makeAdmin === true,
+      is_admin_updated_at: serverTimestamp()
+    });
+    if (p) p.is_admin = makeAdmin === true;
+    toast(makeAdmin ? `${label} is now an admin` : `${label} is no longer an admin`);
+    await logActivity('Admins', (makeAdmin ? 'Granted' : 'Revoked') + ' admin status: ' + label);
+    renderAdminPlayers();
+  } catch(e) {
+    toast('Failed to update: ' + e.message, 'error');
+    console.warn('toggleAdminPlayer failed:', e);
+    renderAdminPlayers();
+  }
+};
 
 window.openAddCaptain = function() {
   const el = document.getElementById('add-captain-form');

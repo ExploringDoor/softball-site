@@ -743,6 +743,7 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getMessaging, getToken, deleteToken, onMessage } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging.js';
 import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
 
@@ -752,7 +753,13 @@ const VAPID_KEY = window.LEAGUE_CONFIG.push.vapidKey;
 
 const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
+const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch(()=>{});
 let messaging = null;
+// Tracks the current player doc for the signed-in user. Used to gate the
+// commissioner-only admin alert toggle — must have is_admin: true on their
+// player record.
+let MY_PLAYER_DOC = null;
 
 // Check if VAPID key is configured
 const isConfigured = VAPID_KEY !== 'YOUR_VAPID_KEY_HERE';
@@ -1038,27 +1045,80 @@ window.disableNotifications = async function() {
   }
 };
 
-// Show the commissioner-only toggle when the URL has ?admin=1, and load the
-// current value of the is_admin flag on this token's Firestore doc.
+// The "Commissioner Alerts" toggle (admin-only push category) is gated by
+// the signed-in user's player doc: is_admin === true. The legacy ?admin=1
+// URL trick is gone — anyone could have used it to flag themselves.
+//
+// Flow:
+//   onAuthStateChanged → look up player doc by auth_uid →
+//     if is_admin: show toggle + load current state
+//     else: hide toggle + force is_admin=false on this token (defensive)
 async function initAdminToggle() {
-  const wantsAdmin = new URLSearchParams(window.location.search).get('admin') === '1';
-  if (!wantsAdmin) return;
-  const row = document.getElementById('admin-toggle-row');
-  if (row) row.classList.remove('hidden');
+  // Wait for auth state to settle before deciding.
+  onAuthStateChanged(auth, async (user) => {
+    const row = document.getElementById('admin-toggle-row');
+    if (!user) {
+      if (row) row.classList.add('hidden');
+      MY_PLAYER_DOC = null;
+      await _forceClearAdminFlagOnToken();
+      return;
+    }
+    // Find their player doc by auth_uid.
+    try {
+      const snap = await getDocs(query(collection(db, 'players'),
+        where('auth_uid', '==', user.uid)));
+      if (snap.empty) {
+        MY_PLAYER_DOC = null;
+        if (row) row.classList.add('hidden');
+        await _forceClearAdminFlagOnToken();
+        return;
+      }
+      MY_PLAYER_DOC = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      const isAdmin = MY_PLAYER_DOC.is_admin === true;
+      if (!isAdmin) {
+        if (row) row.classList.add('hidden');
+        await _forceClearAdminFlagOnToken();
+        return;
+      }
+      // Authorized — show the toggle and reflect current state.
+      if (row) row.classList.remove('hidden');
+      const token = localStorage.getItem('dvsl-notif-token');
+      if (!token) return;
+      const tokSnap = await getDocs(query(collection(db, 'notification_tokens'),
+        where('token', '==', token)));
+      for (const d of tokSnap.docs) {
+        const cb = document.getElementById('admin-flag-toggle');
+        if (cb) cb.checked = d.data().is_admin === true;
+      }
+    } catch(e) { console.warn('Admin toggle init failed:', e); }
+  });
+}
+
+// Defensive: if the user is not an admin (or signed out), make sure their
+// notification_tokens doc doesn't have a stale is_admin: true left over
+// from before this gating was added.
+async function _forceClearAdminFlagOnToken() {
   const token = localStorage.getItem('dvsl-notif-token');
   if (!token) return;
   try {
-    const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
-    const snap = await getDocs(q);
+    const snap = await getDocs(query(collection(db, 'notification_tokens'),
+      where('token', '==', token)));
     for (const d of snap.docs) {
-      const isAdmin = d.data().is_admin === true;
-      const cb = document.getElementById('admin-flag-toggle');
-      if (cb) cb.checked = isAdmin;
+      if (d.data().is_admin === true) {
+        await updateDoc(doc(db, 'notification_tokens', d.id), { is_admin: false });
+      }
     }
-  } catch(e) { console.warn('Admin flag load failed:', e); }
+  } catch(_) {}
 }
 
 window.updateAdminFlag = async function() {
+  // Re-check authorization on every toggle. If the user isn't actually an
+  // admin (e.g. they edited the DOM to un-hide the row), refuse the update.
+  if (!MY_PLAYER_DOC || MY_PLAYER_DOC.is_admin !== true) {
+    const cb = document.getElementById('admin-flag-toggle');
+    if (cb) cb.checked = false;
+    return;
+  }
   const token = localStorage.getItem('dvsl-notif-token');
   if (!token) return;
   const checked = !!document.getElementById('admin-flag-toggle')?.checked;
