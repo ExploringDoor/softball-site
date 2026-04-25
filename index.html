@@ -8097,28 +8097,38 @@ function getRows(){
       };
     });
   }
-  // Historical year — pick the dataset that matches the team filter. If
-  // the user hasn't narrowed to a specific team and we're on a past year,
-  // fall back to TBIR (preserves prior behavior for the main stats page).
-  const histTeamId = (team !== 'all' && CAREER_SEASONS_BY_TEAM[team]) ? team
-                     : (CAREER_SEASONS_BY_TEAM[team] ? team : 'tbir');
-  const histDataset = (year !== '2026') ? CAREER_SEASONS_BY_TEAM[histTeamId]?.[year] : null;
-  if(histDataset){
-    const histPseudoTeam = '_' + histTeamId + '_hist';
-    return histDataset.map(p => {
-      const fullName = `${p.first} ${p.last}`;
-      const playerMatch = PLAYERS.find(pl => pl.name.toLowerCase() === fullName.toLowerCase());
-      const avg = p.ab>0 ? p.h/p.ab : 0;
-      const obp = (p.ab+p.bb)>0 ? (p.h+p.bb)/(p.ab+p.bb) : 0;
-      const slg = p.ab>0 ? (p.s+2*p.d+3*p.t+4*p.hr)/p.ab : 0;
-      return {
-        id: playerMatch?.id || null,
-        name: fullName, team: histPseudoTeam, pos: '',
-        gp: p.gp, ab: p.ab, h: p.h, d: p.d||0, t: p.t||0,
-        hr: p.hr, rbi: p.rbi, r: p.r, bb: p.bb,
-        avg, slg, ops: obp+slg
-      };
-    });
+  // Historical year — collect rows from every team that has data for this
+  // year. Previously this fell back to TBIR-only, which hid Beth Or Red
+  // (and any other historical team's) stats from the leaders view.
+  // Now: when team='all', merge all historical datasets for the year.
+  // When the user narrows to a specific historical team, just that team.
+  if (year !== '2026') {
+    const histTeamIds = (team !== 'all' && CAREER_SEASONS_BY_TEAM[team])
+      ? [team]
+      : Object.keys(CAREER_SEASONS_BY_TEAM).filter(tid => CAREER_SEASONS_BY_TEAM[tid][year]);
+    if (histTeamIds.length) {
+      const out = [];
+      for (const tid of histTeamIds) {
+        const ds = CAREER_SEASONS_BY_TEAM[tid][year];
+        if (!ds) continue;
+        const histPseudoTeam = '_' + tid + '_hist';
+        for (const p of ds) {
+          const fullName = `${p.first} ${p.last}`;
+          const playerMatch = PLAYERS.find(pl => pl.name.toLowerCase() === fullName.toLowerCase());
+          const avg = p.ab>0 ? p.h/p.ab : 0;
+          const obp = (p.ab+p.bb)>0 ? (p.h+p.bb)/(p.ab+p.bb) : 0;
+          const slg = p.ab>0 ? (p.s+2*p.d+3*p.t+4*p.hr)/p.ab : 0;
+          out.push({
+            id: playerMatch?.id || null,
+            name: fullName, team: histPseudoTeam, pos: '',
+            gp: p.gp, ab: p.ab, h: p.h, d: p.d||0, t: p.t||0,
+            hr: p.hr, rbi: p.rbi, r: p.r, bb: p.bb,
+            avg, slg, ops: obp+slg
+          });
+        }
+      }
+      return out;
+    }
   }
   let rows = PLAYERS;
   if(team!=='all') rows = rows.filter(p=>p.team===team);
@@ -8182,10 +8192,20 @@ function renderStats(){
   }).join('');
 
   // FOOT
-  const histActiveTeamFoot = (team !== 'all' && CAREER_SEASONS_BY_TEAM[team]?.[year]) ? team
-                             : (CAREER_SEASONS_BY_TEAM['tbir']?.[year] ? 'tbir' : null);
-  const isHist = year !== '2026' && histActiveTeamFoot;
-  const histLabelFoot = histActiveTeamFoot ? (CAREER_TEAM_META[histActiveTeamFoot]?.short || histActiveTeamFoot.toUpperCase()) : '';
+  const histTeamsThisYear = (year !== '2026')
+    ? Object.keys(CAREER_SEASONS_BY_TEAM).filter(tid => CAREER_SEASONS_BY_TEAM[tid][year])
+    : [];
+  const isHist = histTeamsThisYear.length > 0;
+  let histLabelFoot = '';
+  if (isHist) {
+    if (team !== 'all' && histTeamsThisYear.includes(team)) {
+      histLabelFoot = CAREER_TEAM_META[team]?.short || team.toUpperCase();
+    } else if (histTeamsThisYear.length === 1) {
+      histLabelFoot = CAREER_TEAM_META[histTeamsThisYear[0]]?.short || histTeamsThisYear[0].toUpperCase();
+    } else {
+      histLabelFoot = histTeamsThisYear.map(tid => CAREER_TEAM_META[tid]?.short || tid.toUpperCase()).join(' + ');
+    }
+  }
   document.getElementById('statsFoot').innerHTML = `<tr><td colspan="${cols.length}">Sorted by ${col?.label||sk} · ${rows.length} players · ${isHist?`${year} ${histLabelFoot} Season`:(split==='all'?'2026 Year to Date':SPLITS.find(s=>s.val===split)?.label||split)}</td></tr>`;
 
   // Pitching stats: historical years don't have archived pitching
@@ -8241,15 +8261,31 @@ function buildFilters(){
   const histYears = Array.from(histYearsSet);
   // "Historical" view = non-2026 year AND at least one team has data for that year
   const isHistorical = year !== '2026' && histYears.includes(year);
-  // Which team's data is actually being shown (drives the badge text)
-  const histActiveTeam = (team !== 'all' && CAREER_SEASONS_BY_TEAM[team]?.[year]) ? team
-                         : (CAREER_SEASONS_BY_TEAM['tbir']?.[year] ? 'tbir' : null);
-  const histLabel = histActiveTeam ? (CAREER_TEAM_META[histActiveTeam]?.short || histActiveTeam.toUpperCase()) + ' historical data' : 'Historical data';
+  // Teams with data for this specific historical year (drives both the
+  // team filter dropdown and the "All Historical Teams" merge label).
+  const histTeamsForYear = isHistorical
+    ? Object.keys(CAREER_SEASONS_BY_TEAM).filter(tid => CAREER_SEASONS_BY_TEAM[tid][year])
+    : [];
+  // If the saved team filter is from the current season and the user
+  // switches to a historical year that team isn't part of, drop back to
+  // 'all' so we don't show an empty list.
+  if (isHistorical && team !== 'all' && !histTeamsForYear.includes(team)) {
+    team = 'all';
+  }
   fr.innerHTML = `
-    <select class="filter-select" id="sel-year" onchange="year=this.value;renderStats()">
+    <select class="filter-select" id="sel-year" onchange="year=this.value;team='all';renderStats()">
       ${YEARS.filter(y=>y==='2026'||histYears.includes(y)).map(y=>`<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
     </select>
-    ${isHistorical ? `<span style="font-size:12px;color:var(--muted);align-self:center;padding:0 8px">${histLabel}</span>` : `
+    ${isHistorical ? `
+    <select class="filter-select" id="sel-team" onchange="team=this.value;renderStats()">
+      <option value="all">${histTeamsForYear.length > 1 ? 'All Historical Teams' : 'All Teams'}</option>
+      ${histTeamsForYear.map(tid => {
+        const label = CAREER_TEAM_META[tid]?.name || tid.toUpperCase();
+        return `<option value="${tid}" ${tid===team?'selected':''}>${label}</option>`;
+      }).join('')}
+    </select>
+    <span style="font-size:12px;color:var(--muted);align-self:center;padding:0 8px">${year} historical data</span>
+    ` : `
     <select class="filter-select" id="sel-team" onchange="team=this.value;renderStats()">
       <option value="all">All Teams</option>
       ${TEAMS.map(t=>`<option value="${t.id}" ${t.id===team?'selected':''}>${t.short||t.name}</option>`).join('')}
