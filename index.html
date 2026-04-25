@@ -528,18 +528,21 @@
           if (document.visibilityState === 'visible') _dvslCheckPendingNav();
         }, 5000);
 
-        // Hide mobile notification bell while scrolling down; show again at top / scroll up.
+        // Hide mobile notification bell once the user scrolls past the
+        // top of the page; show again only when they're back at/near the
+        // top. Previous logic used a "show on scroll-up" reveal that
+        // flickered during fast/momentum scrolling on iOS — every tiny
+        // upward delta during a downward flick popped the bell back into
+        // view. Simpler is better: visible at top, hidden when scrolled.
         (function setupBellScrollHide(){
           const bell = document.getElementById('nav-notif-btn');
           if (!bell) return;
-          let lastY = window.scrollY || 0;
+          const SHOW_THRESHOLD = 32; // px from top where bell is still visible
           let ticking = false;
           function onScroll(){
             const y = window.scrollY || 0;
-            if (y <= 8) bell.classList.remove('scroll-hidden');
-            else if (y > lastY + 4) bell.classList.add('scroll-hidden');
-            else if (y < lastY - 4) bell.classList.remove('scroll-hidden');
-            lastY = y;
+            if (y <= SHOW_THRESHOLD) bell.classList.remove('scroll-hidden');
+            else bell.classList.add('scroll-hidden');
             ticking = false;
           }
           window.addEventListener('scroll', () => {

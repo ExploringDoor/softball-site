@@ -603,6 +603,14 @@ select.form-input{cursor:pointer;appearance:auto}
   .form-card{padding:24px 18px}
   .form-row-2{grid-template-columns:1fr}
   .step-label{display:none}
+  /* Scroll-hide top chrome on mobile to free up screen real estate
+     while filling out the form — matches rules.html / photos.html. */
+  #score-ticker, nav { transition: transform .22s ease, opacity .22s ease !important; }
+  #score-ticker.scroll-hidden, nav.scroll-hidden {
+    transform: translateY(-160%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
 }
 </style>
 </head>
@@ -640,10 +648,6 @@ select.form-input{cursor:pointer;appearance:auto}
       </div>
     </li>
   </ul>
-  <div class="nav-right">
-    <button class="nav-signup-btn" onclick="window.location='notifications.html'">🔔 Alerts</button>
-    <button id="darkToggle" onclick="toggleDarkMode()" style="background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:14px;transition:all .2s" title="Toggle dark mode">🌙</button>
-  </div>
 </nav>
 <button class="hamburger" id="hbg" style="position:fixed;top:calc(74px + env(safe-area-inset-top, 0px));right:14px;z-index:600;display:none;background:rgba(0,0,0,.55);border-radius:7px;padding:8px 10px">
   <span style="display:block;width:22px;height:2px;background:#fff;border-radius:2px"></span>
@@ -1102,13 +1106,10 @@ try {
   }
 } catch(e) {}
 
-function toggleDarkMode(){
-  const on = document.body.classList.toggle('dark');
-  localStorage.setItem('dvsl-dark', on ? '1' : '0');
-  const btn = document.getElementById('darkToggle');
-  if (btn) btn.textContent = on ? '☀️' : '🌙';
-}
-(function(){ if(localStorage.getItem('dvsl-dark')==='1'){ document.body.classList.add('dark'); const b=document.getElementById('darkToggle'); if(b) b.textContent='☀️'; } })();
+// Persist dark-mode preference if it was set on another page (the toggle
+// UI itself was removed from registration.html — keep the auto-restore so
+// users who set dark mode elsewhere see it here too).
+(function(){ if(localStorage.getItem('dvsl-dark')==='1') document.body.classList.add('dark'); })();
 </script>
 
 <script>
@@ -1119,38 +1120,40 @@ function toggleDarkMode(){
   if(hbg) hbg.addEventListener('click',function(){ hbg.classList.toggle('open');mob.classList.toggle('open'); });
   if(mob) mob.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){ hbg.classList.remove('open');mob.classList.remove('open'); });});
 })();
-// Hide the score ticker on scroll (and slide the nav + hamburger up into
-// its place), mirroring index.html. Adam reported: on /registration.html
-// the ticker and the floating "Alerts" chip stayed pinned even when the
-// user scrolled down.
+// Scroll-hide top chrome on mobile. Hides ticker + nav (so the DVSL
+// logo also slides up out of the way) once the user scrolls past the
+// top, brings them back when they're at the very top. Same simple
+// "near top = visible, scrolled = hidden" pattern used by the home
+// page bell — avoids the flicker that scroll-up-reveal gets on iOS
+// momentum scrolling.
 (function(){
   const ticker = document.getElementById('score-ticker');
-  const nav = document.querySelector('nav');
-  const hbg = document.getElementById('hbg');
-  if(!ticker) return;
+  const navEl  = document.querySelector('nav');
+  const hbg    = document.getElementById('hbg');
+  const all = [ticker, navEl].filter(Boolean);
+  if (!all.length) return;
+  const SHOW_THRESHOLD = 32;
   let ticking = false;
-  function onScroll(){
-    if(ticking) return;
-    requestAnimationFrame(()=>{
-      const y = window.scrollY || window.pageYOffset || 0;
-      if(y > 10){
-        ticker.style.transform = 'translateY(-100%)';
-        ticker.style.opacity = '0';
-        ticker.style.pointerEvents = 'none';
-        if(nav) nav.style.top = 'env(safe-area-inset-top, 0px)';
-        if(hbg) hbg.style.top = 'calc(22px + env(safe-area-inset-top, 0px))';
-      } else {
-        ticker.style.transform = '';
-        ticker.style.opacity = '';
-        ticker.style.pointerEvents = '';
-        if(nav) nav.style.top = '';
-        if(hbg) hbg.style.top = '';
-      }
-      ticking = false;
-    });
-    ticking = true;
+  function tick(){
+    const y = window.scrollY || window.pageYOffset || 0;
+    const mobile = window.matchMedia('(max-width: 768px)').matches;
+    if (!mobile) {
+      all.forEach(el => el.classList.remove('scroll-hidden'));
+      if (hbg) hbg.style.top = '';
+      ticking = false; return;
+    }
+    if (y <= SHOW_THRESHOLD) {
+      all.forEach(el => el.classList.remove('scroll-hidden'));
+      if (hbg) hbg.style.top = '';
+    } else {
+      all.forEach(el => el.classList.add('scroll-hidden'));
+      // Pull the hamburger up to the top edge once the chrome's hidden
+      // so it stays reachable.
+      if (hbg) hbg.style.top = 'calc(8px + env(safe-area-inset-top, 0px))';
+    }
+    ticking = false;
   }
-  ['scroll','touchmove'].forEach(ev=>window.addEventListener(ev,onScroll,{passive:true}));
+  window.addEventListener('scroll', () => { if (!ticking) { requestAnimationFrame(tick); ticking = true; } }, { passive: true });
 })();
 </script>
 </body>
