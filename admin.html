@@ -795,15 +795,17 @@ select.form-input{cursor:pointer}
       <div style="flex:1;height:1px;background:rgba(0,0,0,.1)"></div>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">Email</label>
-      <input type="email" id="login-email" class="form-input" placeholder="admin@dvsl.com" autocomplete="email">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Password</label>
-      <input type="password" id="login-pass" class="form-input" placeholder="Enter password" autocomplete="current-password">
-    </div>
-    <button class="btn btn-outline btn-full" id="login-btn" onclick="doLogin()">Commissioner Sign In</button>
+    <form id="login-form" autocomplete="on" onsubmit="event.preventDefault();doLogin();return false">
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input type="email" id="login-email" name="email" class="form-input" placeholder="admin@dvsl.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" id="login-pass" name="password" class="form-input" placeholder="Enter password" autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-outline btn-full" id="login-btn">Commissioner Sign In</button>
+    </form>
     <div style="margin-top:10px;text-align:center">
       <a href="#" onclick="doPasswordReset();return false" style="font-size:12px;color:#002D72;text-decoration:underline">Forgot password?</a>
     </div>
@@ -2063,6 +2065,15 @@ window.clearCaptainChat = async function() {
 // ═══════════════════════════════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════════════════════════════
+// Programmatic password save — see profile.html for full rationale.
+async function _dvslSaveCredential(email, password) {
+  try {
+    if (!email || !password) return;
+    if (typeof window.PasswordCredential !== 'function') return;
+    await navigator.credentials.store(new window.PasswordCredential({ id: email, password, name: email }));
+  } catch (_) {}
+}
+
 window.doLogin = async function() {
   const email = document.getElementById('login-email').value.trim();
   const pass = document.getElementById('login-pass').value;
@@ -2072,6 +2083,7 @@ window.doLogin = async function() {
   try {
     document.getElementById('login-btn').disabled = true;
     await signInWithEmailAndPassword(auth, email, pass);
+    _dvslSaveCredential(email, pass);
   } catch(e) {
     let msg = e.message || 'Login failed';
     if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found') {
