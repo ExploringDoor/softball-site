@@ -2026,21 +2026,23 @@ function renderRoster() {
     el.innerHTML = '<div class="empty">No players on the roster yet. Add your first player above.</div>';
     return;
   }
+  const signedUpCount = MY_PLAYERS.filter(p => p.auth_uid).length;
   el.innerHTML = `
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${MY_PLAYERS.length} player(s)</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${MY_PLAYERS.length} player(s) — <strong style="color:var(--green)">${signedUpCount} signed up</strong> for the player portal</div>
     <div class="tbl-wrap"><table class="tbl">
-      <thead><tr><th>#</th><th>Name</th><th>Pos</th><th class="roster-email-col">Email</th><th>Actions</th></tr></thead>
+      <thead><tr><th>#</th><th>Name</th><th>Pos</th><th title="Signed up for the player portal" style="text-align:center">Signed up</th><th class="roster-email-col">Email</th><th>Actions</th></tr></thead>
       <tbody>${MY_PLAYERS.map(p => `<tr>
         <td style="width:36px">${p.num || '-'}</td>
         <td><strong>${esc(p.name)}</strong></td>
         <td style="width:48px">${esc(p.pos || '-')}</td>
+        <td style="text-align:center;width:80px">${p.auth_uid ? '<span title="Signed up" style="color:var(--green);font-size:18px">✓</span>' : '<span title="Not signed up yet" style="color:var(--muted2);font-size:14px">—</span>'}</td>
         <td class="roster-email-col" style="color:var(--muted);font-size:12px">${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
         <td style="white-space:nowrap;width:120px">
           <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
           <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">✕</button>
         </td>
       </tr>
-      <tr id="player-edit-${p.id}" style="display:none"><td colspan="5" id="player-edit-cell-${p.id}" style="padding:0"></td></tr>`).join('')}
+      <tr id="player-edit-${p.id}" style="display:none"><td colspan="6" id="player-edit-cell-${p.id}" style="padding:0"></td></tr>`).join('')}
       </tbody>
     </table></div>
   `;
