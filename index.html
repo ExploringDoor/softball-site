@@ -2948,10 +2948,12 @@ thead th.sorted-col .sarrow{opacity:1}
             <div id="home-recent-scores" class="gc-cards-grid"></div>
           </div>
           <!-- Upcoming Schedule -->
-          <div class="sec-eyebrow">2026 Season</div>
-          <div class="sec-title">Upcoming Schedule</div>
-          <div class="sched-wrap" id="sched-wrap" style="margin-top:16px"></div>
-          <div style="margin-top:20px"><a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)" style="font-size:14px;font-weight:600;color:#002D72;text-decoration:none">Full Schedule →</a></div>
+          <div id="home-upcoming-wrap">
+            <div class="sec-eyebrow">2026 Season</div>
+            <div class="sec-title">Upcoming Schedule</div>
+            <div class="sched-wrap" id="sched-wrap" style="margin-top:16px"></div>
+            <div style="margin-top:20px"><a href="javascript:void(0)" onclick="goPage('scores');setTimeout(()=>setView('schedule'),100)" style="font-size:14px;font-weight:600;color:#002D72;text-decoration:none">Full Schedule →</a></div>
+          </div>
         </div>
         <!-- Right: Standings sidebar -->
         <div style="width:300px;flex-shrink:0">
@@ -4461,6 +4463,7 @@ async function refreshVolatileData() {
     try { buildStand2026(); } catch(e) {}          // full standings page
     try { buildSchedule(); } catch(e) {}
     try { buildHomeRecentScores(); } catch(e) {}
+    try { applyHomeSectionOrder(); } catch(e) {}
     try { buildLeaderboard(); } catch(e) {}
     // Re-render current page if it's scores
     const activePage = document.querySelector('.page.active');
@@ -5081,6 +5084,58 @@ function buildStandings(){
         +'</tr>';
     }).join('')}</tbody></table>
   </div>`;
+}
+
+// Home-page section ordering: Adam's rule is that on **game days +
+// recovery window** people care more about what's coming up, but the
+// rest of the week they care more about what just happened.
+//
+// Schedule:
+//   Saturday 00:00 → Monday 18:00  →  Upcoming Schedule on top
+//   Monday 18:00  → Saturday 00:00 →  Recent Scores on top (default DOM order)
+//
+// "Repeat weekly" — implemented as a pure clock check; no persistence.
+// Called after every home-page rebuild so the order is fresh on each
+// visit / data refresh.
+function _dvslShouldShowUpcomingFirst(){
+  const now = new Date();
+  const day = now.getDay();   // 0=Sun, 1=Mon, ..., 6=Sat
+  const hour = now.getHours();
+  // Saturday all day OR Sunday all day OR Monday before 6pm
+  return day === 6 || day === 0 || (day === 1 && hour < 18);
+}
+function applyHomeSectionOrder(){
+  const recentWrap = document.getElementById('home-recent-scores-wrap');
+  const upcomingWrap = document.getElementById('home-upcoming-wrap');
+  if (!recentWrap || !upcomingWrap) return;
+  const parent = recentWrap.parentElement;
+  if (!parent || parent !== upcomingWrap.parentElement) return;
+  const upcomingFirst = _dvslShouldShowUpcomingFirst();
+  // If upcoming should be first and isn't currently first, move it.
+  // Otherwise (default state) make sure recent comes before upcoming.
+  if (upcomingFirst) {
+    if (upcomingWrap.previousElementSibling !== null && upcomingWrap.previousElementSibling === recentWrap) {
+      parent.insertBefore(upcomingWrap, recentWrap);
+    } else if (recentWrap.previousElementSibling !== upcomingWrap) {
+      // Defensive: if neither order is correct (e.g. extra siblings inserted),
+      // explicitly place upcoming directly before recent.
+      parent.insertBefore(upcomingWrap, recentWrap);
+    }
+  } else {
+    if (recentWrap.previousElementSibling !== null && recentWrap.previousElementSibling === upcomingWrap) {
+      parent.insertBefore(recentWrap, upcomingWrap);
+    }
+  }
+}
+// Re-apply when the user returns to a backgrounded tab — they may have
+// crossed a threshold (e.g. left the page Friday evening, returned
+// Saturday morning) without a fresh data load triggering the rebuild.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      try { applyHomeSectionOrder(); } catch(_) {}
+    }
+  });
 }
 
 function buildHomeRecentScores(){
@@ -6140,6 +6195,7 @@ window._dataPromise.then(() => {
   try{ buildHomeSidebar(); }catch(e){}
   try{ buildHomeRecentScores(); }catch(e){}
   try{ buildSchedule(); }catch(e){}
+  try{ applyHomeSectionOrder(); }catch(e){}
   try{ initNextGame(); }catch(e){}
   try{ buildLeaderboard(); }catch(e){}
   try{ buildRecaps(); }catch(e){}
