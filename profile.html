@@ -1272,6 +1272,12 @@ async function init() {
 // drop them into the player app. If no linked doc exists (e.g. captain
 // revoked their claim), sign them out and show an error.
 async function _routeFromAuthUser(user) {
+  // Idempotency guard: this function may be called twice on sign-in
+  // (once by onAuthStateChanged, once explicitly by submitPlayerAuth) —
+  // skip if we've already routed this exact user into player mode.
+  if (MODE === 'player' && MY_AUTH_PLAYER && MY_AUTH_PLAYER.auth_uid === user.uid) {
+    return;
+  }
   try {
     const snap = await getDocs(query(collection(db, 'players'), where('auth_uid', '==', user.uid)));
     if (snap.empty) {
@@ -1522,8 +1528,13 @@ window.submitPlayerAuth = async function() {
       // onAuthStateChanged will route via _routeFromAuthUser → welcome screen.
     } else {
       // Sign in to existing account — go straight in, no welcome screen.
-      await signInWithEmailAndPassword(auth, email, pw);
+      const cred = await signInWithEmailAndPassword(auth, email, pw);
       toast('Signed in!', 'success');
+      // Belt-and-suspenders: explicitly route NOW. The onAuthStateChanged
+      // listener also fires, but on some browsers (especially PWAs) it can
+      // be sluggish or fire before this function returns, leaving the user
+      // staring at the sign-in screen with a "Signed in" toast.
+      await _routeFromAuthUser(cred.user);
     }
   } catch (e) {
     let msg = e.message || String(e);
