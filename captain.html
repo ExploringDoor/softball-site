@@ -1590,7 +1590,12 @@ window.cauthBackToTeams = function() {
 window.cauthContinue = async function() {
   // "Continue as currently-signed-in user"
   if (!CAPTAIN_USER || !CAPTAIN_PENDING_TEAM) return;
-  await _writeCaptainClaim(CAPTAIN_USER, CAPTAIN_PENDING_TEAM);
+  try {
+    await _writeCaptainClaim(CAPTAIN_USER, CAPTAIN_PENDING_TEAM);
+  } catch (e) {
+    alert('Could not record captain claim: ' + (e.message || e.code || e) + '\n\nThis is almost certainly a Firestore rules issue — admin will need to add write permission for the "captain_claims" collection.');
+    return;
+  }
   await _enterCaptainAppFor(CAPTAIN_PENDING_TEAM);
 };
 
@@ -1644,7 +1649,18 @@ window.submitCaptainAuth = async function() {
       // Edge case — auth succeeded but no team selected. Bounce back.
       cauthBackToTeams(); return;
     }
-    await _writeCaptainClaim(cred.user, CAPTAIN_PENDING_TEAM);
+    try {
+      await _writeCaptainClaim(cred.user, CAPTAIN_PENDING_TEAM);
+    } catch (writeErr) {
+      // Bubble the real error up to the visible banner instead of silently
+      // dropping into the dashboard with no audit-log entry.
+      errEl.style.background = '#fff0f0';
+      errEl.style.borderColor = '#ffcccc';
+      errEl.style.color = 'var(--red)';
+      errEl.textContent = 'Signed in but the captain claim write failed: ' + (writeErr.message || writeErr.code || writeErr) + '. Likely a Firestore rules issue — captain_claims collection needs write permission for authed users.';
+      errEl.style.display = 'block';
+      return;
+    }
     await _enterCaptainAppFor(CAPTAIN_PENDING_TEAM);
   } catch (e) {
     let msg = e.message || String(e);
@@ -1703,34 +1719,18 @@ window.captainSignOut = async function() {
 // captain of this team". Doc id = `${teamId}__${authUid}` so re-signing in
 // just updates last_seen instead of creating dupes.
 async function _writeCaptainClaim(user, team) {
-  if (!user || !team) return;
+  if (!user || !team) throw new Error('missing user or team');
   const docId = team.id + '__' + user.uid;
-  try {
-    await setDoc(doc(db, 'captain_claims', docId), {
-      team_id: team.id,
-      team_name: team.name || team.short || team.id,
-      auth_uid: user.uid,
-      email: (user.email || '').toLowerCase(),
-      claimed_at: serverTimestamp(),
-      last_seen: serverTimestamp(),
-      revoked: false
-    }, { merge: true });
-    console.log('[captain_claims] wrote', docId, 'for', user.email);
-  } catch (e) {
-    // Surface the error visibly — silent failures here mean admin's audit
-    // log stays empty forever and nobody knows why.
-    console.error('captain_claims write failed:', e);
-    const errEl = document.getElementById('cauth-error');
-    if (errEl) {
-      errEl.style.background = '#fff0f0';
-      errEl.style.borderColor = '#ffcccc';
-      errEl.style.color = 'var(--red)';
-      errEl.textContent = 'Signed in OK, but couldn\'t record the claim: ' + (e.message || e.code || e) + ' (likely a Firestore rules issue — captain_claims collection may need write permission for authed users)';
-      errEl.style.display = 'block';
-    } else {
-      alert('Captain claim write failed: ' + (e.message || e));
-    }
-  }
+  await setDoc(doc(db, 'captain_claims', docId), {
+    team_id: team.id,
+    team_name: team.name || team.short || team.id,
+    auth_uid: user.uid,
+    email: (user.email || '').toLowerCase(),
+    claimed_at: serverTimestamp(),
+    last_seen: serverTimestamp(),
+    revoked: false
+  }, { merge: true });
+  console.log('[captain_claims] wrote', docId, 'for', user.email);
 }
 
 // Listen for Firebase Auth state. Fires on initial page load (after a small

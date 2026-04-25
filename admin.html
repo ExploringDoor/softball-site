@@ -6259,18 +6259,30 @@ function renderCaptains() {
 // team_name, auth_uid, email, claimed_at, last_seen, revoked.
 let CAPTAIN_CLAIMS = [];
 
-window.loadCaptainClaims = async function() {
+window.loadCaptainClaims = async function(opts) {
+  const silent = opts && opts.silent;
   const el = document.getElementById('captain-claims-content');
   if (!el) return;
-  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading sign-ins...</div>';
+  if (!silent) el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading sign-ins...</div>';
   try {
     const snap = await getDocs(collection(db, 'captain_claims'));
     CAPTAIN_CLAIMS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderCaptainClaims();
   } catch(e) {
-    el.innerHTML = '<div class="empty">Could not load captain sign-ins: ' + esc(e.message) + '</div>';
+    if (!silent) el.innerHTML = '<div class="empty">Could not load captain sign-ins: ' + esc(e.message) + '</div>';
+    console.warn('loadCaptainClaims failed:', e);
   }
 };
+
+// Auto-refresh audit log every 30s so new sign-ins surface without a manual
+// click. Cheap query (one collection read).
+setInterval(() => {
+  // Only poll if the Captains section is visible to avoid wasted reads.
+  const sec = document.getElementById('sec-captains');
+  if (sec && getComputedStyle(sec).display !== 'none') {
+    window.loadCaptainClaims({ silent: true });
+  }
+}, 30000);
 
 function renderCaptainClaims() {
   const el = document.getElementById('captain-claims-content');
