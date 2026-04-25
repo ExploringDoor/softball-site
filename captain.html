@@ -727,6 +727,70 @@ select.form-input{cursor:pointer}
   </div>
 </div>
 
+<!-- CAPTAIN AUTH SCREEN -->
+<div id="captain-auth" style="display:none;padding-top:calc(48px + env(safe-area-inset-top, 0px));min-height:100vh;background:var(--bg)">
+  <div style="max-width:440px;margin:0 auto;padding:32px 24px 80px">
+    <div style="text-align:center;margin-bottom:24px">
+      <img id="cauth-logo" src="" style="width:96px;height:96px;object-fit:contain;margin:0 auto 8px;display:block" onerror="this.style.display='none'">
+      <div id="cauth-team-name" style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;text-transform:uppercase;color:var(--navy);letter-spacing:-.01em">—</div>
+      <div style="font-size:14px;color:var(--muted);margin-top:6px">Captain sign-in</div>
+    </div>
+
+    <!-- Mode toggle -->
+    <div style="display:flex;gap:0;background:#eef0f4;border-radius:10px;padding:4px;margin-bottom:18px">
+      <button id="cauth-tab-signin" onclick="cauthSetMode('signin')" style="flex:1;padding:10px;border:0;background:#fff;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;box-shadow:0 1px 3px rgba(0,0,0,.08)">I have an account</button>
+      <button id="cauth-tab-signup" onclick="cauthSetMode('signup')" style="flex:1;padding:10px;border:0;background:transparent;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px;color:var(--muted)">Create account</button>
+    </div>
+
+    <div id="cauth-already" style="display:none;background:#e6f4ea;border:1px solid #b7dfc4;border-radius:10px;padding:14px;margin-bottom:14px;font-size:13px;color:#1e6638">
+      <div style="font-weight:700;margin-bottom:4px">✓ Already signed in</div>
+      <div id="cauth-already-email" style="font-family:monospace;word-break:break-all;font-size:12px;margin-bottom:10px">—</div>
+      <button onclick="cauthContinue()" class="btn btn-primary btn-sm" style="width:100%;margin-bottom:6px">Continue as captain of <span id="cauth-already-team">this team</span></button>
+      <button onclick="cauthSignOutAndReset()" class="btn btn-outline btn-sm" style="width:100%">Sign in as someone else</button>
+    </div>
+
+    <div id="cauth-form">
+      <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:6px">Email</label>
+      <input id="cauth-email" type="email" autocomplete="email" inputmode="email" placeholder="you@example.com"
+        style="width:100%;padding:12px;border:1px solid #d0d4dc;border-radius:8px;font-size:15px;margin-bottom:12px">
+
+      <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:6px">Password</label>
+      <div style="position:relative;margin-bottom:12px">
+        <input id="cauth-pw" type="password" autocomplete="current-password" placeholder="••••••••"
+          style="width:100%;padding:12px 44px 12px 12px;border:1px solid #d0d4dc;border-radius:8px;font-size:15px">
+        <button type="button" onclick="cauthTogglePw('cauth-pw')" aria-label="Show password"
+          style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:18px;cursor:pointer;padding:6px">👁</button>
+      </div>
+
+      <div id="cauth-pw2-row" style="display:none">
+        <label style="display:block;font-size:13px;font-weight:600;color:#333;margin-bottom:6px">Confirm password</label>
+        <div style="position:relative;margin-bottom:12px">
+          <input id="cauth-pw2" type="password" autocomplete="new-password" placeholder="••••••••"
+            style="width:100%;padding:12px 44px 12px 12px;border:1px solid #d0d4dc;border-radius:8px;font-size:15px">
+          <button type="button" onclick="cauthTogglePw('cauth-pw2')" aria-label="Show password"
+            style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:18px;cursor:pointer;padding:6px">👁</button>
+        </div>
+      </div>
+
+      <div id="cauth-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:10px;padding:8px 10px;background:#fff0f0;border-radius:6px;border:1px solid #ffcccc"></div>
+
+      <button id="cauth-submit" onclick="submitCaptainAuth()" class="btn btn-primary"
+        style="width:100%;padding:14px;font-size:15px;font-weight:700;margin-bottom:14px">Sign In</button>
+
+      <div id="cauth-forgot-block" style="background:#fff8e1;border:2px solid #f4c430;border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:700;color:#7a5a00;margin-bottom:6px">🔑 Forgot password? Tap to reset</div>
+        <div style="font-size:13px;color:#7a5a00;margin-bottom:10px">⚠️ Check your <strong>JUNK / SPAM</strong> folder — reset emails usually go there!</div>
+        <div style="font-size:13px;color:#7a5a00;margin-bottom:10px">Already signed up before? Type your email above and tap the button below — we'll email you a reset link.</div>
+        <button onclick="captainForgotPassword()" class="btn btn-outline" style="width:100%;border-color:#f4c430;color:#7a5a00;font-weight:700">Send password reset email</button>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:18px">
+      <button onclick="cauthBackToTeams()" class="btn btn-outline btn-sm">← Back to team picker</button>
+    </div>
+  </div>
+</div>
+
 <!-- CAPTAIN APP -->
 <div id="app" class="app">
 
@@ -739,8 +803,9 @@ select.form-input{cursor:pointer}
         <span id="top-team-label">Loading...</span>
       </div>
     </div>
-    <div class="top-bar-right">
+    <div class="top-bar-right" style="display:flex;gap:6px">
       <button class="btn btn-outline btn-sm" onclick="changeTeam()">Change Team</button>
+      <button class="btn btn-outline btn-sm" onclick="captainSignOut()" style="color:var(--red);border-color:var(--red)">Sign Out</button>
     </div>
   </div>
 
@@ -1151,6 +1216,7 @@ select.form-input{cursor:pointer}
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -1163,6 +1229,14 @@ const FIREBASE_CONFIG = {
 
 const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
+const auth = getAuth(app);
+// Persist auth across browser restarts so captains only sign in once per device.
+setPersistence(auth, browserLocalPersistence).catch(e => console.warn('auth persistence failed:', e));
+
+// Captain auth state — set after a successful sign-in / claim.
+let CAPTAIN_USER = null;       // Firebase Auth user object
+let CAPTAIN_AUTH_MODE = 'signin'; // 'signin' | 'signup'
+let CAPTAIN_PENDING_TEAM = null;  // team object set when picking team, used by auth screen
 
 // ═══════════════════════════════════════════════════════════════════
 // EMAILJS CONFIG — fill these in after setting up emailjs.com
@@ -1403,12 +1477,26 @@ async function initTeamPicker() {
 window.selectTeam = async function(teamId) {
   const team = ALL_TEAMS.find(t => t.id === teamId);
   if (!team) return;
-  captainData = { team_id: team.id, team_name: team.name, email: team.name };
-  currentUser = { email: team.name }; // used as author identifier in chat/submissions
+  CAPTAIN_PENDING_TEAM = team;
+  // Show the auth screen instead of dropping straight into the dashboard.
+  // After successful sign-in, _enterCaptainAppFor(team) wires everything up.
+  showCaptainAuthScreen(team);
+};
+
+// Internal: actually enter the captain app for a given team. Called from the
+// auth flow once the user is signed in and the captain_claims doc is written.
+async function _enterCaptainAppFor(team) {
+  captainData = {
+    team_id: team.id,
+    team_name: team.name,
+    email: (CAPTAIN_USER && CAPTAIN_USER.email) || team.name
+  };
+  currentUser = { email: (CAPTAIN_USER && CAPTAIN_USER.email) || team.name }; // author identifier in chat/submissions
   // Remember this team so a push-notification deep-link (which only lands on
   // /captain.html?tab=...) can skip the picker next time.
   try { localStorage.setItem('dvsl-captain-team', team.id); } catch(_) {}
   document.getElementById('team-picker').style.display = 'none';
+  document.getElementById('captain-auth').style.display = 'none';
   document.getElementById('app').style.display = 'block';
   await loadAllData();
   // If the URL carries ?tab=captchat (notification deep-link), jump there.
@@ -1440,9 +1528,221 @@ window.changeTeam = function() {
   showTab('team');
 };
 
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN AUTH (Firebase email + password)
+// Flow: pick team → showCaptainAuthScreen → submitCaptainAuth → write
+//   captain_claims doc → _enterCaptainAppFor(team).
+// browserLocalPersistence keeps captains signed in across sessions, so
+// most of the time they hit the page, pick their team, and the "Already
+// signed in" block lets them continue with one tap.
+// ═══════════════════════════════════════════════════════════════════
+function showCaptainAuthScreen(team) {
+  document.getElementById('team-picker').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  const screen = document.getElementById('captain-auth');
+  screen.style.display = 'block';
+  document.getElementById('cauth-logo').src = 'logos/' + team.id + '.png';
+  document.getElementById('cauth-team-name').textContent = team.short || team.name;
+  document.getElementById('cauth-error').style.display = 'none';
+  document.getElementById('cauth-pw').value = '';
+  const pw2 = document.getElementById('cauth-pw2'); if (pw2) pw2.value = '';
+  // If a Firebase Auth session already exists (e.g. captain signed in as
+  // a player on this device), short-circuit the form: show "Continue as X".
+  if (CAPTAIN_USER && CAPTAIN_USER.email) {
+    document.getElementById('cauth-already-email').textContent = CAPTAIN_USER.email;
+    document.getElementById('cauth-already-team').textContent = team.short || team.name;
+    document.getElementById('cauth-already').style.display = 'block';
+    document.getElementById('cauth-form').style.display = 'none';
+  } else {
+    document.getElementById('cauth-already').style.display = 'none';
+    document.getElementById('cauth-form').style.display = 'block';
+    cauthSetMode('signin'); // default
+    setTimeout(() => document.getElementById('cauth-email').focus(), 100);
+  }
+}
+
+window.cauthSetMode = function(mode) {
+  CAPTAIN_AUTH_MODE = mode;
+  const tSignin = document.getElementById('cauth-tab-signin');
+  const tSignup = document.getElementById('cauth-tab-signup');
+  if (mode === 'signin') {
+    tSignin.style.background = '#fff'; tSignin.style.color = '';
+    tSignin.style.boxShadow = '0 1px 3px rgba(0,0,0,.08)';
+    tSignup.style.background = 'transparent'; tSignup.style.color = 'var(--muted)';
+    tSignup.style.boxShadow = 'none';
+    document.getElementById('cauth-pw2-row').style.display = 'none';
+    document.getElementById('cauth-submit').textContent = 'Sign In';
+    document.getElementById('cauth-pw').setAttribute('autocomplete', 'current-password');
+  } else {
+    tSignup.style.background = '#fff'; tSignup.style.color = '';
+    tSignup.style.boxShadow = '0 1px 3px rgba(0,0,0,.08)';
+    tSignin.style.background = 'transparent'; tSignin.style.color = 'var(--muted)';
+    tSignin.style.boxShadow = 'none';
+    document.getElementById('cauth-pw2-row').style.display = 'block';
+    document.getElementById('cauth-submit').textContent = 'Create Account';
+    document.getElementById('cauth-pw').setAttribute('autocomplete', 'new-password');
+  }
+  document.getElementById('cauth-error').style.display = 'none';
+};
+
+window.cauthTogglePw = function(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+};
+
+window.cauthBackToTeams = function() {
+  CAPTAIN_PENDING_TEAM = null;
+  document.getElementById('captain-auth').style.display = 'none';
+  document.getElementById('team-picker').style.display = 'block';
+};
+
+window.cauthContinue = async function() {
+  // "Continue as currently-signed-in user"
+  if (!CAPTAIN_USER || !CAPTAIN_PENDING_TEAM) return;
+  await _writeCaptainClaim(CAPTAIN_USER, CAPTAIN_PENDING_TEAM);
+  await _enterCaptainAppFor(CAPTAIN_PENDING_TEAM);
+};
+
+window.cauthSignOutAndReset = async function() {
+  try { await signOut(auth); } catch(_) {}
+  CAPTAIN_USER = null;
+  // Re-render the auth screen now in form mode.
+  if (CAPTAIN_PENDING_TEAM) showCaptainAuthScreen(CAPTAIN_PENDING_TEAM);
+};
+
+window.submitCaptainAuth = async function() {
+  const errEl = document.getElementById('cauth-error');
+  errEl.style.display = 'none';
+  const email = (document.getElementById('cauth-email').value || '').trim().toLowerCase();
+  const pw = document.getElementById('cauth-pw').value || '';
+  if (!email || !pw) {
+    errEl.textContent = 'Email and password are required.';
+    errEl.style.display = 'block'; return;
+  }
+  if (CAPTAIN_AUTH_MODE === 'signup') {
+    const pw2 = document.getElementById('cauth-pw2').value || '';
+    if (pw.length < 6) {
+      errEl.textContent = 'Password must be at least 6 characters.';
+      errEl.style.display = 'block'; return;
+    }
+    if (pw !== pw2) {
+      errEl.textContent = 'Passwords do not match.';
+      errEl.style.display = 'block'; return;
+    }
+  }
+  const btn = document.getElementById('cauth-submit');
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    let cred;
+    if (CAPTAIN_AUTH_MODE === 'signup') {
+      // Auto-recover if the email was already used: silently fall back to
+      // sign-in with the same password they typed. Matches the player flow.
+      try {
+        cred = await createUserWithEmailAndPassword(auth, email, pw);
+      } catch (e) {
+        if (/already-in-use/i.test(e.message || '')) {
+          cred = await signInWithEmailAndPassword(auth, email, pw);
+        } else { throw e; }
+      }
+    } else {
+      cred = await signInWithEmailAndPassword(auth, email, pw);
+    }
+    CAPTAIN_USER = cred.user;
+    if (!CAPTAIN_PENDING_TEAM) {
+      // Edge case — auth succeeded but no team selected. Bounce back.
+      cauthBackToTeams(); return;
+    }
+    await _writeCaptainClaim(cred.user, CAPTAIN_PENDING_TEAM);
+    await _enterCaptainAppFor(CAPTAIN_PENDING_TEAM);
+  } catch (e) {
+    let msg = e.message || String(e);
+    if (/wrong-password|invalid-credential/i.test(msg)) msg = 'Wrong password. Try again or tap "Forgot password?" below.';
+    else if (/user-not-found/i.test(msg)) msg = 'No account found for that email. Tap "Create account" above.';
+    else if (/weak-password/i.test(msg)) msg = 'Password is too weak — use at least 6 characters.';
+    else if (/invalid-email/i.test(msg)) msg = 'That email address looks invalid.';
+    else if (/network/i.test(msg)) msg = 'Network error — check your connection and try again.';
+    else msg = msg.replace(/^Firebase:\s*/, '');
+    errEl.textContent = msg;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+};
+
+window.captainForgotPassword = async function() {
+  const errEl = document.getElementById('cauth-error');
+  errEl.style.display = 'none';
+  const email = (document.getElementById('cauth-email').value || '').trim().toLowerCase();
+  if (!email) {
+    errEl.textContent = 'Type your email above first, then tap this button.';
+    errEl.style.display = 'block'; return;
+  }
+  try {
+    await sendPasswordResetEmail(auth, email);
+    errEl.style.background = '#e6f4ea';
+    errEl.style.borderColor = '#b7dfc4';
+    errEl.style.color = '#1e6638';
+    errEl.textContent = '✓ Reset email sent to ' + email + '. Check your JUNK / SPAM folder!';
+    errEl.style.display = 'block';
+  } catch (e) {
+    errEl.style.background = '#fff0f0';
+    errEl.style.borderColor = '#ffcccc';
+    errEl.style.color = 'var(--red)';
+    errEl.textContent = (e.message || String(e)).replace(/^Firebase:\s*/, '');
+    errEl.style.display = 'block';
+  }
+};
+
+window.captainSignOut = async function() {
+  // Wipe local captain state, sign out of Firebase, return to team picker.
+  if (_unsubTeamChat) { _unsubTeamChat(); _unsubTeamChat = null; }
+  if (_unsubCaptChat) { _unsubCaptChat(); _unsubCaptChat = null; }
+  captainData = null; currentUser = null;
+  CAPTAIN_USER = null; CAPTAIN_PENDING_TEAM = null;
+  try { localStorage.removeItem('dvsl-captain-team'); } catch(_) {}
+  try { await signOut(auth); } catch(_) {}
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('captain-auth').style.display = 'none';
+  document.getElementById('team-picker').style.display = 'block';
+  showTab('team');
+};
+
+// Write/refresh the audit doc that tells admin "this email signed in as
+// captain of this team". Doc id = `${teamId}__${authUid}` so re-signing in
+// just updates last_seen instead of creating dupes.
+async function _writeCaptainClaim(user, team) {
+  if (!user || !team) return;
+  try {
+    const docId = team.id + '__' + user.uid;
+    await setDoc(doc(db, 'captain_claims', docId), {
+      team_id: team.id,
+      team_name: team.name || team.short || team.id,
+      auth_uid: user.uid,
+      email: (user.email || '').toLowerCase(),
+      claimed_at: serverTimestamp(),
+      last_seen: serverTimestamp(),
+      revoked: false
+    }, { merge: true });
+  } catch (e) { console.warn('captain_claims write failed:', e); }
+}
+
+// Listen for Firebase Auth state. Fires on initial page load (after a small
+// delay) — that's how we detect "already signed in" users without forcing
+// them through the sign-in form again.
+onAuthStateChanged(auth, (user) => {
+  CAPTAIN_USER = user || null;
+  // If user is on the auth screen and just got their session detected, swap
+  // to the "Continue as X" UI. (showCaptainAuthScreen handles both states.)
+  const authScreen = document.getElementById('captain-auth');
+  if (authScreen && authScreen.style.display === 'block' && CAPTAIN_PENDING_TEAM) {
+    showCaptainAuthScreen(CAPTAIN_PENDING_TEAM);
+  }
+});
+
 // Start by showing team picker, then auto-select the last-used team if we
-// know which one it was. This keeps notification deep-links instant instead
-// of forcing the captain to tap their team logo every time.
+// know which one it was. The auth screen will short-circuit to "Continue as X"
+// if the captain is already signed in — one tap and they're back in.
 initTeamPicker().then(() => {
   try {
     const last = localStorage.getItem('dvsl-captain-team');

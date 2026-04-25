@@ -1288,11 +1288,25 @@ select.form-input{cursor:pointer}
         </div>
       </div>
       <div style="background:var(--blue-bg);color:var(--blue);font-size:12px;padding:10px 14px;border-radius:8px;margin-bottom:16px">
-        Captains enter <strong>captain.html</strong> by picking their team from a list — no password needed. Records here are used for the directory, email blasts, and matching captain-submitted box scores. Email and phone are optional but recommended.
+        Captains enter <strong>captain.html</strong> by picking their team and signing in with their personal email + password (Firebase Auth). Records here are used for the directory, email blasts, and matching captain-submitted box scores. Email and phone are optional but recommended.
       </div>
       <div id="add-captain-form" style="display:none"></div>
       <div id="captains-content">
         <div class="loading"><div class="spinner"></div> Loading captains...</div>
+      </div>
+
+      <!-- Captain sign-in audit log (Firebase Auth claims) -->
+      <div class="panel" style="margin-top:24px">
+        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <span>Captain sign-ins (audit log)</span>
+          <button class="btn btn-outline btn-sm" onclick="loadCaptainClaims()">🔄 Refresh</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+          Every email that has signed in to the captain portal, grouped by team. If someone wrong claimed a team, click <strong>Revoke</strong> — they'll have to sign in again on their next visit.
+        </div>
+        <div id="captain-claims-content">
+          <div class="loading"><div class="spinner"></div> Loading sign-ins...</div>
+        </div>
       </div>
     </div>
 
@@ -1766,7 +1780,7 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, limit, setDoc, Timestamp, deleteField, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, limit, setDoc, Timestamp, deleteField, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
@@ -2326,6 +2340,7 @@ async function loadAllData() {
     loadBanner();
     loadActivityLog();
     loadCaptains();
+    loadCaptainClaims();
     loadScoreReviews();
     loadFinancials();
   } catch(e) {
@@ -6237,6 +6252,83 @@ function renderCaptains() {
     }).join('')}</tbody>
   </table></div>`;
 }
+
+// ─── CAPTAIN CLAIMS (Firebase Auth audit log) ────────────────────────
+// captain_claims collection is written by captain.html every time a captain
+// signs in. Each doc id = `${team_id}__${auth_uid}`, fields: team_id,
+// team_name, auth_uid, email, claimed_at, last_seen, revoked.
+let CAPTAIN_CLAIMS = [];
+
+window.loadCaptainClaims = async function() {
+  const el = document.getElementById('captain-claims-content');
+  if (!el) return;
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading sign-ins...</div>';
+  try {
+    const snap = await getDocs(collection(db, 'captain_claims'));
+    CAPTAIN_CLAIMS = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderCaptainClaims();
+  } catch(e) {
+    el.innerHTML = '<div class="empty">Could not load captain sign-ins: ' + esc(e.message) + '</div>';
+  }
+};
+
+function renderCaptainClaims() {
+  const el = document.getElementById('captain-claims-content');
+  if (!CAPTAIN_CLAIMS.length) {
+    el.innerHTML = '<div class="empty">No captain sign-ins yet. Captains who sign in at <code>captain.html</code> will appear here.</div>';
+    return;
+  }
+  // Group by team
+  const byTeam = {};
+  CAPTAIN_CLAIMS.forEach(c => {
+    if (c.revoked) return;
+    const key = c.team_id || '__unknown';
+    (byTeam[key] ||= []).push(c);
+  });
+  const teamOrder = Object.keys(byTeam).sort((a,b) => {
+    const an = (byTeam[a][0]?.team_name || a).toLowerCase();
+    const bn = (byTeam[b][0]?.team_name || b).toLowerCase();
+    return an.localeCompare(bn);
+  });
+  if (!teamOrder.length) {
+    el.innerHTML = '<div class="empty">No active captain sign-ins (all revoked).</div>';
+    return;
+  }
+  const fmtTs = (ts) => {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : (ts.seconds ? new Date(ts.seconds*1000) : new Date(ts));
+    if (isNaN(d)) return '—';
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  };
+  el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Team</th><th>Email</th><th>First sign-in</th><th>Last seen</th><th>Actions</th></tr></thead>
+    <tbody>${teamOrder.map(teamKey => {
+      const claims = byTeam[teamKey];
+      return claims.map((c, idx) => `<tr>
+        <td>${idx === 0 ? `<strong>${esc(c.team_name || c.team_id)}</strong>` : ''}</td>
+        <td>${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--blue)">${esc(c.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
+        <td style="font-size:12px;color:var(--muted)">${esc(fmtTs(c.claimed_at))}</td>
+        <td style="font-size:12px;color:var(--muted)">${esc(fmtTs(c.last_seen))}</td>
+        <td class="actions">
+          <button class="btn btn-danger btn-sm" data-claim-id="${esc(c.id)}" data-claim-label="${esc((c.email || '') + ' (' + (c.team_name || c.team_id) + ')').replace(/"/g,'&quot;')}" onclick="revokeCaptainClaim(this.dataset.claimId, this.dataset.claimLabel)">Revoke</button>
+        </td>
+      </tr>`).join('');
+    }).join('')}</tbody>
+  </table></div>`;
+}
+
+window.revokeCaptainClaim = async function(claimId, label) {
+  if (!claimId) return;
+  if (!confirm('Revoke captain access for ' + (label || claimId) + '?\n\nThey will need to sign in again on their next visit.')) return;
+  try {
+    // Mark revoked rather than delete — keeps audit trail intact.
+    await updateDoc(doc(db, 'captain_claims', claimId), { revoked: true, revoked_at: serverTimestamp() });
+    toast('Captain claim revoked', 'success');
+    loadCaptainClaims();
+  } catch(e) {
+    toast('Revoke failed: ' + e.message, 'error');
+  }
+};
 
 window.openAddCaptain = function() {
   const el = document.getElementById('add-captain-form');
