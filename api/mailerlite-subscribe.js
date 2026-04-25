@@ -16,6 +16,7 @@
 //   name?:  string    — first name
 //   last?:  string    — last name
 //   phone?: string
+//   team?:  string    — team affiliation (custom field "team" in MailerLite)
 //   groups?: string[] — override default group list
 //
 // Responses:
@@ -59,7 +60,8 @@ export default async function handler(req, res) {
         fields: {
           name: body.name || '',
           last_name: body.last || '',
-          phone: body.phone || ''
+          phone: body.phone || '',
+          ...(body.team ? { team: body.team } : {})
         },
         ...(groups ? { groups } : {})
       })

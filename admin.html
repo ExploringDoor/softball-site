@@ -7360,9 +7360,26 @@ window.toggleSubscriberList = async function() {
           list.innerHTML = '<div style="color:var(--muted2)">No active subscribers found.</div>';
         } else {
           list.innerHTML = subs.map(s => {
-            const name = [s.fields?.name, s.fields?.last_name].filter(Boolean).join(' ').trim();
+            // Build name: prefer first + last; fall back to whichever is set.
+            // Some legacy records have full name stuffed into `name` and team
+            // in `last_name` — for those, just show the `name` field.
+            const first = (s.fields?.name || '').trim();
+            const last  = (s.fields?.last_name || '').trim();
+            // If `name` already contains a space (looks like a full name) and
+            // last_name doesn't appear in it, just use `name` to avoid the
+            // "Brian Gelfand Gelfand" duplication.
+            let display;
+            if (first && last && !first.toLowerCase().includes(last.toLowerCase())) {
+              display = `${first} ${last}`;
+            } else {
+              display = first || last || '';
+            }
+            const team = (s.fields?.team || '').trim();
             const email = s.email || '(no email)';
-            return `<div style="padding:3px 0;border-bottom:1px solid var(--border)">${name ? `<strong>${name}</strong> · ` : ''}<span style="color:var(--muted2)">${email}</span></div>`;
+            const teamBadge = team
+              ? ` <span style="background:var(--blue-bg);color:var(--blue);font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px">${team}</span>`
+              : '';
+            return `<div style="padding:3px 0;border-bottom:1px solid var(--border)">${display ? `<strong>${display}</strong>${teamBadge} · ` : ''}<span style="color:var(--muted2)">${email}</span></div>`;
           }).join('');
         }
         _mlSubsLoaded = true;
