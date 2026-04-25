@@ -213,7 +213,13 @@ async function listMatchingTokens({ projectId, accessToken, category, team, team
     // adminOnly filter: only tokens where is_admin === true
     if (adminOnly && f.is_admin?.booleanValue !== true) continue;
     const cats = (f.categories?.arrayValue?.values || []).map(v => v.stringValue);
-    if (cats.length && !cats.includes(category)) continue;
+    // Categories filter: skip tokens that have explicitly opted into a set
+    // that doesn't include this category. EXCEPTION: when `adminOnly` is set,
+    // we treat is_admin:true as the explicit subscription — the admin toggle
+    // in notifications.html does not write 'admin' to the categories field
+    // (it lives in its own row), so without this bypass admin pushes would
+    // never deliver to anyone whose categories array is non-empty.
+    if (!adminOnly && cats.length && !cats.includes(category)) continue;
     const tokTeams = (f.teams?.arrayValue?.values || []).map(v => v.stringValue);
     // authed_teams: set by profile.html when a player signs in with Firebase
     // Auth and their doc is linked to a team. Used ONLY to gate team_chat
