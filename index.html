@@ -3025,7 +3025,7 @@ thead th.sorted-col .sarrow{opacity:1}
 <!-- ═══ PLAYERS PAGE ═══ -->
 <div class="page" id="pg-players">
   <div class="page-header-pad" style="padding:130px 48px 28px;background:var(--bg)">
-    <button onclick="playersGoBack()" style="background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-bottom:14px">← Back</button>
+    <button type="button" onclick="event.preventDefault();event.stopPropagation();window.playersGoBack&&window.playersGoBack();return false" style="background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:14px;font-weight:600;padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-bottom:14px;-webkit-tap-highlight-color:rgba(0,0,0,.1);position:relative;z-index:5;touch-action:manipulation">← Back to Home</button>
     <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(34px,5vw,54px);text-transform:uppercase;line-height:.95">2026 <span style="color:var(--gold)">Teams</span></h1>
   </div>
   <div style="padding:24px 48px 64px;max-width:1400px;margin:0 auto">
@@ -3056,8 +3056,8 @@ thead th.sorted-col .sarrow{opacity:1}
       <div style="display:flex;align-items:flex-start;gap:20px;padding-top:8px">
         <img id="team-hero-logo" src="" alt="" style="width:clamp(90px,11vw,150px);height:clamp(90px,11vw,150px);object-fit:contain;display:none;flex-shrink:0;filter:drop-shadow(0 4px 24px rgba(0,0,0,.3));margin-top:4px">
         <div>
-          <div id="team-back-btn" style="display:none;margin-bottom:12px">
-            <button onclick="teamGoBack()" style="background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer;display:flex;align-items:center;gap:6px">← Back</button>
+          <div id="team-back-btn" style="display:none;margin-bottom:12px;position:relative;z-index:5">
+            <button type="button" onclick="event.preventDefault();event.stopPropagation();window.teamGoBack&&window.teamGoBack();return false" style="background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:14px;font-weight:600;padding:10px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;-webkit-tap-highlight-color:rgba(0,0,0,.1);position:relative;z-index:5;touch-action:manipulation">← Back to Teams</button>
           </div>
           <div class="sec-eyebrow" id="team-div-label"></div>
           <div class="team-name-big" id="team-big-name"></div>
@@ -5334,34 +5334,21 @@ function buildTeamsBigCards(){
 }
 
 // ════════════════════════════ TEAM PAGE ══════════════════════════════════
-function teamGoBack(){
-  // Go back in history if there's a previous SPA page, otherwise fall back to Teams list
-  if (document.referrer && document.referrer.includes(window.location.hostname)) {
-    history.back();
-  } else {
-    goPage('players');
-  }
-}
+window.teamGoBack = function(){
+  // Always navigate to the Teams listing — clicking back from a single
+  // team's page should land you back where you came from in the typical
+  // flow (Teams listing → click team → back). history.back() was
+  // unreliable in standalone PWA mode (referrer is often empty, no
+  // SPA state to pop) so we just go straight there.
+  try { goPage('players'); } catch(_) { window.location.href = '/#players'; }
+};
 
-// Back button on the Teams (players) listing page. In standalone PWA
-// mode there's no browser back button, and the bottom tab bar has no
-// "back" affordance — so without an in-page button users could land on
-// /#players (e.g. from the More sheet) with no way out except Home.
-//
-// `history.back()` alone is unreliable: if the user landed directly on
-// /#players (fresh PWA launch, deep link, More-menu nav from a sibling
-// page), there is no SPA state to pop and the call silently no-ops.
-// Strategy: try history.back(); if the URL didn't change after a beat,
-// force navigate to Home.
+// Back button on the Teams (players) listing page. Just go to home —
+// every previous attempt to be clever (history.back() + fallback timer)
+// failed in the PWA in different ways. The user's expectation is "give
+// me a way out of this page", and Home is always the right answer.
 window.playersGoBack = function(){
-  const startUrl = location.href;
-  try { history.back(); } catch(_) {}
-  setTimeout(() => {
-    if (location.href === startUrl) {
-      // history.back() didn't actually move us — force to home.
-      try { goPage('home'); } catch(_) { window.location.href = '/'; }
-    }
-  }, 250);
+  try { goPage('home'); } catch(_) { window.location.href = '/'; }
 };
 
 
