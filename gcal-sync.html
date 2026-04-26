@@ -149,12 +149,19 @@ window.loadGames = async function() {
     // Firestore (pending_gcal_syncs). This is how captain-portal edits get
     // picked up automatically — admin just clicks Sync and we handle only
     // the games that actually changed.
-    if (!TARGETED_GAME_IDS.length) {
+    //
+    // Skip this auto-detect when ?fullsync=1 is in the URL — the admin
+    // explicitly wants the full team-picker UI (e.g. to sync a brand-new
+    // team like TOAST that isn't in any pending edit).
+    const forceFullSync = new URLSearchParams(location.search).get('fullsync') === '1';
+    if (!TARGETED_GAME_IDS.length && !forceFullSync) {
       const fromFs = await loadPendingFromFirestore();
       if (fromFs.length) {
         TARGETED_GAME_IDS = fromFs;
         out(`Found ${fromFs.length} pending edit${fromFs.length===1?'':'s'} from captain portal.`);
       }
+    } else if (forceFullSync) {
+      out(`(?fullsync=1 — skipping pending-edit auto-detect, showing full team picker.)`);
     }
 
     // ── Targeted single-game mode ─────────────────────────────────────
