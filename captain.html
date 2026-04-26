@@ -804,6 +804,7 @@ select.form-input{cursor:pointer}
   <!-- TAB NAVIGATION -->
   <div class="tab-nav">
     <div class="tab-item active" data-tab="team" onclick="showTab('team')">My Team</div>
+    <div class="tab-item" onclick="window.location.href='/inbox.html'">🔔 Notifications</div>
     <div class="tab-item" data-tab="roster" onclick="showTab('roster')">Roster</div>
     <div class="tab-item" data-tab="schedule" onclick="showTab('schedule')">Schedule</div>
     <div class="tab-item" data-tab="scores" onclick="showTab('scores')">Submit Score</div>
@@ -832,6 +833,16 @@ select.form-input{cursor:pointer}
         <div id="team-info-content">
           <div class="loading"><div class="spinner"></div> Loading team data...</div>
         </div>
+      </div>
+      <div class="panel" id="next-up-panel" style="margin-top:18px">
+        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <span>📅 Next Up — Attendance</span>
+          <button class="btn btn-outline btn-sm" onclick="renderNextUp()">🔄 Refresh</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+          Live RSVP counts for your next games. Tap "Remind waiting" to nudge un-replied teammates.
+        </div>
+        <div id="next-up-content"><div class="loading"><div class="spinner"></div> Loading...</div></div>
       </div>
     </div>
 
@@ -1207,7 +1218,7 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, deleteField, setDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
@@ -2076,7 +2087,69 @@ function renderTeam() {
       <div><span style="color:var(--muted);font-size:12px;text-transform:uppercase;font-weight:600;letter-spacing:.06em">Runs Against</span><br><strong>${ra}</strong></div>
     </div>
   `;
+
+  // Lazily render the Next Up panel after team data is up.
+  renderNextUp().catch(()=>{});
 }
+
+// Next Up — Attendance panel: show next 3 upcoming games with RSVP
+// counts and per-game Remind buttons. Mirrors the legacy profile.html
+// captain home tab behavior.
+window.renderNextUp = async function(){
+  const el = document.getElementById('next-up-content');
+  if (!el) return;
+  if (!MY_TEAM || !captainData?.team_id) return;
+  const upcoming = MY_GAMES
+    .filter(g => !g.done && !(g.ppd || g.rained_out))
+    .sort((a,b) => (a.wk||99) - (b.wk||99))
+    .slice(0,3);
+  if (!upcoming.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--muted);font-style:italic;padding:8px 0">No upcoming games to track.</div>';
+    return;
+  }
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading RSVPs...</div>';
+  try {
+    const snap = await getDocs(query(collection(db,'availability'), where('team_id','==', captainData.team_id)));
+    const byGame = {};
+    snap.docs.forEach(d => {
+      const r = d.data();
+      if (!byGame[r.game_id]) byGame[r.game_id] = { yes:[], maybe:[], no:[], all:new Set() };
+      if (['yes','maybe','no'].includes(r.status)) {
+        byGame[r.game_id][r.status].push(r.player_name);
+        byGame[r.game_id].all.add(r.player_name);
+      }
+    });
+    el.innerHTML = upcoming.map(g => {
+      const opp = g.away === captainData.team_id ? g.home : g.away;
+      const oppT = ALL_TEAMS.find(t => t.id === opp);
+      const oppName = oppT?.short || opp?.toUpperCase() || 'TBD';
+      const ha = g.home === captainData.team_id ? 'vs' : '@';
+      const r = byGame[g.id] || { yes:[], maybe:[], no:[], all:new Set() };
+      const total = MY_PLAYERS.filter(p => !p.pending_approval).length;
+      const pending = MY_PLAYERS.filter(p => !p.pending_approval && !r.all.has(p.name));
+      const remind = pending.length
+        ? `<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="captainRemindWaiting('${esc(g.id)}', this)">📢 Remind ${pending.length} waiting</button>`
+        : '<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:6px">✓ All replied</div>';
+      return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <div>
+            <div style="font-weight:700;font-size:14px">Wk ${g.wk||'?'} · ${ha} <span style="color:${oppT?.color||'var(--navy)'}">${oppName}</span></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(g.date||'')} ${g.time?'· '+esc(g.time):''} ${g.field?'· '+esc(g.field):''}</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px;text-align:center">
+          <div style="background:rgba(34,197,94,.08);color:var(--green);font-weight:700;padding:6px;border-radius:6px">✓ In ${r.yes.length}</div>
+          <div style="background:rgba(245,158,11,.08);color:#b45309;font-weight:700;padding:6px;border-radius:6px">? Maybe ${r.maybe.length}</div>
+          <div style="background:rgba(239,68,68,.08);color:var(--red);font-weight:700;padding:6px;border-radius:6px">✕ Out ${r.no.length}</div>
+          <div style="background:rgba(0,0,0,.04);color:#4b5563;font-weight:700;padding:6px;border-radius:6px">• Wait ${pending.length}</div>
+        </div>
+        ${remind}
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Could not load RSVPs: ${esc(e.message)}</div>`;
+  }
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // ROSTER
@@ -2121,18 +2194,23 @@ function renderRoster() {
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${roster.length} player(s) — <strong style="color:var(--green)">${signedUpCount} signed up</strong> for the player portal</div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>#</th><th>Name</th><th>Pos</th><th title="Signed up for the player portal" style="text-align:center">Signed up</th><th class="roster-email-col">Email</th><th>Actions</th></tr></thead>
-      <tbody>${roster.map(p => `<tr>
+      <tbody>${roster.map(p => {
+        const claimed = !!p.auth_uid;
+        const revokeBtn = claimed ? `<button class="btn btn-outline btn-sm" onclick="captRevokeClaim('${p.id}')" title="Revoke this player's sign-in access" style="color:#c62828;border-color:#c62828">Revoke</button>` : '';
+        return `<tr>
         <td style="width:36px">${p.num || '-'}</td>
         <td><strong>${esc(p.name)}</strong></td>
         <td style="width:48px">${esc(p.pos || '-')}</td>
-        <td style="text-align:center;width:80px">${p.auth_uid ? '<span title="Signed up" style="color:var(--green);font-size:18px">✓</span>' : '<span title="Not signed up yet" style="color:var(--muted2);font-size:14px">—</span>'}</td>
+        <td style="text-align:center;width:80px">${claimed ? '<span title="Signed up" style="color:var(--green);font-size:18px">✓</span>' : '<span title="Not signed up yet" style="color:var(--muted2);font-size:14px">—</span>'}</td>
         <td class="roster-email-col" style="color:var(--muted);font-size:12px">${p.email ? `<a href="mailto:${esc(p.email)}" style="color:var(--navy)">${esc(p.email)}</a>` : '<span style="color:var(--muted2)">—</span>'}</td>
-        <td style="white-space:nowrap;width:120px">
+        <td style="white-space:nowrap;min-width:170px">
           <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
+          ${revokeBtn}
           <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">✕</button>
         </td>
       </tr>
-      <tr id="player-edit-${p.id}" style="display:none"><td colspan="6" id="player-edit-cell-${p.id}" style="padding:0"></td></tr>`).join('')}
+      <tr id="player-edit-${p.id}" style="display:none"><td colspan="6" id="player-edit-cell-${p.id}" style="padding:0"></td></tr>`;
+      }).join('')}
       </tbody>
     </table></div>` : '<div class="empty">No players on the roster yet. Add your first player above.</div>';
 
@@ -2156,6 +2234,29 @@ window.captApproveJoinRequest = async function(playerId) {
     renderRoster();
     renderTeam();
   } catch(e) { toast('Approve failed: ' + e.message, 'error'); }
+};
+
+// Revoke a player's sign-in claim — strip the auth_uid + email from
+// their player doc without removing them from the roster. Used when
+// the wrong person claimed a roster slot or impersonation is suspected.
+// The player can re-claim by signing in again with the right email.
+window.captRevokeClaim = async function(playerId) {
+  const p = MY_PLAYERS.find(x => x.id === playerId);
+  const label = p ? (p.name || p.email || playerId) : playerId;
+  if (!confirm(`Revoke ${label}'s sign-in access?\n\nThey'll stay on the roster but their app account will be unlinked from this name. They can re-claim by signing in again.`)) return;
+  try {
+    await updateDoc(doc(db, 'players', playerId), {
+      auth_uid: deleteField(),
+      email: p?.email_unclaimed || deleteField(),  // keep the email if we have a separate field
+      claimed_at: deleteField(),
+      revoked_at: new Date().toISOString(),
+      revoked_by: currentUser?.email || captainData?.team_name || 'captain',
+    });
+    if (p) { delete p.auth_uid; delete p.claimed_at; }
+    toast(`${label}'s claim revoked.`, 'success');
+    await logActivity('Roster (Captain)', `Revoked ${label}'s sign-in claim`).catch(()=>{});
+    renderRoster();
+  } catch(e) { toast('Revoke failed: ' + e.message, 'error'); }
 };
 
 // Reject a self-registered player — delete the player doc. The Firebase
@@ -2294,7 +2395,10 @@ function renderSchedule() {
     const opponent = isHome ? g.away : g.home;
     const homeAway = isHome ? 'vs' : '@';
     const done = g.done;
-    const canEdit = !done; // only allow editing future/pending games
+    const isPpd = !!(g.ppd || g.rained_out);
+    const canEdit = !done && !isPpd;
+    const ppdResched = g.ppd_rescheduled_to || g.rescheduled_to || '';
+    const ppdBadge = isPpd ? `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706">🌧 PPD${ppdResched ? ' · → ' + esc(ppdResched) : ''}</span>` : '';
     return `<div class="game-card" style="flex-direction:column;align-items:stretch;gap:8px" id="gc-${g.id}">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div>
@@ -2308,9 +2412,10 @@ function renderSchedule() {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${done
             ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div><span class="badge badge-done">Final</span>${g.has_discrepancy ? `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700;padding:4px 10px" onclick="showDiscrepancy('${g.id}')">${g.discrepancy_partial ? '⚠ Stats partial' : '⚠ Stats differ'}</button>` : (g.discrepancy_resolved ? `<button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #166534;font-weight:700;padding:4px 10px" onclick="showDiscrepancy('${g.id}')">✓ Stats resolved</button>` : '')}`
-            : `<span class="badge badge-pending">Upcoming</span>`
+            : (isPpd ? ppdBadge : `<span class="badge badge-pending">Upcoming</span>`)
           }
           ${canEdit ? `<button class="btn btn-outline btn-sm" onclick="toggleEditGame('${g.id}')">✏️ Edit</button>` : ''}
+          ${(!done) ? `<button class="btn btn-outline btn-sm" style="color:#92400e;border-color:#d97706" onclick="captTogglePpd('${g.id}')">${isPpd ? '↺ Un-mark PPD' : '🌧 Mark PPD'}</button>` : ''}
         </div>
       </div>
       ${canEdit ? `<div id="sched-edit-${g.id}" style="display:none"></div>` : ''}
@@ -2318,6 +2423,72 @@ function renderSchedule() {
     </div>`;
   }).join('');
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// PPD toggle — captain can mark/unmark a game as PPD (rainout or
+// postponement). Mirrors admin.html togglePpd: writes both the new
+// `ppd` flag and the legacy `rained_out` field for backward compat,
+// plus optional `ppd_rescheduled_to` when we know the new date.
+// Fires a `rainouts` push so both teams see it.
+// ═══════════════════════════════════════════════════════════════════
+window.captTogglePpd = async function(gameId) {
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) return;
+  if (g.away !== captainData.team_id && g.home !== captainData.team_id) {
+    alert('Only captains of the two teams involved can mark this game PPD.');
+    return;
+  }
+  const awayName = getTeamName(g.away);
+  const homeName = getTeamName(g.home);
+  const currentlyPpd = !!(g.ppd || g.rained_out);
+  if (currentlyPpd) {
+    if (!confirm(`Un-mark PPD for "${awayName} @ ${homeName}"? The game will go back to scheduled.`)) return;
+    try {
+      await updateDoc(doc(db, 'games', gameId), {
+        ppd: false, rained_out: false,
+        ppd_rescheduled_to: null, ppd_at: null, ppd_by: null,
+      });
+      Object.assign(g, { ppd: false, rained_out: false, ppd_rescheduled_to: null });
+      await logActivity('Schedule (Captain)', `Un-marked PPD: ${awayName} @ ${homeName} Wk ${g.wk||'?'}`).catch(()=>{});
+      renderSchedule();
+    } catch(e) { alert('Failed: ' + e.message); }
+    return;
+  }
+  const rescheduleInput = prompt(
+    `Mark "${awayName} @ ${homeName}" as PPD.\n\n` +
+    `Optional: enter a reschedule date (e.g. "Apr 28" or "TBD").\n` +
+    `Leave blank if it'll be rescheduled later.`,
+    ''
+  );
+  if (rescheduleInput === null) return;
+  const rescheduledTo = (rescheduleInput || '').trim() || null;
+  try {
+    await updateDoc(doc(db, 'games', gameId), {
+      ppd: true,
+      rained_out: true,
+      ppd_rescheduled_to: rescheduledTo,
+      ppd_at: new Date().toISOString(),
+      ppd_by: captainData.team_id || 'captain',
+    });
+    Object.assign(g, { ppd: true, rained_out: true, ppd_rescheduled_to: rescheduledTo });
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': CAPTAIN_PUSH_SECRET },
+      body: JSON.stringify({
+        title: `🌧 PPD: ${awayName} @ ${homeName}`,
+        body: `Week ${g.wk||'?'} · ${g.date||''} ${g.time||''} @ ${g.field||''} is postponed.` +
+              (rescheduledTo ? ` Rescheduled to ${rescheduledTo}.` : ' Reschedule TBD.'),
+        category: 'rainouts',
+        teams: [g.away, g.home].filter(Boolean),
+        url: '/schedule.html',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    }).catch(e => console.warn('PPD push failed:', e));
+    await logActivity('Schedule (Captain)', `Marked PPD: ${awayName} @ ${homeName} Wk ${g.wk||'?'}${rescheduledTo ? ' → '+rescheduledTo : ''}`).catch(()=>{});
+    toast(`Marked PPD. Both teams notified.`, 'success');
+    renderSchedule();
+  } catch(e) { alert('Failed: ' + e.message); }
+};
 
 window.toggleEditGame = function(gameId) {
   const el = document.getElementById('sched-edit-' + gameId);

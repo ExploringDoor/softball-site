@@ -1214,23 +1214,11 @@ async function init() {
     const snap = await getDocs(query(collection(db, 'teams'), orderBy('name')));
     ALL_TEAMS = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
 
-    // Captain session uses the legacy team-captain password (unchanged).
-    const captTeamId = localStorage.getItem('dvsl-captain-team');
-    if (captTeamId) {
-      const t = ALL_TEAMS.find(x => x.id === captTeamId);
-      if (t) {
-        const cStored = (t.captain_password || '').trim();
-        const cSaved = (localStorage.getItem('dvsl-captain-pw-' + captTeamId) || '').trim();
-        if (!cStored || cSaved.toLowerCase() === cStored.toLowerCase()) {
-          MY_TEAM = t; MODE = 'captain';
-          captainData = { team_id: t.id, team_name: t.name, email: t.name };
-          await enterCaptainApp();
-          return;
-        } else {
-          try { localStorage.removeItem('dvsl-captain-pw-' + captTeamId); } catch(_) {}
-        }
-      }
-    }
+    // Captain mode is now exclusively at /captain.html (Firebase Auth).
+    // Drop the legacy auto-enter path so users with stale localStorage
+    // captain-team don't land on the deprecated embedded captain UI.
+    // The dvsl-captain-team key is left in place (harmless) — captain.html
+    // uses its own auth state.
 
     // Player session: rely on Firebase Auth. If a user is already signed in
     // (survived browser restart via browserLocalPersistence), look up their
