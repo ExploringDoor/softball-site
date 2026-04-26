@@ -5347,9 +5347,21 @@ function teamGoBack(){
 // mode there's no browser back button, and the bottom tab bar has no
 // "back" affordance — so without an in-page button users could land on
 // /#players (e.g. from the More sheet) with no way out except Home.
+//
+// `history.back()` alone is unreliable: if the user landed directly on
+// /#players (fresh PWA launch, deep link, More-menu nav from a sibling
+// page), there is no SPA state to pop and the call silently no-ops.
+// Strategy: try history.back(); if the URL didn't change after a beat,
+// force navigate to Home.
 window.playersGoBack = function(){
-  if (window.history.length > 1) history.back();
-  else goPage('home');
+  const startUrl = location.href;
+  try { history.back(); } catch(_) {}
+  setTimeout(() => {
+    if (location.href === startUrl) {
+      // history.back() didn't actually move us — force to home.
+      try { goPage('home'); } catch(_) { window.location.href = '/'; }
+    }
+  }, 250);
 };
 
 
