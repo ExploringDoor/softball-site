@@ -4771,11 +4771,12 @@ window.captainRemindWaiting = async function(gameId, btn) {
         url: '/profile.html#avail',
         excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
         excludePlayerIds,
+        rosterOnly: true, // skip fans / family / other team subscribers
       }),
     });
     const data = await resp.json().catch(() => ({}));
     const sent = Number(data.sent) || 0;
-    toast(sent ? `Sent to ${sent} device${sent===1?'':'s'} ✓` : 'No subscribers matched (everyone already responded)', sent ? 'success' : 'error');
+    toast(sent ? `Sent to ${sent} player${sent===1?'':'s'} ✓` : 'No waiting players to nudge', sent ? 'success' : 'error');
     if (btn) { btn.innerHTML = sent ? `Sent ✓` : 'None to nudge'; setTimeout(() => { btn.disabled = false; btn.innerHTML = prevLabel; }, 4000); }
   } catch(e) {
     toast('Reminder failed: ' + e.message, 'error');
