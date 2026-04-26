@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v166-team-hero-zindex`;
+const VERSION = `${LEAGUE.id}-v167-leaders-styled`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
