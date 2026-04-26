@@ -4696,7 +4696,17 @@ function goPage(name,extra,skipHistory){
     // If data hasn't loaded yet, rebuild once it does
     if(!TEAMS.length && window._dataPromise) window._dataPromise.then(()=>buildTeamsBigCards());
   }
-  if(name==='leaders') buildLeadersPage();
+  if(name==='leaders'){
+    // PLAYERS may not be loaded yet on a deep-link / cold-launch into
+    // /#leaders. Render with whatever's there now (so the filter bar
+    // appears immediately), and re-render once data lands so the rows
+    // actually populate. Without this fallback the user lands on the
+    // "No stats yet" empty state and has to click around to recover.
+    buildLeadersPage();
+    if(!PLAYERS.length && window._dataPromise) {
+      window._dataPromise.then(()=>{ try { buildLeadersPage(); } catch(e){} });
+    }
+  }
   if(name==='scores'){
     const doScores=()=>{try{setView(extra==='schedule'?'schedule':'scores');buildScoresNav();renderScores();}catch(e){console.error(e);}};
     if(SCHEDULE_PREVIEW.length) setTimeout(doScores,50);
