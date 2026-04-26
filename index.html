@@ -1079,7 +1079,12 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 /* ── TEAM PAGE ── */
 .team-hero{padding:130px 48px 40px;position:relative;border-bottom:1px solid var(--border)}
 .team-hero-blob{position:absolute;inset:0;opacity:.04;pointer-events:none;overflow:hidden}
-.team-hero-inner{position:relative;z-index:1}
+/* z-index 500 so the inner content escapes the invisible fixed nav
+   (z-index 400) on mobile — without it the back button up here gets
+   its taps eaten by the nav even though the nav has no visible
+   content on mobile. team-hero-blob below has pointer-events:none so
+   no risk of it eating clicks regardless of stacking. */
+.team-hero-inner{position:relative;z-index:500}
 .team-name-big{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(54px,9vw,100px);text-transform:uppercase;line-height:.88;letter-spacing:-.01em}
 .team-rec{margin-top:12px;font-size:14px;color:var(--muted)}
 .team-rec strong{color:var(--white)}
@@ -1221,12 +1226,7 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
   .ft-links{justify-content:center}
   .sched-wrap{flex-direction:column}
   .ttabs,.team-body,.team-hero{padding-left:18px;padding-right:18px}
-  /* padding-top must clear (score-ticker 48 + nav 62 + safe-area-inset-top)
-     plus a small breathing gap. On notched iPhones safe-area-inset adds
-     ~47px; without it the team-hero content (including the back button)
-     gets covered by the invisible fixed nav at z-index 400, making the
-     button untappable. */
-  .team-hero{padding-top:calc(124px + env(safe-area-inset-top, 0px))!important}
+  .team-hero{padding-top:124px!important}
   #team-hero-logo{width:clamp(112px,28vw,188px)!important;height:clamp(112px,28vw,188px)!important;margin-top:16px!important;}
   .modal-av{display:none!important}
   .mob-menu{overflow-y:auto!important;bottom:0!important;}
@@ -3030,7 +3030,7 @@ thead th.sorted-col .sarrow{opacity:1}
 <!-- ═══ PLAYERS PAGE ═══ -->
 <div class="page" id="pg-players">
   <div class="page-header-pad" style="padding:130px 48px 28px;background:var(--bg)">
-<a href="/#home" style="display:inline-block;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;text-decoration:none;margin-bottom:14px;-webkit-tap-highlight-color:rgba(0,45,114,.2);position:relative;z-index:500">← Back to Home</a>
+<a href="javascript:void(0)" onclick="window.playersGoBack();return false" style="display:inline-block;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;text-decoration:none;margin-bottom:14px;-webkit-tap-highlight-color:rgba(0,45,114,.2)">← Back</a>
     <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(34px,5vw,54px);text-transform:uppercase;line-height:.95">2026 <span style="color:var(--gold)">Teams</span></h1>
   </div>
   <div style="padding:24px 48px 64px;max-width:1400px;margin:0 auto">
@@ -3061,8 +3061,8 @@ thead th.sorted-col .sarrow{opacity:1}
       <div style="display:flex;align-items:flex-start;gap:20px;padding-top:8px">
         <img id="team-hero-logo" src="" alt="" style="width:clamp(90px,11vw,150px);height:clamp(90px,11vw,150px);object-fit:contain;display:none;flex-shrink:0;filter:drop-shadow(0 4px 24px rgba(0,0,0,.3));margin-top:4px">
         <div>
-          <div id="team-back-btn" style="display:none;margin-bottom:12px;position:relative;z-index:500">
-            <a href="/#home" style="display:inline-block;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;text-decoration:none;-webkit-tap-highlight-color:rgba(0,45,114,.2);position:relative;z-index:500">← Back to Home</a>
+          <div id="team-back-btn" style="display:none;margin-bottom:12px">
+            <a href="javascript:void(0)" onclick="window.teamGoBack();return false" style="display:inline-block;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;text-decoration:none;-webkit-tap-highlight-color:rgba(0,45,114,.2)">← Back</a>
           </div>
           <div class="sec-eyebrow" id="team-div-label"></div>
           <div class="team-name-big" id="team-big-name"></div>
