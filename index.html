@@ -4267,8 +4267,14 @@ async function loadAllData() {
       }))
       .sort((a,b) => b.yr - a.yr);
 
-    // Map calendars
-    TEAM_CALENDARS_DB = {};
+    // Map calendars. Hardcoded fallbacks below are merged in first so the
+    // "Add to Calendar" button works the moment a captain hands me a new
+    // iCal URL — Firestore overrides win on conflict, so once Adam puts a
+    // proper `calendars/{teamId}` doc in place this fallback becomes a
+    // no-op for that team.
+    TEAM_CALENDARS_DB = {
+      toast: 'https://calendar.google.com/calendar/ical/5dab2b095aab16205d728dfc262dbc98bc7cf5687a15e4bf32a5c5101ff55f74%40group.calendar.google.com/public/basic.ics',
+    };
     calendars.forEach(c => { if(c.calendar_url) TEAM_CALENDARS_DB[c.id] = c.calendar_url; });
 
     
