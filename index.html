@@ -5334,14 +5334,83 @@ function buildTeamsBigCards(){
 }
 
 // ════════════════════════════ TEAM PAGE ══════════════════════════════════
+// teamGoBack: try real "go back where I came from" behavior first;
+// fall back to Home if we can't.
+//
+// Strategy:
+// 1. If we have a tracked previous SPA page (set whenever goPage() ran),
+//    navigate there directly. This is the most reliable path in PWA
+//    standalone mode where document.referrer is often empty.
+// 2. Otherwise try history.back() and watch for an actual URL change.
+// 3. If nothing moves us, force-navigate to Home.
 window.teamGoBack = function(){
-  // Always navigate to the Teams listing — clicking back from a single
-  // team's page should land you back where you came from in the typical
-  // flow (Teams listing → click team → back). history.back() was
-  // unreliable in standalone PWA mode (referrer is often empty, no
-  // SPA state to pop) so we just go straight there.
-  try { goPage('players'); } catch(_) { window.location.href = '/#players'; }
+  const prev = window._dvslPrevSpaPage;
+  if (prev && prev.name && prev.name !== 'team') {
+    try { goPage(prev.name, prev.extra || null); return; } catch(_) {}
+  }
+  const startUrl = location.href;
+  try { history.back(); } catch(_) {}
+  setTimeout(() => {
+    if (location.href === startUrl) {
+      try { goPage('home'); } catch(_) { window.location.href = '/'; }
+    }
+  }, 250);
 };
+
+// Track the last SPA page the user was on so teamGoBack can return to
+// it. Wraps the existing goPage. Safe to call before goPage is defined
+// because we resolve it lazily on first call.
+window._dvslPrevSpaPage = null;
+(function(){
+  const origGoPage = window.goPage;
+  // If goPage isn't defined yet, defer hooking until DOMContentLoaded.
+  function hook(){
+    const fn = window.goPage;
+    if (typeof fn !== 'function') return;
+    if (fn._dvslPrevHooked) return;
+    const wrapped = function(name, extra, skipHistory){
+      // Capture the page we're LEAVING (not the one we're going to).
+      // Skip during back-navigation (popstate replays via skipHistory=true).
+      if (!skipHistory) {
+        const cur = (window._dvslCurPage || { name: 'home', extra: null });
+        if (cur.name && cur.name !== name) {
+          window._dvslPrevSpaPage = cur;
+        }
+        window._dvslCurPage = { name, extra: extra || null };
+      } else {
+        window._dvslCurPage = { name, extra: extra || null };
+      }
+      return fn.apply(this, arguments);
+    };
+    wrapped._dvslPrevHooked = true;
+    window.goPage = wrapped;
+  }
+  if (typeof origGoPage === 'function') hook();
+  else if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', hook);
+  }
+})();
+
+// Belt-and-suspenders: programmatically attach a click + touchend
+// listener to both back buttons after the page loads, in addition to
+// the inline onclick. If anything ever breaks the inline handler
+// (CSP, browser quirk, framework collision), this still works.
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const tBtn = document.querySelector('#team-back-btn button');
+    if (tBtn) {
+      const handler = (e) => { e.preventDefault(); e.stopPropagation(); window.teamGoBack && window.teamGoBack(); };
+      tBtn.addEventListener('click', handler);
+      tBtn.addEventListener('touchend', handler);
+    }
+    const pBtn = document.querySelector('#pg-players button[onclick*="playersGoBack"]');
+    if (pBtn) {
+      const handler = (e) => { e.preventDefault(); e.stopPropagation(); window.playersGoBack && window.playersGoBack(); };
+      pBtn.addEventListener('click', handler);
+      pBtn.addEventListener('touchend', handler);
+    }
+  });
+}
 
 // Back button on the Teams (players) listing page. Just go to home —
 // every previous attempt to be clever (history.back() + fallback timer)
