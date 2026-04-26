@@ -3050,15 +3050,18 @@ thead th.sorted-col .sarrow{opacity:1}
 
 <!-- ═══ TEAM PAGE ═══ -->
 <div class="page" id="pg-team">
-  <div class="team-hero" id="team-hero">
+  <!-- Back button — pulled out of team-hero so it's not affected by flex
+       layout, blob overlay, or any other stacking complexity. Plain block
+       container, fixed-position-able if needed. -->
+  <div id="team-back-btn" style="display:none;padding:120px 18px 0 18px;background:var(--bg);position:relative;z-index:50">
+    <button id="team-back-btn-actual" type="button" style="background:#002D72;border:none;border-radius:8px;color:#fff;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;padding:12px 22px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;-webkit-tap-highlight-color:rgba(255,255,255,.2);touch-action:manipulation;box-shadow:0 2px 8px rgba(0,45,114,.25);min-height:44px">← Back</button>
+  </div>
+  <div class="team-hero" id="team-hero" style="padding-top:20px">
     <div class="team-hero-blob" id="team-blob"></div>
     <div class="team-hero-inner" style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
       <div style="display:flex;align-items:flex-start;gap:20px;padding-top:8px">
         <img id="team-hero-logo" src="" alt="" style="width:clamp(90px,11vw,150px);height:clamp(90px,11vw,150px);object-fit:contain;display:none;flex-shrink:0;filter:drop-shadow(0 4px 24px rgba(0,0,0,.3));margin-top:4px">
         <div>
-          <div id="team-back-btn" style="display:none;margin-bottom:12px;margin-left:48px;position:relative;z-index:5">
-            <button type="button" onclick="event.preventDefault();event.stopPropagation();window.teamGoBack&&window.teamGoBack();return false" style="background:#002D72;border:none;border-radius:8px;color:#fff;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;padding:12px 22px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;-webkit-tap-highlight-color:rgba(255,255,255,.2);position:relative;z-index:5;touch-action:manipulation;box-shadow:0 2px 8px rgba(0,45,114,.25)">← Back</button>
-          </div>
           <div class="sec-eyebrow" id="team-div-label"></div>
           <div class="team-name-big" id="team-big-name"></div>
           <div class="team-rec" id="team-rec"></div>
@@ -5391,24 +5394,29 @@ window._dvslPrevSpaPage = null;
   }
 })();
 
-// Belt-and-suspenders: programmatically attach a click + touchend
-// listener to both back buttons after the page loads, in addition to
-// the inline onclick. If anything ever breaks the inline handler
-// (CSP, browser quirk, framework collision), this still works.
+// Belt-and-suspenders: programmatically attach click + touchend
+// listeners to the back buttons. Both events are attached because in
+// some iOS PWA edge cases the synthetic click event from a tap can
+// be suppressed but the touchend still fires. Logging breadcrumbs to
+// the console make it possible to diagnose "the button doesn't work"
+// reports (open Web Inspector while debugging on a Mac).
 if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
-    const tBtn = document.querySelector('#team-back-btn button');
-    if (tBtn) {
-      const handler = (e) => { e.preventDefault(); e.stopPropagation(); window.teamGoBack && window.teamGoBack(); };
-      tBtn.addEventListener('click', handler);
-      tBtn.addEventListener('touchend', handler);
-    }
-    const pBtn = document.querySelector('#pg-players button[onclick*="playersGoBack"]');
-    if (pBtn) {
-      const handler = (e) => { e.preventDefault(); e.stopPropagation(); window.playersGoBack && window.playersGoBack(); };
-      pBtn.addEventListener('click', handler);
-      pBtn.addEventListener('touchend', handler);
-    }
+    const wire = (selector, fnName) => {
+      const btn = document.querySelector(selector);
+      if (!btn) return;
+      const handler = (e) => {
+        try { console.log('[back]', fnName, 'fired via', e.type); } catch(_){}
+        try { e.preventDefault(); } catch(_){}
+        try { e.stopPropagation(); } catch(_){}
+        const fn = window[fnName];
+        if (typeof fn === 'function') fn();
+      };
+      btn.addEventListener('click', handler);
+      btn.addEventListener('touchend', handler);
+    };
+    wire('#team-back-btn-actual', 'teamGoBack');
+    wire('#pg-players button[onclick*="playersGoBack"]', 'playersGoBack');
   });
 }
 
