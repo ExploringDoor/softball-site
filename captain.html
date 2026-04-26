@@ -2087,12 +2087,41 @@ function renderRoster() {
     el.innerHTML = '<div class="empty">No players on the roster yet. Add your first player above.</div>';
     return;
   }
-  const signedUpCount = MY_PLAYERS.filter(p => p.auth_uid).length;
-  el.innerHTML = `
-    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${MY_PLAYERS.length} player(s) — <strong style="color:var(--green)">${signedUpCount} signed up</strong> for the player portal</div>
+  // Split out players who registered themselves through registration.html
+  // and are awaiting captain approval. They should show in a yellow banner
+  // at the top with Approve/Reject actions, NOT mixed into the main roster.
+  const pending = MY_PLAYERS.filter(p => p.pending_approval).sort((a,b) =>
+    (a.created_at || '').localeCompare(b.created_at || ''));
+  const roster = MY_PLAYERS.filter(p => !p.pending_approval);
+  const signedUpCount = roster.filter(p => p.auth_uid).length;
+
+  const pendingHtml = pending.length ? `
+    <div style="background:#FFF8E1;border:2px solid #F9A825;border-radius:10px;padding:14px;margin-bottom:16px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#F57F17;margin-bottom:8px">
+        ⚠ ${pending.length} Pending Roster Request${pending.length>1?'s':''}
+      </div>
+      <div style="font-size:12px;color:#795548;margin-bottom:12px">
+        These players registered themselves via the Player Sign-Up form. Approve to add them to the roster, or reject to remove.
+      </div>
+      ${pending.map(p => `
+        <div style="background:#fff;border:1px solid #F9A825;border-radius:8px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <div>
+            <div style="font-weight:700;color:var(--navy)">${esc(p.name||'')}${p.num?' (#'+p.num+')':''}${p.pos?' · '+esc(p.pos):''}</div>
+            <div style="font-size:12px;color:var(--muted)">${esc(p.email||'no email')}${p.phone?' · '+esc(p.phone):''}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-success btn-sm" onclick="captApproveJoinRequest('${p.id}')">Approve</button>
+            <button class="btn btn-danger btn-sm" onclick="captRejectJoinRequest('${p.id}')">Reject</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>` : '';
+
+  const rosterHtml = roster.length ? `
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${roster.length} player(s) — <strong style="color:var(--green)">${signedUpCount} signed up</strong> for the player portal</div>
     <div class="tbl-wrap"><table class="tbl">
       <thead><tr><th>#</th><th>Name</th><th>Pos</th><th title="Signed up for the player portal" style="text-align:center">Signed up</th><th class="roster-email-col">Email</th><th>Actions</th></tr></thead>
-      <tbody>${MY_PLAYERS.map(p => `<tr>
+      <tbody>${roster.map(p => `<tr>
         <td style="width:36px">${p.num || '-'}</td>
         <td><strong>${esc(p.name)}</strong></td>
         <td style="width:48px">${esc(p.pos || '-')}</td>
@@ -2105,9 +2134,45 @@ function renderRoster() {
       </tr>
       <tr id="player-edit-${p.id}" style="display:none"><td colspan="6" id="player-edit-cell-${p.id}" style="padding:0"></td></tr>`).join('')}
       </tbody>
-    </table></div>
-  `;
+    </table></div>` : '<div class="empty">No players on the roster yet. Add your first player above.</div>';
+
+  el.innerHTML = pendingHtml + rosterHtml;
 }
+
+// Approve a self-registered player — flip pending_approval off so they
+// appear on the main roster.
+window.captApproveJoinRequest = async function(playerId) {
+  const p = MY_PLAYERS.find(x => x.id === playerId);
+  const label = p ? (p.name || p.email || playerId) : playerId;
+  try {
+    await updateDoc(doc(db, 'players', playerId), {
+      pending_approval: false,
+      approved_at: new Date().toISOString(),
+      approved_by: currentUser?.email || captainData?.team_name || 'captain',
+    });
+    if (p) { p.pending_approval = false; p.approved_at = new Date().toISOString(); }
+    toast(`${label} approved.`, 'success');
+    await logActivity('Roster (Captain)', `Approved ${label} for ${captainData.team_name}`).catch(()=>{});
+    renderRoster();
+    renderTeam();
+  } catch(e) { toast('Approve failed: ' + e.message, 'error'); }
+};
+
+// Reject a self-registered player — delete the player doc. The Firebase
+// Auth user they created is left in place; nothing else references it.
+window.captRejectJoinRequest = async function(playerId) {
+  const p = MY_PLAYERS.find(x => x.id === playerId);
+  const label = p ? (p.name || p.email || playerId) : playerId;
+  if (!confirm(`Reject ${label}? This removes their roster request — they'll need to register again if they want to try.`)) return;
+  try {
+    await deleteDoc(doc(db, 'players', playerId));
+    MY_PLAYERS = MY_PLAYERS.filter(x => x.id !== playerId);
+    toast(`${label} rejected and removed.`, 'success');
+    await logActivity('Roster (Captain)', `Rejected ${label} for ${captainData.team_name}`).catch(()=>{});
+    renderRoster();
+    renderTeam();
+  } catch(e) { toast('Reject failed: ' + e.message, 'error'); }
+};
 
 window.openAddPlayer = function() {
   const el = document.getElementById('add-player-form');
