@@ -723,11 +723,34 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
 
     <!-- Favorite teams: gate notifications to chosen teams -->
     <div class="categories" style="margin-top:20px">
-      <h3>Favorite Teams</h3>
+      <h3>Which teams?</h3>
       <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
-        Choose one or more teams to only get alerts for those teams. Leave all unchecked to receive alerts for every team.
+        Pick which teams you want notifications for.
       </p>
-      <div id="team-prefs-list" style="display:flex;flex-wrap:wrap;gap:8px">
+      <div id="team-mode-radio" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;cursor:pointer;background:var(--card2)">
+          <input type="radio" name="team-mode" value="all" id="tm-all" onchange="setTeamMode('all')">
+          <div>
+            <div style="font-weight:700">All teams</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Get score updates and league alerts for every team</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;cursor:pointer;background:var(--card2)">
+          <input type="radio" name="team-mode" value="mine" id="tm-mine" onchange="setTeamMode('mine')">
+          <div>
+            <div style="font-weight:700">Just my team <span id="tm-mine-detected" style="font-weight:600;color:var(--gold);font-size:12px"></span></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Only my team's scores, schedule changes, and chat</div>
+          </div>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--border);border-radius:10px;cursor:pointer;background:var(--card2)">
+          <input type="radio" name="team-mode" value="custom" id="tm-custom" onchange="setTeamMode('custom')">
+          <div>
+            <div style="font-weight:700">Custom — pick teams</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Follow specific teams (e.g. friends' teams, your kid's team)</div>
+          </div>
+        </label>
+      </div>
+      <div id="team-prefs-list" style="display:none;flex-wrap:wrap;gap:8px;padding:12px;background:var(--bg2);border-radius:10px;border:1px solid var(--border)">
         <div style="color:var(--muted);font-size:13px">Loading teams...</div>
       </div>
     </div>
@@ -891,6 +914,19 @@ function loadSavedCategories() {
 // Load teams from Firestore and render as checkboxes. Persists selections
 // to localStorage + Firestore so the backend can filter which tokens to
 // push a given team's alerts to.
+// Detect the user's team via their Firebase Auth account (player roster
+// link). Used by the "Just my team" radio option to auto-fill.
+async function _detectMyTeam() {
+  try {
+    const u = auth.currentUser;
+    if (!u) return null;
+    const snap = await getDocs(query(collection(db, 'players'), where('auth_uid', '==', u.uid)));
+    if (snap.empty) return null;
+    const p = snap.docs[0].data();
+    return { id: p.team || p.team_id || null, name: p.team_name || '' };
+  } catch(_) { return null; }
+}
+
 async function loadTeamPrefs() {
   const host = document.getElementById('team-prefs-list');
   if (!host) return;
@@ -904,28 +940,82 @@ async function loadTeamPrefs() {
   }
   teams.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
   const saved = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
+
+  // Render the custom-mode checkboxes (hidden until "Custom" radio chosen).
   host.innerHTML = teams.map(t => `
-    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;background:var(--card2)">
+    <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;background:var(--card)">
       <input type="checkbox" data-team="${t.id}" ${saved.includes(t.id) ? 'checked' : ''} onchange="updateTeamPrefs()" style="cursor:pointer">
       <span>${(t.name || t.id).replace(/</g,'&lt;')}</span>
     </label>`).join('') || '<div style="color:var(--muted);font-size:13px">No teams yet.</div>';
+
+  // Auto-detect "my team" for the second radio option.
+  const myTeam = await _detectMyTeam();
+  const teamObj = myTeam?.id ? teams.find(t => t.id === myTeam.id) : null;
+  const detectedEl = document.getElementById('tm-mine-detected');
+  if (teamObj) {
+    if (detectedEl) detectedEl.textContent = '· ' + (teamObj.short || teamObj.name || teamObj.id);
+    document.getElementById('tm-mine').dataset.teamId = teamObj.id;
+  } else {
+    if (detectedEl) detectedEl.textContent = '(sign in to auto-detect)';
+    document.getElementById('tm-mine').disabled = true;
+    document.getElementById('tm-mine').parentElement.style.opacity = '.55';
+    document.getElementById('tm-mine').parentElement.style.cursor = 'default';
+  }
+
+  // Restore current mode from saved selection.
+  // - saved is empty → "All teams"
+  // - saved has exactly 1 team and it matches detected team → "Just my team"
+  // - saved has anything else → "Custom"
+  let mode = 'all';
+  if (saved.length === 0) mode = 'all';
+  else if (saved.length === 1 && teamObj && saved[0] === teamObj.id) mode = 'mine';
+  else mode = 'custom';
+  const radio = document.getElementById('tm-' + mode);
+  if (radio && !radio.disabled) radio.checked = true;
+  else { document.getElementById('tm-all').checked = true; mode = 'all'; }
+  // Show/hide the custom checkbox grid based on mode.
+  host.style.display = mode === 'custom' ? 'flex' : 'none';
 }
 
-window.updateTeamPrefs = async function() {
-  const picked = [];
-  document.querySelectorAll('[data-team]').forEach(cb => { if (cb.checked) picked.push(cb.dataset.team); });
-  localStorage.setItem('dvsl-notif-teams', JSON.stringify(picked));
+window.setTeamMode = async function(mode) {
+  const host = document.getElementById('team-prefs-list');
+  if (mode === 'all') {
+    // Empty array means "all teams" in the existing wire format.
+    localStorage.setItem('dvsl-notif-teams', JSON.stringify([]));
+    document.querySelectorAll('[data-team]').forEach(cb => cb.checked = false);
+    host.style.display = 'none';
+    await _saveTeamPrefsToFirestore([]);
+  } else if (mode === 'mine') {
+    const tid = document.getElementById('tm-mine').dataset.teamId;
+    if (!tid) return;
+    localStorage.setItem('dvsl-notif-teams', JSON.stringify([tid]));
+    document.querySelectorAll('[data-team]').forEach(cb => { cb.checked = (cb.dataset.team === tid); });
+    host.style.display = 'none';
+    await _saveTeamPrefsToFirestore([tid]);
+  } else {
+    // Custom — reveal the checkbox grid; user picks from there.
+    host.style.display = 'flex';
+  }
+};
+
+async function _saveTeamPrefsToFirestore(picked) {
   const token = localStorage.getItem('dvsl-notif-token');
-  if (!token) return; // not subscribed yet — they'll sync on enable
+  if (!token) return;
   try {
     const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
     const snap = await getDocs(q);
     for (const d of snap.docs) {
       await updateDoc(doc(db, 'notification_tokens', d.id), { teams: picked });
     }
-  } catch(err) {
-    console.warn('Failed to update team prefs:', err);
-  }
+  } catch(err) { console.warn('Failed to update team prefs:', err); }
+}
+
+window.updateTeamPrefs = async function() {
+  const picked = [];
+  document.querySelectorAll('[data-team]').forEach(cb => { if (cb.checked) picked.push(cb.dataset.team); });
+  localStorage.setItem('dvsl-notif-teams', JSON.stringify(picked));
+  await _saveTeamPrefsToFirestore(picked);
+  return; // (returnPath kept simple — Firestore handler reports its own warnings)
 };
 
 window.enableNotifications = async function() {
