@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, body, category, team, teams, url, excludeToken, adminOnly, sourceId, imageDataUrl } = req.body || {};
+  const { title, body, category, team, teams, url, excludeToken, excludePlayerIds, adminOnly, sourceId, imageDataUrl } = req.body || {};
   // sourceId: optional stable ID of the originating object (e.g. chat message
   // doc id). Copied onto every pending_nav doc so the notification can be
   // retroactively cleared if the source is deleted (e.g. user deletes a chat
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
   // 2. Pull matching tokens out of the notification_tokens collection via
   //    the Firestore REST API (reuses same service-account auth).
   let tokenRows = [];
-  try { tokenRows = await listMatchingTokens({ projectId: PROJECT_ID, accessToken, category, team, teams, adminOnly }); }
+  try { tokenRows = await listMatchingTokens({ projectId: PROJECT_ID, accessToken, category, team, teams, adminOnly, excludePlayerIds }); }
   catch(e) { return res.status(500).json({ error: 'Failed to read tokens', detail: e.message }); }
 
   // Exclude sender's own token so people don't get pinged for their own chat
@@ -196,7 +196,7 @@ async function getAccessToken(svc) {
   return data.access_token;
 }
 
-async function listMatchingTokens({ projectId, accessToken, category, team, teams, adminOnly }) {
+async function listMatchingTokens({ projectId, accessToken, category, team, teams, adminOnly, excludePlayerIds }) {
   const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/notification_tokens?pageSize=300`;
   const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }});
   const data = await resp.json();
@@ -205,6 +205,7 @@ async function listMatchingTokens({ projectId, accessToken, category, team, team
   const teamWanted = Array.isArray(teams) && teams.length
     ? teams.filter(Boolean)
     : (team ? [team] : []);
+  const excludeIds = Array.isArray(excludePlayerIds) ? excludePlayerIds.filter(Boolean) : [];
   const out = [];
   for (const d of data.documents) {
     const f = d.fields || {};
@@ -212,6 +213,14 @@ async function listMatchingTokens({ projectId, accessToken, category, team, team
     if (!tok) continue;
     // adminOnly filter: only tokens where is_admin === true
     if (adminOnly && f.is_admin?.booleanValue !== true) continue;
+    // excludePlayerIds: skip tokens whose player_id is in the list. Used by
+    // the captain "Remind waiting" broadcast to skip players who already
+    // responded for the target game. Tokens without a player_id (un-signed-up
+    // subscribers) are not excluded here.
+    if (excludeIds.length) {
+      const tokPid = f.player_id?.stringValue;
+      if (tokPid && excludeIds.includes(tokPid)) continue;
+    }
     const cats = (f.categories?.arrayValue?.values || []).map(v => v.stringValue);
     // Categories filter: skip tokens that have explicitly opted into a set
     // that doesn't include this category. EXCEPTION: when `adminOnly` is set,

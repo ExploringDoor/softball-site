@@ -4743,6 +4743,23 @@ window.captainRemindWaiting = async function(gameId, btn) {
   const body = `Please mark your availability for Wk ${g.wk||'?'} ${ha} ${oppName}${when ? ' · ' + when : ''}. Tap to submit.`;
   const prevLabel = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.innerHTML = 'Sending…'; }
+  // Compute the player_ids of teammates who already responded so the
+  // server can skip their devices. Cross-references the availability
+  // collection (player_name) against MY_PLAYERS (id + name + auth_uid).
+  let excludePlayerIds = [];
+  try {
+    const aSnap = await getDocs(query(collection(db,'availability'),
+      where('team_id','==', team.id), where('game_id','==', gameId)));
+    const respondedNames = new Set();
+    aSnap.docs.forEach(d => {
+      const r = d.data();
+      if (['yes','maybe','no'].includes(r.status)) respondedNames.add(r.player_name);
+    });
+    excludePlayerIds = MY_PLAYERS
+      .filter(p => respondedNames.has(p.name))
+      .map(p => p.id)
+      .filter(Boolean);
+  } catch(_) { /* best effort — fall through to broad delivery */ }
   try {
     const resp = await fetch('/api/send-notification', {
       method: 'POST',
@@ -4753,12 +4770,13 @@ window.captainRemindWaiting = async function(gameId, btn) {
         teams: [team.id],
         url: '/profile.html#avail',
         excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+        excludePlayerIds,
       }),
     });
     const data = await resp.json().catch(() => ({}));
     const sent = Number(data.sent) || 0;
-    toast(sent ? `Sent to ${sent} teammate${sent===1?'':'s'} ✓` : 'No subscribers matched yet', sent ? 'success' : 'error');
-    if (btn) { btn.innerHTML = sent ? `Sent ✓` : 'No subscribers'; setTimeout(() => { btn.disabled = false; btn.innerHTML = prevLabel; }, 4000); }
+    toast(sent ? `Sent to ${sent} device${sent===1?'':'s'} ✓` : 'No subscribers matched (everyone already responded)', sent ? 'success' : 'error');
+    if (btn) { btn.innerHTML = sent ? `Sent ✓` : 'None to nudge'; setTimeout(() => { btn.disabled = false; btn.innerHTML = prevLabel; }, 4000); }
   } catch(e) {
     toast('Reminder failed: ' + e.message, 'error');
     if (btn) { btn.disabled = false; btn.innerHTML = prevLabel; }

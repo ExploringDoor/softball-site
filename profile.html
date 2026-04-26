@@ -1822,12 +1822,20 @@ async function _dvslAttachAuthedTeamToPushToken(teamId) {
   try {
     const snap = await getDocs(query(collection(db, 'notification_tokens'),
       where('token', '==', token)));
+    const authUid = auth.currentUser?.uid || null;
     for (const d of snap.docs) {
       const at = Array.isArray(d.data().authed_teams) ? d.data().authed_teams : [];
-      if (at.includes(teamId)) continue;
-      await updateDoc(doc(db, 'notification_tokens', d.id), {
-        authed_teams: [...at, teamId],
-      });
+      const cur = d.data();
+      const update = {};
+      if (!at.includes(teamId)) update.authed_teams = [...at, teamId];
+      // Also pin auth_uid + player_id so server-side push gating can
+      // exclude already-responded players from the captains "Remind"
+      // broadcast. Only writes when missing or stale.
+      if (authUid && cur.auth_uid !== authUid) update.auth_uid = authUid;
+      if (MY_AUTH_PLAYER?.id && cur.player_id !== MY_AUTH_PLAYER.id) update.player_id = MY_AUTH_PLAYER.id;
+      if (Object.keys(update).length) {
+        await updateDoc(doc(db, 'notification_tokens', d.id), update);
+      }
     }
   } catch(_) { /* best effort */ }
 }
