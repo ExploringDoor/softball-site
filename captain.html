@@ -4436,9 +4436,10 @@ async function renderTeamAvailability() {
     const byGame = {};
     snap.docs.forEach(d => {
       const r = d.data();
-      if (!byGame[r.game_id]) byGame[r.game_id] = { yes:[], maybe:[], no:[] };
+      if (!byGame[r.game_id]) byGame[r.game_id] = { yes:[], maybe:[], no:[], all:new Set() };
       if (r.status === 'yes' || r.status === 'maybe' || r.status === 'no') {
         byGame[r.game_id][r.status].push(r.player_name);
+        byGame[r.game_id].all.add(r.player_name);
       }
     });
 
@@ -4450,12 +4451,20 @@ async function renderTeamAvailability() {
       const oppTeam = ALL_TEAMS.find(t => t.id === opp);
       const oppName = oppTeam?.name || opp?.toUpperCase() || 'TBD';
       const homeAway = g.home === captainData.team_id ? 'vs' : '@';
-      const rsvp = byGame[g.id] || { yes:[], maybe:[], no:[] };
+      const rsvp = byGame[g.id] || { yes:[], maybe:[], no:[], all:new Set() };
       const responded = rsvp.yes.length + rsvp.maybe.length + rsvp.no.length;
       const total = MY_PLAYERS.length;
+      // Pending = roster names not yet in the responded set.
+      const pending = MY_PLAYERS.filter(p => !rsvp.all.has(p.name)).map(p => p.name);
       const namePills = (names, color) => names.length
         ? names.map(n => `<span style="display:inline-block;background:${color}18;color:${color};border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;margin:2px">${esc(n)}</span>`).join('')
         : `<span style="font-size:11px;color:var(--muted);font-style:italic">None yet</span>`;
+      const remindBtn = pending.length
+        ? `<button class="btn btn-primary btn-sm" style="margin-top:12px"
+             onclick="captainRemindWaiting('${esc(g.id)}', this)">
+             📢 Remind ${pending.length} waiting
+           </button>`
+        : '';
       return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
           <div>
@@ -4464,17 +4473,61 @@ async function renderTeamAvailability() {
           </div>
           <span style="font-size:12px;color:var(--muted)">${responded}/${total} responded</span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
           <div><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--green);margin-bottom:4px">✓ Yes (${rsvp.yes.length})</div>${namePills(rsvp.yes,'var(--green)')}</div>
           <div><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#f59e0b;margin-bottom:4px">? Maybe (${rsvp.maybe.length})</div>${namePills(rsvp.maybe,'#f59e0b')}</div>
           <div><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--red);margin-bottom:4px">✕ No (${rsvp.no.length})</div>${namePills(rsvp.no,'var(--red)')}</div>
+          <div><div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#4b5563;margin-bottom:4px">• Waiting (${pending.length})</div>${namePills(pending,'#4b5563')}</div>
         </div>
+        ${remindBtn}
       </div>`;
     }).join('');
   } catch(e) {
     el.innerHTML = `<div class="empty">Could not load availability: ${e.message}</div>`;
   }
 }
+
+// Push a "please mark availability" reminder to everyone subscribed to
+// this team. Uses category 'announcements' (not team_chat) so it
+// reaches subscribers who haven't signed in via Firebase Auth yet —
+// most of the league at this stage. team_chat would only deliver to
+// the few players already authed, which defeats the purpose of
+// reminding the un-signed-up players to sign up.
+window.captainRemindWaiting = async function(gameId, btn) {
+  const g = MY_GAMES.find(x => x.id === gameId);
+  if (!g) { toast('Game not found', 'error'); return; }
+  const team = ALL_TEAMS.find(t => t.id === captainData.team_id);
+  if (!team) { toast('Team context missing — refresh and try again', 'error'); return; }
+  const oppId = g.away === team.id ? g.home : g.away;
+  const oppTeam = ALL_TEAMS.find(t => t.id === oppId);
+  const oppName = oppTeam?.name || oppId?.toUpperCase() || 'TBD';
+  const ha = g.home === team.id ? 'vs' : '@';
+  const when = [g.date, g.time].filter(Boolean).join(' ');
+  const title = (team.short || team.name) + ' · Availability needed';
+  const body = `Please mark your availability for Wk ${g.wk||'?'} ${ha} ${oppName}${when ? ' · ' + when : ''}. Tap to submit.`;
+  const prevLabel = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Sending…'; }
+  try {
+    const resp = await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': CAPTAIN_PUSH_SECRET },
+      body: JSON.stringify({
+        title, body,
+        category: 'announcements',
+        teams: [team.id],
+        url: '/profile.html#avail',
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+      }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    const sent = Number(data.sent) || 0;
+    toast(sent ? `Sent to ${sent} teammate${sent===1?'':'s'} ✓` : 'No subscribers matched yet', sent ? 'success' : 'error');
+    if (btn) { btn.innerHTML = sent ? `Sent ✓` : 'No subscribers'; setTimeout(() => { btn.disabled = false; btn.innerHTML = prevLabel; }, 4000); }
+  } catch(e) {
+    toast('Reminder failed: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = prevLabel; }
+  }
+};
 
 // Captain edit view — shows all players × all games, captain can set any RSVP
 async function renderCaptainEdit() {
