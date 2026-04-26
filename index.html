@@ -3025,7 +3025,7 @@ thead th.sorted-col .sarrow{opacity:1}
 <!-- ═══ PLAYERS PAGE ═══ -->
 <div class="page" id="pg-players">
   <div class="page-header-pad" style="padding:130px 48px 28px;background:var(--bg)">
-    <button type="button" onclick="event.preventDefault();event.stopPropagation();window.playersGoBack&&window.playersGoBack();return false" style="background:#002D72;border:none;border-radius:8px;color:#fff;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;padding:12px 22px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-bottom:14px;margin-left:48px;-webkit-tap-highlight-color:rgba(255,255,255,.2);position:relative;z-index:5;touch-action:manipulation;box-shadow:0 2px 8px rgba(0,45,114,.25)">← Back to Home</button>
+    <a href="javascript:void(0)" onclick="window.playersGoBack();return false" style="display:inline-block;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:rgba(0,45,114,.2);margin-bottom:14px">← Back</a>
     <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(34px,5vw,54px);text-transform:uppercase;line-height:.95">2026 <span style="color:var(--gold)">Teams</span></h1>
   </div>
   <div style="padding:24px 48px 64px;max-width:1400px;margin:0 auto">
@@ -3050,18 +3050,15 @@ thead th.sorted-col .sarrow{opacity:1}
 
 <!-- ═══ TEAM PAGE ═══ -->
 <div class="page" id="pg-team">
-  <!-- Back button — pulled out of team-hero so it's not affected by flex
-       layout, blob overlay, or any other stacking complexity. Plain block
-       container, fixed-position-able if needed. -->
-  <div id="team-back-btn" style="display:none;padding:120px 18px 0 18px;background:var(--bg);position:relative;z-index:50">
-    <button id="team-back-btn-actual" type="button" style="background:#002D72;border:none;border-radius:8px;color:#fff;font-family:'Inter',sans-serif;font-size:15px;font-weight:700;padding:12px 22px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;-webkit-tap-highlight-color:rgba(255,255,255,.2);touch-action:manipulation;box-shadow:0 2px 8px rgba(0,45,114,.25);min-height:44px">← Back</button>
-  </div>
-  <div class="team-hero" id="team-hero" style="padding-top:20px">
+  <div class="team-hero" id="team-hero">
     <div class="team-hero-blob" id="team-blob"></div>
     <div class="team-hero-inner" style="display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
       <div style="display:flex;align-items:flex-start;gap:20px;padding-top:8px">
         <img id="team-hero-logo" src="" alt="" style="width:clamp(90px,11vw,150px);height:clamp(90px,11vw,150px);object-fit:contain;display:none;flex-shrink:0;filter:drop-shadow(0 4px 24px rgba(0,0,0,.3));margin-top:4px">
         <div>
+          <div id="team-back-btn" style="display:none;margin-bottom:12px">
+            <a href="javascript:void(0)" onclick="window.teamGoBack();return false" style="display:inline-block;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.1);border-radius:6px;color:rgba(0,0,0,.6);font-family:'Inter',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;text-decoration:none;cursor:pointer;-webkit-tap-highlight-color:rgba(0,45,114,.2)">← Back</a>
+          </div>
           <div class="sec-eyebrow" id="team-div-label"></div>
           <div class="team-name-big" id="team-big-name"></div>
           <div class="team-rec" id="team-rec"></div>
@@ -5394,31 +5391,6 @@ window._dvslPrevSpaPage = null;
   }
 })();
 
-// Belt-and-suspenders: programmatically attach click + touchend
-// listeners to the back buttons. Both events are attached because in
-// some iOS PWA edge cases the synthetic click event from a tap can
-// be suppressed but the touchend still fires. Logging breadcrumbs to
-// the console make it possible to diagnose "the button doesn't work"
-// reports (open Web Inspector while debugging on a Mac).
-if (typeof document !== 'undefined') {
-  document.addEventListener('DOMContentLoaded', () => {
-    const wire = (selector, fnName) => {
-      const btn = document.querySelector(selector);
-      if (!btn) return;
-      const handler = (e) => {
-        try { console.log('[back]', fnName, 'fired via', e.type); } catch(_){}
-        try { e.preventDefault(); } catch(_){}
-        try { e.stopPropagation(); } catch(_){}
-        const fn = window[fnName];
-        if (typeof fn === 'function') fn();
-      };
-      btn.addEventListener('click', handler);
-      btn.addEventListener('touchend', handler);
-    };
-    wire('#team-back-btn-actual', 'teamGoBack');
-    wire('#pg-players button[onclick*="playersGoBack"]', 'playersGoBack');
-  });
-}
 
 // Back button on the Teams (players) listing page. Just go to home —
 // every previous attempt to be clever (history.back() + fallback timer)
