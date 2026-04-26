@@ -107,11 +107,32 @@ const PRESELECT_TEAM = URL_PARAMS.get('team') || '';
 // If no ?games= param was supplied, check Firestore for captain-queued edits
 // (pending_gcal_syncs collection). Admin.html's listener mirrors these to
 // localStorage, but we also read them directly here as the source of truth.
+//
+// Side-effect: populates PENDING_META so the targeted UI can show who
+// edited what + when, instead of just listing the games anonymously.
+let PENDING_META = {}; // game_id → { edited_by, edited_by_email, summary, source, timestamp }
 async function loadPendingFromFirestore() {
   try {
     const pSnap = await getDocs(collection(db, 'pending_gcal_syncs'));
     const ids = [];
-    pSnap.forEach(d => { const x = d.data() || {}; if (x.game_id) ids.push(x.game_id); else ids.push(d.id); });
+    PENDING_META = {};
+    pSnap.forEach(d => {
+      const x = d.data() || {};
+      const gid = x.game_id || d.id;
+      ids.push(gid);
+      let ts = '';
+      if (x.timestamp) {
+        // serverTimestamp is a Firestore Timestamp object; toDate() gives JS Date.
+        try { ts = x.timestamp.toDate ? x.timestamp.toDate().toISOString() : (typeof x.timestamp === 'string' ? x.timestamp : ''); } catch(_) {}
+      }
+      PENDING_META[gid] = {
+        edited_by: x.edited_by || '',
+        edited_by_email: x.edited_by_email || '',
+        summary: x.summary || '',
+        source: x.source || '',
+        timestamp: ts,
+      };
+    });
     return ids;
   } catch(e) { out(`(Could not read pending_gcal_syncs: ${e.message})`); return []; }
 }
@@ -222,6 +243,21 @@ window.loadGames = async function() {
   }
 };
 
+// Format a stored ISO timestamp as a friendly relative-ish label.
+// "5 min ago", "2h ago", "Apr 25 9:14 PM", etc.
+function _fmtPendingTs(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const now = Date.now();
+  const diffMin = Math.round((now - d.getTime()) / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return diffMin + ' min ago';
+  if (diffMin < 60 * 24) return Math.round(diffMin / 60) + 'h ago';
+  if (diffMin < 60 * 24 * 7) return Math.round(diffMin / (60 * 24)) + 'd ago';
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 // Render the locked "you're about to update these specific games" panel
 // shown in targeted mode. Replaces the big team-checkbox grid.
 function renderTargetedUi(games) {
@@ -234,7 +270,29 @@ function renderTargetedUi(games) {
         ${games.map(g => {
           const awayShort = TEAMS_BY_ID[g.away]?.short || g.away;
           const homeShort = TEAMS_BY_ID[g.home]?.short || g.home;
-          return `<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:6px;padding:8px 12px;font-size:13px"><strong>Wk${g.wk} ${awayShort} @ ${homeShort}</strong> — ${g.date} ${g.time} @ ${g.field||'TBD'}</div>`;
+          const meta = PENDING_META[g.id] || {};
+          const who = meta.edited_by || meta.edited_by_email || (meta.source === 'admin' ? 'admin' : meta.source === 'captain' ? 'captain' : '');
+          const when = _fmtPendingTs(meta.timestamp);
+          const sourceTag = meta.source === 'admin'
+            ? '<span style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;letter-spacing:.05em;padding:1px 6px;border-radius:3px;text-transform:uppercase">admin</span>'
+            : meta.source === 'captain'
+              ? '<span style="background:#dbeafe;color:#1e3a8a;font-size:10px;font-weight:700;letter-spacing:.05em;padding:1px 6px;border-radius:3px;text-transform:uppercase">captain</span>'
+              : '';
+          // Only show the diff summary if it's actually informative — captain
+          // writes a generic "game edited" string, no useful diff. Admin
+          // writes things like "time: 6:00 → 6:15".
+          const summaryUseful = meta.summary && !/^game edited$/i.test(meta.summary) && meta.summary !== 'no changes';
+          const metaLine = (who || when || summaryUseful) ? `
+            <div style="font-size:11px;color:rgba(0,0,0,.55);margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+              ${sourceTag}
+              ${who ? `<span>by <strong>${who}</strong></span>` : ''}
+              ${when ? `<span>· ${when}</span>` : ''}
+              ${summaryUseful ? `<span style="background:#f3f4f6;border-radius:3px;padding:1px 6px;font-family:ui-monospace,monospace;font-size:10px">${meta.summary}</span>` : ''}
+            </div>` : '';
+          return `<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:6px;padding:8px 12px;font-size:13px">
+            <div><strong>Wk${g.wk} ${awayShort} @ ${homeShort}</strong> — ${g.date} ${g.time} @ ${g.field||'TBD'}</div>
+            ${metaLine}
+          </div>`;
         }).join('')}
       </div>
       <div style="margin-top:12px;display:flex;gap:8px">
