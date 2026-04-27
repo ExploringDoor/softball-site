@@ -1033,7 +1033,13 @@ function render(items, mode = 'unread') {
       }, 200);
     });
 
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (cardEv) => {
+      // Skip nav when the tap was on an attached image — the image has
+      // its own click handler that opens a full-screen lightbox.
+      // stopPropagation on the image alone wasn't reliable in iOS PWA
+      // (synthetic-click race conditions), so the card listener also
+      // bails out by inspecting the click target.
+      if (cardEv && cardEv.target && (cardEv.target.tagName === 'IMG' || cardEv.target.closest('.card-img'))) return;
       // Adam asked that tapping a notification move it to Archive right
       // away — don't require pressing the × first. So in unread mode:
       //   1. snapshot into archive (guaranteed, even if it wasn't
