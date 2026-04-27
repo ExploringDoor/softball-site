@@ -696,6 +696,7 @@ a{color:inherit;text-decoration:none}
   </button>
 </div>
 
+<div id="archive-sync-status" style="display:none;background:#fef3c7;color:#92400e;padding:8px 14px;font-size:12px;border-bottom:1px solid #fbbf24;text-align:center"></div>
 <div id="list" class="list">
   <div class="loading">Loading…</div>
 </div>
@@ -879,21 +880,44 @@ function pushArchiveToFirestore() {
 }
 
 // Wire up: when Firebase Auth knows the user, capture their uid, pull
-// remote archive, then push local up to merge.
+// remote archive, then push local up to merge. Also re-pull on every
+// pageshow so switching back to the inbox tab/app shows the latest.
 function _initArchiveSync() {
   if (!window._fbAuth || !window._fbDeps) {
-    // Module script may not have run yet; retry shortly.
     setTimeout(_initArchiveSync, 200);
     return;
   }
   window._fbDeps.onAuthStateChanged(window._fbAuth, async (user) => {
-    if (!user) { _ARCHIVE_AUTH_UID = null; return; }
+    const banner = document.getElementById('archive-sync-status');
+    if (!user) {
+      _ARCHIVE_AUTH_UID = null;
+      if (banner) {
+        banner.style.display = 'block';
+        banner.innerHTML = '⚠️ Not signed in — archive only stored on this device. <a href="/profile.html" style="color:inherit;text-decoration:underline">Sign in</a> to sync across devices.';
+      }
+      return;
+    }
     _ARCHIVE_AUTH_UID = user.uid;
+    if (banner) {
+      banner.style.display = 'block';
+      banner.innerHTML = `✓ Synced as ${user.email || 'signed-in user'} — archive shared across your devices.`;
+      banner.style.background = '#dcfce7';
+      banner.style.color = '#166534';
+    }
     await pullArchiveFromFirestore();
     pushArchiveToFirestore();
   });
 }
 _initArchiveSync();
+// Re-sync whenever the page becomes visible (tab switch, app foreground)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && _ARCHIVE_AUTH_UID) {
+    pullArchiveFromFirestore();
+  }
+});
+window.addEventListener('pageshow', () => {
+  if (_ARCHIVE_AUTH_UID) pullArchiveFromFirestore();
+});
 
 function ago(ts) {
   const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1000));
@@ -1065,19 +1089,36 @@ function render(items, mode = 'unread') {
 
     body.appendChild(textZone);
 
-    // Image lives OUTSIDE the textZone — sibling, not descendant. So
-    // clicks on the image cannot bubble into the textZone's handler.
+    // Image lives OUTSIDE the textZone — sibling, not descendant. The
+    // image is wrapped in a <button> rather than a bare <img> because
+    // iOS PWA standalone mode treats buttons as native interactive
+    // elements with explicit click priority — bare images sometimes
+    // had their tap routed to ancestors via synthetic-click hit-test
+    // weirdness. Wrapping in a button is the most-reliable opt-in to
+    // single-element-target click behavior. Also bound on multiple
+    // event types so something fires regardless of iOS quirks.
     if (item.image_data_url) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'card-imgbtn';
+      btn.style.cssText = 'all:unset;display:block;width:100%;cursor:zoom-in;-webkit-tap-highlight-color:rgba(0,45,114,.18);touch-action:manipulation';
+      btn.setAttribute('aria-label', 'Open image full screen');
       const img = document.createElement('img');
       img.className = 'card-img';
       img.src = item.image_data_url;
       img.alt = '';
       img.loading = 'lazy';
-      img.addEventListener('click', (ev) => {
-        ev.preventDefault(); ev.stopPropagation();
+      img.style.pointerEvents = 'none'; // taps go to the button wrapper, never the IMG
+      btn.appendChild(img);
+      const openHandler = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
         window.openImgBox(item.image_data_url);
-      });
-      body.appendChild(img);
+      };
+      btn.addEventListener('click', openHandler);
+      btn.addEventListener('pointerup', openHandler);
+      body.appendChild(btn);
     }
 
     const meta = document.createElement('div');
