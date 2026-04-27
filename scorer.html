@@ -6652,25 +6652,70 @@ async function loadRosters(awayTeamId, homeTeamId) {
 }
 
 // ===== SAVE SCORE =====
+// Live-watch lock (Adam ask 2026-04-26):
+//   The first scorer to start a game claims `live_owner` on the games
+//   doc. Subsequent scorers (other captain, admin) can still score
+//   privately into their own score_submissions lane, but their saveScore
+//   updates do NOT touch the public games doc — so watch.html only ever
+//   sees one authoritative live score per game, not two captains
+//   fighting over the same live broadcast.
 async function saveScore() {
   if (!G.gameId || G.gameId === 'practice') return;
   try {
-    // If the game was already finalized by the other captain, NEVER overwrite the
-    // canonical score on the games doc — our in-progress scoring would clobber
-    // the real final score on the public site. Still persist our own state.
-    if (G._gameAlreadyFinal) {
-      saveFullState();
-      return;
+    if (G._gameAlreadyFinal) { saveFullState(); return; }
+
+    const myRole = G.scoringTeam === G.awayTeam?.id ? 'away'
+                 : G.scoringTeam === G.homeTeam?.id ? 'home'
+                 : 'admin';
+
+    // Claim or check the live-watch lock atomically: read the games doc,
+    // claim if unowned, defer if owned by someone else.
+    const gSnap = await getDoc(doc(db, 'games', G.gameId));
+    const g = gSnap.exists() ? gSnap.data() : {};
+    const owner = g.live_owner || null;
+
+    if (!owner) {
+      // Unclaimed → claim it. We're the live broadcaster.
+      G._isLiveOwner = true;
+      await updateDoc(doc(db, 'games', G.gameId), {
+        away_score: G.awayScore,
+        home_score: G.homeScore,
+        live: true,
+        live_owner: myRole,
+        live_owner_started_at: serverTimestamp(),
+        liveAt: serverTimestamp(),
+        inning: G.inning,
+        half: G.half,
+      });
+    } else if (owner === myRole) {
+      // We own the live broadcast — keep updating.
+      G._isLiveOwner = true;
+      await updateDoc(doc(db, 'games', G.gameId), {
+        away_score: G.awayScore,
+        home_score: G.homeScore,
+        live: true,
+        liveAt: serverTimestamp(),
+        inning: G.inning,
+        half: G.half,
+      });
+    } else {
+      // Someone else (other captain or admin) owns the live broadcast.
+      // Don't touch the public games doc — our stats will land in our
+      // private score_submissions lane via saveBoxScore. Show a one-time
+      // banner so the user knows their work is being saved but isn't
+      // appearing on watch.html.
+      G._isLiveOwner = false;
+      if (!G._showedLiveLockBanner) {
+        G._showedLiveLockBanner = true;
+        try {
+          if (typeof flashFeedback === 'function') {
+            flashFeedback('OTHER SCORER IS LIVE — YOUR VIEW IS PRIVATE', 'var(--gold)');
+          } else {
+            console.info(`[live-lock] live_owner=${owner}; my saveScore writes are skipped`);
+          }
+        } catch(_){}
+      }
     }
-    await updateDoc(doc(db, 'games', G.gameId), {
-      away_score: G.awayScore,
-      home_score: G.homeScore,
-      live: true,
-      liveAt: serverTimestamp(),
-      inning: G.inning,
-      half: G.half,
-    });
-    // Also save full state so page refresh restores everything
     saveFullState();
   } catch (err) {
     console.warn('saveScore error:', err);
