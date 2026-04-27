@@ -8099,7 +8099,13 @@ window.sendPushNotification = async function() {
   const body  = document.getElementById('push-body').value.trim();
   const category = document.getElementById('push-category').value;
   const team = document.getElementById('push-team').value || undefined;
-  const url = document.getElementById('push-url').value.trim() || undefined;
+  // When an image is attached, default the click destination to the
+  // inbox so the user can see the full-size photo (tap-to-zoom). Without
+  // a URL, FCM notifications either no-op or open the start page; with
+  // a URL, our service worker routes the user there.
+  let url = document.getElementById('push-url').value.trim();
+  if (!url && _pushImageDataUrl) url = '/inbox.html';
+  url = url || undefined;
   const result = document.getElementById('push-result');
 
   if (!title || !body) { toast('Title and message are required', 'error'); return; }
