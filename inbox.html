@@ -977,17 +977,10 @@ function render(items, mode = 'unread') {
       img.src = item.image_data_url;
       img.alt = '';
       img.loading = 'lazy';
-      // Open the lightbox on pointerdown rather than click — iOS PWA's
-      // ~300ms click delay was letting the synthetic click reach the
-      // (now-visible) lightbox and close it immediately. pointerdown
-      // fires before any click. Suppress the subsequent click event so
-      // the card-level navigation handler doesn't run either.
-      const openLightbox = (e) => {
-        if (e) { e.preventDefault?.(); e.stopPropagation?.(); }
-        window.openImgBox(item.image_data_url);
-      };
-      img.addEventListener('pointerdown', openLightbox);
-      img.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+      // Per-element listener removed — a document-level capture-phase
+      // listener (set up once at the bottom of this file) handles taps
+      // on any .card-img and opens the lightbox before the card's bubble-
+      // phase nav listener can ever see the event.
       body.appendChild(img);
     }
 
@@ -1131,12 +1124,7 @@ window.addEventListener('pageshow', refresh);
 window.addEventListener('focus', refresh);
 
 // Image lightbox: tap any push-attached image to open full size.
-// Tap the × button or anywhere on the dark background to close.
-//
-// iOS PWA quirk: opening on pointerdown fires the lightbox into view
-// before the synthetic click event resolves. Without a guard, that
-// same click landed on the now-visible lightbox and closed it instantly.
-// Solution: ignore close-clicks for the first 350ms after open.
+// Close by tapping the × button or anywhere on the dark background.
 let _imgBoxOpenedAt = 0;
 window.openImgBox = function(src){
   let bg = document.getElementById('imgbox-bg');
@@ -1152,13 +1140,44 @@ window.openImgBox = function(src){
     document.body.appendChild(bg);
   }
   bg.querySelector('img').src = src;
-  // Defer .open via rAF so the originating gesture's events all complete
-  // before the overlay is added to the hit-test stack.
   requestAnimationFrame(() => {
     bg.classList.add('open');
     _imgBoxOpenedAt = Date.now();
   });
 };
+
+// Capture-phase listener on the document: the FIRST handler to see any
+// click in the page. If the originating target is a .card-img, we
+// open the lightbox and aggressively stop the event so the card's
+// bubble-phase nav handler never runs. Earlier per-element listener +
+// stopPropagation strategies were defeated by iOS PWA's synthetic-click
+// hit-testing — the click sometimes targeted the parent card and ran
+// the nav handler. Capture-phase at document root catches everything.
+function _dvslImgBoxIntercept(e) {
+  const t = e.target;
+  if (!t) return;
+  const img = t.tagName === 'IMG' && t.classList?.contains('card-img')
+    ? t
+    : (t.closest && t.closest('.card-img'));
+  if (!img) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+  window.openImgBox(img.src || img.getAttribute('src'));
+}
+// Capture phase = third arg true. Both click and touchend covered for
+// belt-and-suspenders on iOS.
+document.addEventListener('click', _dvslImgBoxIntercept, true);
+document.addEventListener('touchend', (e) => {
+  // Only intercept if the touch target is the image itself; otherwise let
+  // normal touch handling continue.
+  const t = e.target;
+  if (t && (t.tagName === 'IMG' && t.classList?.contains('card-img'))) {
+    e.preventDefault();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    window.openImgBox(t.src || t.getAttribute('src'));
+  }
+}, true);
 </script>
 
 </body>
