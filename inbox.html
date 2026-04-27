@@ -1033,41 +1033,50 @@ function render(items, mode = 'unread') {
     const body = document.createElement('div');
     body.className = 'card-body';
 
-    // Source label ("📣 From DVSL League Admin") for commissioner-
-    // originated pushes, so Adam's announcements don't just read as
-    // "test test" -- it's immediately clear the league office sent it.
+    // The text region is a SEPARATE clickable zone from the image.
+    // Click on text → archive + navigate. Click on image → open
+    // lightbox. The image lives outside this wrapper so taps on it
+    // can't possibly trigger the navigation handler. (After three
+    // attempts to win an event-propagation race I gave up and
+    // structurally separated the two click targets — Adam ask
+    // 2026-04-26.)
+    const textZone = document.createElement('div');
+    textZone.className = 'card-textzone';
+    textZone.style.cursor = 'pointer';
+
     if (LEAGUE_SOURCE_CATS.has(item.category)) {
       const src = document.createElement('div');
       src.className = 'card-source';
       src.textContent = '📣 From DVSL League Admin';
-      body.appendChild(src);
+      textZone.appendChild(src);
     }
 
     const title = document.createElement('div');
     title.className = 'card-title';
     title.textContent = item.title || 'DVSL';
-    body.appendChild(title);
+    textZone.appendChild(title);
 
     if (item.body) {
       const msg = document.createElement('div');
       msg.className = 'card-msg';
       msg.textContent = item.body;
-      body.appendChild(msg);
+      textZone.appendChild(msg);
     }
 
-    // Optional photo attached by Adam via the admin push composer.
-    // Stored inline as a base64 data URI on the pending_nav doc so
-    // we can render it here with no extra fetch.
+    body.appendChild(textZone);
+
+    // Image lives OUTSIDE the textZone — sibling, not descendant. So
+    // clicks on the image cannot bubble into the textZone's handler.
     if (item.image_data_url) {
       const img = document.createElement('img');
       img.className = 'card-img';
       img.src = item.image_data_url;
       img.alt = '';
       img.loading = 'lazy';
-      // Per-element listener removed — a document-level capture-phase
-      // listener (set up once at the bottom of this file) handles taps
-      // on any .card-img and opens the lightbox before the card's bubble-
-      // phase nav listener can ever see the event.
+      img.addEventListener('click', (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        window.openImgBox(item.image_data_url);
+      });
       body.appendChild(img);
     }
 
@@ -1082,7 +1091,8 @@ function render(items, mode = 'unread') {
     const when = document.createElement('span');
     when.textContent = ago(item.ts);
     meta.appendChild(when);
-    body.appendChild(meta);
+    // Meta inside textZone so the timestamp/category area is also nav-clickable.
+    textZone.appendChild(meta);
 
     const x = document.createElement('button');
     x.className = 'card-x';
@@ -1120,23 +1130,11 @@ function render(items, mode = 'unread') {
       }, 200);
     });
 
-    card.addEventListener('click', (cardEv) => {
-      // Skip nav when the tap was on an attached image — the image has
-      // its own click handler that opens a full-screen lightbox.
-      // stopPropagation on the image alone wasn't reliable in iOS PWA
-      // (synthetic-click race conditions), so the card listener also
-      // bails out by inspecting the click target.
-      if (cardEv && cardEv.target && (cardEv.target.tagName === 'IMG' || cardEv.target.closest('.card-img'))) return;
+    // Navigation handler bound to the textZone, NOT the whole card.
+    // Image is a sibling of textZone so taps on it never run this.
+    textZone.addEventListener('click', () => {
       // Adam asked that tapping a notification move it to Archive right
-      // away — don't require pressing the × first. So in unread mode:
-      //   1. snapshot into archive (guaranteed, even if it wasn't
-      //      snapshotted on the last refresh),
-      //   2. mark locally-dismissed so render() filters it out even if
-      //      the server dismiss POST loses the race with page nav,
-      //   3. prune it from LAST_UNREAD,
-      //   4. fire the server dismiss (sendBeacon, best-effort),
-      //   5. navigate to the notification's target URL.
-      // Archive-mode tap: just re-navigate (doc is already gone from server).
+      // away — don't require pressing the × first.
       if (mode !== 'archive') {
         archiveSnapshot([item]);
         markDismissedLocal(item.id);
