@@ -5305,8 +5305,10 @@ function buildSchedule(){
   const upGames=weekGames.filter(g=>!g.done && !g.ppd);
   const gamesToShow=upGames.length?upGames:weekGames;
 
-  // Render as preview cards (reuse scheduleBlock which now outputs preview-card for upcoming)
-  const cards=gamesToShow.slice(0,6).map(g=>{
+  // Show every upcoming game in the current week. Previously capped at 6,
+  // which silently hid games when a week had 7+ matchups (e.g. wk2 has 8
+  // including the rescheduled SA @ BOR).
+  const cards=gamesToShow.map(g=>{
     const atm=getTeamByShort(g.away), htm=getTeamByShort(g.home);
     const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
     const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
