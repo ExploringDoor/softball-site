@@ -4766,12 +4766,16 @@ window.captainRemindWaiting = async function(gameId, btn) {
       headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': CAPTAIN_PUSH_SECRET },
       body: JSON.stringify({
         title, body,
-        category: 'announcements',
+        // team_chat is gated server-side on authed_teams: only delivers to
+        // signed-in players whose roster spot links to the target team.
+        // That prevents leakage to other teams' subscribers (e.g. a TBIR
+        // player who'd subscribed to OA score updates won't get OA's
+        // availability reminder).
+        category: 'team_chat',
         teams: [team.id],
         url: '/profile.html#avail',
         excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
         excludePlayerIds,
-        rosterOnly: true, // skip fans / family / other team subscribers
       }),
     });
     const data = await resp.json().catch(() => ({}));
