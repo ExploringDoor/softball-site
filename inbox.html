@@ -977,10 +977,17 @@ function render(items, mode = 'unread') {
       img.src = item.image_data_url;
       img.alt = '';
       img.loading = 'lazy';
-      img.addEventListener('click', (e) => {
-        e.stopPropagation();
+      // Open the lightbox on pointerdown rather than click — iOS PWA's
+      // ~300ms click delay was letting the synthetic click reach the
+      // (now-visible) lightbox and close it immediately. pointerdown
+      // fires before any click. Suppress the subsequent click event so
+      // the card-level navigation handler doesn't run either.
+      const openLightbox = (e) => {
+        if (e) { e.preventDefault?.(); e.stopPropagation?.(); }
         window.openImgBox(item.image_data_url);
-      });
+      };
+      img.addEventListener('pointerdown', openLightbox);
+      img.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
       body.appendChild(img);
     }
 
@@ -1123,20 +1130,34 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pageshow', refresh);
 window.addEventListener('focus', refresh);
 
-// Image lightbox: tap any push-attached image to open full size,
-// tap anywhere outside (or the × button) to close.
+// Image lightbox: tap any push-attached image to open full size.
+// Tap the × button or anywhere on the dark background to close.
+//
+// iOS PWA quirk: opening on pointerdown fires the lightbox into view
+// before the synthetic click event resolves. Without a guard, that
+// same click landed on the now-visible lightbox and closed it instantly.
+// Solution: ignore close-clicks for the first 350ms after open.
+let _imgBoxOpenedAt = 0;
 window.openImgBox = function(src){
   let bg = document.getElementById('imgbox-bg');
   if (!bg) {
     bg = document.createElement('div');
     bg.id = 'imgbox-bg';
     bg.className = 'imgbox-bg';
-    bg.innerHTML = '<button class="imgbox-close" aria-label="Close">×</button><img alt="">';
-    bg.addEventListener('click', () => bg.classList.remove('open'));
+    bg.innerHTML = '<button class="imgbox-close" aria-label="Close" type="button">×</button><img alt="">';
+    bg.addEventListener('click', (e) => {
+      if (Date.now() - _imgBoxOpenedAt < 350) return; // ignore the click that opened us
+      bg.classList.remove('open');
+    });
     document.body.appendChild(bg);
   }
   bg.querySelector('img').src = src;
-  bg.classList.add('open');
+  // Defer .open via rAF so the originating gesture's events all complete
+  // before the overlay is added to the hit-test stack.
+  requestAnimationFrame(() => {
+    bg.classList.add('open');
+    _imgBoxOpenedAt = Date.now();
+  });
 };
 </script>
 
