@@ -3935,9 +3935,15 @@ function renderBoxScore(awayName, homeName, g) {
           <textarea id="bs-recap-text" rows="4" placeholder="Write a brief game summary..." style="width:100%;padding:8px;border:1px solid rgba(0,0,0,.15);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;background:#f8f9fa" oninput="bsGameRecap=this.value">${bsGameRecap.replace(/</g,'&lt;')}</textarea>
         </div>
       </div>
-      <div style="display:flex;gap:12px;justify-content:center;margin-top:24px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1);flex-wrap:wrap">
-        <button class="btn btn-success" onclick="saveBoxScore(true)">Save & Mark Final</button>
-        <button class="btn btn-outline" onclick="saveBoxScore(false)">Save Draft</button>
+      <div style="background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:10px 14px;margin-top:18px;font-size:12px;color:#9a3412">
+        <strong>Admin scoring is private.</strong> Edits below stay in your private lane and don't affect the public box score.
+        Click <strong>📊 Compare 3-Way</strong> to see your view next to the captains' submissions, or <strong>📢 Publish to Public</strong> to override the captain merge with your version.
+      </div>
+      <div style="display:flex;gap:12px;justify-content:center;margin-top:14px;padding-top:20px;border-top:1px solid rgba(0,0,0,.1);flex-wrap:wrap">
+        <button class="btn btn-success" onclick="saveBoxScore(true)" title="Mark admin's view as final, but keep it private (does not change the public box score)">💾 Save Final (Private)</button>
+        <button class="btn btn-outline" onclick="saveBoxScore(false)" title="Save admin's draft, private">💾 Save Draft</button>
+        <button class="btn btn-outline" style="background:#dbeafe;color:#1e3a8a;border-color:#1e3a8a;font-weight:700" onclick="openCompare3Way()" title="Side-by-side: admin / home captain / away captain submissions">📊 Compare 3-Way</button>
+        <button class="btn btn-outline" style="background:#fef3c7;color:#92400e;border-color:#92400e;font-weight:700" onclick="publishAdminBoxAsFinal()" title="Override the captain merge — publish admin's version as the public box score and mark game final">📢 Publish to Public</button>
         <button class="btn btn-outline" onclick="bsExportPdf()" title="Export box score as PDF">🖨️ Export PDF</button>
         <button class="btn btn-outline" style="color:#e65100;border-color:#e65100" onclick="bsReopenGame()" title="Reset game: clears score, captain submissions, and in-progress scorer state">↺ Reset Game</button>
         <button class="btn btn-outline" onclick="closeBoxScore()">Cancel</button>
@@ -4404,33 +4410,188 @@ window.saveBoxScore = async function(markFinal) {
     potg_name: (document.getElementById('bs-potg-name')?.value||bsPotgName||'').trim(),
     potg_team: bsPotgTeam||''
   };
+  // Admin's edits go to the PRIVATE admin lane only — never the public box.
+  // To make the admin's view public, use publishAdminBoxAsFinal() (the
+  // 📢 Publish button), which overrides the captain merge.
   try {
-    const primaryRef = doc(db, 'box_scores', bsGameId);
-    const primarySnap = await getDoc(primaryRef);
-    if (primarySnap.exists()) {
-      await updateDoc(primaryRef, boxData);
-    } else {
-      const q2 = query(collection(db, 'box_scores'), where('game_id', '==', bsGameId));
-      const snap = await getDocs(q2);
-      const primary = snap.docs.find(d => !d.data().team_id);
-      if (primary) await updateDoc(doc(db,'box_scores',primary.id), boxData);
-      else await setDoc(primaryRef, boxData);
-    }
-    const _preG = GAMES.find(x=>x.id===bsGameId);
-    const wasDone = !!_preG?.done;
-    await updateDoc(doc(db,'games',bsGameId), {away_score:awayR, home_score:homeR, done:markFinal});
-    const g = GAMES.find(x=>x.id===bsGameId);
-    if(g){g.away_score=awayR;g.home_score=homeR;g.done=markFinal;}
-    toast(markFinal?'Box score saved & game final!':'Box score draft saved');
-    await logActivity('Box Score',`${getTeamName(bsGameData.away)} ${awayR} - ${getTeamName(bsGameData.home)} ${homeR}${markFinal?' (Final)':' (Draft)'}`);
-    // Push only on transition to final.
-    if (markFinal && !wasDone && g) sendScorePush(g, awayR, homeR);
-    if(markFinal) {
-      await recalcStandingsFromGames();
-      await recalcPlayerStatsFromBoxScores();
-    }
-    closeBoxScore(); renderScores(); renderDashboard(); renderStandings();
+    await setDoc(doc(db, 'score_submissions', `${bsGameId}_admin`), {
+      ...boxData,
+      submitting_side: 'admin',
+      submitting_team: 'admin',
+      submitted_at:    new Date().toISOString(),
+      team_id:         'admin',
+      team_name:       'Admin',
+      submitted_by:    currentUser?.email || 'admin',
+      timestamp:       Timestamp.now(),
+      status:          markFinal ? 'admin_final' : 'admin_draft',
+      is_final:        !!markFinal,
+      has_boxscore:    true,
+    });
+    toast(markFinal ? 'Admin view saved as final (private)' : 'Admin draft saved (private)');
+    await logActivity('Box Score (Admin)', `Saved private ${markFinal?'final':'draft'}: ${getTeamName(bsGameData.away)} ${awayR} - ${getTeamName(bsGameData.home)} ${homeR}`);
+    // Don't close the editor — admin may want to keep editing or hit Publish next.
   } catch(e) { toast('Failed: '+e.message,'error'); }
+};
+
+// Override the captain merge — copy the admin's private submission to the
+// public box_scores doc, mark the game final, push the score notification,
+// recompute standings + player stats. Admin uses this when they want
+// their view to be the source of truth (e.g. captains haven't submitted
+// or admin disagrees with the captain merge).
+window.publishAdminBoxAsFinal = async function() {
+  if (!confirm('Publish your admin view as the official final box score? This overrides any captain submissions and marks the game final on the public site.')) return;
+  try {
+    // First save the current edits to the admin lane so we publish what's
+    // on screen (not whatever was last saved).
+    await window.saveBoxScore(true);
+
+    // Read the now-saved admin lane and copy to the canonical public doc.
+    const adminSnap = await getDoc(doc(db, 'score_submissions', `${bsGameId}_admin`));
+    if (!adminSnap.exists()) { toast('No admin submission to publish', 'error'); return; }
+    const ad = adminSnap.data();
+    const canonical = {
+      ...ad,
+      first_submitter: 'admin',
+      single_source: 'admin',
+      has_discrepancy: false,
+      discrepancies: [],
+      status: 'final',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    delete canonical.submitting_side;
+    delete canonical.submitting_team;
+    delete canonical.submitted_at;
+    delete canonical.team_id;
+    delete canonical.team_name;
+    delete canonical.submitted_by;
+    delete canonical.is_final;
+    await setDoc(doc(db, 'box_scores', bsGameId), canonical);
+
+    // Mark the game final on the games collection
+    const _preG = GAMES.find(x => x.id === bsGameId);
+    const wasDone = !!_preG?.done;
+    await updateDoc(doc(db, 'games', bsGameId), {
+      away_score: ad.away_score || 0,
+      home_score: ad.home_score || 0,
+      done: true,
+      has_discrepancy: false,
+    });
+    const g = GAMES.find(x => x.id === bsGameId);
+    if (g) { g.away_score = ad.away_score || 0; g.home_score = ad.home_score || 0; g.done = true; }
+    if (!wasDone && g) sendScorePush(g, ad.away_score || 0, ad.home_score || 0);
+    await recalcStandingsFromGames();
+    await recalcPlayerStatsFromBoxScores();
+    await logActivity('Box Score (Admin)', `📢 PUBLISHED admin view to public: ${getTeamName(bsGameData.away)} ${ad.away_score||0} - ${getTeamName(bsGameData.home)} ${ad.home_score||0}`);
+    toast('Published to public box score ✓', 'success');
+    closeBoxScore();
+    renderScores();
+    renderDashboard();
+    renderStandings();
+  } catch(e) { toast('Publish failed: ' + e.message, 'error'); }
+};
+
+// 3-Way comparison overlay: side-by-side view of admin / home / away
+// submissions for the current bsGameId. Highlights cells where the
+// scorers disagree. Read-only; admin reconciles via the editor + Publish.
+window.openCompare3Way = async function() {
+  if (!bsGameId) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.85);overflow:auto;padding:24px';
+  overlay.innerHTML = '<div style="text-align:center;color:#fff;padding:40px">Loading…</div>';
+  document.body.appendChild(overlay);
+
+  try {
+    const [adminSnap, homeSnap, awaySnap] = await Promise.all([
+      getDoc(doc(db, 'score_submissions', `${bsGameId}_admin`)),
+      getDoc(doc(db, 'score_submissions', `${bsGameId}_home`)),
+      getDoc(doc(db, 'score_submissions', `${bsGameId}_away`)),
+    ]);
+    const subs = {
+      admin: adminSnap.exists() ? adminSnap.data() : null,
+      home:  homeSnap.exists()  ? homeSnap.data()  : null,
+      away:  awaySnap.exists()  ? awaySnap.data()  : null,
+    };
+    const presence = ['admin','home','away'].map(r => `${r}: ${subs[r]?'✓ '+(subs[r].is_final?'final':'draft'):'—'}`).join(' · ');
+
+    // Score row — what each scorer reports for both teams' final scores
+    const scoreRows = ['away_score','home_score'].map(field => {
+      const label = field === 'away_score' ? `${getTeamName(bsGameData.away)} (away)` : `${getTeamName(bsGameData.home)} (home)`;
+      const a = subs.admin?.[field], h = subs.home?.[field], w = subs.away?.[field];
+      const allSame = [a,h,w].filter(v => v !== undefined).every((v,_,arr) => v === arr[0]);
+      const cell = v => `<td style="padding:8px 12px;text-align:center;font-weight:700;font-size:18px;${allSame?'':'background:#fef3c7;color:#92400e'}">${v ?? '—'}</td>`;
+      return `<tr><td style="padding:8px 12px;font-weight:600;color:var(--muted)">${esc(label)}</td>${cell(a)}${cell(h)}${cell(w)}</tr>`;
+    }).join('');
+
+    // Per-batter cross-check: pivot all batters from all submissions, show AB/H/HR/RBI from each
+    const batters = {};
+    ['admin','home','away'].forEach(role => {
+      const sub = subs[role]; if (!sub) return;
+      ['away_lineup','home_lineup'].forEach(lk => {
+        (sub[lk] || []).forEach(p => {
+          const key = `${lk}::${p.name}`;
+          if (!batters[key]) batters[key] = { name: p.name, side: lk === 'home_lineup' ? 'home':'away', admin:null, home:null, away:null };
+          batters[key][role] = p;
+        });
+      });
+    });
+    const batterRows = Object.values(batters).sort((a,b) => a.side.localeCompare(b.side) || a.name.localeCompare(b.name)).map(row => {
+      const cell = (sub) => {
+        if (!sub) return `<td style="padding:6px 10px;color:var(--muted2);text-align:center">—</td>`;
+        return `<td style="padding:6px 10px;text-align:center;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;line-height:1.2">${sub.ab||0}AB · ${sub.h||0}H · ${sub.hr||0}HR · ${sub.rbi||0}RBI</td>`;
+      };
+      // Highlight if the three lanes disagree on AB/H/HR/RBI
+      const cells = [row.admin, row.home, row.away];
+      const present = cells.filter(Boolean);
+      const sig = (p) => `${p?.ab||0}-${p?.h||0}-${p?.hr||0}-${p?.rbi||0}`;
+      const disagree = present.length > 1 && new Set(present.map(sig)).size > 1;
+      const bg = disagree ? 'background:#fef3c7' : '';
+      return `<tr style="border-bottom:1px solid rgba(0,0,0,.05);${bg}">
+        <td style="padding:6px 10px;font-weight:600;color:rgba(0,0,0,.65);font-size:12px">${row.side==='home'?'🏠':'✈️'} ${esc(row.name)}</td>
+        ${cell(row.admin)}${cell(row.home)}${cell(row.away)}
+      </tr>`;
+    }).join('') || '<tr><td colspan="4" style="padding:30px;text-align:center;color:var(--muted)">No batter data submitted yet</td></tr>';
+
+    overlay.innerHTML = `
+      <div style="max-width:1100px;margin:0 auto;background:#fff;border-radius:14px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:8px">
+          <div>
+            <h2 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:24px;text-transform:uppercase;color:var(--navy);margin-bottom:4px">📊 3-Way Box Score Compare</h2>
+            <div style="font-size:13px;color:var(--muted)">${esc(getTeamName(bsGameData.away))} @ ${esc(getTeamName(bsGameData.home))} · Wk ${bsGameData.wk||'?'}</div>
+            <div style="font-size:11px;color:var(--muted2);margin-top:4px;font-family:ui-monospace,monospace">${esc(presence)}</div>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="this.closest('div[style*=\\'position:fixed\\']').remove()">Close ✕</button>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:18px">
+          <thead>
+            <tr style="background:var(--bg2)">
+              <th style="padding:10px;text-align:left;width:30%">Score</th>
+              <th style="padding:10px;text-align:center;background:#dbeafe;color:#1e3a8a">Admin</th>
+              <th style="padding:10px;text-align:center;background:#dcfce7;color:#166534">Home Captain</th>
+              <th style="padding:10px;text-align:center;background:#fce7f3;color:#9d174d">Away Captain</th>
+            </tr>
+          </thead>
+          <tbody>${scoreRows}</tbody>
+        </table>
+        <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;text-transform:uppercase;color:var(--navy);margin-bottom:8px">Batter cross-check</h3>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Yellow rows = the three submissions disagree on AB/H/HR/RBI. The actual public box uses each captain's view of their own side.</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:var(--bg2);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
+              <th style="padding:8px 10px;text-align:left">Batter</th>
+              <th style="padding:8px 10px;text-align:center;background:#dbeafe;color:#1e3a8a">Admin</th>
+              <th style="padding:8px 10px;text-align:center;background:#dcfce7;color:#166534">Home Cap.</th>
+              <th style="padding:8px 10px;text-align:center;background:#fce7f3;color:#9d174d">Away Cap.</th>
+            </tr>
+          </thead>
+          <tbody>${batterRows}</tbody>
+        </table>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  } catch(e) {
+    overlay.innerHTML = `<div style="text-align:center;color:#fff;padding:40px">Failed to load: ${e.message}</div>`;
+    overlay.addEventListener('click', () => overlay.remove());
+  }
 };
 window.closeBoxScore = function() {
   document.getElementById('box-score-view').style.display='none';
