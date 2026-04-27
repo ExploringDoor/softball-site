@@ -2326,18 +2326,21 @@ function _notifCardHtml(it, archived) {
   const titleEsc = esc(it.title || 'Notification');
   const bodyEsc = it.body ? esc(it.body) : '';
   const catLabel = it.category ? (_NOTIF_CAT_LABEL[it.category] || it.category) : '';
+  const imgEsc = it.image_data_url ? esc(it.image_data_url) : '';
   return `
     <div class="notif-card-row ${archived ? 'archived' : ''}" data-id="${esc(it.id)}"
          style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:#fff;${archived ? 'opacity:.72' : ''}">
       ${archived ? '' : '<div style="width:8px;height:8px;border-radius:50%;background:var(--navy);margin-top:7px;flex-shrink:0"></div>'}
-      <div style="flex:1;min-width:0;cursor:pointer" onclick="window._notifCardClick('${esc(it.id)}', ${archived ? 'true' : 'false'})">
-        <div style="font-weight:700;font-size:14px;line-height:1.3">${titleEsc}</div>
-        ${bodyEsc ? `<div style="font-size:13px;color:var(--muted);margin-top:2px;line-height:1.4">${bodyEsc}</div>` : ''}
-        ${it.image_data_url ? `<img src="${esc(it.image_data_url)}" style="max-width:100%;max-height:200px;border-radius:8px;margin-top:8px" loading="lazy">` : ''}
-        <div style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">
-          ${catLabel ? `<span style="font-weight:700">${esc(catLabel)}</span>` : ''}
-          <span>${_notifAgo(it.ts)}</span>
+      <div style="flex:1;min-width:0">
+        <div style="cursor:pointer" onclick="window._notifCardClick('${esc(it.id)}', ${archived ? 'true' : 'false'})">
+          <div style="font-weight:700;font-size:14px;line-height:1.3">${titleEsc}</div>
+          ${bodyEsc ? `<div style="font-size:13px;color:var(--muted);margin-top:2px;line-height:1.4">${bodyEsc}</div>` : ''}
+          <div style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">
+            ${catLabel ? `<span style="font-weight:700">${esc(catLabel)}</span>` : ''}
+            <span>${_notifAgo(it.ts)}</span>
+          </div>
         </div>
+        ${imgEsc ? `<button type="button" onclick="event.preventDefault();event.stopPropagation();window._notifOpenImage('${imgEsc}')" style="all:unset;display:block;width:100%;cursor:zoom-in;-webkit-tap-highlight-color:rgba(0,45,114,.18);touch-action:manipulation;margin-top:8px"><img src="${imgEsc}" style="max-width:100%;max-height:200px;border-radius:8px;display:block;pointer-events:none" loading="lazy" alt=""></button>` : ''}
       </div>
       <button class="icon-btn" aria-label="Dismiss"
               style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px"
@@ -2345,6 +2348,28 @@ function _notifCardHtml(it, archived) {
     </div>
   `;
 }
+
+// Lightbox for tap-to-zoom on push-attached images. Mirrors inbox.html.
+let _notifImgBoxOpenedAt = 0;
+window._notifOpenImage = function(src) {
+  let bg = document.getElementById('notif-imgbox-bg');
+  if (!bg) {
+    bg = document.createElement('div');
+    bg.id = 'notif-imgbox-bg';
+    bg.style.cssText = 'display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;cursor:zoom-out';
+    bg.innerHTML = '<button type="button" aria-label="Close" style="position:absolute;top:max(20px,env(safe-area-inset-top));right:20px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:20px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button><img alt="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 12px 48px rgba(0,0,0,.5)">';
+    bg.addEventListener('click', () => {
+      if (Date.now() - _notifImgBoxOpenedAt < 350) return; // ignore the click that opened us
+      bg.style.display = 'none';
+    });
+    document.body.appendChild(bg);
+  }
+  bg.querySelector('img').src = src;
+  requestAnimationFrame(() => {
+    bg.style.display = 'flex';
+    _notifImgBoxOpenedAt = Date.now();
+  });
+};
 
 async function _notifRenderUnread(recentId) {
   const el = document.getElementById(recentId);
