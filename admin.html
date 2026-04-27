@@ -5659,7 +5659,7 @@ window.editGame = function(gameId) {
       </div>
       <div class="form-row">
         <div class="form-col"><label class="form-label">Field</label><select class="form-input" id="eg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
-        <div class="form-col"><label class="form-label">Address</label><input type="text" class="form-input" id="eg-addr-${gameId}" value="${esc(g.addr||'')}"></div>
+        <div class="form-col"><label class="form-label">Address</label><input type="text" class="form-input" id="eg-addr-${gameId}" value="${esc(g.addr||'')}" placeholder="Auto-fills from field"><div style="font-size:10px;color:var(--muted2);margin-top:2px">Auto-set from Field by default. Override only if needed.</div></div>
       </div>
       <div class="form-row" style="gap:8px;flex-wrap:wrap">
         <button class="btn btn-success" onclick="saveEditGame('${gameId}')" style="flex:1 1 120px;min-height:44px">Save</button>
@@ -5871,6 +5871,21 @@ window.saveEditGame = async function(gameId) {
     field: document.getElementById('eg-field-' + gameId).value || _prev.field || '',
     addr: document.getElementById('eg-addr-' + gameId).value.trim(),
   };
+  // Auto-fill addr from FIELD_LOCATIONS when the field changed and the
+  // user didn't override the address (i.e. the addr input still matches
+  // the previous field's canonical address). Means: change "Southampton"
+  // to "Lukens 2" → addr automatically updates to the Lukens address,
+  // no manual edit needed. Custom addresses (e.g. for an away-team
+  // hosted location) still survive because the input value is preserved
+  // when it doesn't match the previous canonical mapping.
+  const FIELD_LOC = (window.LEAGUE_CONFIG && window.LEAGUE_CONFIG.fieldLocations) || {};
+  const prevCanonicalAddr = FIELD_LOC[_prev.field] || '';
+  const userTypedSomethingCustom = data.addr && data.addr !== prevCanonicalAddr;
+  if (data.field !== _prev.field && !userTypedSomethingCustom) {
+    data.addr = FIELD_LOC[data.field] || data.addr || '';
+  } else if (!data.addr && FIELD_LOC[data.field]) {
+    data.addr = FIELD_LOC[data.field];
+  }
   if (dateIso) {
     const d = new Date(dateIso + 'T12:00:00');
     data.date_iso = dateIso;

@@ -4279,7 +4279,7 @@ async function loadAllData() {
     SCHEDULE_PREVIEW = games
       .map(g => ({
         id: g.id,
-        wk: g.wk, date: normGameDate(g.date), rawDate: g.date||'', day: g.day, time: g.time,
+        wk: g.wk, date: normGameDate(g.date), rawDate: g.date||'', date_iso: g.date_iso||'', day: g.day, time: g.time,
         field: g.field, addr: g.addr||'',
         away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
         home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
@@ -5303,7 +5303,16 @@ function buildSchedule(){
 
   const weekGames=wkMap[currentWk];
   const upGames=weekGames.filter(g=>!g.done && !g.ppd);
-  const gamesToShow=upGames.length?upGames:weekGames;
+  const gamesToShow=(upGames.length?upGames:weekGames).slice().sort((a,b) => {
+    // Within a week, always show games in chronological order. Prefer
+    // ISO date when present; fall back to the human-readable date string
+    // (e.g. "Apr 28") which still sorts month-then-day correctly when
+    // every game in the same week shares a month. Time is the tiebreaker.
+    const ad = a.date_iso || a.rawDate || a.date || '';
+    const bd = b.date_iso || b.rawDate || b.date || '';
+    if (ad !== bd) return ad.localeCompare(bd, undefined, { numeric: true });
+    return (a.time || '').localeCompare(b.time || '', undefined, { numeric: true });
+  });
 
   // Show every upcoming game in the current week. Previously capped at 6,
   // which silently hid games when a week had 7+ matchups (e.g. wk2 has 8

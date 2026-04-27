@@ -70,8 +70,25 @@
     },
 
     // ── League-specific data ─────────────────────────────────────────────
-    // Field/venue list — where games are played. Used by admin scheduling.
-    fields: ['Mondauk 4', 'Mondauk 5', 'Lukens 2', 'Plymouth', 'Sunnybrook', 'Cedar Hill', 'TBD'],
+    // Field/venue list — where games are played. Used by admin scheduling
+    // dropdowns. The companion FIELD_LOCATIONS map (below) is the single
+    // source of truth for street addresses; keep the two in sync.
+    fields: ['Mondauk 4', 'Mondauk 5', 'Lukens 2', 'Plymouth', 'Sunnybrook', 'Cedar Hill', 'Southampton', 'TBD'],
+
+    // Field → street address. Used by saveEditGame (admin + captain) to
+    // auto-fill `addr` whenever a games `field` changes, so calendar
+    // events / map links always reflect the right venue. Adding a new
+    // field? Add the address here too.
+    fieldLocations: {
+      'Mondauk 4':   '1452 Dillon Road, Ambler, PA 19034',
+      'Mondauk 5':   '1452 Dillon Road, Ambler, PA 19034',
+      'Lukens 2':    '540A Dresher Road, Horsham, PA 19044',
+      'Plymouth':    '810 Germantown Pike, Plymouth Meeting, PA 19462',
+      'Sunnybrook':  '2532 Long Meadow Road, Lansdale, PA 19446',
+      'Cedar Hill':  '449 Cedar Hill Road, Ambler, PA 19002',
+      'Southampton': 'Schafer Park, Gravel Hill and Industrial Blvd, Southampton, PA 18966',
+      'TBD':         '',
+    },
 
     // Team abbreviations that have a matching logo PNG in /logos/<abbr>.png.
     // Used only as a has-logo cache — any team not in this set falls back to

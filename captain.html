@@ -2691,8 +2691,20 @@ window.saveEditGame = async function(gameId) {
     const before = g ? { date: g.date||'', day: g.day||'', time: g.time||'', field: g.field||'', date_iso: g.date_iso||'' } : null;
     const after  = { date: dateDisplay, day: dayDisplay, time: timeDisplay, field: field||'', date_iso: dateIso||'' };
 
-    await updateDoc(doc(db, 'games', gameId), { date: dateDisplay, day: dayDisplay, time: timeDisplay, time_24: time24||'', date_iso: dateIso||'', field: field||'' });
-    if (g) { g.date = dateDisplay; g.day = dayDisplay; g.time = timeDisplay; g.time_24 = time24||''; g.date_iso = dateIso||''; g.field = field||''; }
+    // Auto-fill addr from the field. If captain changed the field, the
+    // address follows automatically — no manual entry needed.
+    const FIELD_LOC = (window.LEAGUE_CONFIG && window.LEAGUE_CONFIG.fieldLocations) || {};
+    const prevCanonical = before ? (FIELD_LOC[before.field] || '') : '';
+    const userKeptCustomAddr = (g?.addr || '') && (g?.addr || '') !== prevCanonical;
+    let newAddr = g?.addr || '';
+    if (field !== before?.field && !userKeptCustomAddr) {
+      newAddr = FIELD_LOC[field] || newAddr || '';
+    } else if (!newAddr && FIELD_LOC[field]) {
+      newAddr = FIELD_LOC[field];
+    }
+    const updatePayload = { date: dateDisplay, day: dayDisplay, time: timeDisplay, time_24: time24||'', date_iso: dateIso||'', field: field||'', addr: newAddr };
+    await updateDoc(doc(db, 'games', gameId), updatePayload);
+    if (g) { g.date = dateDisplay; g.day = dayDisplay; g.time = timeDisplay; g.time_24 = time24||''; g.date_iso = dateIso||''; g.field = field||''; g.addr = newAddr; }
 
     // Build a human-readable diff for the commissioner.
     let summary = '';
