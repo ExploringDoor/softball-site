@@ -162,8 +162,18 @@ window.loadGames = async function() {
     TEAM_LIST.sort((a,b) => a.name.localeCompare(b.name));
     out(`Loaded ${tSnap.docs.length} teams`);
 
-    const gSnap = await getDocs(query(collection(db, 'games'), orderBy('wk')));
-    GAMES = gSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // No orderBy on the Firestore query — if any game doc has wk stored
+    // as a string ("2") instead of an integer (2), Firestore's mixed-type
+    // ordering silently drops those docs from the result. Pull all games
+    // unsorted, then coerce wk to a number client-side and sort. (Adam
+    // hit this exact bug 2026-04-26: 4 games with string wk were missing
+    // from the calendar sync until I patched the underlying data.)
+    const gSnap = await getDocs(collection(db, 'games'));
+    GAMES = gSnap.docs.map(d => {
+      const data = d.data();
+      const wkN = parseInt(data.wk);
+      return { id: d.id, ...data, wk: Number.isFinite(wkN) ? wkN : 999 };
+    }).sort((a, b) => (a.wk || 0) - (b.wk || 0));
     out(`Loaded ${GAMES.length} games\n`);
 
     // If the admin didn't pass ?games=, look for captain-queued edits in
