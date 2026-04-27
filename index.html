@@ -4590,11 +4590,11 @@ function loadFallbackData() {
     {id:'bos',color:'#94a3b8',name:'Beth Or Silver',short:'BOS',w:6,l:9,pct:.400,gb:'3',streak:'—',rs:105,ra:132},
   ];
   ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
+  // Past games removed from this fallback (Apr 14/16/21/23) since they
+  // would render as "upcoming" if this list ever ships to a user. The
+  // fallback only fires when Firestore is unreachable; in that case we
+  // want to show the next thing on the schedule, not a stale past game.
   SCHEDULE_PREVIEW = [
-{wk:1,date:'Apr 14',day:'Tue',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'BOB',home:'GOLD',as:null,hs:null,done:false},
-    {wk:1,date:'Apr 16',day:'Thu',time:'7:00 PM',field:'Mondauk 5',addr:'1451 Dillon Rd, Ambler PA',away:'KI',home:'TSG',as:null,hs:null,done:false},
-    {wk:2,date:'Apr 21',day:'Tue',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'BA',home:'BOB',as:null,hs:null,done:false},
-    {wk:2,date:'Apr 23',day:'Thu',time:'7:00 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',away:'KI',home:'TBIMC',as:null,hs:null,done:false},
     {wk:3,date:'Apr 28',day:'Tue',time:'7:00 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'OA',home:'TSMC',as:null,hs:null,done:false},
     {wk:3,date:'Apr 30',day:'Thu',time:'7:00 PM',field:'Plymouth',addr:'2919 Walton Rd, Plymouth Mtg PA',away:'BA',home:'BOR',as:null,hs:null,done:false},
     {wk:4,date:'May 5',day:'Tue',time:'7:00 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'TSBKA',home:'TSMC',as:null,hs:null,done:false},
@@ -7240,7 +7240,7 @@ function renderScores(){
   if(view==='scores'){
     const doneWks=allWks.filter(w=>w.games.some(g=>g.done));
     if(!doneWks.length){
-      wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⚾</div><div style="font-size:20px;font-weight:700;margin-bottom:8px">Season Starts April 14!</div><div style="color:var(--muted);font-size:14px">No completed games yet. Check the Schedule tab for upcoming games.</div></div>';
+      wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⚾</div><div style="font-size:20px;font-weight:700;margin-bottom:8px">No final scores yet</div><div style="color:var(--muted);font-size:14px">Once a game wraps up it will show here. Check the Schedule tab for upcoming games.</div></div>';
       return;
     }
     const off=Math.min(Math.max(0,weekOffset<0?doneWks.length-1:weekOffset),doneWks.length-1);

@@ -1033,7 +1033,8 @@ select.form-input{cursor:pointer}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-outline" onclick="exportStandingsPDF()" title="Download standings as PDF">📄 Export PDF</button>
-          <button class="btn btn-warning" onclick="autoCalcStandings()">Auto-Calculate</button>
+          <button class="btn btn-warning" onclick="autoCalcStandings()" title="Recompute team W-L-RS-RA from final games">Auto-Calculate</button>
+          <button class="btn btn-warning" onclick="autoCalcPlayerStats()" title="Recompute every players AB/H/HR/RBI/AVG/OPS by summing all final box scores">Recalc Player Stats</button>
           <button class="btn btn-success" onclick="saveAllStandings()">Save All</button>
         </div>
       </div>
@@ -4424,7 +4425,10 @@ window.saveBoxScore = async function(markFinal) {
     await logActivity('Box Score',`${getTeamName(bsGameData.away)} ${awayR} - ${getTeamName(bsGameData.home)} ${homeR}${markFinal?' (Final)':' (Draft)'}`);
     // Push only on transition to final.
     if (markFinal && !wasDone && g) sendScorePush(g, awayR, homeR);
-    if(markFinal) await recalcStandingsFromGames();
+    if(markFinal) {
+      await recalcStandingsFromGames();
+      await recalcPlayerStatsFromBoxScores();
+    }
     closeBoxScore(); renderScores(); renderDashboard(); renderStandings();
   } catch(e) { toast('Failed: '+e.message,'error'); }
 };
@@ -4805,6 +4809,97 @@ let bsAwayScoreOverride = null, bsHomeScoreOverride = null;
 // ═══════════════════════════════════════════════════════════════════
 // STANDINGS AUTO-CALCULATE
 // ═══════════════════════════════════════════════════════════════════
+// Sum every batter line from every final box score and write the totals
+// back to each player doc. Without this the Stats / Leaders pages stay
+// at zeros even after games are marked final, because saveBoxScore only
+// touches the box_scores collection — not the players collection where
+// the season-to-date snapshot lives. Called from saveBoxScore after
+// markFinal, plus exposed as a manual recalc button.
+async function recalcPlayerStatsFromBoxScores() {
+  // Pull all box scores. Both the master per-game doc and any per-team
+  // captain submissions could exist; we prefer the master (no team_id
+  // field) when both are present for the same game.
+  let bsSnap;
+  try { bsSnap = await getDocs(collection(db, 'box_scores')); }
+  catch(e) { console.warn('recalcPlayerStats: box_scores read failed', e); return; }
+
+  // Group by game_id, prefer doc without team_id (= the master).
+  const byGame = {};
+  bsSnap.docs.forEach(d => {
+    const x = d.data();
+    const gid = x.game_id || d.id;
+    if (!byGame[gid] || (!x.team_id && byGame[gid]._hasTeamId)) {
+      byGame[gid] = { ...x, _hasTeamId: !!x.team_id };
+    }
+  });
+
+  // Aggregator: name → totals. Names are the primary join key (player
+  // doc has p.name, box-score line has line.name). Tie-break by team
+  // when the same name appears on multiple rosters.
+  const totalsByKey = {};
+  function addLine(line, teamId) {
+    if (!line || !line.name) return;
+    const key = (line.name || '').trim() + '||' + (teamId || '');
+    if (!totalsByKey[key]) {
+      totalsByKey[key] = { name:line.name.trim(), team:teamId||'', gp:0, ab:0, r:0, h:0, s:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
+    }
+    const x = totalsByKey[key];
+    x.gp += 1;
+    x.ab += parseInt(line.ab) || 0;
+    x.r  += parseInt(line.r)  || 0;
+    x.h  += parseInt(line.h)  || 0;
+    x.s  += parseInt(line.s)  || 0;
+    x.d  += parseInt(line.d)  || 0;
+    x.t  += parseInt(line.t)  || 0;
+    x.hr += parseInt(line.hr) || 0;
+    x.rbi+= parseInt(line.rbi)|| 0;
+    x.bb += parseInt(line.bb) || 0;
+    x.so += parseInt(line.so) || parseInt(line.k) || 0;
+  }
+
+  Object.values(byGame).forEach(bs => {
+    // Skip score-only / draft entries that don't have actual batter lines.
+    if (bs.status && bs.status !== 'final') return;
+    (bs.away_lineup || []).forEach(line => addLine(line, bs.away));
+    (bs.home_lineup || []).forEach(line => addLine(line, bs.home));
+  });
+
+  // Match each aggregated key to a player doc by (name, team) pair.
+  // Reset every player to zeros first, then write totals; that handles
+  // the case where a player appeared in last week's box score but DNP'd
+  // this week — their season totals stay frozen at last week's, not stale.
+  const writes = [];
+  for (const p of (PLAYERS || [])) {
+    const key = (p.name || '').trim() + '||' + (p.team || '');
+    const t = totalsByKey[key];
+    const ab = t?.ab || 0;
+    const h  = t?.h  || 0;
+    const bb = t?.bb || 0;
+    const d  = t?.d  || 0;
+    const tr = t?.t  || 0;
+    const hr = t?.hr || 0;
+    const sing = h - d - tr - hr; // derived singles in case `s` wasn't recorded
+    const avg = ab > 0 ? h / ab : 0;
+    const obp = (ab + bb) > 0 ? (h + bb) / (ab + bb) : 0;
+    const slg = ab > 0 ? (sing + 2*d + 3*tr + 4*hr) / ab : 0;
+    const ops = obp + slg;
+    const update = {
+      gp: t?.gp || 0,
+      ab, r: t?.r || 0, h,
+      s: sing, d, t: tr, hr,
+      rbi: t?.rbi || 0, bb, so: t?.so || 0,
+      avg: parseFloat(avg.toFixed(3)),
+      obp: parseFloat(obp.toFixed(3)),
+      slg: parseFloat(slg.toFixed(3)),
+      ops: parseFloat(ops.toFixed(3)),
+    };
+    writes.push(updateDoc(doc(db, 'players', p.id), update).then(() => {
+      Object.assign(p, update);
+    }).catch(e => console.warn('player update failed', p.id, e)));
+  }
+  await Promise.all(writes);
+}
+
 async function recalcStandingsFromGames() {
   const stats = {};
   TEAMS.forEach(t => { stats[t.id] = { w:0, l:0, t:0, rs:0, ra:0, results:[] }; });
@@ -4879,6 +4974,18 @@ window.autoCalcStandings = async function() {
     renderStandings();
     renderDashboard();
     toast('Standings recalculated!');
+  } catch(e) {
+    toast('Failed: ' + e.message, 'error');
+  }
+};
+
+window.autoCalcPlayerStats = async function() {
+  if (!confirm('Recompute every player\'s season totals (AB/H/HR/RBI/AVG/OPS) by summing all final box scores? This will overwrite current player stats.')) return;
+  try {
+    toast('Recalculating player stats...', 'info');
+    await recalcPlayerStatsFromBoxScores();
+    await logActivity('Stats', 'Auto-recomputed all player stats from box scores');
+    toast('Player stats recalculated! Refresh to see updates.');
   } catch(e) {
     toast('Failed: ' + e.message, 'error');
   }
