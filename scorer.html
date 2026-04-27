@@ -6905,148 +6905,224 @@ async function saveBoxScore(isFinal = false) {
       status:        'final',
     };
 
-    // Which side is this scorer representing? (null = admin/unknown)
+    // ─────────────────────────────────────────────────────────────────────
+    // 3-LANE SCORING MODEL (Adam ask 2026-04-26):
+    //   Each scorer (admin / home / away) writes ONLY to their own
+    //   `score_submissions/{gameId}_{role}` lane. They cannot clobber
+    //   each other under any circumstance.
+    //
+    //   The canonical public `box_scores/{gameId}` doc is REBUILT from
+    //   captain submissions only, by recomputeCanonicalBoxScore() below.
+    //   Admin's lane is private — never affects the public box. Admin
+    //   uses a "Publish my version as final" button in admin.html to
+    //   override the captain merge.
+    // ─────────────────────────────────────────────────────────────────────
     const scoringSide = G.scoringTeam === G.awayTeam.id ? 'away'
                       : G.scoringTeam === G.homeTeam.id ? 'home'
-                      : null;
+                      : 'admin';
 
-    // ── Non-final (mid-game checkpoint): simple overwrite, no dual-sub logic ──
+    // ── Mid-game draft (not final): write to this scorer's lane only.
+    // Public live score is updated on the games doc separately by
+    // saveScore(). The box_scores canonical doc stays untouched until
+    // a captain commits a final submission.
     if (!isFinal) {
-      // Guard: never let a mid-game draft clobber a finalized box score.
-      // If either captain has already submitted (first_submitter set) or the
-      // doc is already marked final, skip the checkpoint write entirely.
-      const draftGuardSnap = await getDoc(doc(db, 'box_scores', G.gameId));
-      if (draftGuardSnap.exists()) {
-        const dg = draftGuardSnap.data() || {};
-        if (dg.first_submitter || dg.status === 'final' || dg.home_submission || dg.away_submission) {
-          console.info('Skipping mid-game draft save: finalized box score already exists');
-          return { firstSubmission: false, skippedDraftOverFinal: true };
-        }
-      }
-      await setDoc(doc(db, 'box_scores', G.gameId), {
+      await setDoc(doc(db, 'score_submissions', `${G.gameId}_${scoringSide}`), {
         ...fullData,
-        status: 'draft',
-        created_at: new Date().toISOString(),
+        submitting_side: scoringSide,
+        submitting_team: scoringSide === 'admin' ? 'admin' : G.scoringTeam,
+        submitted_at:    new Date().toISOString(),
+        team_id:         scoringSide === 'admin' ? 'admin' : (G.scoringTeam || ''),
+        team_name:       scoringSide === 'admin' ? 'Admin' : (scoringSide === 'away' ? G.awayTeam.name : G.homeTeam.name) || '',
+        submitted_by:    scoringSide === 'admin' ? 'Admin' : (scoringSide === 'away' ? G.awayTeam.name : G.homeTeam.name) || '',
+        wk:              G.wk || 0,
+        timestamp:       Timestamp.now(),
+        status:          'draft',
+        is_final:        false,
+        has_boxscore:    true,
       });
       return { firstSubmission: true };
     }
 
-    // ── Step 1: Save this team's individual submission record ──────────────
-    if (scoringSide) {
-      const submittingTeamObj = scoringSide === 'away' ? G.awayTeam : G.homeTeam;
-      await setDoc(doc(db, 'score_submissions', `${G.gameId}_${scoringSide}`), {
-        ...fullData,
-        submitting_side: scoringSide,
-        submitting_team: G.scoringTeam,
-        submitted_at:    new Date().toISOString(),
-        // Fields captain.html filters on (MY_SUBMISSIONS = submissions.filter(s => s.team_id === captainData.team_id))
-        team_id:         G.scoringTeam || submittingTeamObj.id || '',
-        team_name:       submittingTeamObj.name || submittingTeamObj.short || '',
-        submitted_by:    submittingTeamObj.name || submittingTeamObj.short || '',
-        wk:              G.wk || 0,
-        timestamp:       Timestamp.now(),
-        status:          'approved',
-        has_boxscore:    true,
-      });
+    // ── Final submission: write to this scorer's lane.
+    const submittingTeamObj = scoringSide === 'away' ? G.awayTeam
+                            : scoringSide === 'home' ? G.homeTeam
+                            : null;
+    await setDoc(doc(db, 'score_submissions', `${G.gameId}_${scoringSide}`), {
+      ...fullData,
+      submitting_side: scoringSide,
+      submitting_team: scoringSide === 'admin' ? 'admin' : G.scoringTeam,
+      submitted_at:    new Date().toISOString(),
+      team_id:         scoringSide === 'admin' ? 'admin' : (G.scoringTeam || submittingTeamObj?.id || ''),
+      team_name:       scoringSide === 'admin' ? 'Admin' : (submittingTeamObj?.name || submittingTeamObj?.short || ''),
+      submitted_by:    scoringSide === 'admin' ? 'Admin' : (submittingTeamObj?.name || submittingTeamObj?.short || ''),
+      wk:              G.wk || 0,
+      timestamp:       Timestamp.now(),
+      status:          scoringSide === 'admin' ? 'admin_final' : 'final',
+      is_final:        true,
+      has_boxscore:    true,
+    });
+
+    // Captain final → rebuild the public canonical from current home/away
+    // submissions. Admin final → does NOT touch the canonical (admin lane
+    // is private; admin must explicitly publish from admin.html).
+    if (scoringSide !== 'admin') {
+      const r = await recomputeCanonicalBoxScore(G.gameId);
+      return { firstSubmission: r.firstSubmission, hasDiscrepancy: r.hasDiscrepancy };
     }
-
-    // ── Step 2: Upsert the canonical box_score doc ─────────────────────────
-    const existingSnap = await getDoc(doc(db, 'box_scores', G.gameId));
-    const existing     = existingSnap.exists() ? existingSnap.data() : null;
-
-    // Treat this as a first submission only if no prior submitter is recorded
-    // (captain.html writes status 'approved'/'pending', not 'final', so we can't
-    // key off status alone), the scorer is unknown (admin override), or we're
-    // resubmitting our own side.
-    if (!existing || !existing.first_submitter || existing.first_submitter === scoringSide || !scoringSide) {
-      // First submission (or admin override, or same role resubmitting)
-      await setDoc(doc(db, 'box_scores', G.gameId), {
-        ...fullData,
-        first_submitter:  scoringSide || 'admin',
-        has_discrepancy:  existing?.has_discrepancy || false,
-        discrepancies:    existing?.discrepancies || [],
-        created_at:       existing?.created_at || new Date().toISOString(),
-      });
-      return { firstSubmission: !existing };
-
-    } else {
-      // ── Second submission: merge + discrepancy detection ────────────────
-      const discrepancies = [];
-
-      // Score discrepancy?
-      if (G.awayScore !== (existing.away_score || 0) ||
-          G.homeScore !== (existing.home_score || 0)) {
-        discrepancies.push({
-          type:             'score',
-          first_submitter:  existing.first_submitter || 'unknown',
-          second_submitter: scoringSide,
-          first_away:       existing.away_score,
-          first_home:       existing.home_score,
-          second_away:      G.awayScore,
-          second_home:      G.homeScore,
-        });
-      }
-
-      // Batting discrepancies — compare BOTH teams' lineups between first and
-      // second submitter so the stats-differ view shows conflicts for every
-      // player on both sides, not just the second submitter's own team.
-      ['away', 'home'].forEach(side => {
-        const firstLineup  = existing[`${side}_lineup`] || [];
-        const secondLineup = fullData[`${side}_lineup`] || [];
-        const firstByName  = {};
-        firstLineup.forEach(p => { firstByName[p.name] = p; });
-        secondLineup.forEach(p => {
-          const prev = firstByName[p.name];
-          if (!prev) return; // new player — no conflict
-          const keys  = ['ab', 'h', 'r', 'rbi', 'bb'];
-          const diffs = keys.filter(k => (p[k] || 0) !== (prev[k] || 0));
-          if (diffs.length > 0) {
-            discrepancies.push({
-              type:             'batting',
-              player:           p.name,
-              side:             side,
-              first_submitter:  existing.first_submitter || 'unknown',
-              second_submitter: scoringSide,
-              first:  Object.fromEntries(keys.map(k => [k, prev[k] || 0])),
-              second: Object.fromEntries(keys.map(k => [k, p[k]   || 0])),
-            });
-          }
-        });
-      });
-
-      // Merge: override the scoring team's side with their own data — lineup,
-      // pitchers, team score, and that half of the linescore (each captain is
-      // authoritative for their own side).
-      const _mergePayload = {
-        [`${scoringSide}_lineup`]:   fullData[`${scoringSide}_lineup`],
-        [`${scoringSide}_pitchers`]: fullData[`${scoringSide}_pitchers`],
-        [`${scoringSide}_score`]:    fullData[`${scoringSide}_score`],
-        second_submitter:     scoringSide,
-        has_discrepancy:      discrepancies.length > 0,
-        discrepancies:        discrepancies,
-        second_submitted_at:  new Date().toISOString(),
-      };
-      // Linescore: write both the nested (scorer) and flat (captain) shapes so
-      // every reader picks it up correctly.
-      const _lsForSide = fullData.linescores?.[scoringSide] ?? fullData[`${scoringSide}_linescore`];
-      if (_lsForSide) {
-        _mergePayload[`linescores.${scoringSide}`] = _lsForSide;
-        _mergePayload[`${scoringSide}_linescore`]  = _lsForSide;
-      }
-      await updateDoc(doc(db, 'box_scores', G.gameId), _mergePayload);
-
-      // Flag game doc so captain portal can show discrepancy without loading box_scores
-      if (discrepancies.length > 0) {
-        await updateDoc(doc(db, 'games', G.gameId), {
-          has_discrepancy: true,
-        }).catch(() => {});
-      }
-      return { firstSubmission: false, hasDiscrepancy: discrepancies.length > 0 };
-    }
+    return { firstSubmission: false, adminOnly: true };
   } catch (err) {
     console.warn('saveBoxScore error:', err);
     return { firstSubmission: true }; // safe default on error
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Recompute the canonical public box_scores/{gameId} from the captain
+// submission lanes. Admin's lane is NOT consulted here — admin uses a
+// separate "Publish as final" button in admin.html to override.
+//
+// Rules:
+//   • Only home submitted → home is single source of truth (their lineup,
+//     their scores, their linescore for both sides).
+//   • Only away submitted → away is single source of truth.
+//   • Both submitted → each captain authoritative for their own side
+//     (home_lineup from home, away_lineup from away, etc.). Score
+//     discrepancies + cross-checked batter line discrepancies are recorded
+//     on the canonical doc for admin review.
+//
+// Returns: { firstSubmission: bool, hasDiscrepancy: bool, mode: 'single'|'merged' }
+// ─────────────────────────────────────────────────────────────────────────
+async function recomputeCanonicalBoxScore(gameId) {
+  const homeSnap = await getDoc(doc(db, 'score_submissions', `${gameId}_home`));
+  const awaySnap = await getDoc(doc(db, 'score_submissions', `${gameId}_away`));
+  const home = homeSnap.exists() ? homeSnap.data() : null;
+  const away = awaySnap.exists() ? awaySnap.data() : null;
+
+  if (!home && !away) return { firstSubmission: true, hasDiscrepancy: false, mode: 'none' };
+
+  const existingSnap = await getDoc(doc(db, 'box_scores', gameId));
+  const existing = existingSnap.exists() ? existingSnap.data() : null;
+  const wasFirst = !existing;
+
+  // Single-source mode: only one captain submitted; they own everything.
+  if (home && !away) {
+    const canonical = {
+      ...home,
+      single_source: 'home',
+      first_submitter: 'home',
+      has_discrepancy: false,
+      discrepancies: [],
+      status: 'final',
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    delete canonical.submitting_side;
+    delete canonical.submitting_team;
+    delete canonical.submitted_at;
+    delete canonical.team_id;
+    delete canonical.team_name;
+    delete canonical.submitted_by;
+    delete canonical.is_final;
+    await setDoc(doc(db, 'box_scores', gameId), canonical);
+    await updateDoc(doc(db, 'games', gameId), { has_discrepancy: false }).catch(()=>{});
+    return { firstSubmission: wasFirst, hasDiscrepancy: false, mode: 'single' };
+  }
+  if (away && !home) {
+    const canonical = {
+      ...away,
+      single_source: 'away',
+      first_submitter: 'away',
+      has_discrepancy: false,
+      discrepancies: [],
+      status: 'final',
+      created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    delete canonical.submitting_side;
+    delete canonical.submitting_team;
+    delete canonical.submitted_at;
+    delete canonical.team_id;
+    delete canonical.team_name;
+    delete canonical.submitted_by;
+    delete canonical.is_final;
+    await setDoc(doc(db, 'box_scores', gameId), canonical);
+    await updateDoc(doc(db, 'games', gameId), { has_discrepancy: false }).catch(()=>{});
+    return { firstSubmission: wasFirst, hasDiscrepancy: false, mode: 'single' };
+  }
+
+  // Both captains submitted — per-side merge + discrepancy detection.
+  const firstSubmitter = (home.submitted_at < away.submitted_at) ? 'home' : 'away';
+  const secondSubmitter = firstSubmitter === 'home' ? 'away' : 'home';
+  const discrepancies = [];
+
+  // Score disagreement: each captain reports both teams' final scores.
+  if ((home.away_score || 0) !== (away.away_score || 0) ||
+      (home.home_score || 0) !== (away.home_score || 0)) {
+    discrepancies.push({
+      type: 'score',
+      home_captain: { away: home.away_score || 0, home: home.home_score || 0 },
+      away_captain: { away: away.away_score || 0, home: away.home_score || 0 },
+    });
+  }
+
+  // Batting cross-check: compare each side's lineup as recorded by both captains.
+  ['away', 'home'].forEach(side => {
+    const homeView = home[`${side}_lineup`] || [];
+    const awayView = away[`${side}_lineup`] || [];
+    const homeByName = {}; homeView.forEach(p => { homeByName[p.name] = p; });
+    awayView.forEach(p => {
+      const prev = homeByName[p.name];
+      if (!prev) return;
+      const keys = ['ab','h','r','rbi','bb'];
+      const diffs = keys.filter(k => (p[k]||0) !== (prev[k]||0));
+      if (diffs.length > 0) {
+        discrepancies.push({
+          type: 'batting', side, player: p.name,
+          home_captain: Object.fromEntries(keys.map(k => [k, prev[k]||0])),
+          away_captain: Object.fromEntries(keys.map(k => [k, p[k]||0])),
+        });
+      }
+    });
+  });
+
+  const canonical = {
+    game_id: home.game_id,
+    away: home.away,
+    home: home.home,
+    // Each captain authoritative for their own side
+    home_lineup:   home.home_lineup,
+    home_pitchers: home.home_pitchers,
+    home_score:    home.home_score,
+    away_lineup:   away.away_lineup,
+    away_pitchers: away.away_pitchers,
+    away_score:    away.away_score,
+    // Linescores: each captain's view of their own side's innings
+    linescores: {
+      home: home.linescores?.home || home.home_linescore || [],
+      away: away.linescores?.away || away.away_linescore || [],
+    },
+    home_linescore: home.linescores?.home || home.home_linescore || [],
+    away_linescore: away.linescores?.away || away.away_linescore || [],
+    away_errors: away.away_errors || 0,
+    home_errors: home.home_errors || 0,
+    potg_name: home.potg_name || away.potg_name || '',
+    potg_team: home.potg_team || away.potg_team || '',
+    recap: home.recap || away.recap || '',
+    first_submitter: firstSubmitter,
+    second_submitter: secondSubmitter,
+    has_discrepancy: discrepancies.length > 0,
+    discrepancies,
+    single_source: false,
+    status: 'final',
+    wk: home.wk || away.wk || 0,
+    created_at: existing?.created_at || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  await setDoc(doc(db, 'box_scores', gameId), canonical);
+  await updateDoc(doc(db, 'games', gameId), {
+    has_discrepancy: discrepancies.length > 0,
+  }).catch(()=>{});
+  return { firstSubmission: wasFirst, hasDiscrepancy: discrepancies.length > 0, mode: 'merged' };
 }
 
 // ===== START GAME =====
