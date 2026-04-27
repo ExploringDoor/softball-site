@@ -700,6 +700,21 @@ a{color:inherit;text-decoration:none}
   <div class="loading">Loading…</div>
 </div>
 
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const _fbApp = initializeApp(window.LEAGUE_CONFIG.firebase);
+const _fbAuth = getAuth(_fbApp);
+const _fbDb = getFirestore(_fbApp);
+setPersistence(_fbAuth, browserLocalPersistence).catch(()=>{});
+
+// Expose for the legacy non-module script below this block.
+window._fbAuth = _fbAuth;
+window._fbDb = _fbDb;
+window._fbDeps = { doc, getDoc, setDoc, onAuthStateChanged };
+</script>
 <script>
 // /api bindings — the same endpoints the chip uses. This page reads
 // the unread list (server-side) and also keeps a client-side archive
@@ -797,16 +812,88 @@ function archiveSnapshot(items) {
       changed = true;
     }
   });
-  if (changed) saveArchive(Array.from(byId.values()));
+  if (changed) {
+    saveArchive(Array.from(byId.values()));
+    pushArchiveToFirestore(); // best-effort cross-device sync
+  }
 }
 function removeFromArchive(id) {
   if (!id) return;
   const arr = loadArchive().filter(it => it.id !== id);
   saveArchive(arr);
+  pushArchiveToFirestore();
 }
 function clearArchive() {
   try { localStorage.removeItem(ARCHIVE_KEY); } catch (_) {}
+  pushArchiveToFirestore();
 }
+
+// ── Cross-device archive sync (Firestore) ──────────────────────────────
+// Adam reported: archived notifications visible on phone don't show up on
+// desktop and vice-versa. The archive used to live only in per-device
+// localStorage. Now: when the user is signed in via Firebase Auth, we
+// also mirror the archive to inbox_archive/{auth_uid} in Firestore.
+// On every load, we pull the remote, merge with local, and write the
+// union back. So both phone and desktop end up with the same list.
+let _ARCHIVE_AUTH_UID = null;
+let _ARCHIVE_PUSH_TIMER = null;
+
+async function pullArchiveFromFirestore() {
+  if (!_ARCHIVE_AUTH_UID || !window._fbDeps) return;
+  try {
+    const { doc, getDoc } = window._fbDeps;
+    const snap = await getDoc(doc(window._fbDb, 'inbox_archive', _ARCHIVE_AUTH_UID));
+    if (!snap.exists()) return;
+    const remote = (snap.data() || {}).items || [];
+    if (!Array.isArray(remote) || !remote.length) return;
+    // Merge with local; remote items we don't have locally get added.
+    const local = loadArchive();
+    const byId = new Map(local.map(it => [it.id, it]));
+    let merged = false;
+    remote.forEach(it => {
+      if (!it || !it.id) return;
+      if (!byId.has(it.id)) { byId.set(it.id, it); merged = true; }
+    });
+    if (merged) {
+      saveArchive(Array.from(byId.values()));
+      // Re-render archive view if user is on it.
+      if (typeof CURRENT_TAB !== 'undefined' && CURRENT_TAB === 'archive') render();
+    }
+  } catch (e) { console.warn('archive pull failed:', e); }
+}
+
+function pushArchiveToFirestore() {
+  if (!_ARCHIVE_AUTH_UID || !window._fbDeps) return;
+  // Coalesce rapid writes (multiple archives in a row) into one Firestore
+  // round-trip. 800ms debounce.
+  clearTimeout(_ARCHIVE_PUSH_TIMER);
+  _ARCHIVE_PUSH_TIMER = setTimeout(async () => {
+    try {
+      const { doc, setDoc } = window._fbDeps;
+      const items = loadArchive();
+      await setDoc(doc(window._fbDb, 'inbox_archive', _ARCHIVE_AUTH_UID), {
+        items, updated_at: new Date().toISOString(),
+      });
+    } catch (e) { console.warn('archive push failed:', e); }
+  }, 800);
+}
+
+// Wire up: when Firebase Auth knows the user, capture their uid, pull
+// remote archive, then push local up to merge.
+function _initArchiveSync() {
+  if (!window._fbAuth || !window._fbDeps) {
+    // Module script may not have run yet; retry shortly.
+    setTimeout(_initArchiveSync, 200);
+    return;
+  }
+  window._fbDeps.onAuthStateChanged(window._fbAuth, async (user) => {
+    if (!user) { _ARCHIVE_AUTH_UID = null; return; }
+    _ARCHIVE_AUTH_UID = user.uid;
+    await pullArchiveFromFirestore();
+    pushArchiveToFirestore();
+  });
+}
+_initArchiveSync();
 
 function ago(ts) {
   const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1000));
