@@ -976,13 +976,15 @@ body.dark .nav-team-name{color:#e0e0e0}
    scrollable content on iOS PWA. */
 body.dvsl-modal-open #dvsl-tabbar{display:none!important}
 body.dvsl-modal-open{padding-bottom:0!important}
-/* Hide the desktop nav (HOME/SCORES/SCHEDULE/etc.) whenever a modal
-   is open — Adam ask 4/27/26: the icons "shouldn't even be there"
-   when reading a box score / player profile. Uses :has() so we don't
-   need any JS body-class toggling. Mobile already hides .nav-links,
-   but keep mob-menu rule too in case it was open behind the modal. */
-body:has(.modal-bg.open) .nav,
-body:has(.modal-bg.open) .mob-menu{display:none!important}
+/* Hide the desktop nav (HOME/SCORES/SCHEDULE/etc.) and the mobile
+   menu whenever ANY modal is open — Adam ask 4/27/26: nav icons
+   shouldn't be there over a box score / player profile / matchup
+   preview popup. Uses body.dvsl-modal-open which is toggled by the
+   MutationObserver in _syncTickerForModals (covers both #modal-bg
+   and #scPop opening). Replaces an earlier :has() approach that
+   wasn't reliable across all browsers/SW caches. */
+body.dvsl-modal-open .nav,
+body.dvsl-modal-open .mob-menu{display:none!important}
 .modal-close{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase;background:rgba(0,0,0,.04);border:1px solid var(--border2);color:var(--white);border-radius:8px;padding:10px 20px;cursor:pointer;transition:all .2s;min-height:44px;min-width:80px}
 .modal-close:hover{border-color:var(--gold);color:var(--gold)}
 .modal-inner{padding:28px 32px 36px}
