@@ -2061,7 +2061,96 @@ async function renderPlayerAvail() {
 
   el.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:14px">Marking as: <span style="color:var(--navy)">${esc(player?.name||'')}</span></div>`
     + (upcoming.length ? gameBlock(upcoming, 'Upcoming Games') : '<div class="empty">No upcoming games scheduled.</div>')
+    + `<div id="player-team-rollcall"></div>`
     + (recent.length ? gameBlock(recent, 'Recent Games') : '');
+
+  // Team-wide RSVP roll-call (Adam ask 4/28/26 — players want to see who
+  // else on their team is in / out / maybe / waiting for upcoming games,
+  // same view captains have in their dashboard).
+  renderPlayerTeamRollCall(upcoming);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER — Team-wide RSVP roll-call (read-only)
+// ═══════════════════════════════════════════════════════════════════
+// Mirrors the captain-side renderCaptainUpcomingAttendance display
+// (./profile.html ~ line 2959) but read-only — players don't get the
+// Remind / edit affordances, just visibility into who's coming.
+async function renderPlayerTeamRollCall(upcomingGames) {
+  const el = document.getElementById('player-team-rollcall');
+  if (!el || !MY_TEAM) return;
+  if (!upcomingGames.length) { el.innerHTML = ''; return; }
+
+  // Full team roster sorted by jersey
+  const roster = (MY_PLAYERS || [])
+    .slice()
+    .sort((a,b) => (parseInt(a.num)||999) - (parseInt(b.num)||999));
+
+  el.innerHTML = `<div class="panel-title" style="margin-top:24px">Team RSVP Roll-Call</div>
+    <div style="font-size:12px;color:var(--muted);margin:-4px 0 10px">Who's in, out, maybe, or hasn't responded yet for each upcoming game.</div>
+    <div class="loading"><div class="spinner spinner-sm"></div> Loading…</div>`;
+
+  try {
+    const snap = await getDocs(query(collection(db, 'availability'),
+      where('team_id', '==', MY_TEAM.id)));
+    // game_id → playerId → { status, name }
+    const byGame = {};
+    snap.docs.forEach(d => {
+      const a = d.data();
+      if (!byGame[a.game_id]) byGame[a.game_id] = {};
+      if (a.player_id) byGame[a.game_id][a.player_id] = { status: a.status, name: a.player_name };
+    });
+
+    const rows = upcomingGames.map(g => {
+      const oppId = g.away === MY_TEAM.id ? g.home : g.away;
+      const opp = ALL_TEAMS.find(t => t.id === oppId);
+      const oppName = opp?.short || opp?.name || oppId?.toUpperCase() || 'TBD';
+      const ha = g.home === MY_TEAM.id ? 'vs' : '@';
+      const resp = byGame[g.id] || {};
+      const yes = [], no = [], maybe = [], pending = [];
+      roster.forEach(p => {
+        const r = resp[p.id];
+        const nm = p.name || (r && r.name) || 'Player';
+        if (!r || !r.status) pending.push(nm);
+        else if (r.status === 'yes') yes.push(nm);
+        else if (r.status === 'no') no.push(nm);
+        else if (r.status === 'maybe') maybe.push(nm);
+        else pending.push(nm);
+      });
+      const col = (arr, label, color) =>
+        `<div style="flex:1;min-width:120px">
+           <div style="font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:${color};margin-bottom:6px">${label} (${arr.length})</div>
+           <div style="font-size:13px;line-height:1.55;color:#1a1a1a">${arr.length ? arr.map(esc).join('<br>') : '<span style="color:var(--muted);font-style:italic">—</span>'}</div>
+         </div>`;
+      return `<details class="game-card" style="display:block;padding:0;margin-bottom:10px">
+        <summary style="list-style:none;cursor:pointer;padding:12px 14px;display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+          <div style="font-weight:700;font-size:14px;color:var(--navy);flex:1;min-width:160px">Wk ${g.wk} · ${ha} ${esc(oppName)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px;font-weight:700">
+            <span style="background:rgba(34,197,94,.12);color:var(--green);padding:3px 8px;border-radius:4px">✓ ${yes.length}/${roster.length}</span>
+            <span style="background:rgba(239,68,68,.12);color:var(--red);padding:3px 8px;border-radius:4px">✕ ${no.length}</span>
+            <span style="background:rgba(245,158,11,.12);color:#b45309;padding:3px 8px;border-radius:4px">? ${maybe.length}</span>
+            <span style="background:rgba(75,85,99,.12);color:#4b5563;padding:3px 8px;border-radius:4px">• ${pending.length}</span>
+          </div>
+        </summary>
+        <div style="padding:0 14px 14px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">${esc(g.date||'')} ${g.day?'· '+esc(g.day):''} ${g.time?'· '+esc(g.time):''} ${g.field?'· '+esc(g.field):''}</div>
+          <div style="display:flex;gap:14px;flex-wrap:wrap">
+            ${col(yes, '✓ In', 'var(--green)')}
+            ${col(maybe, '? Maybe', '#b45309')}
+            ${col(no, '✕ Out', 'var(--red)')}
+            ${col(pending, '• Waiting', '#4b5563')}
+          </div>
+        </div>
+      </details>`;
+    }).join('');
+
+    el.innerHTML = `<div class="panel-title" style="margin-top:24px">Team RSVP Roll-Call</div>
+      <div style="font-size:12px;color:var(--muted);margin:-4px 0 10px">Tap a game to expand. Who's in, out, maybe, or hasn't responded yet.</div>
+      ${rows}`;
+  } catch(e) {
+    el.innerHTML = `<div class="panel-title" style="margin-top:24px">Team RSVP Roll-Call</div>
+      <div class="empty">Could not load: ${esc(e.message)}</div>`;
+  }
 }
 
 function rebuildAvailRow(gameId) {
@@ -2090,6 +2179,10 @@ window.setAvail = async function(gameId, status) {
       _rsvps[gameId] = status;
     }
     rebuildAvailRow(gameId);
+    // Refresh the team roll-call so counts + your name update live in
+    // the "who's in / out / maybe" breakdown below.
+    const upcoming = MY_GAMES.filter(g => !g.done).sort((a,b) => (a.wk||0)-(b.wk||0));
+    renderPlayerTeamRollCall(upcoming);
   } catch(e) { toast('Could not save: ' + e.message, 'error'); }
 };
 
