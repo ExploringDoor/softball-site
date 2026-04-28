@@ -3015,25 +3015,6 @@ thead th.sorted-col .sarrow{opacity:1}
 
   </div>
 
-  <!-- WELCOME / FIRST-VISIT CARD -->
-  <!-- Shows on first home-page visit. Dismissed (✕) sets localStorage flag
-       so it never returns. Helps new players + captains find sign-up. -->
-  <div id="welcome-card" style="display:none;background:linear-gradient(135deg,#002D72 0%,#0048b3 100%);color:#fff;padding:22px 22px 24px;margin:0 auto;max-width:1100px;border-radius:0;position:relative;box-shadow:0 4px 18px rgba(0,45,114,.18)">
-    <button onclick="dismissWelcomeCard()" aria-label="Dismiss" style="position:absolute;top:10px;right:12px;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:18px;font-weight:700;width:30px;height:30px;border-radius:50%;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;transition:background .15s">×</button>
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-      <div style="font-size:32px;line-height:1;flex-shrink:0">👋</div>
-      <div style="flex:1;min-width:240px">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;letter-spacing:.04em;text-transform:uppercase;line-height:1">New to DVSL?</div>
-        <div style="font-size:14px;font-weight:500;opacity:.92;margin-top:4px;line-height:1.4">Create a profile to track your stats, mark availability, and get game notifications. Captains: log in to manage your roster, schedule, and submit scores.</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
-      <a href="profile.html" style="display:inline-flex;align-items:center;gap:6px;background:#F5C842;color:#0a1730;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;padding:10px 18px;border-radius:8px;text-decoration:none;transition:transform .15s">👤 Player Sign Up / Sign In</a>
-      <a href="captain.html" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;padding:10px 18px;border-radius:8px;text-decoration:none">⚾ Captain Dashboard</a>
-      <a href="registration.html" style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.18);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase;padding:10px 18px;border-radius:8px;text-decoration:none">✍️ Register a New Player</a>
-    </div>
-  </div>
-
   <div class="divider"></div>
 
   <!-- SCHEDULE + STANDINGS (two-column) -->
@@ -3624,6 +3605,25 @@ thead th.sorted-col .sarrow{opacity:1}
   <div class="modal-box">
     <div class="modal-bar"><button class="modal-close" onclick="closeModal()">✕ Close</button></div>
     <div class="modal-inner" id="modal-inner"></div>
+  </div>
+</div>
+
+<!-- WELCOME POPUP — first-visit modal, blocks the site until ✕'d.
+     Adam ask 4/27/26: was inline card, now a true blocking modal so
+     new visitors must acknowledge before browsing. Two CTAs: player
+     sign-up + captain dashboard. ✕ stores localStorage flag so it
+     never returns. Auto-skipped for users already signed in. -->
+<div id="welcome-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,8,20,.88);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px">
+  <div style="background:linear-gradient(135deg,#002D72 0%,#0048b3 100%);color:#fff;padding:32px 28px 28px;border-radius:18px;max-width:440px;width:100%;position:relative;box-shadow:0 24px 64px rgba(0,0,0,.5);text-align:center">
+    <button onclick="dismissWelcomeCard()" aria-label="Dismiss" style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:18px;font-weight:700;width:34px;height:34px;border-radius:50%;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center">×</button>
+    <div style="font-size:46px;line-height:1;margin-bottom:10px">👋</div>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;letter-spacing:.04em;text-transform:uppercase;line-height:1.05">Welcome to DVSL</div>
+    <div style="font-size:14.5px;font-weight:500;opacity:.92;margin-top:10px;line-height:1.5">Create a profile to track your stats, mark game availability, and get notifications. Captains can manage rosters, schedules, and submit scores.</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:22px">
+      <a href="profile.html" style="display:block;background:#F5C842;color:#0a1730;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:14px 18px;border-radius:10px;text-decoration:none">👤 Player Sign Up / Sign In</a>
+      <a href="captain.html" style="display:block;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.28);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:14px 18px;border-radius:10px;text-decoration:none">⚾ Captain Dashboard</a>
+    </div>
+    <div style="font-size:11px;font-weight:600;opacity:.55;margin-top:18px;letter-spacing:.05em;text-transform:uppercase">Tap × to continue browsing</div>
   </div>
 </div>
 <script>
@@ -6759,25 +6759,28 @@ function buildTicker2(){
 
 buildTicker2();
 
-// ═══ WELCOME CARD (first-visit) ═══
-// Shows the welcome card on /index.html for visitors who haven't
-// dismissed it. Stored in localStorage so it never returns once
-// closed. Hidden if user is signed in (they don't need a sign-up
-// pitch) — checks the auth_uid token used by profile.html.
+// ═══ WELCOME POPUP (first-visit, blocking) ═══
+// Modal overlay. Visitors must ✕ to dismiss before browsing. Stored
+// in localStorage so it never returns once closed. Auto-skipped for
+// users already signed in (checks dvsl-auth-uid token).
 (function _initWelcomeCard(){
   try {
     const dismissed = localStorage.getItem('dvsl_welcome_dismissed') === '1';
-    const signedIn = !!localStorage.getItem('dvsl-auth-uid'); // set by profile.html on login
-    const card = document.getElementById('welcome-card');
-    if (!card) return;
-    if (dismissed || signedIn) { card.style.display = 'none'; return; }
-    card.style.display = 'block';
+    const signedIn = !!localStorage.getItem('dvsl-auth-uid');
+    const overlay = document.getElementById('welcome-overlay');
+    if (!overlay) return;
+    if (dismissed || signedIn) { overlay.style.display = 'none'; return; }
+    overlay.style.display = 'flex';
+    // Lock body scroll while overlay is up so the dimmed page can't be
+    // scrolled behind the popup.
+    document.body.style.overflow = 'hidden';
   } catch(_) { /* localStorage blocked → don't show, fail safe */ }
 })();
 window.dismissWelcomeCard = function() {
   try { localStorage.setItem('dvsl_welcome_dismissed', '1'); } catch(_){}
-  const card = document.getElementById('welcome-card');
-  if (card) card.style.display = 'none';
+  const overlay = document.getElementById('welcome-overlay');
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
 };
 
 // ═══ SCORES JS ═══
