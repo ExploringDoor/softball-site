@@ -2022,17 +2022,70 @@ async function renderPlayerAvail() {
   const player = MY_PLAYERS.find(p => p.id === pid);
   el.innerHTML = '<div class="loading"><div class="spinner spinner-sm"></div> Loading…</div>';
 
+  // Pull THIS player's RSVPs and the FULL TEAM's RSVPs in parallel so we
+  // can render the per-game roll-call inline with each game card.
+  let teamRsvpsByGame = {};
   try {
-    const snap = await getDocs(query(collection(db, 'availability'),
-      where('player_id', '==', pid), where('team_id', '==', MY_TEAM.id)));
+    const [mySnap, teamSnap] = await Promise.all([
+      getDocs(query(collection(db, 'availability'),
+        where('player_id', '==', pid), where('team_id', '==', MY_TEAM.id))),
+      getDocs(query(collection(db, 'availability'),
+        where('team_id', '==', MY_TEAM.id))),
+    ]);
     _rsvps = {};
-    snap.docs.forEach(d => { _rsvps[d.data().game_id] = d.data().status; });
-  } catch(_) { _rsvps = {}; }
+    mySnap.docs.forEach(d => { _rsvps[d.data().game_id] = d.data().status; });
+    teamSnap.docs.forEach(d => {
+      const a = d.data();
+      if (!teamRsvpsByGame[a.game_id]) teamRsvpsByGame[a.game_id] = {};
+      if (a.player_id) teamRsvpsByGame[a.game_id][a.player_id] = { status: a.status, name: a.player_name };
+    });
+  } catch(_) { _rsvps = {}; teamRsvpsByGame = {}; }
+
+  // Stash on window so setAvail() can rebuild a single card's roll-call
+  // without re-querying everything.
+  window._teamRsvpsByGame = teamRsvpsByGame;
 
   const upcoming = MY_GAMES.filter(g => !g.done).sort((a,b) => (a.wk||0)-(b.wk||0));
   const recent = MY_GAMES.filter(g => g.done).sort((a,b) => (b.wk||0)-(a.wk||0)).slice(0, 5);
+  const roster = (MY_PLAYERS || []).slice().sort((a,b) => (parseInt(a.num)||999) - (parseInt(b.num)||999));
 
-  const gameBlock = (games, label) => {
+  // Build the team-roll-call HTML for ONE game (used inside upcoming game
+  // cards and reused on RSVP updates).
+  window._buildTeamRollCallHtml = function(gameId) {
+    const resp = (window._teamRsvpsByGame || {})[gameId] || {};
+    const yes = [], no = [], maybe = [], pending = [];
+    roster.forEach(p => {
+      const r = resp[p.id];
+      const nm = p.name || (r && r.name) || 'Player';
+      if (!r || !r.status) pending.push(nm);
+      else if (r.status === 'yes') yes.push(nm);
+      else if (r.status === 'no') no.push(nm);
+      else if (r.status === 'maybe') maybe.push(nm);
+      else pending.push(nm);
+    });
+    const col = (arr, label, color) =>
+      `<div style="flex:1;min-width:110px">
+         <div style="font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:${color};margin-bottom:5px">${label} (${arr.length})</div>
+         <div style="font-size:12px;line-height:1.5;color:#1a1a1a">${arr.length ? arr.map(esc).join('<br>') : '<span style="color:var(--muted);font-style:italic">—</span>'}</div>
+       </div>`;
+    return `<details style="margin-top:10px;padding:0;border-top:1px dashed rgba(0,0,0,.1)">
+      <summary style="list-style:none;cursor:pointer;padding:8px 0;font-size:11px;font-weight:700;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="margin-right:auto">Team RSVP &nbsp;▾</span>
+        <span style="background:rgba(34,197,94,.12);color:var(--green);padding:2px 7px;border-radius:4px;font-size:10px">✓ ${yes.length}/${roster.length}</span>
+        <span style="background:rgba(239,68,68,.12);color:var(--red);padding:2px 7px;border-radius:4px;font-size:10px">✕ ${no.length}</span>
+        <span style="background:rgba(245,158,11,.12);color:#b45309;padding:2px 7px;border-radius:4px;font-size:10px">? ${maybe.length}</span>
+        <span style="background:rgba(75,85,99,.12);color:#4b5563;padding:2px 7px;border-radius:4px;font-size:10px">• ${pending.length}</span>
+      </summary>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;padding:8px 0 4px">
+        ${col(yes, '✓ In', 'var(--green)')}
+        ${col(maybe, '? Maybe', '#b45309')}
+        ${col(no, '✕ Out', 'var(--red)')}
+        ${col(pending, '• Waiting', '#4b5563')}
+      </div>
+    </details>`;
+  };
+
+  const gameBlock = (games, label, includeRollCall) => {
     if (!games.length) return '';
     return `<div style="margin-bottom:22px">
       <div class="panel-title">${label}</div>
@@ -2042,7 +2095,8 @@ async function renderPlayerAvail() {
         const oppName = opp?.short || opp?.name || oppId?.toUpperCase() || 'TBD';
         const ha = g.home === MY_TEAM.id ? 'vs' : '@';
         const st = _rsvps[g.id] || '';
-        return `<div class="game-card">
+        const rollCallHtml = includeRollCall ? `<div id="rollcall-${g.id}" style="width:100%">${window._buildTeamRollCallHtml(g.id)}</div>` : '';
+        return `<div class="game-card" style="flex-wrap:wrap">
           <div class="game-info">
             <div class="game-opp">Wk ${g.wk} · ${ha} <span style="color:${opp?.color||'var(--navy)'}">${esc(oppName)}</span></div>
             <div class="game-meta">${esc(g.date||'')} ${g.day?'· '+esc(g.day):''} ${g.time?'· '+esc(g.time):''} ${g.field?'· '+esc(g.field):''}</div>
@@ -2054,20 +2108,15 @@ async function renderPlayerAvail() {
                 <button class="ab ab-maybe ${st==='maybe'?'on':''}" onclick="window.setAvail('${g.id}','maybe')">? Maybe</button>
                 <button class="ab ab-no ${st==='no'?'on':''}" onclick="window.setAvail('${g.id}','no')">✕ No</button>
               </div>`}
+          ${rollCallHtml}
         </div>`;
       }).join('')}
     </div>`;
   };
 
   el.innerHTML = `<div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:14px">Marking as: <span style="color:var(--navy)">${esc(player?.name||'')}</span></div>`
-    + (upcoming.length ? gameBlock(upcoming, 'Upcoming Games') : '<div class="empty">No upcoming games scheduled.</div>')
-    + `<div id="player-team-rollcall"></div>`
-    + (recent.length ? gameBlock(recent, 'Recent Games') : '');
-
-  // Team-wide RSVP roll-call (Adam ask 4/28/26 — players want to see who
-  // else on their team is in / out / maybe / waiting for upcoming games,
-  // same view captains have in their dashboard).
-  renderPlayerTeamRollCall(upcoming);
+    + (upcoming.length ? gameBlock(upcoming, 'Upcoming Games', true) : '<div class="empty">No upcoming games scheduled.</div>')
+    + (recent.length ? gameBlock(recent, 'Recent Games', false) : '');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2171,18 +2220,27 @@ window.setAvail = async function(gameId, status) {
     if (_rsvps[gameId] === status) {
       await deleteDoc(doc(db, 'availability', docId));
       delete _rsvps[gameId];
+      // Mirror the delete in the in-memory team-rsvp map so the
+      // inline roll-call updates without a full refetch.
+      if (window._teamRsvpsByGame && window._teamRsvpsByGame[gameId]) {
+        delete window._teamRsvpsByGame[gameId][pid];
+      }
     } else {
       await setDoc(doc(db, 'availability', docId), {
         game_id: gameId, player_id: pid, player_name: player?.name || '',
         team_id: MY_TEAM.id, status, updated_at: new Date().toISOString()
       });
       _rsvps[gameId] = status;
+      if (!window._teamRsvpsByGame) window._teamRsvpsByGame = {};
+      if (!window._teamRsvpsByGame[gameId]) window._teamRsvpsByGame[gameId] = {};
+      window._teamRsvpsByGame[gameId][pid] = { status, name: player?.name || '' };
     }
     rebuildAvailRow(gameId);
-    // Refresh the team roll-call so counts + your name update live in
-    // the "who's in / out / maybe" breakdown below.
-    const upcoming = MY_GAMES.filter(g => !g.done).sort((a,b) => (a.wk||0)-(b.wk||0));
-    renderPlayerTeamRollCall(upcoming);
+    // Re-render this game's inline roll-call (counts + names update live).
+    const rcEl = document.getElementById('rollcall-' + gameId);
+    if (rcEl && typeof window._buildTeamRollCallHtml === 'function') {
+      rcEl.innerHTML = window._buildTeamRollCallHtml(gameId);
+    }
   } catch(e) { toast('Could not save: ' + e.message, 'error'); }
 };
 
