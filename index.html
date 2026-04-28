@@ -6759,21 +6759,31 @@ function buildTicker2(){
 
 buildTicker2();
 
-// ═══ WELCOME POPUP (first-visit, blocking) ═══
-// Modal overlay. Visitors must ✕ to dismiss before browsing. Stored
-// in localStorage so it never returns once closed. Auto-skipped for
-// users already signed in (checks dvsl-auth-uid token).
+// ═══ WELCOME POPUP (first-visit) ═══
+// Modal overlay. Visitors must ✕ to dismiss. Stored in localStorage
+// so it never returns once closed. Auto-skipped for users already
+// signed in (checks dvsl-auth-uid token).
+//
+// IMPORTANT: do NOT lock body scroll. Earlier version set
+// document.body.style.overflow = 'hidden' when the popup was shown
+// — on iOS PWA this could leave the body stuck-locked if a JS error
+// prevented the cleanup, hiding the schedule / scores below the
+// hero. The dim overlay alone is enough to block interaction.
+//
+// Also: defensively reset any stuck overflow on every load so even
+// if a previous session left it locked, this load fixes it.
 (function _initWelcomeCard(){
   try {
+    // Defensive: undo any stuck body scroll lock from previous loads.
+    if (document.body.style.overflow === 'hidden') {
+      document.body.style.overflow = '';
+    }
     const dismissed = localStorage.getItem('dvsl_welcome_dismissed') === '1';
     const signedIn = !!localStorage.getItem('dvsl-auth-uid');
     const overlay = document.getElementById('welcome-overlay');
     if (!overlay) return;
     if (dismissed || signedIn) { overlay.style.display = 'none'; return; }
     overlay.style.display = 'flex';
-    // Lock body scroll while overlay is up so the dimmed page can't be
-    // scrolled behind the popup.
-    document.body.style.overflow = 'hidden';
   } catch(_) { /* localStorage blocked → don't show, fail safe */ }
 })();
 window.dismissWelcomeCard = function() {
