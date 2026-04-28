@@ -865,11 +865,14 @@ select.form-input{cursor:pointer}
       <div class="section-sub">Your team's upcoming and past games</div>
       <div id="calendar-share-box" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin:8px 0 14px;display:none">
         <div style="font-weight:700;color:#1e40af;margin-bottom:4px">📅 Share Calendar Subscription</div>
-        <div style="font-size:13px;color:#1e3a8a;margin-bottom:8px">Each player needs to click this link <em>on their own phone</em> to subscribe to your team's schedule. Copy it and share with your team.</div>
+        <div style="font-size:13px;color:#1e3a8a;margin-bottom:8px">Each player needs to subscribe <em>on their own phone</em>. Send them the link below — they'll tap whichever button matches their phone (Apple or Google).</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <a id="calendar-open-apple-link" class="btn btn-sm" style="background:#000;color:#fff;border:none" href="#">🍎 Open in Apple Calendar</a>
+          <a id="calendar-open-google-link" class="btn btn-sm" style="background:#1A73E8;color:#fff;border:none" href="#" target="_blank" rel="noopener">🟦 Open in Google Calendar</a>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-outline btn-sm" onclick="copyCalendarLink()">📋 Copy Link</button>
-          <button class="btn btn-outline btn-sm" onclick="shareCalendarLink()">📤 Share</button>
-          <a id="calendar-open-link" class="btn btn-outline btn-sm" href="#" target="_blank">🔗 Open</a>
+          <button class="btn btn-outline btn-sm" onclick="copyCalendarLink()">📋 Copy iCal URL</button>
+          <button class="btn btn-outline btn-sm" onclick="shareCalendarLink()">📤 Share to Players</button>
         </div>
         <div id="calendar-share-status" style="font-size:12px;color:#059669;margin-top:6px;display:none"></div>
       </div>
@@ -1893,8 +1896,13 @@ function updateCalendarShareBox() {
   const url = window._myCalendarUrl;
   if (!url) { box.style.display = 'none'; return; }
   box.style.display = 'block';
-  const openLink = document.getElementById('calendar-open-link');
-  if (openLink) openLink.href = url.replace(/^https:\/\//, 'webcal://');
+  // Apple/iCal: webcal:// scheme triggers the native subscribe prompt.
+  // Google Calendar: cid= URL is a separate web flow that adds the feed
+  // to the user's google account. Each platform needs its own button.
+  const appleLink  = document.getElementById('calendar-open-apple-link');
+  const googleLink = document.getElementById('calendar-open-google-link');
+  if (appleLink)  appleLink.href  = url.replace(/^https:\/\//, 'webcal://');
+  if (googleLink) googleLink.href = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(url)}`;
 }
 
 function _calendarShareText() {
