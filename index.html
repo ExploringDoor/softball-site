@@ -6637,9 +6637,13 @@ function buildTicker2(){
     const timeStr = g.time||'TBD';
     const awayLabel = isMob ? getMobileAbbr(g.away) : g.away;
     const homeLabel = isMob ? getMobileAbbr(g.home) : g.home;
-    // Click opens gameday popup for upcoming, or recap for completed
+    // Click opens gameday popup for upcoming, or BOX SCORE for completed.
+    // Adam ask 4/27/26: ticker used to call openRecap2 which dropped the
+    // user on the Recap tab — but everywhere else (game cards, schedule
+    // rows, scores tab) opens the Box Score tab by default. Use openBox
+    // for consistency. Pass g.id if present so the modal can pull stats.
     const onclick = done
-      ? "openRecap2('"+g.away+"','"+g.home+"',"+g.as+","+g.hs+",'"+field+"','"+g.date+"')"
+      ? "openBox('"+g.away+"','"+g.home+"',"+g.as+","+g.hs+",'"+field+"','"+g.date+"','"+(g.id||'')+"')"
       : "openGameday('"+g.away+"','"+g.home+"','"+field+"','"+timeStr+"')";
     return '<div class="st-game" onclick="'+onclick+'">'
       +'<div class="st-game-inner">'
