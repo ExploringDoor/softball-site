@@ -6114,11 +6114,23 @@ document.getElementById('gom-final-btn').addEventListener('click', async () => {
     }
     // Once finalized, stop any further saveScore calls from overwriting the games doc
     G._gameAlreadyFinal = true;
-    // Always clean up game state (shared + per-side) regardless of submission order
-    deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
-    deleteDoc(doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
-    deleteDoc(doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
-    try { clearLocalState(); } catch(_) {}
+    // Clean up ONLY this submitter's own state. Previously this deleted
+    // every game_states doc for the game, which wiped the OTHER captain's
+    // mid-game state and ALSO wiped admin's private lane — so admin had
+    // no way to resume. Fix: delete only the lane this scorer owns.
+    //   - Captain side: game_states/{gameId}_{home|away} only
+    //   - Admin side:   game_states/{gameId} only
+    const _mySideForCleanup = G.scoringTeam === G.awayTeam?.id ? 'away'
+                            : G.scoringTeam === G.homeTeam?.id ? 'home'
+                            : null;
+    if (_mySideForCleanup) {
+      deleteDoc(doc(db, 'game_states', `${G.gameId}_${_mySideForCleanup}`)).catch(() => {});
+      try { localStorage.removeItem(`dvsl_scorer_state_${G.gameId}_${_mySideForCleanup}`); } catch(_){}
+    } else {
+      // Admin lane (no scoringTeam set) — only the bare gameId doc.
+      deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
+      try { localStorage.removeItem(`dvsl_scorer_state_${G.gameId}`); } catch(_){}
+    }
   }
   // Show a brief toast if this was a second submission
   if (!result.firstSubmission) {
