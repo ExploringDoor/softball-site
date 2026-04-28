@@ -3687,6 +3687,12 @@ let _dpTeam = null;
 let _dpBatterSid = null;
 let _dpRequired = 2;  // 2 = double play, 3 = triple play
 let _rasPrePlaySnapshot = null; // snapshot of G state before play started (for cancel)
+// FC-only: tracks whether the batter is out at 1st on this fielder's choice.
+// Adam ask 2026-04-27: a runner-on-1st FC where the BATTER is the one
+// retired (and the runner advances safely to 2B) had no UI option. Default
+// is '1B' (legacy behavior — runner is the out). Toggling to 'out' makes
+// the batter the recorded out and clears their position from 1B.
+let _rasBatterSel = '1B';
 
 function showDoublePlaySheet(batEntry, team, sid, locStr, requiredOuts = 2) {
   _dpRequired = requiredOuts;
@@ -3905,6 +3911,8 @@ function showRunnerAdvanceSheet(hitType, batEntry, allRunners, team, sid, locStr
   _rasPrePlaySnapshot = G.plays.length > 0 ? G.plays[G.plays.length - 1] : null;
 
   const batterBase = hitType === 'single' || hitType === 'fc' ? 1 : hitType === 'double' ? 2 : 3;
+  // Reset batter selection to default (only meaningful when hitType==='fc').
+  _rasBatterSel = '1B';
   // Smart defaults: runners advance by hit distance; runner on 3rd scores on single/double, etc.
   _rasRunners = allRunners.map(({ runner, from }, idx) => {
     let sel;
@@ -3986,18 +3994,50 @@ function renderRasSheet() {
     container.appendChild(row);
   });
 
-  // Batter row (locked)
+  // Batter row — locked for non-FC plays, selectable [1B / Out] for FC.
+  // FC: lets the user record either "runner out, batter safe" (default) or
+  // "batter out at 1st, runner advances" (Adam's runner-on-1st scenario).
   const batterBase = _rasHitType === 'single' || _rasHitType === 'fc' ? 1 : _rasHitType === 'double' ? 2 : 3;
   const batterBaseLabel = batterBase === 1 ? '1B' : batterBase === 2 ? '2B' : '3B';
   const bRow = document.createElement('div');
   bRow.className = 'ras-row';
   const bNm = _rasBatEntry.name && _rasBatEntry.name !== 'Batter'
     ? _rasBatEntry.name : (_rasBatEntry.num ? '#' + _rasBatEntry.num : 'Batter');
-  bRow.innerHTML = `
-    <div class="ras-row-info"><div class="ras-runner-name">${bNm}</div><div class="ras-runner-from">batter</div></div>
-    <div class="ras-btns"><button class="ras-btn sel-base" disabled>${batterBaseLabel}</button></div>
-  `;
+  const bInfo = document.createElement('div');
+  bInfo.className = 'ras-row-info';
+  bInfo.innerHTML = `<div class="ras-runner-name">${bNm}</div><div class="ras-runner-from">batter</div>`;
+  const bBtns = document.createElement('div');
+  bBtns.className = 'ras-btns';
+  if (_rasHitType === 'fc') {
+    // Two-button toggle: 1B (safe) or Out
+    [{ label: batterBaseLabel, val: '1B' }, { label: 'Out✕', val: 'out', cls: 'btn-out' }].forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'ras-btn' + (opt.cls ? ' ' + opt.cls : '');
+      btn.textContent = opt.label;
+      if (_rasBatterSel === opt.val) {
+        btn.classList.add(opt.val === 'out' ? 'sel-out' : 'sel-base');
+      }
+      btn.addEventListener('click', () => { _rasBatterSel = opt.val; renderRasSheet(); });
+      bBtns.appendChild(btn);
+    });
+  } else {
+    // Non-FC: locked at the batter's hit base
+    const lockBtn = document.createElement('button');
+    lockBtn.className = 'ras-btn sel-base';
+    lockBtn.disabled = true;
+    lockBtn.textContent = batterBaseLabel;
+    bBtns.appendChild(lockBtn);
+  }
+  bRow.appendChild(bInfo); bRow.appendChild(bBtns);
   container.appendChild(bRow);
+
+  // FC-only running totals adjustment: if user marked batter as out, count
+  // them in the outs total shown at the top of the sheet so the user has
+  // visual confirmation before tapping Confirm.
+  if (_rasHitType === 'fc' && _rasBatterSel === 'out') {
+    const outsEl = document.getElementById('ras-outs');
+    if (outsEl) outsEl.textContent = String((parseInt(outsEl.textContent, 10) || 0) + 1);
+  }
 }
 
 function confirmRunnerAdvance() {
@@ -4024,6 +4064,20 @@ function confirmRunnerAdvance() {
       G.runners[sel] = runner;
     }
   });
+  // FC-only: if user marked the batter out at 1st, increment outs and clear
+  // the batter's spot at 1B (resetRunnersForHit had auto-placed them there).
+  // Pitcher gets credit for the out.
+  let batterOutOnFC = false;
+  if (_rasHitType === 'fc' && _rasBatterSel === 'out') {
+    batterOutOnFC = true;
+    if (G.outs < 3) {
+      G.outs++;
+      const psBatterOut = currentPitcherStats(team === 'away' ? 'home' : 'away');
+      if (psBatterOut) psBatterOut.outs++;
+    }
+    G.runners[1] = null;
+  }
+
   // Log 2-out RBIs
   if (rbiFromRunners > 0 && G._twoOutBatter && G._twoOutTeam === team) {
     G.twoOutRbiLog.push({ name: G._twoOutBatter, team, rbi: rbiFromRunners });
@@ -4039,6 +4093,10 @@ function confirmRunnerAdvance() {
     if (sel === 'out')   return `${nm} out at ${from === 1 ? '1st' : from === 2 ? '2nd' : '3rd'}`;
     return `${nm} to ${sel === 1 ? '1st' : sel === 2 ? '2nd' : '3rd'}`;
   });
+  if (batterOutOnFC) {
+    const bNm = (_rasBatEntry.name && _rasBatEntry.name !== 'Batter') ? _rasBatEntry.name : (_rasBatEntry.num ? '#' + _rasBatEntry.num : 'Batter');
+    runnerParts.unshift(`${bNm} out at 1st`);
+  }
   const desc = `${abLabel} — ${hitLabel}${locStr}${runnerParts.length ? '. ' + runnerParts.join('. ') : ''}`;
   logPlay(hitLabel, desc);
   flashFeedback(hitLabel.toUpperCase(), 'var(--green)');
