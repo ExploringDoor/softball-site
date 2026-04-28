@@ -2488,6 +2488,9 @@
     </div>
     <div class="lineup-footer">
       <button class="btn-primary" onclick="luNextStep()">NEXT: HOME LINEUP ›</button>
+      <button onclick="luQuickStartMyTeamOnly()" style="margin-top:8px;width:100%;background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#f59e0b;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:1px;padding:11px;border-radius:10px;cursor:pointer">📋 JUST SCORE MY TEAM ›
+        <span style="display:block;font-size:10px;font-weight:600;letter-spacing:0;color:#fbbf24;margin-top:2px;text-transform:none">Skip opposing lineup · Quick +RUN/+OUT during their innings</span>
+      </button>
     </div>
   </div>
   <!-- Step 2: Home team -->
@@ -2521,6 +2524,9 @@
     </div>
     <div class="lineup-footer">
       <button class="btn-primary" onclick="startScoring()">START SCORING ›</button>
+      <button onclick="luQuickStartMyTeamOnly()" style="margin-top:8px;width:100%;background:rgba(245,158,11,.15);border:1px solid #f59e0b;color:#f59e0b;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:1px;padding:11px;border-radius:10px;cursor:pointer">📋 JUST SCORE MY TEAM ›
+        <span style="display:block;font-size:10px;font-weight:600;letter-spacing:0;color:#fbbf24;margin-top:2px;text-transform:none">Skip opposing lineup · Quick +RUN/+OUT during their innings</span>
+      </button>
     </div>
   </div>
 </div>
@@ -2681,6 +2687,21 @@
     </div>
     <div id="undo-btn-row">
       <button id="undo-pitch-btn">↩ UNDO</button>
+    </div>
+  </div>
+
+  <!-- Quick Inning Panel: shown during opposing half-inning when myTeamOnly mode is active.
+       Replaces the normal pitch buttons / BIP flow with three big buttons that just
+       advance state. Pitcher stats for the user's team are still credited (R / outs). -->
+  <div id="quick-inning-panel" style="display:none;background:var(--card);padding:14px 14px calc(14px + env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,0.06)">
+    <div style="text-align:center;font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#f59e0b;margin-bottom:10px">📋 OPPOSING TEAM BATTING — QUICK LOG</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <button id="qi-run" style="padding:18px 8px;background:rgba(34,197,94,.18);border:2px solid #22c55e;color:#22c55e;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;border-radius:10px;cursor:pointer">+ 1 RUN</button>
+      <button id="qi-out" style="padding:18px 8px;background:rgba(239,68,68,.18);border:2px solid #ef4444;color:#ef4444;font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;border-radius:10px;cursor:pointer">+ 1 OUT</button>
+    </div>
+    <button id="qi-end" style="width:100%;padding:13px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.15);color:var(--text-muted);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:1.5px;border-radius:10px;cursor:pointer">END HALF INNING</button>
+    <div id="qi-undo-row" style="text-align:center;margin-top:10px">
+      <button id="qi-undo" style="background:none;border:none;color:rgba(255,255,255,.5);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;padding:6px 18px">↩ UNDO LAST</button>
     </div>
   </div>
 
@@ -3077,6 +3098,10 @@ const G = {
   halfInningPitches: 0,
   halfInningHits: 0,
   halfInningErrors: 0,
+  // My-Team-Only mode: when true, opposing team's half-innings show a
+  // streamlined +RUN/+OUT panel instead of full pitch-by-pitch tracking.
+  // Set by the lineup screen "JUST SCORE MY TEAM" button.
+  myTeamOnly: false,
   // Extra tracking for box score notes
   hrLog: [],           // [{name, team, inning, pitcher, runnersOn, outs, count}]
   sfLog: [],           // [{name, team, rbi}]
@@ -3188,7 +3213,157 @@ function renderAll() {
 
   // Runners
   renderRunners();
+
+  // My-Team-Only mode: when the OPPOSING team is at bat, replace the
+  // pitch buttons / batter bar with a streamlined +RUN/+OUT panel so the
+  // captain doesn't have to enter dummy data for the other team.
+  maybeShowQuickPanel();
 }
+
+// ============================================================
+// MY-TEAM-ONLY (solo scoring) MODE
+// ============================================================
+// Triggered from the lineup screen via "📋 JUST SCORE MY TEAM" button.
+// Auto-fills opposing team's lineup with placeholders, then jumps into
+// scoring. During the opposing team's half-innings the regular pitch
+// UI is hidden and a 3-button panel (+RUN / +OUT / END HALF) is shown
+// instead. User's own team is scored normally.
+
+function _myTeamOnlySide() {
+  if (!G.myTeamOnly || !G.scoringTeam) return null;
+  if (G.scoringTeam === G.awayTeam?.id) return 'away';
+  if (G.scoringTeam === G.homeTeam?.id) return 'home';
+  return null;
+}
+
+function _opposingIsBatting() {
+  const mySide = _myTeamOnlySide();
+  if (!mySide) return false;
+  // mySide === 'away' → I'm fielding in the bottom (home batting)
+  // mySide === 'home' → I'm fielding in the top (away batting)
+  return (mySide === 'away' && G.half === 'bottom') ||
+         (mySide === 'home' && G.half === 'top');
+}
+
+function maybeShowQuickPanel() {
+  const panel = document.getElementById('quick-inning-panel');
+  const bottomArea = document.getElementById('bottom-area');
+  const batterBar = document.getElementById('batter-bar');
+  if (!panel) return;
+  const showQuick = G.myTeamOnly && _opposingIsBatting();
+  if (showQuick) {
+    panel.style.display = 'block';
+    if (bottomArea) bottomArea.style.display = 'none';
+    if (batterBar) batterBar.style.display = 'none';
+  } else {
+    panel.style.display = 'none';
+    if (bottomArea) bottomArea.style.display = '';
+    if (batterBar) batterBar.style.display = '';
+  }
+}
+
+function quickAddRun() {
+  snapshotState();
+  const opposingTeam = battingTeam();   // the team batting (i.e. the opposing side)
+  if (opposingTeam === 'away') G.awayScore++; else G.homeScore++;
+  // Credit run-allowed to MY pitcher (the fielding team's pitcher).
+  const ps = currentPitcherStats(fieldingTeam());
+  if (ps) ps.r = (ps.r || 0) + 1;
+  // Log a generic play so the user has visibility + can rewind via play log.
+  G.playLog.unshift({
+    inning: inningDisplay(),
+    team: opposingTeam === 'away' ? G.awayTeam.short : G.homeTeam.short,
+    battingTeam: opposingTeam,
+    fieldingTeam: fieldingTeam(),
+    player: 'Opposing Batter',
+    pid: null,
+    pitcherPid: G.pitchers?.[fieldingTeam()]?.pid || null,
+    result: 'Run',
+    desc: '+1 run (quick log)',
+    score: `${G.awayScore}-${G.homeScore}`,
+  });
+  if (G.playLog.length > 300) G.playLog.pop();
+  flashFeedback('+1 RUN', 'var(--green)');
+  renderAll();
+  saveScore();
+}
+
+function quickAddOut() {
+  snapshotState();
+  if (G.outs < 3) {
+    G.outs++;
+    const ps = currentPitcherStats(fieldingTeam());
+    if (ps) ps.outs = (ps.outs || 0) + 1;
+  }
+  const opposingTeam = battingTeam();
+  G.playLog.unshift({
+    inning: inningDisplay(),
+    team: opposingTeam === 'away' ? G.awayTeam.short : G.homeTeam.short,
+    battingTeam: opposingTeam,
+    fieldingTeam: fieldingTeam(),
+    player: 'Opposing Batter',
+    pid: null,
+    pitcherPid: G.pitchers?.[fieldingTeam()]?.pid || null,
+    result: 'Out',
+    desc: '+1 out (quick log)',
+    score: `${G.awayScore}-${G.homeScore}`,
+  });
+  if (G.playLog.length > 300) G.playLog.pop();
+  flashFeedback('OUT', 'var(--red)');
+  if (G.outs >= 3) {
+    setTimeout(() => endHalfInning(), 600);
+  } else {
+    renderAll();
+    saveScore();
+  }
+}
+
+function quickEndHalf() {
+  if (!confirm('End this half-inning now?')) return;
+  snapshotState();
+  // Force-credit any remaining outs to the pitcher (so IP doesn't undercount)
+  const ps = currentPitcherStats(fieldingTeam());
+  if (ps) {
+    while (G.outs < 3) {
+      G.outs++;
+      ps.outs = (ps.outs || 0) + 1;
+    }
+  } else {
+    G.outs = 3;
+  }
+  endHalfInning();
+}
+
+window.luQuickStartMyTeamOnly = function() {
+  const mySide = G.scoringTeam === G.awayTeam?.id ? 'away'
+               : G.scoringTeam === G.homeTeam?.id ? 'home' : null;
+  if (!mySide) {
+    alert('Solo team mode requires you to be scoring as a specific team. Open scorer.html from the captain Live Score button (it sets ?team= for you).');
+    return;
+  }
+  if (!G.lineups[mySide] || G.lineups[mySide].length === 0) {
+    alert('Build YOUR team\'s batting order first, then tap "Just Score My Team".');
+    return;
+  }
+  if (!G.pitchers?.[mySide]?.name) {
+    alert('Pick YOUR team\'s pitcher first.');
+    return;
+  }
+  if (!confirm('Track only YOUR team\'s stats?\n\n• Opposing team gets a placeholder lineup.\n• During their half-innings you\'ll see +RUN / +OUT buttons (no pitch tracking).\n• Your team\'s batting + pitching is recorded normally.')) return;
+  // Auto-fill opposing team
+  const otherSide = mySide === 'away' ? 'home' : 'away';
+  if (!G.lineups[otherSide] || G.lineups[otherSide].length === 0) {
+    G.lineups[otherSide] = Array.from({ length: 9 }, (_, i) => ({
+      name: `Opp Batter ${i+1}`, num: '', pos: '',
+    }));
+  }
+  if (!G.pitchers) G.pitchers = {};
+  if (!G.pitchers[otherSide]?.name) {
+    G.pitchers[otherSide] = { name: 'Opposing Pitcher', num: '?', pid: '' };
+  }
+  G.myTeamOnly = true;
+  startScoring();
+};
 
 // ===== BASE PIXEL POSITIONING =====
 // Original image fractions (calibrated from 2752×1536 field photo)
@@ -3374,6 +3549,12 @@ document.querySelectorAll('[data-pitch]').forEach(btn => {
   });
 });
 document.getElementById('undo-pitch-btn').addEventListener('click', () => undoLast());
+
+// Quick-inning panel button wiring (my-team-only mode)
+document.getElementById('qi-run')?.addEventListener('click', () => quickAddRun());
+document.getElementById('qi-out')?.addEventListener('click', () => quickAddOut());
+document.getElementById('qi-end')?.addEventListener('click', () => quickEndHalf());
+document.getElementById('qi-undo')?.addEventListener('click', () => undoLast());
 
 function handlePitch(type) {
   // Guard: if the between-innings overlay (or any end-of-half modal) is open,
@@ -6920,6 +7101,7 @@ function buildStatePayload() {
     halfInningPitches: G.halfInningPitches || 0,
     halfInningHits: G.halfInningHits || 0,
     halfInningErrors: G.halfInningErrors || 0,
+    myTeamOnly: !!G.myTeamOnly,
     awayTeam: G.awayTeam,
     homeTeam: G.homeTeam,
     hrLog: G.hrLog || [],
@@ -7444,6 +7626,7 @@ document.getElementById('start-btn').addEventListener('click', async () => {
       G.halfInningPitches = s.halfInningPitches ?? 0;
       G.halfInningHits    = s.halfInningHits    ?? 0;
       G.halfInningErrors  = s.halfInningErrors  ?? 0;
+      G.myTeamOnly        = !!s.myTeamOnly;
       G.hrLog         = s.hrLog         ?? [];
       G.twoOutRbiLog  = s.twoOutRbiLog  ?? [];
       G.lob           = s.lob           ?? { away: 0, home: 0 };
