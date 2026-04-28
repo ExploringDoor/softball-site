@@ -2761,6 +2761,13 @@
         </div>
         <div class="sheet-row-chevron">›</div>
       </div>
+      <div class="sheet-row" id="menu-reset-half">
+        <div class="sheet-row-content">
+          <div class="sheet-row-label" style="color:#e65100">↺ Reset This Half-Inning</div>
+          <div class="menu-row-sub">Rewind to before the first play of this half-inning</div>
+        </div>
+        <div class="sheet-row-chevron">›</div>
+      </div>
       <div class="sheet-row" id="menu-overrides">
         <div class="sheet-row-content">
           <div class="sheet-row-label normal-text">Manual Overrides</div>
@@ -4909,6 +4916,11 @@ document.getElementById('menu-end-half').addEventListener('click', () => {
   endHalfInning();
 });
 
+document.getElementById('menu-reset-half').addEventListener('click', () => {
+  closeMenuSheet();
+  resetCurrentHalfInning();
+});
+
 document.getElementById('menu-overrides').addEventListener('click', () => {
   closeMenuSheet();
   openOverridesSheet();
@@ -5389,6 +5401,8 @@ function renderPlayLogEntries(container) {
   G.playLog.forEach((entry, idx) => {
     const row = document.createElement('div');
     row.className = 'play-log-entry';
+    // ✎ = fix box-score stats only (no state rewind)
+    // ↩ = rewind game state to BEFORE this play (erases this play + every newer play)
     row.innerHTML = `
       <div class="play-log-inning">${entry.inning}</div>
       <div class="play-log-body">
@@ -5396,15 +5410,80 @@ function renderPlayLogEntries(container) {
         <div class="play-log-desc">${entry.desc}</div>
       </div>
       <div class="play-log-score">${entry.score}</div>
-      <button class="play-log-edit-btn" title="Edit play">✎</button>
+      <button class="play-log-rewind-btn" title="Rewind to before this play (erases this and newer plays)" style="background:none;border:none;color:#e65100;font-size:18px;font-weight:900;padding:4px 8px;cursor:pointer;opacity:.7">↩</button>
+      <button class="play-log-edit-btn" title="Fix stats only (no state change)">✎</button>
     `;
     row.querySelector('.play-log-edit-btn').addEventListener('click', (e) => {
       e.stopPropagation();
       openPlayEdit(idx);
     });
+    row.querySelector('.play-log-rewind-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      rewindToPlayIdx(idx);
+    });
     container.appendChild(row);
   });
 }
+
+// ===== REWIND TO PLAY =====
+// Walks G.plays snapshot stack back until G.playLog has lost (idx+1) plays.
+// undoLast() restores playLog from each snapshot, so we just keep popping
+// until the visible playLog reaches the target length. Pitch-only snapshots
+// (ball/strike with no playLog entry) collapse naturally as we pop them.
+function rewindToPlayIdx(playIdx) {
+  if (!G.playLog || playIdx < 0 || playIdx >= G.playLog.length) return;
+  const tappedPlay = G.playLog[playIdx];
+  const playerStr = tappedPlay.player || 'this play';
+  const erasedCount = playIdx + 1;
+  const msg = erasedCount === 1
+    ? `Rewind to before "${tappedPlay.desc || playerStr}"?\n\nThis erases that play.`
+    : `Rewind to before "${tappedPlay.desc || playerStr}"?\n\nThis erases ${erasedCount} plays (this one + ${erasedCount - 1} newer).`;
+  if (!confirm(msg)) return;
+
+  const targetLen = G.playLog.length - erasedCount;
+  let safety = 200;
+  while (G.playLog.length > targetLen && G.plays.length > 0 && safety-- > 0) {
+    undoLast();
+  }
+  // Close the play log sheet so the user sees the field state they rewound to.
+  document.getElementById('playlog-sheet-overlay').classList.remove('open');
+  renderAll();
+  saveScore();
+  flashFeedback(`REWOUND ${erasedCount} ${erasedCount === 1 ? 'PLAY' : 'PLAYS'}`, 'var(--orange)');
+}
+
+// ===== RESET CURRENT HALF-INNING =====
+// Find the oldest play in the current half-inning (matching inning marker
+// + battingTeam) and rewind to before it. If no plays match (we're already
+// at start of half-inning), do nothing.
+function resetCurrentHalfInning() {
+  if (!G.playLog || G.playLog.length === 0) {
+    alert('Nothing to reset — no plays recorded yet this half-inning.');
+    return;
+  }
+  const currentInningMark = inningDisplay();
+  const currentBattingTeam = battingTeam();
+  // playLog is unshifted (idx 0 = newest). Walk from oldest → newest, find
+  // the first index that matches current half-inning. That's the OLDEST
+  // play we need to erase.
+  let oldestMatchIdx = -1;
+  for (let i = G.playLog.length - 1; i >= 0; i--) {
+    const e = G.playLog[i];
+    if (e.inning === currentInningMark && e.battingTeam === currentBattingTeam) {
+      oldestMatchIdx = i;
+      break;
+    }
+  }
+  if (oldestMatchIdx === -1) {
+    alert('No plays found in the current half-inning.');
+    return;
+  }
+  // Rewind erases plays 0..oldestMatchIdx — that's all plays from this
+  // half-inning. Reuse rewindToPlayIdx with the oldest matching idx so
+  // the user gets the same confirm dialog + flash feedback.
+  rewindToPlayIdx(oldestMatchIdx);
+}
+window.resetCurrentHalfInning = resetCurrentHalfInning;
 
 // ===== PLAY LOG SHEET =====
 function openPlayLogSheet() {
