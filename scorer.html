@@ -7015,6 +7015,20 @@ async function saveScore() {
     // claim if unowned, defer if owned by someone else.
     const gSnap = await getDoc(doc(db, 'games', G.gameId));
     const g = gSnap.exists() ? gSnap.data() : {};
+
+    // If the game just got finalized by someone else (e.g. the captain
+    // submitted a final score from profile.html / captain.html while we
+    // were still live-scoring), DO NOT write our in-progress score back
+    // over their canonical final. Latch _gameAlreadyFinal locally and
+    // fall through to local-state-only saves. This is what was burning
+    // OA-TOAST 4/27/26: admin live-scored to 8-0, captain finalized 11-0,
+    // admin's next saveScore call clobbered home_score back to 8.
+    if (g.done === true) {
+      G._gameAlreadyFinal = true;
+      saveFullState();
+      return;
+    }
+
     const owner = g.live_owner || null;
 
     if (!owner) {
