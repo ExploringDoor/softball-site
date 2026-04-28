@@ -2489,9 +2489,14 @@ async function _loadCaptInbox() {
       getDocs(query(collection(db, 'score_uploads'), where('status', '==', 'pending_review')))
     ]);
     // captain box-score docs have a team_id field and IDs shaped {gameId}_{teamId}
-    CAPT_SUBMISSION_INBOX.boxes = bsSnap.docs
-      .map(d => ({ id: d.id, ...d.data() }))
-      .filter(b => b.team_id && b.id.includes('_'));
+    const all = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    CAPT_SUBMISSION_INBOX.boxes = all.filter(b => b.team_id && b.id.includes('_'));
+    // Index canonical (no team_id) box scores by game_id so renderScores
+    // can show "submitted by X at Y time" without an extra fetch per row.
+    CAPT_SUBMISSION_INBOX.canonicalByGame = {};
+    all.filter(b => !b.team_id).forEach(b => {
+      if (b.game_id || b.id) CAPT_SUBMISSION_INBOX.canonicalByGame[b.game_id || b.id] = b;
+    });
     CAPT_SUBMISSION_INBOX.uploads = upSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     _captInboxLoaded = true;
   } catch (e) {
@@ -2712,6 +2717,34 @@ function renderScores() {
         const pendingBadge = hasPending && !hasConflict
           ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">⏳ Score Pending</span>`
           : '';
+        // Submission metadata for finalized games — who submitted + when.
+        // Pulls from score_submitted_*_by (legacy captain.html flow) for "who",
+        // and box_scores canonical doc.created_at (new 3-lane flow) for "when".
+        // Falls back to "unknown (legacy entry)" when nothing is available.
+        let submissionLine = '';
+        if (done) {
+          const homeBy = g.score_submitted_home_by || '';
+          const awayBy = g.score_submitted_away_by || '';
+          const parts = [];
+          if (homeBy) parts.push(`${esc(getTeamName(g.home))} (home): <strong>${esc(homeBy)}</strong>`);
+          if (awayBy) parts.push(`${esc(getTeamName(g.away))} (away): <strong>${esc(awayBy)}</strong>`);
+          if (parts.length === 0) parts.push('Submitter: <em>unknown (legacy entry)</em>');
+          // Look up canonical box_scores doc to surface the timestamp. The
+          // _loadCaptInbox() pre-builder indexes canonical-only docs (those
+          // without team_id) by game_id so we don't need a per-card fetch.
+          const canonical = (CAPT_SUBMISSION_INBOX.canonicalByGame || {})[g.id];
+          const submittedAtRaw = canonical?.created_at || canonical?.submitted_at || canonical?.updated_at;
+          let whenStr = '';
+          if (submittedAtRaw) {
+            try {
+              const d = new Date(submittedAtRaw);
+              if (!isNaN(d.getTime())) {
+                whenStr = ` &middot; <span style="color:var(--muted)">${d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>`;
+              }
+            } catch(_) {}
+          }
+          submissionLine = `<div style="width:100%;font-size:11px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px dashed rgba(0,0,0,.08)">📝 Submitted: ${parts.join(' &middot; ')}${whenStr}</div>`;
+        }
         return `<div class="game-row-card" id="score-game-${g.id}">
           <div class="teams">${getTeamName(g.away)} <span class="vs">@</span> ${getTeamName(g.home)}</div>
           <div class="meta">${g.date||''} ${g.day||''} &bull; ${g.time||''} &bull; ${g.field||''}</div>
@@ -2723,6 +2756,7 @@ function renderScores() {
                <button class="btn btn-outline btn-sm" onclick="editScore('${g.id}')">Edit Score</button>
                <button class="btn btn-outline btn-sm" onclick="openBoxScore('${g.id}')">Box Score</button>
                <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="openPdfUpload('${g.id}')">📄 Upload Sheet</button>
+               <button class="btn btn-outline btn-sm" style="background:#fef3c7;color:#92400e;border-color:#d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&from=admin&resume=1','_blank')" title="Resume your private admin scoring lane (the captain's submission already set the public score; this is your separate view)">⚡ Resume Live Score</button>
                <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${g.id}')">↺ Reset Game</button>`
             : `<span class="badge badge-pending">Pending</span>
                <button class="btn btn-outline btn-sm" onclick="adminShowScoreOnly('${g.id}')">📝 Score Only</button>
@@ -2731,6 +2765,7 @@ function renderScores() {
                <button class="btn btn-outline btn-sm" style="background:#fef3c7;color:#92400e;border-color:#d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&from=admin','_blank')">⚡ Live Score</button>
                <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${g.id}')" title="Clear any captain submissions or in-progress scorer state for this game">↺ Reset Game</button>`
           }
+          ${submissionLine}
           <div id="score-form-${g.id}" style="display:none;width:100%;margin-top:10px"></div>
         </div>`;
       }).join('')}

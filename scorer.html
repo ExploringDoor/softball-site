@@ -6525,8 +6525,14 @@ async function loadGames() {
 
     teamsSnap.forEach(d => { teamsData[d.id] = { id: d.id, ...d.data() }; });
 
-    // Read ?team= early so we can filter the dropdown around it
-    const urlTeamId = new URLSearchParams(window.location.search).get('team');
+    // Read URL params early so we can filter the dropdown around them.
+    // ?team=  → captain-mode: this scorer represents that team
+    // ?from=admin or ?resume=1 → admin wants finalized games visible too,
+    //   so they can resume their private admin lane after a captain
+    //   already submitted final (which flipped games.done = true).
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlTeamId = urlParams.get('team');
+    const adminResumeMode = urlParams.get('from') === 'admin' || urlParams.get('resume') === '1';
 
     gamesData = [];
     gamesSnap.forEach(d => {
@@ -6540,6 +6546,11 @@ async function loadGames() {
       if (urlTeamId && mySide) {
         // Captain-context: only hide if THIS team already submitted their scorecard
         if (submittedSet.has(`${d.id}_${mySide}`)) return;
+        gamesData.push({ id: d.id, ...data, _alreadyFinal: data.done === true });
+      } else if (adminResumeMode) {
+        // Admin-resume mode: include finalized games so admin can re-enter
+        // their private admin lane (game_states/{gameId}) after a captain
+        // submission flipped the public game to done.
         gamesData.push({ id: d.id, ...data, _alreadyFinal: data.done === true });
       } else {
         // No team context (admin/manual) — keep legacy behavior: hide done games
@@ -6572,7 +6583,9 @@ async function loadGames() {
       const wk = game.wk || game.week;
       const week = wk ? `Wk${wk}: ` : '';
       const dateStr = game.date ? ` · ${game.date}` : '';
-      const finalMark = game._alreadyFinal ? ' ✓ (other team finalized — submit your card)' : '';
+      const finalMark = game._alreadyFinal
+        ? (adminResumeMode ? ' ✓ Final (resume admin lane)' : ' ✓ (other team finalized — submit your card)')
+        : '';
       opt.textContent = `${week}${awayName} @ ${homeName}${dateStr}${finalMark}`;
       select.appendChild(opt);
     });
