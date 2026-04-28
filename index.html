@@ -3635,16 +3635,17 @@ let _db = null;
 async function getDb() {
   if (_db) return _db;
   const { initializeApp } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js');
-  const { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore, collection, getDocs, query, orderBy } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+  const { getFirestore, collection, getDocs, query, orderBy } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
   const app = initializeApp(FIREBASE_CONFIG);
-  // PWA offline: persistent IndexedDB cache (falls back to memory on unsupported)
-  try {
-    _db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
-  } catch (e) {
-    _db = getFirestore(app);
-  }
+  // 2026-04-27: dropped persistentLocalCache + persistentMultipleTabManager.
+  // iOS PWA's IndexedDB persistent cache can stall silently on certain
+  // devices, causing getDocs() reads to hang or return empty even when
+  // the network is healthy — Adam saw the home page render section
+  // headers (Upcoming Schedule, Standings, etc.) but with no data
+  // populated underneath. profile.html uses plain getFirestore and
+  // works on the same device, so we mirror that simpler init here.
+  // Trade-off: lose offline-cache support; live reads still work.
+  _db = getFirestore(app);
   window._fbDeps = { collection, getDocs, query, orderBy };
   return _db;
 }
