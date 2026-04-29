@@ -391,18 +391,25 @@
             return;
           }
 
-          // Adam ask 4/28/26: HOME tab from a team page (after viewing a
-          // player) was unresponsive on iOS PWA. Cause: the tab is a
-          // same-document anchor (/#home) — navigating relies on the
-          // hashchange listener firing, which in iOS PWA standalone mode
-          // is flaky right after a modal cycle. Explicitly call goPage()
-          // here for in-app pages so we never depend on the hash-change
-          // cascade. Ignore non-fan-site destinations (profile.html, etc).
-          const FAN_PAGES = { home: 1, scores: 1, schedule: 1, players: 1, teams: 1, leaders: 1, stats: 1, standings: 1 };
+          // Adam ask 4/28/26: HOME tab on iOS PWA was unresponsive after
+          // viewing a player from a team page. The hash-change cascade
+          // (anchor → hashchange → goPage) silently dies after a modal
+          // cycle in PWA standalone mode. Bulletproof fix: HOME tab
+          // ALWAYS does a full navigation to "/" — no hash, no SPA
+          // routing, just a hard reload. Slightly slower than SPA but
+          // 100% reliable.
           const id = a.dataset.tab;
+          if (id === 'home') {
+            e.preventDefault();
+            e.stopPropagation();
+            window.location.href = '/';
+            return;
+          }
+          // Other in-app fan-site tabs: use goPage when available so we
+          // skip the hash cascade. (Cross-page tabs like profile.html
+          // fall through to the anchor's natural navigation.)
+          const FAN_PAGES = { scores: 1, schedule: 1, players: 1, teams: 1, leaders: 1, stats: 1, standings: 1 };
           if (FAN_PAGES[id]) {
-            // Only short-circuit when we're already on /index.html
-            // (otherwise the anchor needs to do a real cross-page nav).
             const onIndex = location.pathname === '/' || location.pathname === '/index.html';
             if (onIndex && typeof window.goPage === 'function') {
               e.preventDefault();
