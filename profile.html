@@ -1279,6 +1279,27 @@ async function _routeFromAuthUser(user) {
   if (MODE === 'player' && MY_AUTH_PLAYER && MY_AUTH_PLAYER.auth_uid === user.uid) {
     return;
   }
+  // Adam ask 4/28/26: captains should NOT default to player mode when
+  // they sign in. If this user is a captain (has a non-revoked
+  // captain_claims doc), redirect to captain.html where their saved
+  // credential auto-signs them straight into the dashboard.
+  // Honor an explicit ?mode=player flag so a captain who WANTS the
+  // player view can still get there.
+  try {
+    const urlMode = new URLSearchParams(window.location.search).get('mode');
+    if (urlMode !== 'player') {
+      const claimSnap = await getDocs(query(
+        collection(db, 'captain_claims'),
+        where('auth_uid', '==', user.uid)
+      ));
+      const activeClaim = claimSnap.docs.find(d => d.data().revoked !== true);
+      if (activeClaim) {
+        // Has an active captain claim — bounce to captain.html.
+        window.location.replace('captain.html');
+        return;
+      }
+    }
+  } catch(_) { /* if claim check fails, fall through to player mode */ }
   try {
     const snap = await getDocs(query(collection(db, 'players'), where('auth_uid', '==', user.uid)));
     if (snap.empty) {
