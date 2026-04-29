@@ -5264,28 +5264,39 @@ function buildHomeRecentScores(){
   const el=document.getElementById('home-recent-scores');
   if(!wrap||!el) return;
   // Sort done games by actual calendar date DESC (most recent first), then by
-  // wk DESC as tiebreak. Prior logic ("last 3 after sort by wk asc") would
-  // push an early-week game off the list if any later-week games were marked
-  // done — which happens with seed / demo data, or if a makeup game sits in
-  // the future but is already closed out. "Recent Scores" should mean the
-  // games that most recently actually happened.
-  const today = new Date(); today.setHours(0,0,0,0);
-  const toD = g => {
-    const s = g.rawDate || g.date || '';
-    const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
+  // wk DESC as tiebreak. Robust date parsing — supports both ISO ("2026-04-27")
+  // and "Apr 27" formats since the schedule has both stored on different rows.
+  // Adam ask 4/28/26: was showing "no recent scores" when it should have been
+  // surfacing tonight's finals. Bumped slice 3 → 6 so a full evening of games
+  // is visible at a glance.
+  const today = new Date();
+  // Compare in a normalized day-only space so timezones can't cause a
+  // game finalized "today" to be filtered as future.
+  const toDayKey = s => {
+    if (!s) return null;
+    // "2026-04-27" → 20260427
+    const iso = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return parseInt(iso[1]+iso[2]+iso[3], 10);
+    // "Apr 27" or "Apr 27 2026" → use Date.parse with current year
+    const probe = Date.parse(`${s} ${today.getFullYear()}`);
+    if (!isNaN(probe)) {
+      const d = new Date(probe);
+      return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate();
+    }
+    return null;
   };
+  const todayKey = today.getFullYear()*10000 + (today.getMonth()+1)*100 + today.getDate();
   const done = SCHEDULE_PREVIEW
     .filter(g => g.done)
-    // Only games that actually happened on or before today — filters out any
-    // stray future-dated games that somehow got marked done.
-    .filter(g => { const d = toD(g); return !d || d <= today; })
+    // Only games that actually happened on or before today.
+    .filter(g => { const k = toDayKey(g.rawDate || g.date); return k == null || k <= todayKey; })
     .sort((a,b) => {
-      const da = toD(a), db = toD(b);
-      if (da && db && da.getTime() !== db.getTime()) return db - da;
+      const ka = toDayKey(a.rawDate || a.date) || 0;
+      const kb = toDayKey(b.rawDate || b.date) || 0;
+      if (ka !== kb) return kb - ka;
       return (b.wk||0) - (a.wk||0);
     })
-    .slice(0,3);
+    .slice(0, 6);
   if(!done.length){ wrap.style.display='none'; return; }
   wrap.style.display='block';
   el.innerHTML=done.map(g=>scheduleBlock(g,false)).join('');
@@ -5466,17 +5477,36 @@ function buildTeamsBigCards(){
 // 2. Otherwise try history.back() and watch for an actual URL change.
 // 3. If nothing moves us, force-navigate to Home.
 window.teamGoBack = function(){
+  // Defensive close of any open modal — prevents the case where the
+  // user opens a player profile from this team and the modal swallows
+  // the click on the back button visually but nothing ever happens.
+  // (Adam ask 4/28/26: "click back to home doesn't do anything" after
+  // viewing a player.) Closing the modal first guarantees a clean
+  // navigation transition.
+  try {
+    const mb = document.getElementById('modal-bg');
+    if (mb && mb.classList.contains('open')) {
+      mb.classList.remove('open');
+      document.body.style.overflow = '';
+      // Drop any modal-specific body lock left over from openModal.
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.right = '';
+      document.body.style.width = '';
+      delete document.body.dataset.modalSkipLock;
+    }
+  } catch(_) {}
+
   const prev = window._dvslPrevSpaPage;
   if (prev && prev.name && prev.name !== 'team') {
     try { goPage(prev.name, prev.extra || null); return; } catch(_) {}
   }
-  const startUrl = location.href;
-  try { history.back(); } catch(_) {}
-  setTimeout(() => {
-    if (location.href === startUrl) {
-      try { goPage('home'); } catch(_) { window.location.href = '/'; }
-    }
-  }, 250);
+  // No tracked previous page — go straight home. (Was using
+  // history.back() with a 250ms timeout fallback; that was racy in
+  // PWA mode where the popstate listener sometimes silently swallowed
+  // the back navigation. Direct goPage('home') is bulletproof.)
+  try { goPage('home'); } catch(_) { window.location.href = '/'; }
 };
 
 // Track the last SPA page the user was on so teamGoBack can return to
