@@ -6604,6 +6604,13 @@ async function loadSiteBanner(){
     const pp = hf.split('/');
     const h = pp[0];
     const ex = pp[1]||null;
+    // Adam ask 4/28/26 (real bug): tapping HOME tab (href="/") from
+    // /index.html#team/tbir clears the hash but DOESN'T reload — same
+    // path, just a hash removal. hashchange fires with empty hash, but
+    // none of the branches below match an empty string, so the page
+    // stays stuck on the team panel even though the URL is now "/".
+    // Catch the empty-hash case and route to home explicitly.
+    if (!h) { goPage('home'); return; }
     if(h === 'schedule') goPage('scores', 'schedule');
     else if(h === 'game') openGameById(ex);
     else if(h && valid.includes(h)) goPage(h, ex);
