@@ -1242,7 +1242,12 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 const auth = getAuth(app);
 // Persist auth across browser restarts so captains only sign in once per device.
-setPersistence(auth, browserLocalPersistence).catch(e => console.warn('auth persistence failed:', e));
+// Adam ask 4/28/26: same fix as profile.html — hold a Promise that all
+// sign-in paths await before calling Firebase, otherwise persistence may
+// not be applied yet and the session lands as in-memory only.
+const AUTH_READY = (async () => {
+  try { await setPersistence(auth, browserLocalPersistence); } catch(e){ console.warn('auth persistence failed:', e); }
+})();
 
 // Captain auth state — set after a successful sign-in / claim.
 let CAPTAIN_USER = null;       // Firebase Auth user object
@@ -1684,6 +1689,10 @@ window.submitCaptainAuth = async function() {
   const orig = btn.textContent;
   btn.disabled = true; btn.textContent = '…';
   try {
+    // Wait for setPersistence to finish before any Firebase Auth call
+    // — guarantees the session lands as browserLocalPersistence and
+    // survives PWA close / app restart.
+    await AUTH_READY;
     let cred;
     if (CAPTAIN_AUTH_MODE === 'signup') {
       // Auto-recover if the email was already used: silently fall back to

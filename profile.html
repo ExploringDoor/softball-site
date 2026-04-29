@@ -1139,7 +1139,19 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 // Local persistence = session survives browser restart / app close. This is
 // what makes "type password once per device, stays signed in forever" work.
-try { setPersistence(auth, browserLocalPersistence); } catch(_) {}
+//
+// Adam ask 4/28/26: players reporting they have to log in EVERY time they
+// open the site. Root cause: setPersistence is async (returns a Promise);
+// fire-and-forget meant some signInWithEmailAndPassword calls happened
+// BEFORE persistence was applied, so Firebase fell back to in-memory
+// session-only auth. Now we hold a global Promise (`AUTH_READY`) that all
+// sign-in / sign-up paths await before calling Firebase, guaranteeing
+// browserLocalPersistence is active. iOS Safari ITP can still purge
+// localStorage after 7 days of no interaction with the site — the only
+// fix for that is installing the PWA to home screen (not subject to ITP).
+const AUTH_READY = (async () => {
+  try { await setPersistence(auth, browserLocalPersistence); } catch(_){}
+})();
 
 const PUSH_SECRET = window.LEAGUE_CONFIG.push.adminSecret;
 
@@ -1599,6 +1611,7 @@ async function _dvslAttemptAutoSignIn(email) {
   const password = _dvslLookupCredentialFor(email);
   if (!password) return false;
   try {
+    await AUTH_READY;
     const signInP = signInWithEmailAndPassword(auth, email, password);
     const timeout = new Promise((_, reject) =>
       setTimeout(() => reject(new Error('auto-signin-timeout')), 6000));
@@ -1633,6 +1646,10 @@ window.submitPlayerAuth = async function() {
   }
   submitBtn.disabled = true; submitBtn.textContent = '...';
   try {
+    // Ensure persistence (browserLocalPersistence) is applied BEFORE the
+    // first call into Firebase Auth — otherwise the session may default
+    // to in-memory and evaporate on app close.
+    await AUTH_READY;
     if (PENDING_AUTH_MODE === 'signup') {
       // Claim roster spot: create auth user, link uid + email onto player doc.
       // If the email is already registered (user's previous attempt was
@@ -1720,6 +1737,7 @@ window.submitAddSelf = async function() {
   if (pw !== pw2) { errEl.textContent = 'Passwords do not match — re-type the same password in both boxes.'; errEl.style.display='block'; return; }
   btn.disabled = true; btn.textContent = '...';
   try {
+    await AUTH_READY;
     const cred = await createUserWithEmailAndPassword(auth, email, pw);
     const fullName = first + ' ' + last;
     await addDoc(collection(db, 'players'), {
