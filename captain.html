@@ -1562,9 +1562,25 @@ async function showCaptainAuthScreen(team) {
   document.getElementById('cauth-error').style.display = 'none';
   document.getElementById('cauth-pw').value = '';
   const pw2 = document.getElementById('cauth-pw2'); if (pw2) pw2.value = '';
-  // If a Firebase Auth session already exists (e.g. captain signed in as
-  // a player on this device), short-circuit the form: show "Continue as X".
+  // If a Firebase Auth session already exists, check whether this user
+  // is ALREADY the captain of this team (has a non-revoked claim). If
+  // yes, skip the "Continue as X" button entirely and drop them into
+  // the dashboard. Otherwise show the confirmation prompt — that's the
+  // case where someone signed in as a player wants to claim a NEW team.
   if (CAPTAIN_USER && CAPTAIN_USER.email) {
+    let alreadyClaimed = false;
+    try {
+      const claimDoc = await getDoc(doc(db, 'captain_claims', team.id + '__' + CAPTAIN_USER.uid));
+      alreadyClaimed = claimDoc.exists() && claimDoc.data().revoked !== true;
+    } catch(_) {}
+    if (alreadyClaimed) {
+      // Auto-enter — no click required.
+      try { await _writeCaptainClaim(CAPTAIN_USER, team); } catch(_) {} // refreshes last_seen
+      await _enterCaptainAppFor(team);
+      return;
+    }
+    // Not the captain yet — show the explicit "Continue as X" so they
+    // know they're about to claim THIS team with their account.
     document.getElementById('cauth-already-email').textContent = CAPTAIN_USER.email;
     document.getElementById('cauth-already-team').textContent = team.short || team.name;
     document.getElementById('cauth-already').style.display = 'block';
