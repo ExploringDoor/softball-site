@@ -5231,7 +5231,17 @@ window.autoCalcPlayerStats = async function() {
 function renderStandings() {
   const el = document.getElementById('standings-content');
   if (!TEAMS.length) { el.innerHTML = '<div class="empty">No teams found</div>'; return; }
-  const sorted = [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
+  // Adam ask 4/28/26: standings were sorted by PCT only — meaning a team
+  // with more wins (and a higher points total) could fall behind a team
+  // with a hotter winning pct from fewer games played. Sort by POINTS
+  // (3·W + 2·T + 1·L, matches public standings) DESC, then PCT desc as
+  // tiebreaker, then alphabetical name as final tiebreak.
+  const _pts = (t) => (t.w||0)*3 + (t.t||0)*2 + (t.l||0)*1;
+  const sorted = [...TEAMS].sort((a,b) =>
+    _pts(b) - _pts(a) ||
+    (b.pct||0) - (a.pct||0) ||
+    (a.name||'').localeCompare(b.name||'')
+  );
   el.innerHTML = `<div class="tbl-wrap"><table class="tbl">
     <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th title="Points: 3 per win + 2 per tie + 1 per loss — matches the public standings page">PTS</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th title="Legacy team-level player password (kept for backward compat — prefer per-player passwords on Roster tab)">Team PW</th><th title="Captain password for this team (used on profile.html captain flow)">Captain PW</th><th>Actions</th></tr></thead>
     <tbody>${sorted.map((t, i) => `<tr id="standing-row-${t.id}">
