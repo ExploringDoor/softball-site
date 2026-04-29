@@ -1552,7 +1552,7 @@ window.changeTeam = function() {
 // most of the time they hit the page, pick their team, and the "Already
 // signed in" block lets them continue with one tap.
 // ═══════════════════════════════════════════════════════════════════
-function showCaptainAuthScreen(team) {
+async function showCaptainAuthScreen(team) {
   document.getElementById('team-picker').style.display = 'none';
   document.getElementById('app').style.display = 'none';
   const screen = document.getElementById('captain-auth');
@@ -1569,13 +1569,55 @@ function showCaptainAuthScreen(team) {
     document.getElementById('cauth-already-team').textContent = team.short || team.name;
     document.getElementById('cauth-already').style.display = 'block';
     document.getElementById('cauth-form').style.display = 'none';
-  } else {
+    return;
+  }
+  // No Firebase session — try a SILENT sign-in using a saved credential
+  // before showing the form. Adam ask 4/28/26: captain.html only
+  // pre-filled the inputs and required a click; profile.html attempts a
+  // real auto-sign-in. Now captain.html does too.
+  const saved = _dvslLoadCaptainCred();
+  if (saved && saved.email && saved.password) {
+    // Show a brief "checking…" state in the form area so the screen
+    // doesn't flash an empty sign-in form before the silent attempt
+    // resolves.
     document.getElementById('cauth-already').style.display = 'none';
     document.getElementById('cauth-form').style.display = 'block';
-    cauthSetMode('signin'); // default
-    _dvslPrefillCaptainAuth();
-    setTimeout(() => document.getElementById('cauth-email').focus(), 100);
+    document.getElementById('cauth-email').value = saved.email;
+    document.getElementById('cauth-pw').value = saved.password;
+    const submitBtn = document.getElementById('cauth-submit');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Signing in…'; }
+    try {
+      await AUTH_READY;
+      const cred = await signInWithEmailAndPassword(auth, saved.email, saved.password);
+      CAPTAIN_USER = cred.user;
+      // Success — claim and enter the app.
+      try { await _writeCaptainClaim(CAPTAIN_USER, team); } catch(_) {}
+      await _enterCaptainAppFor(team);
+      return;
+    } catch (e) {
+      // Silent sign-in failed. If credential is stale (password reset
+      // since we saved), drop it so we don't keep retrying. Then fall
+      // through to the normal sign-in form.
+      const code = e.code || '';
+      const msg = e.message || '';
+      if (/wrong-password|invalid-credential|user-not-found|user-disabled/.test(code + ' ' + msg)) {
+        try {
+          const lastEmail = localStorage.getItem('dvsl-creds-last-captain-email');
+          if (lastEmail) localStorage.removeItem(CRED_KEY_PREFIX + lastEmail);
+          localStorage.removeItem('dvsl-creds-last-captain-email');
+        } catch(_) {}
+      }
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = CAPTAIN_AUTH_MODE === 'signup' ? 'Create Account' : 'Sign In'; }
+      // Clear the password field so user starts fresh
+      document.getElementById('cauth-pw').value = '';
+    }
   }
+  // No saved cred or auto-attempt failed → show the normal sign-in form.
+  document.getElementById('cauth-already').style.display = 'none';
+  document.getElementById('cauth-form').style.display = 'block';
+  cauthSetMode('signin'); // default
+  _dvslPrefillCaptainAuth();
+  setTimeout(() => document.getElementById('cauth-email').focus(), 100);
 }
 
 window.cauthSetMode = function(mode) {
