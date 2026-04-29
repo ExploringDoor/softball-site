@@ -395,24 +395,12 @@
             return;
           }
 
-          // Adam ask 4/28/26: HOME tab on iOS PWA was unresponsive after
-          // viewing a player from a team page. The hash-change cascade
-          // (anchor → hashchange → goPage) silently dies after a modal
-          // cycle in PWA standalone mode. Bulletproof fix: HOME tab
-          // ALWAYS does a full navigation to "/" — no hash, no SPA
-          // routing, just a hard reload. Slightly slower than SPA but
-          // 100% reliable.
+          // In-app fan-site tabs: explicitly call goPage() so we never
+          // depend on iOS PWA's flaky hash-change cascade. (Cross-page
+          // tabs like profile.html fall through to the anchor's normal
+          // navigation.)
           const id = a.dataset.tab;
-          if (id === 'home') {
-            e.preventDefault();
-            e.stopPropagation();
-            window.location.href = '/';
-            return;
-          }
-          // Other in-app fan-site tabs: use goPage when available so we
-          // skip the hash cascade. (Cross-page tabs like profile.html
-          // fall through to the anchor's natural navigation.)
-          const FAN_PAGES = { scores: 1, schedule: 1, players: 1, teams: 1, leaders: 1, stats: 1, standings: 1 };
+          const FAN_PAGES = { home: 1, scores: 1, schedule: 1, players: 1, teams: 1, leaders: 1, stats: 1, standings: 1 };
           if (FAN_PAGES[id]) {
             const onIndex = location.pathname === '/' || location.pathname === '/index.html';
             if (onIndex && typeof window.goPage === 'function') {
