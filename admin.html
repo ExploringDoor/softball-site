@@ -2696,10 +2696,44 @@ function renderScores() {
   // Sort games within each week by actual date/time so rows render
   // chronologically (Fri before Sat, 6pm before 7pm) instead of Firestore's
   // arbitrary insertion order.
+  // Adam ask 4/28/26: many games store ISO ("2026-05-12") in the `date`
+  // field rather than `date_iso`. Falling back to date_iso alone left
+  // those games unsorted (all empty strings). Build a normalized ISO
+  // sort key that prefers date_iso, then date if it looks ISO, and
+  // finally Date.parse(`${date} 2026 ${time}`) as a last resort.
+  function _sortKeyDate(g) {
+    if (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) return g.date_iso;
+    if (g.date && /^\d{4}-\d{2}-\d{2}$/.test(g.date)) return g.date;
+    if (g.date) {
+      // "May 7" / "Apr 22" style — append a year so Date.parse works.
+      const probe = Date.parse(`${g.date} 2026`);
+      if (!isNaN(probe)) {
+        const d = new Date(probe);
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      }
+    }
+    return '9999-99-99'; // unknown date → sort to bottom
+  }
+  function _sortKeyTime(g) {
+    if (g.time_24 && /^\d{2}:\d{2}/.test(g.time_24)) return g.time_24;
+    if (g.time) {
+      // "6:15 PM" -> "18:15"
+      const m = g.time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+      if (m) {
+        let h = parseInt(m[1],10);
+        const min = m[2];
+        const ap = (m[3]||'').toUpperCase();
+        if (ap === 'PM' && h !== 12) h += 12;
+        if (ap === 'AM' && h === 12) h = 0;
+        return `${String(h).padStart(2,'0')}:${min}`;
+      }
+    }
+    return '99:99';
+  }
   Object.keys(byWeek).forEach(w => {
     byWeek[w].sort((a, b) =>
-      (a.date_iso || '').localeCompare(b.date_iso || '') ||
-      (a.time_24 || '').localeCompare(b.time_24 || '')
+      _sortKeyDate(a).localeCompare(_sortKeyDate(b)) ||
+      _sortKeyTime(a).localeCompare(_sortKeyTime(b))
     );
   });
 
