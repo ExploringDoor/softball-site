@@ -3953,14 +3953,14 @@ function renderBoxScore(awayName, homeName, g) {
                   <tr style="border-bottom:1px solid rgba(0,0,0,.08)">
                     <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${awayName}</td>
                     ${bsInnings.away.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'away\','+i+',this.value)"></td>').join('')}
-                    <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-away-r">${awayR}${awayMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+awayInningR+'\">inns: '+awayInningR+'</div>':''}</td>
+                    <td style="${tdStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-away-r"><input type="number" min="0" style="${inputStyle};font-weight:800" value="${awayR}" title="Final R total. Auto-fills from batting stats but you can override here if you only have the opposing team's final score (no inning-by-inning, no per-player stats)." oninput="bsSetTotalR('away',this.value)">${awayMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+awayInningR+'\">inns: '+awayInningR+'</div>':''}</td>
                     <td style="${totalStyle}" id="bs-linescore-away-h">${awayH}</td>
                     <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsAwayErrors}" oninput="bsUpdateErrors('away',this.value)"></td>
                   </tr>
                   <tr>
                     <td style="text-align:left;padding:6px 12px;font-weight:700;font-size:13px;text-transform:uppercase;white-space:nowrap">${homeName}</td>
                     ${bsInnings.home.map((v,i) => '<td style="'+tdStyle+'"><input type="number" min="0" style="'+inputStyle+'" value="'+v+'" oninput="bsUpdateInning(\'home\','+i+',this.value)"></td>').join('')}
-                    <td style="${totalStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-home-r">${homeR}${homeMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+homeInningR+'\">inns: '+homeInningR+'</div>':''}</td>
+                    <td style="${tdStyle};border-left:2px solid rgba(0,0,0,.15)" id="bs-linescore-home-r"><input type="number" min="0" style="${inputStyle};font-weight:800" value="${homeR}" title="Final R total. Auto-fills from batting stats but you can override here if you only have the opposing team's final score (no inning-by-inning, no per-player stats)." oninput="bsSetTotalR('home',this.value)">${homeMismatch?'<div style=\"font-size:9px;color:#f57c00;font-weight:400\" title=\"Inning boxes sum to '+homeInningR+'\">inns: '+homeInningR+'</div>':''}</td>
                     <td style="${totalStyle}" id="bs-linescore-home-h">${homeH}</td>
                     <td style="${tdStyle}"><input type="number" min="0" style="${inputStyle}" value="${bsHomeErrors}" oninput="bsUpdateErrors('home',this.value)"></td>
                   </tr>
@@ -4463,8 +4463,12 @@ window.bsExportPdf = function() {
 window.saveBoxScore = async function(markFinal) {
   const calcAwayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
   const calcHomeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
-  const awayR = bsScoreOnlyMode && bsAwayScoreOverride !== null ? bsAwayScoreOverride : calcAwayR;
-  const homeR = bsScoreOnlyMode && bsHomeScoreOverride !== null ? bsHomeScoreOverride : calcHomeR;
+  // Honor a manual R override regardless of mode. In full-stats mode this
+  // lets admins type a final R total for an opposing team they don't have
+  // batting stats for (Adam 4/30/26: e.g. Beth Or Red full stats + Shir
+  // Ami just a 26 total, no inning-by-inning).
+  const awayR = bsAwayScoreOverride !== null ? bsAwayScoreOverride : calcAwayR;
+  const homeR = bsHomeScoreOverride !== null ? bsHomeScoreOverride : calcHomeR;
   const boxData = {
     game_id: bsGameId, wk: bsGameData.wk, date: bsGameData.date,
     away: bsGameData.away, home: bsGameData.home,
@@ -5035,6 +5039,22 @@ window.bsSetScoreOnly = function(side, val) {
   if (side === 'away') bsAwayScoreOverride = score;
   else bsHomeScoreOverride = score;
   const at = document.getElementById('bs-away-total'), ht = document.getElementById('bs-home-total');
+  if (side === 'away' && at) at.textContent = score;
+  if (side === 'home' && ht) ht.textContent = score;
+};
+// Adam ask 4/30/26: when admin only has full stats for one team but
+// just a final R total for the other, let them type that total
+// directly into the linescore R cell. Reuses the same override
+// variables as score-only mode but works in full-stats mode too.
+window.bsSetTotalR = function(side, val) {
+  // Empty string clears the override (revert to auto-calc). Otherwise
+  // pin the override to the typed number.
+  const trimmed = String(val || '').trim();
+  const score = trimmed === '' ? null : (parseInt(trimmed) || 0);
+  if (side === 'away') bsAwayScoreOverride = score;
+  else bsHomeScoreOverride = score;
+  const at = document.getElementById('bs-away-total'), ht = document.getElementById('bs-home-total');
+  if (score === null) return; // let auto-calc repopulate on next rerender
   if (side === 'away' && at) at.textContent = score;
   if (side === 'home' && ht) ht.textContent = score;
 };
