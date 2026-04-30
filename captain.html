@@ -4453,12 +4453,27 @@ window.handleCaptainScoreUpload = async function(gameId, file) {
     }
     const { parsed } = await resp.json();
     barEl.style.width = '100%';
-    titleEl.textContent = 'Done!';
+    titleEl.textContent = 'Resolving names...';
     msgEl.textContent = `Found ${(parsed.awayBatters||[]).length + (parsed.homeBatters||[]).length} players`;
-    await new Promise(r => setTimeout(r, 600));
 
-    // Auto-submit score from parsed data if scores found
-    if (parsed.awayScore != null && parsed.homeScore != null) {
+    // Match parsed last-names to roster (Adam ask 4/30/26, ported from
+    // admin.html v236). Surfaces a picker for any same-surname ambiguity.
+    const ambiguous = _captResolveParsedNames(parsed, g.away, g.home);
+    if (ambiguous.length > 0) {
+      proc.style.display = 'none';
+      await _captShowAmbiguousNamePicker(ambiguous);
+    }
+
+    // Detect: does the sheet have full batter detail, or just scores?
+    // If we got at least one batter on either side, open the box-score
+    // editor pre-populated with the parsed data so captain can review +
+    // submit. Otherwise fall back to the score-only manual-entry flow.
+    const hasBatters = (parsed.awayBatters||[]).length > 0 || (parsed.homeBatters||[]).length > 0;
+    if (hasBatters) {
+      proc.style.display = 'none';
+      _captApplyParsedToBoxScore(gameId, g, parsed);
+      toast('Sheet read — review the box score below and submit.');
+    } else if (parsed.awayScore != null && parsed.homeScore != null) {
       proc.style.display = 'none';
       document.getElementById('manual-entry-' + gameId).style.display = 'block';
       const awayInput = document.getElementById('ss-away-' + gameId);
@@ -4476,6 +4491,232 @@ window.handleCaptainScoreUpload = async function(gameId, file) {
     errEl.textContent = 'Upload failed: ' + e.message;
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// CAPTAIN SCORE SHEET PARSING — name resolution + ambiguity picker
+// ═══════════════════════════════════════════════════════════════════
+// Port of admin.html v233-v236 logic so captain uploads also map
+// "Kundtz" → "Jason Kundtz" + attach pid + ask which Smith when
+// multiple roster players share a surname.
+function _captNorm(s) { return String(s||'').trim().toLowerCase(); }
+function _captSurname(s) {
+  const n = _captNorm(s);
+  if (!n) return '';
+  if (n.includes(',')) return n.split(',')[0].trim();
+  const parts = n.replace(/\./g,'').split(/\s+/).filter(Boolean);
+  while (parts.length > 1 && /^(jr|sr|ii|iii|iv)$/.test(parts[parts.length-1])) parts.pop();
+  return parts[parts.length-1] || '';
+}
+function _captFirstInitial(s) {
+  const n = _captNorm(s);
+  if (!n) return '';
+  if (n.includes(',')) {
+    const after = n.split(',')[1] || '';
+    return after.trim().charAt(0);
+  }
+  const parts = n.replace(/\./g,'').split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return '';
+  return parts[0].charAt(0);
+}
+function _captMatchAgainstRoster(parsedName, roster, parsedNum) {
+  const last = _captSurname(parsedName);
+  if (!last) return { match: null, candidates: [] };
+  const candidates = roster.filter(p => _captSurname(p.name) === last);
+  if (candidates.length === 0) return { match: null, candidates: [] };
+  if (candidates.length === 1) return { match: candidates[0], candidates };
+  if (parsedNum != null && String(parsedNum).trim() !== '') {
+    const nStr = String(parsedNum).trim();
+    const byNum = candidates.filter(p => String(p.num || '').trim() === nStr);
+    if (byNum.length === 1) return { match: byNum[0], candidates };
+  }
+  const initial = _captFirstInitial(parsedName);
+  if (initial) {
+    const narrow = candidates.filter(p => _captFirstInitial(p.name) === initial);
+    if (narrow.length === 1) return { match: narrow[0], candidates };
+  }
+  return { match: null, candidates };
+}
+function _captResolveParsedNames(parsed, awayTeamId, homeTeamId) {
+  const ambiguous = [];
+  if (!parsed) return ambiguous;
+  const allP = (typeof ALL_PLAYERS !== 'undefined' && Array.isArray(ALL_PLAYERS)) ? ALL_PLAYERS : [];
+  const awayRoster = allP.filter(p => p.team === awayTeamId && p.active !== false);
+  const homeRoster = allP.filter(p => p.team === homeTeamId && p.active !== false);
+  const resolveOne = (entry, roster, side, role) => {
+    if (!entry || !entry.name) return;
+    const r = _captMatchAgainstRoster(entry.name, roster, entry.num);
+    if (r.match) {
+      entry.name = r.match.name;
+      entry.pid = r.match.id;
+      if (!entry.num && r.match.num) entry.num = r.match.num;
+    } else if (r.candidates.length > 1) {
+      ambiguous.push({ entry, candidates: r.candidates, side, role });
+    }
+  };
+  (parsed.awayBatters  || []).forEach(p => resolveOne(p, awayRoster, 'away', 'batter'));
+  (parsed.homeBatters  || []).forEach(p => resolveOne(p, homeRoster, 'home', 'batter'));
+  (parsed.awayPitchers || []).forEach(p => resolveOne(p, awayRoster, 'away', 'pitcher'));
+  (parsed.homePitchers || []).forEach(p => resolveOne(p, homeRoster, 'home', 'pitcher'));
+  return ambiguous;
+}
+function _captShowAmbiguousNamePicker(ambiguousList) {
+  return new Promise(resolve => {
+    if (!ambiguousList || ambiguousList.length === 0) { resolve(); return; }
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(5,8,20,.75);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px';
+    const cardHtml = (item, idx) => {
+      const sideLabel = item.side === 'away' ? 'AWAY' : 'HOME';
+      const roleLabel = item.role === 'pitcher' ? 'Pitcher' : 'Batter';
+      const candHtml = item.candidates.map(p => `
+        <button class="amb-pick-btn" data-idx="${idx}" data-pid="${esc(p.id)}" data-name="${esc(p.name)}" data-num="${esc(p.num || '')}"
+          style="display:block;width:100%;text-align:left;padding:10px 14px;margin-bottom:6px;background:#fff;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit;transition:all .12s">
+          <div style="font-weight:700;font-size:14px;color:var(--navy)">${p.num ? '#' + esc(p.num) + ' ' : ''}${esc(p.name)}</div>
+          ${p.pos ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(p.pos)}</div>` : ''}
+        </button>
+      `).join('');
+      return `<div style="border-bottom:1px solid var(--border);padding:14px 18px" data-amb-idx="${idx}">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px">${sideLabel} · ${roleLabel}</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:10px">Sheet says: <span style="color:var(--navy)">"${esc(item.entry.name)}"</span>${item.entry.num ? ' <span style="color:var(--muted);font-size:13px">(#' + esc(item.entry.num) + ')</span>' : ''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Multiple players with that surname — pick one:</div>
+        ${candHtml}
+        <button class="amb-skip-btn" data-idx="${idx}" style="display:block;width:100%;text-align:center;padding:8px;margin-top:4px;background:transparent;border:1px dashed var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit">↪ Skip — leave as "${esc(item.entry.name)}"</button>
+      </div>`;
+    };
+    overlay.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.4)">
+      <div style="padding:18px 20px;border-bottom:2px solid var(--border);background:linear-gradient(135deg,#002D72,#0048b3);color:#fff;border-radius:14px 14px 0 0">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;letter-spacing:.04em;text-transform:uppercase">Pick the right player</div>
+        <div style="font-size:12px;opacity:.85;margin-top:3px">${ambiguousList.length} entr${ambiguousList.length === 1 ? 'y' : 'ies'} need clarification.</div>
+      </div>
+      <div id="amb-body">${ambiguousList.map(cardHtml).join('')}</div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);background:#f8f9fa;border-radius:0 0 14px 14px;display:flex;justify-content:flex-end;gap:8px">
+        <button id="amb-done-btn" class="btn btn-primary btn-sm">Done</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    const done = () => { overlay.remove(); resolve(); };
+    overlay.addEventListener('click', (e) => {
+      const pickBtn = e.target.closest('.amb-pick-btn');
+      if (pickBtn) {
+        const idx = parseInt(pickBtn.dataset.idx, 10);
+        const item = ambiguousList[idx];
+        if (item) {
+          item.entry.name = pickBtn.dataset.name;
+          item.entry.pid = pickBtn.dataset.pid;
+          if (pickBtn.dataset.num && !item.entry.num) item.entry.num = pickBtn.dataset.num;
+          item._resolved = true;
+          const card = overlay.querySelector(`[data-amb-idx="${idx}"]`);
+          if (card) {
+            card.style.opacity = '0.55';
+            card.style.pointerEvents = 'none';
+            card.insertAdjacentHTML('afterbegin', '<div style="font-size:11px;color:var(--green);font-weight:700;margin-bottom:6px">✓ Picked: ' + esc(pickBtn.dataset.name) + '</div>');
+          }
+        }
+        if (ambiguousList.every(x => x._resolved || x._skipped)) setTimeout(done, 400);
+        return;
+      }
+      const skipBtn = e.target.closest('.amb-skip-btn');
+      if (skipBtn) {
+        const idx = parseInt(skipBtn.dataset.idx, 10);
+        const item = ambiguousList[idx];
+        if (item) item._skipped = true;
+        const card = overlay.querySelector(`[data-amb-idx="${idx}"]`);
+        if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
+        if (ambiguousList.every(x => x._resolved || x._skipped)) setTimeout(done, 400);
+        return;
+      }
+      if (e.target.id === 'amb-done-btn') { done(); return; }
+    });
+  });
+}
+
+// Pre-fill captain's box score editor from parsed sheet data. Sets
+// _bsState lineups, jumps to the stats step, then patches every input
+// by ID. Mirrors admin.html applyParsedToBoxScore in spirit, but works
+// against captain.html's two-step _bsState + _renderBsStats UI.
+function _captApplyParsedToBoxScore(gameId, g, parsed) {
+  // Build lineup objects from parsed batters
+  const toLineupItem = p => ({ name: p.name || '', num: p.num || '' });
+  const awayLineup = (parsed.awayBatters || []).map(toLineupItem).filter(p => p.name);
+  const homeLineup = (parsed.homeBatters || []).map(toLineupItem).filter(p => p.name);
+  if (!awayLineup.length && !homeLineup.length) {
+    toast('No batters found in the sheet — falling back to score-only entry.', 'warn');
+    return;
+  }
+  // Seed _bsState — bsToStats reads lineups from here.
+  if (typeof _bsState !== 'undefined') {
+    _bsState[gameId] = { away: awayLineup, home: homeLineup };
+  }
+  // Render the stats step directly.
+  const awayNames = awayLineup.map(p => p.name);
+  const homeNames = homeLineup.map(p => p.name);
+  const awayTeamName = esc(getTeamName(g.away));
+  const homeTeamName = esc(getTeamName(g.home));
+  // Make sure the box-score-entry container is visible.
+  const container = document.getElementById('boxscore-entry-' + gameId);
+  if (container) container.style.display = 'block';
+  _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamName);
+  // Patch the rendered inputs on the next tick so the DOM is in place.
+  setTimeout(() => _captFillBsInputs(gameId, parsed), 60);
+}
+
+// Fill captain's rendered box-score inputs with parsed stats.
+function _captFillBsInputs(gameId, parsed) {
+  const setVal = (id, val) => {
+    if (val == null || val === '') return;
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  };
+  const fillTeam = (team, batters) => {
+    (batters || []).forEach((p, i) => {
+      const hr = parseInt(p.hr) || 0;
+      const d  = parseInt(p.doubles) || 0;
+      const t  = parseInt(p.triples) || 0;
+      const h  = parseInt(p.h) || 0;
+      const oneB = Math.max(0, h - hr - d - t);
+      // Order in batCols: AB,R,1B,2B,3B,HR,RBI,BB,K,SAC,SF,ROE,FC
+      setVal(`bs-${gameId}-${team}-AB${i}`, p.ab);
+      setVal(`bs-${gameId}-${team}-R${i}`,  p.r);
+      setVal(`bs-${gameId}-${team}-1B${i}`, oneB);
+      setVal(`bs-${gameId}-${team}-2B${i}`, d);
+      setVal(`bs-${gameId}-${team}-3B${i}`, t);
+      setVal(`bs-${gameId}-${team}-HR${i}`, hr);
+      setVal(`bs-${gameId}-${team}-RBI${i}`, p.rbi);
+      setVal(`bs-${gameId}-${team}-BB${i}`, p.bb);
+      setVal(`bs-${gameId}-${team}-K${i}`,  p.so);
+      // Fire bsAutoLinescore for R + hits so totals roll up.
+      if (typeof window.bsAutoLinescore === 'function') {
+        window.bsAutoLinescore(gameId, team, 'R');
+        window.bsAutoLinescore(gameId, team, '1B');
+      }
+    });
+  };
+  fillTeam('away', parsed.awayBatters);
+  fillTeam('home', parsed.homeBatters);
+  // Pitchers — first pitcher only (the rendered table starts with 1 row).
+  const fillPitcher = (team, pitchers) => {
+    if (!pitchers || !pitchers.length) return;
+    const p0 = pitchers[0];
+    setVal(`bs-${gameId}-${team}-p-name-0`, p0.name);
+    setVal(`bs-${gameId}-${team}-p-IP0`,    p0.ip);
+    setVal(`bs-${gameId}-${team}-p-H0`,     p0.h);
+    setVal(`bs-${gameId}-${team}-p-R0`,     p0.r);
+    setVal(`bs-${gameId}-${team}-p-ER0`,    p0.er);
+    setVal(`bs-${gameId}-${team}-p-BB0`,    p0.bb);
+    setVal(`bs-${gameId}-${team}-p-K0`,     p0.so);
+  };
+  fillPitcher('away', parsed.awayPitchers);
+  fillPitcher('home', parsed.homePitchers);
+  // Linescore innings + R/E.
+  const ls = parsed.linescore || {};
+  const awayInnings = ls.away || [];
+  const homeInnings = ls.home || [];
+  awayInnings.forEach((v, i) => setVal(`bs-${gameId}-ls-away-i${i+1}`, v));
+  homeInnings.forEach((v, i) => setVal(`bs-${gameId}-ls-home-i${i+1}`, v));
+  if (parsed.awayScore != null) setVal(`bs-${gameId}-ls-away-R`, parsed.awayScore);
+  if (parsed.homeScore != null) setVal(`bs-${gameId}-ls-home-R`, parsed.homeScore);
+  if (ls.awayErrors != null) setVal(`bs-${gameId}-ls-away-E`, ls.awayErrors);
+  if (ls.homeErrors != null) setVal(`bs-${gameId}-ls-home-E`, ls.homeErrors);
+}
 
 window.submitScore = async function(gameId) {
   const g = MY_GAMES.find(x => x.id === gameId);
