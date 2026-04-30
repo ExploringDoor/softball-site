@@ -3924,8 +3924,13 @@ function renderBoxScore(awayName, homeName, g) {
       </div>`;
   }
 
-  const awayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
-  const homeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const _calcAwayR = bsAwayLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const _calcHomeR = bsHomeLineup.filter(p=>!p.dnp).reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  // Honor manual R override anywhere we display a "final score" total
+  // (Adam ask 4/30/26: typing 26 in Shir Ami's R cell needs to flow up
+  // to the score banner, not just the linescore row).
+  const awayR = bsAwayScoreOverride !== null ? bsAwayScoreOverride : _calcAwayR;
+  const homeR = bsHomeScoreOverride !== null ? bsHomeScoreOverride : _calcHomeR;
 
   view.innerHTML = `
     <div style="padding:20px 0">
@@ -4520,8 +4525,15 @@ window.bsExportPdf = function() {
   const homeName = homeTeam?.name || bsGameData.home || 'Home';
   const awayActive = bsAwayLineup.filter(p => !p.dnp);
   const homeActive = bsHomeLineup.filter(p => !p.dnp);
-  const awayR = awayActive.reduce((s,p)=>s+(parseInt(p.r)||0),0);
-  const homeR = homeActive.reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  // Honor manual R override (Adam ask 4/30/26: bsExportPdf was summing
+  // each player's r value, ignoring the linescore-R override that lets
+  // admin type a total like 26 for a team with no batting stats. PDF
+  // showed 3-0 instead of 26-3 for SA @ BOR Wk2). Match the same
+  // override-wins-over-calc logic used elsewhere in the box score.
+  const calcAwayR = awayActive.reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const calcHomeR = homeActive.reduce((s,p)=>s+(parseInt(p.r)||0),0);
+  const awayR = (typeof bsAwayScoreOverride !== 'undefined' && bsAwayScoreOverride !== null) ? bsAwayScoreOverride : calcAwayR;
+  const homeR = (typeof bsHomeScoreOverride !== 'undefined' && bsHomeScoreOverride !== null) ? bsHomeScoreOverride : calcHomeR;
 
   const batCols = ['AB','R','1B','2B','3B','HR','RBI','BB','K','SAC','SF','ROE','FC'];
   const batKeys = ['ab','r','s','d','t','hr','rbi','bb','so','sac','sf','roe','fc'];
