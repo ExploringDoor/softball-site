@@ -3624,7 +3624,7 @@ thead th.sorted-col .sarrow{opacity:1}
   <footer class="ft"><div class="ft-logo">⬡ DVSL</div><div class="ft-copy">© 2026 DVSL</div></footer>
 </div>
 
-<div class="pop" id="scPop" onclick="if(event.target===this)closeScPop()"><div class="pop-box"><button class="pop-x" onclick="closeScPop()">✕</button><div id="scPopContent"></div></div></div>
+<div class="pop" id="scPop" onclick="if(event.target===this)closeScPop()"><div class="pop-box"><button class="pop-x" onclick="closeScPop()">✕</button><button id="scPopSaveImg" onclick="saveBoxScoreImage()" title="Save this box score as an image you can share" style="position:absolute;top:14px;right:54px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;font-weight:700;height:28px;padding:0 10px;cursor:pointer;display:flex;align-items:center;gap:4px;z-index:2;font-family:inherit">📷 Save</button><div id="scPopContent"></div></div></div>
 <div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
   <div class="modal-box">
     <div class="modal-bar"><button class="modal-close" onclick="closeModal()">✕ Close</button></div>
@@ -8320,6 +8320,81 @@ function closeScPop(){
   window.scrollTo(0,_popScrollY);
 }
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeScPop();});
+
+// ═══════════════════════════════════════════════════════════════════
+// SAVE BOX SCORE AS IMAGE (Adam ask 4/30/26)
+// Captures the open scPop modal content as a PNG and triggers a
+// download. Uses html2canvas (loaded on demand from a CDN to keep
+// the initial bundle light) — first-tap downloads the library, then
+// renders. Subsequent taps reuse the cached library.
+// ═══════════════════════════════════════════════════════════════════
+async function _ensureHtml2Canvas() {
+  if (window.html2canvas) return window.html2canvas;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Could not load image-export library — check your connection.'));
+    document.head.appendChild(s);
+  });
+  return window.html2canvas;
+}
+
+window.saveBoxScoreImage = async function() {
+  const box = document.querySelector('#scPop .pop-box');
+  const saveBtn = document.getElementById('scPopSaveImg');
+  if (!box) return;
+  // Brief loading state on the button so user sees something happen
+  // even on slow networks (html2canvas is ~150KB on first download).
+  const originalText = saveBtn ? saveBtn.innerHTML : '';
+  if (saveBtn) {
+    saveBtn.innerHTML = '⏳';
+    saveBtn.disabled = true;
+  }
+  try {
+    const h2c = await _ensureHtml2Canvas();
+    // Hide the X close + Save buttons themselves so they don't show in
+    // the captured image.
+    const x = box.querySelector('.pop-x');
+    if (x) x.style.visibility = 'hidden';
+    if (saveBtn) saveBtn.style.visibility = 'hidden';
+    // Render. backgroundColor:#fff so the rendered PNG isn't transparent
+    // when shared into a dark message thread. scale:2 = retina-quality.
+    const canvas = await h2c(box, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      logging: false,
+    });
+    // Restore visibility
+    if (x) x.style.visibility = '';
+    if (saveBtn) saveBtn.style.visibility = '';
+    // Build a sensible filename from the visible matchup + date.
+    const matchup = (document.querySelector('#scPop .pop-matchup .pop-team:nth-child(1) .pop-abbr')?.textContent || 'Away').trim()
+      + '-vs-' + (document.querySelector('#scPop .pop-matchup .pop-team:nth-child(3) .pop-abbr')?.textContent || 'Home').trim();
+    const date = (document.querySelector('#scPop .pop-meta')?.textContent.match(/\w+ \d+/)?.[0] || '').replace(/\s+/g,'-');
+    const fname = `DVSL-${matchup}${date?'-'+date:''}.png`.replace(/[^a-zA-Z0-9._-]/g,'-');
+    // Trigger download.
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }, 'image/png');
+  } catch(e) {
+    alert('Could not save image: ' + (e.message || e));
+  } finally {
+    if (saveBtn) {
+      saveBtn.innerHTML = originalText;
+      saveBtn.disabled = false;
+    }
+  }
+};
 
 // Auto-switch to Schedule tab if ?tab=schedule in URL
 
