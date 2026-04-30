@@ -3260,11 +3260,18 @@ window.handleCaptainUpload = async function(file) {
     // Adam ask 4/30/26: scoresheet PDFs/photos often only have last names
     // ("Kundtz" instead of "Jason Kundtz"). Resolve to full roster names
     // before populating the box score so stats roll up to the right
-    // player_id. Last-name match against the right team's roster, with
-    // "J. Kundtz" / "J Kundtz" first-initial disambiguation.
-    resolveParsedNames(parsed, g.away, g.home);
+    // player_id. Disambiguates by jersey # then first initial; for
+    // truly-ambiguous cases (two same-surname players, no jersey, no
+    // initial) the resolver returns them in `ambiguous` and we ask the
+    // admin to pick via showAmbiguousNamePicker.
+    const ambiguous = resolveParsedNames(parsed, g.away, g.home);
 
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 400));
+
+    if (ambiguous.length > 0) {
+      proc.style.display = 'none';
+      await showAmbiguousNamePicker(ambiguous);
+    }
 
     // ── Pre-fill box score state ──
     applyParsedToBoxScore(parsed);
@@ -3318,58 +3325,149 @@ function _firstInitial(s) {
 }
 // Backwards-compat alias used elsewhere
 function _lastWord(s) { return _surname(s); }
-// Disambiguation order when multiple roster players share a surname:
-//   1. jersey number (parsed.num)  — strongest signal, scoresheets usually have it
-//   2. first-name initial          — works if parsed name is "J. Smith"
-//   3. give up, return null         — caller leaves the parsed name as-is so
-//                                     admin can see it and pick manually
+// Returns { match, candidates } — match is the resolved player or null,
+// candidates is the list of same-surname roster players we narrowed to.
+// If match is null AND candidates.length > 1 → ambiguous, caller should
+// prompt the admin to pick.
 function _matchAgainstRoster(parsedName, roster, parsedNum) {
   const last = _surname(parsedName);
-  if (!last) return null;
+  if (!last) return { match: null, candidates: [] };
   const candidates = roster.filter(p => _surname(p.name) === last);
-  if (candidates.length === 0) return null;
-  if (candidates.length === 1) return candidates[0];
-  // Multiple Smiths — try jersey number first.
+  if (candidates.length === 0) return { match: null, candidates: [] };
+  if (candidates.length === 1) return { match: candidates[0], candidates };
+  // Multiple — try jersey number first.
   if (parsedNum != null && String(parsedNum).trim() !== '') {
     const nStr = String(parsedNum).trim();
     const byNum = candidates.filter(p => String(p.num || '').trim() === nStr);
-    if (byNum.length === 1) return byNum[0];
+    if (byNum.length === 1) return { match: byNum[0], candidates };
   }
-  // Still ambiguous — try first-initial.
+  // Try first-initial.
   const initial = _firstInitial(parsedName);
   if (initial) {
     const narrow = candidates.filter(p => _firstInitial(p.name) === initial);
-    if (narrow.length === 1) return narrow[0];
+    if (narrow.length === 1) return { match: narrow[0], candidates };
   }
-  // Truly ambiguous (e.g. two J. Smiths with no jersey, or both wear #7).
-  // Return null — caller keeps the parsed name as-is so admin notices.
-  return null;
+  // Truly ambiguous — null match, return all candidates so caller can ask.
+  return { match: null, candidates };
 }
+// Resolve parsed names against rosters. Auto-picks where unambiguous;
+// COLLECTS ambiguous entries (multiple same-surname players, no jersey
+// or initial to disambiguate) and returns them in `ambiguous`. Caller
+// uses showAmbiguousNamePicker() to ask the admin which player each
+// ambiguous entry refers to.
 function resolveParsedNames(parsed, awayTeamId, homeTeamId) {
-  if (!parsed) return;
-  // Admin.html stores the full player array as `PLAYERS` (not ALL_PLAYERS).
-  // First version of this function read from a non-existent global and
-  // silently returned empty rosters → no name matches, no resolution.
+  const ambiguous = [];
+  if (!parsed) return ambiguous;
   const allP = (typeof PLAYERS !== 'undefined' && Array.isArray(PLAYERS)) ? PLAYERS : [];
   const awayRoster = allP.filter(p => p.team === awayTeamId && p.active !== false);
   const homeRoster = allP.filter(p => p.team === homeTeamId && p.active !== false);
-  // Quick visibility while debugging — surfaces in the browser console
-  // so Adam can confirm the right rosters were loaded if names still
-  // show last-only afterward.
   console.log('[resolveParsedNames]', { awayTeamId, homeTeamId, awayRosterLen: awayRoster.length, homeRosterLen: homeRoster.length });
-  const resolveOne = (entry, roster) => {
+  const resolveOne = (entry, roster, side, role) => {
     if (!entry || !entry.name) return;
-    const m = _matchAgainstRoster(entry.name, roster, entry.num);
-    if (m) {
-      entry.name = m.name;          // full name from roster
-      entry.pid = m.id;              // attach player_id
-      if (!entry.num && m.num) entry.num = m.num; // backfill jersey too
+    const r = _matchAgainstRoster(entry.name, roster, entry.num);
+    if (r.match) {
+      entry.name = r.match.name;
+      entry.pid = r.match.id;
+      if (!entry.num && r.match.num) entry.num = r.match.num;
+    } else if (r.candidates.length > 1) {
+      // Multiple same-surname players — surface to admin via picker.
+      ambiguous.push({ entry, candidates: r.candidates, side, role });
     }
+    // Zero candidates → guest/sub, leave name as-is silently.
   };
-  (parsed.awayBatters || []).forEach(p => resolveOne(p, awayRoster));
-  (parsed.homeBatters || []).forEach(p => resolveOne(p, homeRoster));
-  (parsed.awayPitchers || []).forEach(p => resolveOne(p, awayRoster));
-  (parsed.homePitchers || []).forEach(p => resolveOne(p, homeRoster));
+  (parsed.awayBatters  || []).forEach(p => resolveOne(p, awayRoster, 'away', 'batter'));
+  (parsed.homeBatters  || []).forEach(p => resolveOne(p, homeRoster, 'home', 'batter'));
+  (parsed.awayPitchers || []).forEach(p => resolveOne(p, awayRoster, 'away', 'pitcher'));
+  (parsed.homePitchers || []).forEach(p => resolveOne(p, homeRoster, 'home', 'pitcher'));
+  return ambiguous;
+}
+
+// When the resolver couldn't tell two same-surname players apart, ask the
+// admin to pick. Returns a Promise that resolves once they've picked
+// (or skipped) every ambiguous entry. Each pick mutates the entry in
+// place (sets entry.name + entry.pid) so the caller doesn't need to
+// re-thread results.
+function showAmbiguousNamePicker(ambiguousList) {
+  return new Promise(resolve => {
+    if (!ambiguousList || ambiguousList.length === 0) { resolve(); return; }
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(5,8,20,.75);z-index:99998;display:flex;align-items:center;justify-content:center;padding:16px';
+    const teamLabel = (tid) => {
+      const t = (typeof TEAMS !== 'undefined' ? TEAMS : []).find(x => x.id === tid);
+      return t ? (t.short || t.name) : tid;
+    };
+    const cardHtml = (item, idx) => {
+      const sideLabel = item.side === 'away' ? 'AWAY' : 'HOME';
+      const roleLabel = item.role === 'pitcher' ? 'Pitcher' : 'Batter';
+      const candHtml = item.candidates.map((p, ci) => `
+        <button class="amb-pick-btn" data-idx="${idx}" data-pid="${esc(p.id)}" data-name="${esc(p.name)}" data-num="${esc(p.num || '')}"
+          style="display:block;width:100%;text-align:left;padding:10px 14px;margin-bottom:6px;background:#fff;border:2px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit;transition:all .12s">
+          <div style="font-weight:700;font-size:14px;color:var(--navy)">${p.num ? '#' + esc(p.num) + ' ' : ''}${esc(p.name)}</div>
+          ${p.pos ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(p.pos)}</div>` : ''}
+        </button>
+      `).join('');
+      return `<div style="border-bottom:1px solid var(--border);padding:14px 18px" data-amb-idx="${idx}">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px">${sideLabel} · ${roleLabel}</div>
+        <div style="font-size:15px;font-weight:700;margin-bottom:10px">Sheet says: <span style="color:var(--navy)">"${esc(item.entry.name)}"</span>${item.entry.num ? ' <span style="color:var(--muted);font-size:13px">(#' + esc(item.entry.num) + ')</span>' : ''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Multiple players with that surname — pick one:</div>
+        ${candHtml}
+        <button class="amb-skip-btn" data-idx="${idx}" style="display:block;width:100%;text-align:center;padding:8px;margin-top:4px;background:transparent;border:1px dashed var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--muted);font-family:inherit">↪ Skip — leave as "${esc(item.entry.name)}"</button>
+      </div>`;
+    };
+    overlay.innerHTML = `<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.4)">
+      <div style="padding:18px 20px;border-bottom:2px solid var(--border);background:linear-gradient(135deg,#002D72,#0048b3);color:#fff;border-radius:14px 14px 0 0">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;letter-spacing:.04em;text-transform:uppercase">Pick the right player</div>
+        <div style="font-size:12px;opacity:.85;margin-top:3px">${ambiguousList.length} entr${ambiguousList.length === 1 ? 'y' : 'ies'} need clarification before continuing.</div>
+      </div>
+      <div id="amb-body">${ambiguousList.map(cardHtml).join('')}</div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);background:#f8f9fa;border-radius:0 0 14px 14px;display:flex;justify-content:flex-end;gap:8px">
+        <button id="amb-done-btn" class="btn btn-primary btn-sm">Done</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    function done() { overlay.remove(); resolve(); }
+
+    overlay.addEventListener('click', (e) => {
+      const pickBtn = e.target.closest('.amb-pick-btn');
+      if (pickBtn) {
+        const idx = parseInt(pickBtn.dataset.idx, 10);
+        const item = ambiguousList[idx];
+        if (item) {
+          item.entry.name = pickBtn.dataset.name;
+          item.entry.pid = pickBtn.dataset.pid;
+          if (pickBtn.dataset.num && !item.entry.num) item.entry.num = pickBtn.dataset.num;
+          item._resolved = true;
+          // Visually mark as picked
+          const card = overlay.querySelector(`[data-amb-idx="${idx}"]`);
+          if (card) {
+            card.style.opacity = '0.55';
+            card.style.pointerEvents = 'none';
+            card.querySelectorAll('.amb-pick-btn').forEach(b => {
+              if (b === pickBtn) b.style.background = 'rgba(0,45,114,.1)';
+            });
+            card.insertAdjacentHTML('afterbegin', '<div style="font-size:11px;color:var(--green);font-weight:700;margin-bottom:6px">✓ Picked: ' + esc(pickBtn.dataset.name) + '</div>');
+          }
+        }
+        // If all resolved, auto-close after brief delay.
+        if (ambiguousList.every(x => x._resolved || x._skipped)) {
+          setTimeout(done, 400);
+        }
+        return;
+      }
+      const skipBtn = e.target.closest('.amb-skip-btn');
+      if (skipBtn) {
+        const idx = parseInt(skipBtn.dataset.idx, 10);
+        const item = ambiguousList[idx];
+        if (item) item._skipped = true;
+        const card = overlay.querySelector(`[data-amb-idx="${idx}"]`);
+        if (card) { card.style.opacity = '0.4'; card.style.pointerEvents = 'none'; }
+        if (ambiguousList.every(x => x._resolved || x._skipped)) setTimeout(done, 400);
+        return;
+      }
+      if (e.target.id === 'amb-done-btn') { done(); return; }
+    });
+  });
 }
 
 function applyParsedToBoxScore(parsed) {
