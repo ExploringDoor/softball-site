@@ -3318,19 +3318,31 @@ function _firstInitial(s) {
 }
 // Backwards-compat alias used elsewhere
 function _lastWord(s) { return _surname(s); }
-function _matchAgainstRoster(parsedName, roster) {
+// Disambiguation order when multiple roster players share a surname:
+//   1. jersey number (parsed.num)  — strongest signal, scoresheets usually have it
+//   2. first-name initial          — works if parsed name is "J. Smith"
+//   3. give up, return null         — caller leaves the parsed name as-is so
+//                                     admin can see it and pick manually
+function _matchAgainstRoster(parsedName, roster, parsedNum) {
   const last = _surname(parsedName);
   if (!last) return null;
-  // Prefer surname match. If multiple, narrow by first-initial.
   const candidates = roster.filter(p => _surname(p.name) === last);
   if (candidates.length === 0) return null;
   if (candidates.length === 1) return candidates[0];
+  // Multiple Smiths — try jersey number first.
+  if (parsedNum != null && String(parsedNum).trim() !== '') {
+    const nStr = String(parsedNum).trim();
+    const byNum = candidates.filter(p => String(p.num || '').trim() === nStr);
+    if (byNum.length === 1) return byNum[0];
+  }
+  // Still ambiguous — try first-initial.
   const initial = _firstInitial(parsedName);
   if (initial) {
     const narrow = candidates.filter(p => _firstInitial(p.name) === initial);
     if (narrow.length === 1) return narrow[0];
   }
-  // Still ambiguous — return null and let caller keep the parsed name as-is.
+  // Truly ambiguous (e.g. two J. Smiths with no jersey, or both wear #7).
+  // Return null — caller keeps the parsed name as-is so admin notices.
   return null;
 }
 function resolveParsedNames(parsed, awayTeamId, homeTeamId) {
@@ -3347,7 +3359,7 @@ function resolveParsedNames(parsed, awayTeamId, homeTeamId) {
   console.log('[resolveParsedNames]', { awayTeamId, homeTeamId, awayRosterLen: awayRoster.length, homeRosterLen: homeRoster.length });
   const resolveOne = (entry, roster) => {
     if (!entry || !entry.name) return;
-    const m = _matchAgainstRoster(entry.name, roster);
+    const m = _matchAgainstRoster(entry.name, roster, entry.num);
     if (m) {
       entry.name = m.name;          // full name from roster
       entry.pid = m.id;              // attach player_id
