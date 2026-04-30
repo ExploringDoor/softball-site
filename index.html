@@ -8564,7 +8564,13 @@ function applyPlayerSplit(p){
 
 function getRows(){
   if(ctx==='team'){
-    return ALL_TEAMS.map(t => {
+    // Adam ask 4/30/26: 2026 team-stats view was including historical
+    // teams (TBI Jaguars 7-8, Temple Israel 10-5, etc.) because we
+    // mapped over ALL_TEAMS = [...TEAMS, ...HIST_TEAMS]. For 2026,
+    // only show currently-active 2026 teams. Historical years still
+    // hit the year !== '2026' branch below for archived rosters.
+    const sourceTeams = year === '2026' ? TEAMS : ALL_TEAMS;
+    return sourceTeams.map(t => {
       const tp = PLAYERS.filter(p=>p.team===t.id);
       const totalAB = tp.reduce((s,p)=>s+p.ab,0);
       const totalH  = tp.reduce((s,p)=>s+p.h,0);
