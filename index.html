@@ -1091,6 +1091,11 @@ body.dark .bat-tbl tr.career-row td{background:rgba(91,154,255,.07)}
 .stats-table td{padding:11px 14px;color:#1a1a1a;font-size:15px}
 .stats-table td:not(.col-rank):not(.col-player):not(.col-team){text-align:right}
 .stats-table td.col-hi,.stats-table th.col-hi{background:rgba(230,172,0,.08);color:var(--gold)}
+/* Adam ask 4/30/26: when admin/user clicks a column header to sort,
+   the entire column should bold to visually emphasize it. .col-pinned
+   is added to the th + every td in that column by renderStats. */
+.stats-table td.col-pinned{font-weight:800;background:rgba(230,172,0,.05);color:#1a1a1a}
+.stats-table th.col-pinned{color:var(--gold);background:rgba(230,172,0,.1)}
 .col-rank{color:var(--muted);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;width:36px}
 .col-rank.r1{color:#e6ac00}.col-rank.r2{color:#888}.col-rank.r3{color:#a05a2c}
 /* Player + team sit as close as possible — team is a small tag glued
@@ -1140,12 +1145,20 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 .tsg-v{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--gold)}
 .tsg-l{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px}
 .big-table{width:100%;border-collapse:collapse}
-.big-table th{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:10px 16px;text-align:left;background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)}
+/* Adam ask 4/30/26: column headers (AVG / HITS / RUNS / etc.) need
+   to read at a glance on the team page's player stats. Bumped 10px
+   -> 30px (~3x), bold-900, dark text. Body cells stay normal so the
+   header is the dominant cue. */
+.big-table th{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#1a1a1a;padding:14px 14px 12px;text-align:left;background:rgba(0,0,0,.02);border-bottom:3px solid var(--border);line-height:1;cursor:pointer;user-select:none;transition:background .15s,color .15s}
 .big-table th:not(:first-child){text-align:center}
-.big-table td{font-size:13px;padding:12px 16px;border-bottom:1px solid rgba(0,0,0,.06)}
+.big-table th:hover{color:var(--gold);background:rgba(230,172,0,.08)}
+.big-table th.col-pinned{color:var(--gold);background:rgba(230,172,0,.1)}
+.big-table td{font-size:14px;padding:12px 14px;border-bottom:1px solid rgba(0,0,0,.06)}
 .big-table td:not(:first-child){text-align:center}
+.big-table td.col-pinned{font-weight:800;background:rgba(230,172,0,.05)}
 .big-table tr:last-child td{border-bottom:none}
 .big-table tr:hover td{background:rgba(0,0,0,.02);cursor:pointer}
+.big-table tr:hover td.col-pinned{background:rgba(230,172,0,.09)}
 
 /* ── RECAPS ── */
 .recap-list{display:flex;flex-direction:column;gap:22px;margin-top:32px}
@@ -2568,8 +2581,13 @@ thead th.pts-col{font-size:14px;color:var(--navy)}
 .lt-rank.r3{color:rgba(205,127,50,1)}
 .lt-player{min-width:0}
 .lt-info{display:flex;flex-direction:column;gap:3px;min-width:0}
-.lt-name{font-weight:800;font-size:22px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Barlow Condensed',sans-serif;letter-spacing:.01em}
-.lt-team{font-size:16px;font-weight:700;color:#5a6473;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
+/* Adam ask 4/30/26: switch the player name on the leaders table off
+   Barlow Condensed (which is narrow + harder to scan at a glance for
+   names) onto Inter, the regular sans the rest of the site uses for
+   body content. Team labels stay in Barlow Condensed since they're
+   short codes (TBIR / OA / BSMC) where condensed reads fine. */
+.lt-name{font-weight:700;font-size:20px;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Inter','Helvetica Neue',Arial,sans-serif;letter-spacing:0}
+.lt-team{font-size:15px;font-weight:700;color:#5a6473;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;text-transform:uppercase}
 .lt-val{text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--gold)}
 .lt-val.highlight{color:var(--gold)}
 .lt-stat{text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;color:#1a1a1a;white-space:nowrap}
@@ -5960,13 +5978,16 @@ function renderTeamStats(t, players, sortKey, sortDir){
         const isSort=c.key===sortKey;
         const nextDir=isSort&&sortDir==='desc'?'asc':'desc';
         const arrow=isSort?(sortDir==='desc'?' ↓':' ↑'):'';
-        return `<th style="cursor:pointer;${isSort?'color:var(--gold)':''};${c.align==='left'?'text-align:left':''}" 
+        return `<th class="${isSort?'col-pinned':''}" style="${c.align==='left'?'text-align:left':''}"
           onclick="renderTeamStats(getTeam('${t.id}'),PLAYERS.filter(p=>p.team==='${t.id}'),'${c.key}','${nextDir}')">
           ${c.label}${arrow}</th>`;
       }).join('')}
     </tr></thead><tbody>
     ${sorted.map(p=>`<tr onclick="openModal('${p.id}')">
-      ${cols.map(c=>`<td style="${c.align==='left'?'text-align:left':''}">${c.fmt(p)}</td>`).join('')}
+      ${cols.map(c=>{
+        const isSort=c.key===sortKey;
+        return `<td class="${isSort?'col-pinned':''}" style="${c.align==='left'?'text-align:left':''}">${c.fmt(p)}</td>`;
+      }).join('')}
     </tr>`).join('')}
     </tbody></table></div>`;
 }
@@ -8650,14 +8671,20 @@ function renderStats(){
     const t = ctx==='team' ? row : getTeamById(row.team);
     const rowCls = i<3?`rank-${i+1}`:'';
     return `<tr class="${rowCls}">${cols.map(c=>{
+      // Adam ask 4/30/26: when a column is the active sort, every cell
+      // in that column gets `.col-pinned` so it visually pops as a
+      // bolded column. Class is paired with the existing `.sorted`
+      // header style (CSS: .stats-table td.col-pinned { font-weight:800;
+      // background:rgba(230,172,0,.05) }).
+      const isSorted = c.key === sk;
       if(c.key==='_rank') return `<td class="col-rank ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${medal(i)}</td>`;
-      if(c.key==='name')  return `<td class="col-player" style="cursor:pointer" onclick="goPlayer('${row.id||''}')" title="View ${row.name} stats">${row.name}${row.pos?`<span class="p-pos">${row.pos}</span>`:''}</td>`;
-      if(c.key==='_team') return `<td class="col-team" style="cursor:pointer" onclick="goTeamPage('${t?.id||''}')"><span class="col-team-dot" style="background:${t?.color||'#888'}"></span><span class="team-name-full">${t?.name||''}</span><span class="team-name-abbr">${t?.short||t?.name||''}</span></td>`;
-      if(c.key==='_w')    return `<td class="${c.cls||''}" style="color:var(--muted);font-size:12px">${row._w||0}–${row._l||0}</td>`;
+      if(c.key==='name')  return `<td class="col-player ${isSorted?'col-pinned':''}" style="cursor:pointer" onclick="goPlayer('${row.id||''}')" title="View ${row.name} stats">${row.name}${row.pos?`<span class="p-pos">${row.pos}</span>`:''}</td>`;
+      if(c.key==='_team') return `<td class="col-team ${isSorted?'col-pinned':''}" style="cursor:pointer" onclick="goTeamPage('${t?.id||''}')"><span class="col-team-dot" style="background:${t?.color||'#888'}"></span><span class="team-name-full">${t?.name||''}</span><span class="team-name-abbr">${t?.short||t?.name||''}</span></td>`;
+      if(c.key==='_w')    return `<td class="${c.cls||''} ${isSorted?'col-pinned':''}" style="color:var(--muted);font-size:12px">${row._w||0}–${row._l||0}</td>`;
       const val = row[c.key];
       const isHighlit = c.key===sk && i<3;
       const disp = c.fmt?c.fmt(val??0):(val??'-');
-      return `<td class="${isHighlit?'stat-highlight':''}">${disp}</td>`;
+      return `<td class="${isHighlit?'stat-highlight':''} ${isSorted?'col-pinned':''}">${disp}</td>`;
     }).join('')}</tr>`;
   }).join('');
 
