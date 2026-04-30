@@ -3335,9 +3335,16 @@ function _matchAgainstRoster(parsedName, roster) {
 }
 function resolveParsedNames(parsed, awayTeamId, homeTeamId) {
   if (!parsed) return;
-  // Roster lookups — relies on ALL_PLAYERS being loaded by admin init.
-  const awayRoster = (typeof ALL_PLAYERS !== 'undefined' ? ALL_PLAYERS : []).filter(p => p.team === awayTeamId && p.active !== false);
-  const homeRoster = (typeof ALL_PLAYERS !== 'undefined' ? ALL_PLAYERS : []).filter(p => p.team === homeTeamId && p.active !== false);
+  // Admin.html stores the full player array as `PLAYERS` (not ALL_PLAYERS).
+  // First version of this function read from a non-existent global and
+  // silently returned empty rosters → no name matches, no resolution.
+  const allP = (typeof PLAYERS !== 'undefined' && Array.isArray(PLAYERS)) ? PLAYERS : [];
+  const awayRoster = allP.filter(p => p.team === awayTeamId && p.active !== false);
+  const homeRoster = allP.filter(p => p.team === homeTeamId && p.active !== false);
+  // Quick visibility while debugging — surfaces in the browser console
+  // so Adam can confirm the right rosters were loaded if names still
+  // show last-only afterward.
+  console.log('[resolveParsedNames]', { awayTeamId, homeTeamId, awayRosterLen: awayRoster.length, homeRosterLen: homeRoster.length });
   const resolveOne = (entry, roster) => {
     if (!entry || !entry.name) return;
     const m = _matchAgainstRoster(entry.name, roster);
