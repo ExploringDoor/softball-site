@@ -2191,7 +2191,12 @@ window.renderNextUp = async function(){
   el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading RSVPs...</div>';
   try {
     const snap = await getDocs(query(collection(db,'availability'), where('team_id','==', captainData.team_id)));
-    const byGame = {};
+    const byGame = {};        // for the count chips + remind list
+    const myStatusByGame = {}; // captain's own status per game
+    // Find captain's own player record by matching email (so we can show
+    // the captain's CURRENT RSVP and let them tap to update it).
+    const captainEmail = (captainData.email || '').toLowerCase();
+    const myPlayer = (MY_PLAYERS || []).find(p => (p.email || '').toLowerCase() === captainEmail);
     snap.docs.forEach(d => {
       const r = d.data();
       if (!byGame[r.game_id]) byGame[r.game_id] = { yes:[], maybe:[], no:[], all:new Set() };
@@ -2199,18 +2204,36 @@ window.renderNextUp = async function(){
         byGame[r.game_id][r.status].push(r.player_name);
         byGame[r.game_id].all.add(r.player_name);
       }
+      if (myPlayer && r.player_id === myPlayer.id) {
+        myStatusByGame[r.game_id] = r.status;
+      }
     });
+    // Stash on window so my own RSVP setter can patch in-memory + re-render.
+    window._captMyStatusByGame = myStatusByGame;
+    window._captMyPlayer = myPlayer;
     el.innerHTML = upcoming.map(g => {
       const opp = g.away === captainData.team_id ? g.home : g.away;
       const oppT = ALL_TEAMS.find(t => t.id === opp);
       const oppName = oppT?.short || opp?.toUpperCase() || 'TBD';
       const ha = g.home === captainData.team_id ? 'vs' : '@';
       const r = byGame[g.id] || { yes:[], maybe:[], no:[], all:new Set() };
-      const total = MY_PLAYERS.filter(p => !p.pending_approval).length;
       const pending = MY_PLAYERS.filter(p => !p.pending_approval && !r.all.has(p.name));
       const remind = pending.length
         ? `<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="captainRemindWaiting('${esc(g.id)}', this)">📢 Remind ${pending.length} waiting</button>`
         : '<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:6px">✓ All replied</div>';
+      // Captain-own RSVP row — only renders if we matched a player by email.
+      // Adam ask 4/30/26: let the captain set their OWN attendance from the
+      // My Team page without bouncing to the Attendance tab.
+      const myStatus = myStatusByGame[g.id] || '';
+      const btnStyle = (status, color, bg) =>
+        `flex:1;padding:8px 4px;border:1.5px solid ${myStatus===status?color:'rgba(0,0,0,.1)'};background:${myStatus===status?bg:'#fff'};color:${myStatus===status?color:'var(--muted)'};font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;transition:all .12s`;
+      const myRsvpRow = myPlayer ? `
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed rgba(0,0,0,.1)">
+          <div style="font-size:11px;color:var(--muted);font-weight:600;flex-shrink:0">My RSVP:</div>
+          <button onclick="captainSetMyAvail('${esc(g.id)}','yes',this)" style="${btnStyle('yes','var(--green)','rgba(34,197,94,.12)')}">✓ Yes</button>
+          <button onclick="captainSetMyAvail('${esc(g.id)}','maybe',this)" style="${btnStyle('maybe','#b45309','rgba(245,158,11,.12)')}">? Maybe</button>
+          <button onclick="captainSetMyAvail('${esc(g.id)}','no',this)" style="${btnStyle('no','var(--red)','rgba(239,68,68,.12)')}">✕ No</button>
+        </div>` : '';
       return `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <div>
@@ -2224,11 +2247,47 @@ window.renderNextUp = async function(){
           <div style="background:rgba(239,68,68,.08);color:var(--red);font-weight:700;padding:6px;border-radius:6px">✕ Out ${r.no.length}</div>
           <div style="background:rgba(0,0,0,.04);color:#4b5563;font-weight:700;padding:6px;border-radius:6px">• Wait ${pending.length}</div>
         </div>
+        ${myRsvpRow}
         ${remind}
       </div>`;
     }).join('');
   } catch(e) {
     el.innerHTML = `<div class="empty">Could not load RSVPs: ${esc(e.message)}</div>`;
+  }
+};
+
+// Captain sets THEIR OWN availability on a game from the My Team page.
+// Tap toggles status — same status twice = clear it. Saves to Firestore +
+// patches the in-memory cache + re-renders the Next-Up card so counts
+// update live without a refresh.
+window.captainSetMyAvail = async function(gameId, status, btnEl) {
+  const myPlayer = window._captMyPlayer;
+  if (!myPlayer) {
+    toast('Could not find your player record. Make sure your captain email matches a player on the roster.', 'error');
+    return;
+  }
+  const teamId = captainData.team_id;
+  const docId = teamId + '_' + gameId + '_' + myPlayer.id;
+  const cur = (window._captMyStatusByGame || {})[gameId] || '';
+  try {
+    if (cur === status) {
+      await deleteDoc(doc(db, 'availability', docId));
+      delete window._captMyStatusByGame[gameId];
+    } else {
+      await setDoc(doc(db, 'availability', docId), {
+        game_id: gameId,
+        player_id: myPlayer.id,
+        player_name: myPlayer.name || '',
+        team_id: teamId,
+        status,
+        updated_at: new Date().toISOString(),
+      });
+      window._captMyStatusByGame[gameId] = status;
+    }
+    // Re-render the next-up cards to reflect new state.
+    if (typeof window.renderNextUp === 'function') window.renderNextUp().catch(()=>{});
+  } catch(e) {
+    toast('Could not save RSVP: ' + e.message, 'error');
   }
 };
 
@@ -2931,17 +2990,18 @@ function renderPendingGames() {
           </div>
           <div class="meta" style="margin-top:4px">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}</div>
         </div>
-        ${alreadySubmitted && !hasConflict ? `<span class="badge badge-pending">Score Submitted</span>` : hasConflict ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">⚠ Conflict</span>` : `
-        <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${hasConflict ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">⚠ Conflict</span>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          ${alreadySubmitted ? `<span class="badge badge-pending" title="You already submitted — adding stats now will UPDATE your submission">✓ Submitted · Edit</span>` : ''}
           <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&team=${captainData.team_id}&from=captain','_blank')">⚡ Score Live</button>
           <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="showUploadZone('${g.id}')">📄 Upload</button>
           <button class="btn btn-outline btn-sm" onclick="showScoreOnlyEntry('${g.id}')">📝 Score Only</button>
           <button class="btn btn-outline btn-sm" onclick="showBoxScoreEntry('${g.id}')">📊 Box Score</button>
-        </div>`}
+        </div>
       </div>
       ${otherTeamInfo}
       ${conflictInfo}
-      ${alreadySubmitted || hasConflict ? '' : `
+      ${hasConflict ? '' : `
       <div id="upload-zone-${g.id}" style="display:none;border:2px dashed #7c3aed;border-radius:12px;padding:36px 20px;text-align:center;background:rgba(124,58,237,.04);cursor:pointer;position:relative" ondragover="event.preventDefault();this.style.background='rgba(124,58,237,.1)'" ondragleave="this.style.background='rgba(124,58,237,.04)'" ondrop="event.preventDefault();this.style.background='rgba(124,58,237,.04)';handleCaptainScoreUpload('${g.id}',event.dataTransfer.files[0])">
         <input type="file" accept=".pdf,image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="handleCaptainScoreUpload('${g.id}',this.files[0])">
         <div style="font-size:36px;margin-bottom:8px">📋</div>
@@ -3225,14 +3285,14 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
             <tr id="bs-ls-away-row-${gameId}">
               <td style="padding:4px 8px;font-size:14px;font-weight:900;text-transform:uppercase;color:var(--navy)">${awayTeamName}</td>
               ${[1,2,3,4,5,6,7].map(n=>`<td class="ls-inn-c" style="padding:3px 3px"><input type="number" min="0" id="bs-${gameId}-ls-away-i${n}" placeholder="-" style="width:100%;text-align:center;font-size:15px;padding:5px 2px;border:1px solid var(--border);border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-weight:700;box-sizing:border-box"></td>`).join('')}
-              <td style="padding:3px 3px;border-left:2px solid var(--border)"><input type="number" min="0" id="bs-${gameId}-ls-away-R" value="0" readonly title="Auto-calculated from batting stats" style="width:100%;text-align:center;font-size:16px;font-weight:900;padding:5px 2px;border:1px solid var(--navy-mid);border-radius:4px;font-family:'Barlow Condensed',sans-serif;background:var(--navy-light);color:var(--navy);cursor:default;box-sizing:border-box"></td>
+              <td style="padding:3px 3px;border-left:2px solid var(--border)"><input type="number" min="0" id="bs-${gameId}-ls-away-R" value="0" title="Auto-fills from batting stats — but you can ALSO type a total R here directly if you don't have inning-by-inning detail for this team" style="width:100%;text-align:center;font-size:16px;font-weight:900;padding:5px 2px;border:1px solid var(--navy-mid);border-radius:4px;font-family:'Barlow Condensed',sans-serif;background:var(--navy-light);color:var(--navy);box-sizing:border-box"></td>
               <td style="padding:3px 3px"><input type="number" min="0" id="bs-${gameId}-ls-away-H" value="0" readonly title="Auto-calculated from batting stats" style="width:100%;text-align:center;font-size:15px;font-weight:700;padding:5px 2px;border:1px solid var(--border);border-radius:4px;font-family:'Barlow Condensed',sans-serif;background:#f9fafb;cursor:default;box-sizing:border-box"></td>
               <td style="padding:3px 3px"><input type="number" min="0" id="bs-${gameId}-ls-away-E" value="0" title="Team total errors" style="width:100%;text-align:center;font-size:15px;font-weight:700;padding:5px 2px;border:1px solid var(--border);border-radius:4px;font-family:'Barlow Condensed',sans-serif;background:#fff8f8;box-sizing:border-box"></td>
             </tr>
             <tr id="bs-ls-home-row-${gameId}" style="border-top:1px solid var(--border2)">
               <td style="padding:4px 8px;font-size:14px;font-weight:900;text-transform:uppercase;color:var(--navy)">${homeTeamName}</td>
               ${[1,2,3,4,5,6,7].map(n=>`<td class="ls-inn-c" style="padding:3px 3px"><input type="number" min="0" id="bs-${gameId}-ls-home-i${n}" placeholder="-" style="width:100%;text-align:center;font-size:15px;padding:5px 2px;border:1px solid var(--border);border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-weight:700;box-sizing:border-box"></td>`).join('')}
-              <td style="padding:3px 3px;border-left:2px solid var(--border)"><input type="number" min="0" id="bs-${gameId}-ls-home-R" value="0" readonly title="Auto-calculated from batting stats" style="width:100%;text-align:center;font-size:16px;font-weight:900;padding:5px 2px;border:1px solid var(--navy-mid);border-radius:4px;font-family:'Barlow Condensed',sans-serif;background:var(--navy-light);color:var(--navy);cursor:default;box-sizing:border-box"></td>
+              <td style="padding:3px 3px;border-left:2px solid var(--border)"><input type="number" min="0" id="bs-${gameId}-ls-home-R" value="0" title="Auto-fills from batting stats — but you can ALSO type a total R here directly if you don't have inning-by-inning detail for this team" style="width:100%;text-align:center;font-size:16px;font-weight:900;padding:5px 2px;border:1px solid var(--navy-mid);border-radius:4px;font-family:'Barlow Condensed',sans-serif;background:var(--navy-light);color:var(--navy);box-sizing:border-box"></td>
               <td style="padding:3px 3px"><input type="number" min="0" id="bs-${gameId}-ls-home-H" value="0" readonly title="Auto-calculated from batting stats" style="width:100%;text-align:center;font-size:15px;font-weight:700;padding:5px 2px;border:1px solid var(--border);border-radius:4px;font-family:'Barlow Condensed',sans-serif;background:#f9fafb;cursor:default;box-sizing:border-box"></td>
               <td style="padding:3px 3px"><input type="number" min="0" id="bs-${gameId}-ls-home-E" value="0" title="Team total errors" style="width:100%;text-align:center;font-size:15px;font-weight:700;padding:5px 2px;border:1px solid var(--border);border-radius:4px;font-family:'Barlow Condensed',sans-serif;background:#fff8f8;box-sizing:border-box"></td>
             </tr>
