@@ -3254,8 +3254,15 @@ window.handleCaptainUpload = async function(file) {
     }
     const { parsed } = await resp.json();
     procBar.style.width = '100%';
-    procTitle.textContent = 'Done! Loading box score...';
+    procTitle.textContent = 'Done! Resolving names against roster...';
     procMsg.textContent = `Found ${(parsed.awayBatters||[]).length + (parsed.homeBatters||[]).length} players`;
+
+    // Adam ask 4/30/26: scoresheet PDFs/photos often only have last names
+    // ("Kundtz" instead of "Jason Kundtz"). Resolve to full roster names
+    // before populating the box score so stats roll up to the right
+    // player_id. Last-name match against the right team's roster, with
+    // "J. Kundtz" / "J Kundtz" first-initial disambiguation.
+    resolveParsedNames(parsed, g.away, g.home);
 
     await new Promise(r => setTimeout(r, 600));
 
@@ -3272,6 +3279,79 @@ window.handleCaptainUpload = async function(file) {
     errEl.textContent = '⚠️ ' + e.message + ' — fix the issue and try again, or enter stats manually using Box Score.';
   }
 };
+
+// Adam ask 4/30/26: scoresheets often have last names only or "J. Smith"
+// shorthand. Match every parsed batter/pitcher name against the actual
+// team roster to:
+//  • Replace last-name-only with full name ("Kundtz" -> "Jason Kundtz")
+//  • Attach player_id (pid) so stats aggregate against the right player
+//  • Surface ambiguous matches (two Smiths) without silently picking one
+function _normName(s) { return String(s||'').trim().toLowerCase(); }
+function _surname(s) {
+  // Handles "Last, First", "First Last", "F. Last", "Last" formats.
+  // Returns the lowercase surname (last name) only.
+  const n = _normName(s);
+  if (!n) return '';
+  if (n.includes(',')) {
+    // "Kundtz, Jason" -> "kundtz"
+    return n.split(',')[0].trim();
+  }
+  // Split on whitespace, drop leading initials (single chars or 1-letter+dot)
+  const parts = n.replace(/\./g,'').split(/\s+/).filter(Boolean);
+  // Drop trailing suffixes like "jr", "sr", "ii", "iii", "iv"
+  while (parts.length > 1 && /^(jr|sr|ii|iii|iv)$/.test(parts[parts.length-1])) {
+    parts.pop();
+  }
+  return parts[parts.length-1] || '';
+}
+function _firstInitial(s) {
+  const n = _normName(s);
+  if (!n) return '';
+  if (n.includes(',')) {
+    // "Kundtz, Jason" -> "j"
+    const after = n.split(',')[1] || '';
+    return after.trim().charAt(0);
+  }
+  const parts = n.replace(/\./g,'').split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return '';
+  return parts[0].charAt(0);
+}
+// Backwards-compat alias used elsewhere
+function _lastWord(s) { return _surname(s); }
+function _matchAgainstRoster(parsedName, roster) {
+  const last = _surname(parsedName);
+  if (!last) return null;
+  // Prefer surname match. If multiple, narrow by first-initial.
+  const candidates = roster.filter(p => _surname(p.name) === last);
+  if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0];
+  const initial = _firstInitial(parsedName);
+  if (initial) {
+    const narrow = candidates.filter(p => _firstInitial(p.name) === initial);
+    if (narrow.length === 1) return narrow[0];
+  }
+  // Still ambiguous — return null and let caller keep the parsed name as-is.
+  return null;
+}
+function resolveParsedNames(parsed, awayTeamId, homeTeamId) {
+  if (!parsed) return;
+  // Roster lookups — relies on ALL_PLAYERS being loaded by admin init.
+  const awayRoster = (typeof ALL_PLAYERS !== 'undefined' ? ALL_PLAYERS : []).filter(p => p.team === awayTeamId && p.active !== false);
+  const homeRoster = (typeof ALL_PLAYERS !== 'undefined' ? ALL_PLAYERS : []).filter(p => p.team === homeTeamId && p.active !== false);
+  const resolveOne = (entry, roster) => {
+    if (!entry || !entry.name) return;
+    const m = _matchAgainstRoster(entry.name, roster);
+    if (m) {
+      entry.name = m.name;          // full name from roster
+      entry.pid = m.id;              // attach player_id
+      if (!entry.num && m.num) entry.num = m.num; // backfill jersey too
+    }
+  };
+  (parsed.awayBatters || []).forEach(p => resolveOne(p, awayRoster));
+  (parsed.homeBatters || []).forEach(p => resolveOne(p, homeRoster));
+  (parsed.awayPitchers || []).forEach(p => resolveOne(p, awayRoster));
+  (parsed.homePitchers || []).forEach(p => resolveOne(p, homeRoster));
+}
 
 function applyParsedToBoxScore(parsed) {
   const toLineup = (batters) => (batters || []).map(p => {
