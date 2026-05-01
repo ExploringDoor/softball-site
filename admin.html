@@ -3293,7 +3293,18 @@ window.handleCaptainUpload = async function(file) {
 //  • Replace last-name-only with full name ("Kundtz" -> "Jason Kundtz")
 //  • Attach player_id (pid) so stats aggregate against the right player
 //  • Surface ambiguous matches (two Smiths) without silently picking one
-function _normName(s) { return String(s||'').trim().toLowerCase(); }
+// Adam audit 4/30/26: name normalization that handles Unicode whitespace
+// (NBSP, tabs, ideographic spaces) so "Joe Barrett" pasted from a PDF
+// still matches "Joe Barrett" typed manually. Mirrors index.html's
+// _dvslCleanName (intentional duplicate so admin.html stays
+// self-contained — same algorithm, same output).
+function _normName(s) {
+  return String(s||'')
+    .replace(/\p{Z}+/gu, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
 function _surname(s) {
   // Handles "Last, First", "First Last", "F. Last", "Last" formats.
   // Returns the lowercase surname (last name) only.

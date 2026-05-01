@@ -3700,6 +3700,22 @@ let TEAMS = [];
 let HIST_TEAMS = [];
 let ALL_TEAMS = [];
 let PLAYERS = [];
+
+// Adam audit 4/30/26: name comparison/dedup helper. Strips ALL Unicode
+// whitespace (incl. NBSP  , tabs, ideographic spaces) by mapping
+// the \p{Z} category to a regular space, lowercases, trims, and
+// collapses runs. "Joe Barrett" and "Joe Barrett" (paste from
+// PDF) and "joe  barrett" all normalize to the same string. Use this
+// EVERYWHERE you compare two names. Exposed on window so admin.html,
+// captain.html, profile.html etc. can reuse the same definition.
+function _dvslCleanName(s) {
+  return String(s || '')
+    .replace(/\p{Z}+/gu, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+window._dvslCleanName = _dvslCleanName;
 let SCHEDULE_PREVIEW = [];
 // Teams whose long name should display as short code everywhere except the team page
 const SHORT_DISPLAY_IDS = new Set(['tbir','tbimc','btbj','tsmc']);
@@ -3988,7 +4004,7 @@ function getCareerStats(playerName){
   for (const [teamId, seasonsMap] of Object.entries(CAREER_SEASONS_BY_TEAM)) {
     const teamShort = CAREER_TEAM_META[teamId]?.short || teamId.toUpperCase();
     for(const [year, roster] of Object.entries(seasonsMap)){
-      const p = roster.find(r => r.first.toLowerCase()===first.toLowerCase() && r.last.toLowerCase()===last.toLowerCase());
+      const p = roster.find(r => _dvslCleanName(r.first)===_dvslCleanName(first) && _dvslCleanName(r.last)===_dvslCleanName(last));
       if(p){
         seasons.push({year, teamId, teamShort, ...p});
         for(const k of Object.keys(totals)) totals[k] += (p[k]||0);
@@ -4109,7 +4125,7 @@ async function loadAllData() {
           if (!Array.isArray(lineup)) continue;
           for (const p of lineup) {
             const nm = (p.name || '').trim(); if (!nm) continue;
-            const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
+            const key = _dvslCleanName(nm) + '||' + (sid || '').toLowerCase();
             if (!batMap[key]) batMap[key] = { name: nm, team: sid, gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0, sac:0, sf:0, roe:0, fc:0 };
             const b = batMap[key];
             b.gp++;
@@ -4143,7 +4159,7 @@ async function loadAllData() {
           if (!Array.isArray(pitchers)) continue;
           for (const p of pitchers) {
             const nm = (p.name || '').trim(); if (!nm) continue;
-            const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
+            const key = _dvslCleanName(nm) + '||' + (sid || '').toLowerCase();
             if (!pitMap[key]) pitMap[key] = { name: nm, team: sid, gs:0, wins:0, losses:0, saves:0, ipOuts:0, h:0, er:0, bb:0, k:0 };
             const pm = pitMap[key];
             pm.gs++;
@@ -4192,7 +4208,7 @@ async function loadAllData() {
           const res = `${teamR > oppR ? 'W' : 'L'} ${teamR}-${oppR}`;
           for (const p of lineup) {
             const nm = (p.name||'').trim(); if (!nm || p.dnp) continue;
-            const key = nm.toLowerCase() + '||' + (sid||'').toLowerCase();
+            const key = _dvslCleanName(nm) + '||' + (sid||'').toLowerCase();
             if (!logMap[key]) logMap[key] = [];
             logMap[key].push({
               opp: oppShort, date: bs.date||'',
@@ -4221,21 +4237,21 @@ async function loadAllData() {
 
       // Build set of names that appear on multiple roster entries — skip name-only fallback for them
       const _nameCount = {};
-      PLAYERS.forEach(pl => { const n = pl.name.toLowerCase(); _nameCount[n] = (_nameCount[n]||0)+1; });
+      PLAYERS.forEach(pl => { const n = _dvslCleanName(pl.name); _nameCount[n] = (_nameCount[n]||0)+1; });
       const _dupNames = new Set(Object.keys(_nameCount).filter(n => _nameCount[n] > 1));
 
       // Apply batting stats to PLAYERS
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
+        const key = _dvslCleanName(pl.name) + '||' + (pl.team || '').toLowerCase();
         let b = batMap[key];
         if (!b) {
           // Fallback 1: name-only match (handles team-id mismatches) — skip for duplicate names
-          const nm = pl.name.toLowerCase();
+          const nm = _dvslCleanName(pl.name);
           if (!_dupNames.has(nm)) b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
         }
         if (!b) {
           // Fallback 2: "A Miller" in box score → "Adam Miller" in players DB
-          const plParts = pl.name.toLowerCase().split(/\s+/);
+          const plParts = _dvslCleanName(pl.name).split(/\s+/);
           if (plParts.length >= 2) {
             const plInitial = plParts[0][0], plLast = plParts.slice(1).join(' ');
             const plTeam = (pl.team||'').toLowerCase();
@@ -4266,10 +4282,10 @@ async function loadAllData() {
       // Apply game log to PLAYERS
       PLAYERS.forEach(pl => {
         const teamKey = (pl.team||'').toLowerCase();
-        const key = pl.name.toLowerCase() + '||' + teamKey;
+        const key = _dvslCleanName(pl.name) + '||' + teamKey;
         if (logMap[key] && logMap[key].length) { pl.log = logMap[key]; return; }
         // Fallback 1: name-only match across any team — skip for duplicate names
-        const nameOnly = pl.name.toLowerCase();
+        const nameOnly = _dvslCleanName(pl.name);
         const allEntries = [];
         if (!_dupNames.has(nameOnly)) {
           for (const k of Object.keys(logMap)) {
@@ -4279,7 +4295,7 @@ async function loadAllData() {
         }
         if (allEntries.length) { pl.log = allEntries.sort((a,b)=>(a.date||'').localeCompare(b.date||'')); return; }
         // Fallback 2: "A Miller" in box score → "Adam Miller" in players DB
-        const plParts = pl.name.toLowerCase().split(/\s+/);
+        const plParts = _dvslCleanName(pl.name).split(/\s+/);
         if (plParts.length >= 2) {
           const plInitial = plParts[0][0], plLast = plParts.slice(1).join(' ');
           const plTeam = (pl.team||'').toLowerCase();
@@ -4296,14 +4312,14 @@ async function loadAllData() {
 
       // Apply pitching stats to PLAYERS (only real pitchers with recorded outs)
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
+        const key = _dvslCleanName(pl.name) + '||' + (pl.team || '').toLowerCase();
         let pm = pitMap[key];
         if (!pm) {
-          const nm = pl.name.toLowerCase();
+          const nm = _dvslCleanName(pl.name);
           if (!_dupNames.has(nm)) pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1];
         }
         if (!pm) {
-          const plParts = pl.name.toLowerCase().split(/\s+/);
+          const plParts = _dvslCleanName(pl.name).split(/\s+/);
           if (plParts.length >= 2) {
             const plInitial = plParts[0][0], plLast = plParts.slice(1).join(' ');
             const plTeam = (pl.team||'').toLowerCase();
@@ -4331,10 +4347,10 @@ async function loadAllData() {
 
       // Apply split log to PLAYERS for real home/away/month/opponent splits
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team || '').toLowerCase();
+        const key = _dvslCleanName(pl.name) + '||' + (pl.team || '').toLowerCase();
         let logs = splitLog[key];
         if (!logs?.length) {
-          const nm = pl.name.toLowerCase();
+          const nm = _dvslCleanName(pl.name);
           if (!_dupNames.has(nm)) { const found = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm); if (found) logs = found[1]; }
         }
         pl._splitLog = logs || [];
@@ -4509,7 +4525,7 @@ async function refreshVolatileData() {
           if (!Array.isArray(lineup)) continue;
           for (const p of lineup) {
             const nm = (p.name || '').trim(); if (!nm) continue;
-            const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
+            const key = _dvslCleanName(nm) + '||' + (sid || '').toLowerCase();
             if (!batMap[key]) batMap[key] = { name: nm, team: (sid||'').toLowerCase(), gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
             const b = batMap[key];
             b.gp++;
@@ -4537,7 +4553,7 @@ async function refreshVolatileData() {
           if (!Array.isArray(pitchers)) continue;
           for (const p of pitchers) {
             const nm = (p.name || '').trim(); if (!nm) continue;
-            const key = nm.toLowerCase() + '||' + (sid || '').toLowerCase();
+            const key = _dvslCleanName(nm) + '||' + (sid || '').toLowerCase();
             if (!pitMap[key]) pitMap[key] = { name: nm, team: sid, gs:0, wins:0, losses:0, saves:0, ipOuts:0, h:0, er:0, bb:0, k:0 };
             const pm = pitMap[key];
             pm.gs++;
@@ -4551,19 +4567,19 @@ async function refreshVolatileData() {
       }
       // Build duplicate names set for name-only fallback guard
       const _nameCount2 = {};
-      PLAYERS.forEach(pl => { const n = pl.name.toLowerCase(); _nameCount2[n] = (_nameCount2[n]||0)+1; });
+      PLAYERS.forEach(pl => { const n = _dvslCleanName(pl.name); _nameCount2[n] = (_nameCount2[n]||0)+1; });
       const _dupNames2 = new Set(Object.keys(_nameCount2).filter(n => _nameCount2[n] > 1));
 
       // Overlay batting stats onto PLAYERS
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
+        const key = _dvslCleanName(pl.name) + '||' + (pl.team||'').toLowerCase();
         let b = batMap[key];
         if (!b) {
-          const nm = pl.name.toLowerCase();
+          const nm = _dvslCleanName(pl.name);
           if (!_dupNames2.has(nm)) b = Object.entries(batMap).find(([k]) => k.split('||')[0] === nm)?.[1];
         }
         if (!b) {
-          const plParts = pl.name.toLowerCase().split(/\s+/);
+          const plParts = _dvslCleanName(pl.name).split(/\s+/);
           if (plParts.length >= 2) {
             const plInitial = plParts[0][0], plLast = plParts.slice(1).join(' ');
             const plTeam = (pl.team||'').toLowerCase();
@@ -4591,9 +4607,9 @@ async function refreshVolatileData() {
       });
       // Overlay pitching stats onto PLAYERS
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
+        const key = _dvslCleanName(pl.name) + '||' + (pl.team||'').toLowerCase();
         let pm = pitMap[key];
-        if (!pm) { const nm = pl.name.toLowerCase(); if (!_dupNames2.has(nm)) pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1]; }
+        if (!pm) { const nm = _dvslCleanName(pl.name); if (!_dupNames2.has(nm)) pm = Object.entries(pitMap).find(([k]) => k.split('||')[0] === nm)?.[1]; }
         if (!pm || pm.ipOuts === 0) { pl.ip = 0; return; }
         pl.ip = parseFloat(`${Math.floor(pm.ipOuts/3)}.${pm.ipOuts%3}`);
         pl.gs = pm.gs; pl.wins = pm.wins; pl.losses = pm.losses;
@@ -4603,9 +4619,9 @@ async function refreshVolatileData() {
       });
       // Overlay split log onto PLAYERS
       PLAYERS.forEach(pl => {
-        const key = pl.name.toLowerCase() + '||' + (pl.team||'').toLowerCase();
+        const key = _dvslCleanName(pl.name) + '||' + (pl.team||'').toLowerCase();
         let logs = splitLog[key];
-        if (!logs?.length) { const nm = pl.name.toLowerCase(); if (!_dupNames2.has(nm)) { const f = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm); if (f) logs = f[1]; } }
+        if (!logs?.length) { const nm = _dvslCleanName(pl.name); if (!_dupNames2.has(nm)) { const f = Object.entries(splitLog).find(([k]) => k.split('||')[0] === nm); if (f) logs = f[1]; } }
         pl._splitLog = logs || [];
       });
       PLAYERS.sort((a, b) => b.avg - a.avg);
@@ -4631,113 +4647,42 @@ async function refreshVolatileData() {
   }
 }
 
-// Fallback hardcoded data in case Supabase is unreachable
+// Adam audit 4/30/26: this function used to seed TEAMS / HIST_TEAMS
+// / SCHEDULE_PREVIEW from a hardcoded list when Firestore was
+// unreachable. That created a drift source — TBIR rename in Firestore
+// didn't update here, so an offline user saw the old name. Better to
+// show an explicit "Couldn't load data" message than ship stale data
+// pretending to be real. Empty arrays + a visible banner.
 function loadFallbackData() {
-  TEAMS = [
-{id:'aj',name:"Adath Jeshurun",short:'AJ',color:'#fb923c',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'ba',name:"Beth Am",short:'BA',color:'#facc15',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'bob',name:"Beth Or Blue",short:'BOB',color:'#60a5fa',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'bor',name:"Beth Or Red",short:'BOR',color:'#f87171',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'bsb',name:"Beth Sholom Blue",short:'BSB',color:'#818cf8',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'bsmc',name:"Beth Sholom Mens Club",short:'BSMC',color:'#f472b6',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'btbj',name:"Beth Tikvah B'Nai Jeshrun",short:'BTBJ',color:'#a78bfa',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'cha',name:"Chabad",short:'CHA',color:'#34d399',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'dn',name:"Darchei Noam Lightning",short:'DN',color:'#38bdf8',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'gjc',name:"Germantown Jewish Centre",short:'GJC',color:'#e879f9',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'gold',name:"Goldstein's",short:'GOLD',color:'#F5C842',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'ki',name:"Keneseth Israel",short:'KI',color:'#22d3ee',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'oa',name:"Or Ami",short:'OA',color:'#86efac',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'sa',name:"Shir Ami",short:'SA',color:'#4ade80',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'tsbka',name:"Temple Sinai Black/Kol Ami",short:'TSBKA',color:'#94a3b8',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'tsmc',name:"Temple Sinai Mens Club",short:'TSMC',color:'#2dd4bf',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'tsg',name:"Temple Sinai Green",short:'TSG',color:'#bbf7d0',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'tbimc',name:"Tifereth Bet Israel Mens Club",short:'TBIMC',color:'#c084fc',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  {id:'tbir',name:"Tifereth Bet Israel Royals",short:'TBIR',color:'#e9d5ff',w:0,l:0,pct:0,gb:'\u2014',streak:'\u2014',rs:0,ra:0,founded:2000,field:'TBD',active:true},
-  ];
-  HIST_TEAMS = [
-    {id:'ba',color:'#facc15',name:'Beth Am',short:'BA',w:8,l:7,pct:.533,gb:'1',streak:'—',rs:120,ra:118},
-    {id:'boo',color:'#a3e635',name:'Beth Or Orange',short:'BOO',w:7,l:7,pct:.500,gb:'1.5',streak:'—',rs:118,ra:118},
-    {id:'ti',color:'#e879f9',name:'Temple Israel',short:'TI',w:10,l:5,pct:.667,gb:'0',streak:'—',rs:148,ra:105},
-    {id:'ka',color:'#34d399',name:'Kol Ami',short:'KA',w:6,l:9,pct:.400,gb:'3',streak:'—',rs:108,ra:129},
-    {id:'gjc',color:'#38bdf8',name:'Glenside JCC',short:'GJC',w:9,l:6,pct:.600,gb:'0',streak:'—',rs:138,ra:112},
-    {id:'bsb',color:'#818cf8',name:'Beth Sholom Blue',short:'BSB',w:5,l:10,pct:.333,gb:'4',streak:'—',rs:99,ra:140},
-    {id:'os',color:'#e2e8f0',name:'Or Shalom',short:'OS',w:3,l:12,pct:.200,gb:'6',streak:'—',rs:88,ra:165},
-    {id:'bami',color:'#fb923c',name:'Beth Am Marlins',short:'BAMI',w:4,l:11,pct:.267,gb:'5',streak:'—',rs:95,ra:152},
-    {id:'tbi',color:'#a78bfa',name:'TBI Jaguars',short:'TBIJ',w:7,l:8,pct:.467,gb:'2',streak:'—',rs:112,ra:121},
-    {id:'bos',color:'#94a3b8',name:'Beth Or Silver',short:'BOS',w:6,l:9,pct:.400,gb:'3',streak:'—',rs:105,ra:132},
-  ];
-  ALL_TEAMS = [...TEAMS, ...HIST_TEAMS];
-  // Past games removed from this fallback (Apr 14/16/21/23) since they
-  // would render as "upcoming" if this list ever ships to a user. The
-  // fallback only fires when Firestore is unreachable; in that case we
-  // want to show the next thing on the schedule, not a stale past game.
-  SCHEDULE_PREVIEW = [
-    {wk:3,date:'Apr 28',day:'Tue',time:'7:00 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'OA',home:'TSMC',as:null,hs:null,done:false},
-    {wk:3,date:'Apr 30',day:'Thu',time:'7:00 PM',field:'Plymouth',addr:'2919 Walton Rd, Plymouth Mtg PA',away:'BA',home:'BOR',as:null,hs:null,done:false},
-    {wk:4,date:'May 5',day:'Tue',time:'7:00 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'TSBKA',home:'TSMC',as:null,hs:null,done:false},
-    {wk:4,date:'May 7',day:'Thu',time:'7:00 PM',field:'Ridgeway',addr:'Ridgeway Ave, Jenkintown PA',away:'BOB',home:'BTBJ',as:null,hs:null,done:false},
-    {wk:5,date:'May 12',day:'Tue',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'OA',home:'TSG',as:null,hs:null,done:false},
-    {wk:5,date:'May 14',day:'Thu',time:'7:00 PM',field:'Mondauk 5',addr:'1451 Dillon Rd, Ambler PA',away:'BSB',home:'TBIMC',as:null,hs:null,done:false},
-    {wk:6,date:'May 19',day:'Tue',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'KI',home:'SA',as:null,hs:null,done:false},
-    {wk:6,date:'May 21',day:'Thu',time:'7:00 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',away:'BTBJ',home:'DN',as:null,hs:null,done:false},
-    {wk:7,date:'May 26',day:'Tue',time:'7:00 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'AJ',home:'BOR',as:null,hs:null,done:false},
-    {wk:7,date:'May 28',day:'Thu',time:'7:00 PM',field:'Plymouth',addr:'2919 Walton Rd, Plymouth Mtg PA',away:'BTBJ',home:'TBIMC',as:null,hs:null,done:false},
-    {wk:8,date:'Jun 2',day:'Tue',time:'7:00 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'GOLD',home:'SA',as:null,hs:null,done:false},
-    {wk:8,date:'Jun 4',day:'Thu',time:'7:00 PM',field:'Ridgeway',addr:'Ridgeway Ave, Jenkintown PA',away:'BOR',home:'TBIMC',as:null,hs:null,done:false},
-    {wk:9,date:'Jun 9',day:'Tue',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'BTBJ',home:'GJC',as:null,hs:null,done:false},
-    {wk:9,date:'Jun 11',day:'Thu',time:'7:00 PM',field:'Mondauk 5',addr:'1451 Dillon Rd, Ambler PA',away:'DN',home:'OA',as:null,hs:null,done:false},
-    {wk:10,date:'Jun 16',day:'Tue',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'BOB',home:'OA',as:null,hs:null,done:false},
-    {wk:10,date:'Jun 18',day:'Thu',time:'7:00 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',away:'AJ',home:'TSBKA',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 23',day:'Mon',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'GOLD',home:'AJ',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 23',day:'Mon',time:'7:00 PM',field:'Mondauk 5',addr:'1451 Dillon Rd, Ambler PA',away:'SA',home:'BOR',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 23',day:'Mon',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'KI',home:'BTBJ',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 23',day:'Mon',time:'7:00 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',away:'TSMC',home:'DN',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 23',day:'Mon',time:'7:00 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'BOB',home:'GJC',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 25',day:'Wed',time:'8:15 PM',field:'Plymouth',addr:'2919 Walton Rd, Plymouth Mtg PA',away:'OA',home:'TBIMC',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 25',day:'Wed',time:'8:15 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'BA',home:'CHA',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 25',day:'Wed',time:'8:15 PM',field:'Ridgeway',addr:'Ridgeway Ave, Jenkintown PA',away:'TSBKA',home:'TBIR',as:null,hs:null,done:false},
-    {wk:11,date:'Jun 25',day:'Wed',time:'8:15 PM',field:'Abington',addr:'1030 Old York Rd, Abington PA',away:'TSG',home:'BSMC',as:null,hs:null,done:false},
-    {wk:12,date:'Jun 30',day:'Mon',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'TBIR',home:'GOLD',as:null,hs:null,done:false},
-    {wk:12,date:'Jun 30',day:'Mon',time:'7:00 PM',field:'Mondauk 5',addr:'1451 Dillon Rd, Ambler PA',away:'BOR',home:'KI',as:null,hs:null,done:false},
-    {wk:12,date:'Jun 30',day:'Mon',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'GJC',home:'SA',as:null,hs:null,done:false},
-    {wk:12,date:'Jun 30',day:'Mon',time:'7:00 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',away:'DN',home:'BOB',as:null,hs:null,done:false},
-    {wk:12,date:'Jun 30',day:'Mon',time:'7:00 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'AJ',home:'TSMC',as:null,hs:null,done:false},
-    {wk:12,date:'Jul 2',day:'Wed',time:'8:15 PM',field:'Plymouth',addr:'2919 Walton Rd, Plymouth Mtg PA',away:'BSMC',home:'OA',as:null,hs:null,done:false},
-    {wk:12,date:'Jul 2',day:'Wed',time:'8:15 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'TBIMC',home:'BA',as:null,hs:null,done:false},
-    {wk:12,date:'Jul 2',day:'Wed',time:'8:15 PM',field:'Ridgeway',addr:'Ridgeway Ave, Jenkintown PA',away:'BTBJ',home:'TSG',as:null,hs:null,done:false},
-    {wk:12,date:'Jul 2',day:'Wed',time:'8:15 PM',field:'Abington',addr:'1030 Old York Rd, Abington PA',away:'BSB',home:'TSBKA',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 7',day:'Mon',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'KI',home:'GOLD',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 7',day:'Mon',time:'7:00 PM',field:'Mondauk 5',addr:'1451 Dillon Rd, Ambler PA',away:'SA',home:'AJ',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 7',day:'Mon',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'BOB',home:'BOR',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 7',day:'Mon',time:'7:00 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',away:'TSMC',home:'TBIR',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 7',day:'Mon',time:'7:00 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'OA',home:'BTBJ',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 9',day:'Wed',time:'8:15 PM',field:'Plymouth',addr:'2919 Walton Rd, Plymouth Mtg PA',away:'BA',home:'DN',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 9',day:'Wed',time:'8:15 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'GJC',home:'BSMC',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 9',day:'Wed',time:'8:15 PM',field:'Ridgeway',addr:'Ridgeway Ave, Jenkintown PA',away:'CHA',home:'TBIMC',as:null,hs:null,done:false},
-    {wk:13,date:'Jul 9',day:'Wed',time:'8:15 PM',field:'Abington',addr:'1030 Old York Rd, Abington PA',away:'TSBKA',home:'BSB',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 14',day:'Mon',time:'7:00 PM',field:'Mondauk 4',addr:'1451 Dillon Rd, Ambler PA',away:'GOLD',home:'SA',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 14',day:'Mon',time:'7:00 PM',field:'Mondauk 5',addr:'1451 Dillon Rd, Ambler PA',away:'AJ',home:'KI',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 14',day:'Mon',time:'7:00 PM',field:'Southampton',addr:'484 Gravel Hill Rd, Southampton PA',away:'BOR',home:'GJC',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 14',day:'Mon',time:'7:00 PM',field:'Sunnybrook',addr:'Church Rd, Elkins Park PA',away:'BOB',home:'TSMC',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 14',day:'Mon',time:'7:00 PM',field:'Warwick',addr:'2301 Dark Hollow Rd, Jamison PA',away:'BTBJ',home:'BA',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 16',day:'Wed',time:'8:15 PM',field:'Plymouth',addr:'2919 Walton Rd, Plymouth Mtg PA',away:'TBIR',home:'OA',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 16',day:'Wed',time:'8:15 PM',field:'Horsham',addr:'308 Cedar Hill Rd, Ambler PA',away:'TBIMC',home:'TSG',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 16',day:'Wed',time:'8:15 PM',field:'Ridgeway',addr:'Ridgeway Ave, Jenkintown PA',away:'BSB',home:'CHA',as:null,hs:null,done:false},
-    {wk:14,date:'Jul 16',day:'Wed',time:'8:15 PM',field:'Abington',addr:'1030 Old York Rd, Abington PA',away:'BSMC',home:'TSBKA',as:null,hs:null,done:false},
-  ];
-  HISTORY = [
-    {yr:2024,champ:'Shir Ami',short:'SA',runner:'KI',rec:'9-6',pct:'.600',hr:8,mvp:'Carlos Rivera',champ_team:'sa'},
-    {yr:2023,champ:'Goldsteins',short:'GOLD',runner:'BOB',rec:'11-4',pct:'.733',hr:14,mvp:'Mike Goldstein',champ_team:'gold'},
-    {yr:2022,champ:'KI',short:'KI',runner:'SA',rec:'10-5',pct:'.667',hr:12,mvp:'Brian Kim',champ_team:'ki'},
-    {yr:2021,champ:'BOB',short:'BOB',runner:'TSMC',rec:'9-6',pct:'.600',hr:9,mvp:'Bobby Marchetti',champ_team:'bob'},
-    {yr:2020,champ:'Shir Ami',short:'SA',runner:'AJ',rec:'8-4',pct:'.667',hr:11,mvp:'Tony DeLuca',champ_team:'sa'},
-    {yr:2019,champ:'Beth Am',short:'BA',runner:'SA',rec:'12-3',pct:'.800',hr:15,mvp:'D. Schwartz',champ_team:null},
-  ];
+  TEAMS = [];
+  HIST_TEAMS = [];
+  ALL_TEAMS = [];
+  SCHEDULE_PREVIEW = [];
+  HISTORY = [];
   RECAPS = [];
-  PLAYERS = []; // Stats will populate from Firebase as real games are played
+  PLAYERS = [];
+  // Try to surface this as a banner the user can dismiss. Defensive
+  // because this can fire before the DOM is fully built.
+  setTimeout(() => {
+    try {
+      const banner = document.getElementById('site-banner');
+      const bannerText = document.getElementById('site-banner-text');
+      if (banner && bannerText) {
+        banner.style.cssText += ';display:block;background:#c8102e;color:#fff';
+        bannerText.textContent = '⚠ Could not load league data — check your connection and refresh. Showing partial / empty state.';
+      } else {
+        // No banner element yet; fall back to console.
+        console.warn('[DVSL] Firestore unreachable — running in offline mode with empty data.');
+      }
+    } catch(_) {}
+  }, 100);
 }
 
-// ════════════════════════════ HELPERS ════════════════════════════════════
+// Old hardcoded fallback removed in v248. Original data is preserved
+// here in a non-executing comment block in case anyone wants to
+// reference what the team list was when this code was removed:
+// (no inline data — the Firestore source of truth was already correct
+// at the time of removal; if you need a snapshot, check git history.)// ════════════════════════════ HELPERS ════════════════════════════════════
 function getTeam(id){return TEAMS.find(t=>t.id===id)}
 function getTeamByShort(s){return TEAMS.find(t=>t.short===s)}
 function initials(name){return (name||'?').split(' ').map(w=>w[0]||'').join('').slice(0,2).toUpperCase()||'?'}
@@ -4904,7 +4849,7 @@ function filterPlayerSearch(query){
   const teamFilter = document.querySelector('.pf-btn.on')?.onclick?.toString().match(/'([^']+)'/)?.[1] || 'all';
   let players = q
     ? PLAYERS.filter(p =>
-        p.name.toLowerCase().includes(q) ||
+        _dvslCleanName(p.name).includes(q) ||
         (getTeam(p.team)?.name||'').toLowerCase().includes(q) ||
         (getTeam(p.team)?.short||'').toLowerCase().includes(q)
       )
@@ -5900,7 +5845,7 @@ function renderCareerTab(sortKey, sortDir){
     if(sk==='seasons') return sd==='asc'?a.seasons.length-b.seasons.length:b.seasons.length-a.seasons.length;
     return sd==='asc'?(a[sk]||0)-(b[sk]||0):(b[sk]||0)-(a[sk]||0);
   });
-  const findPid=(first,last)=>{const p=PLAYERS.find(x=>x.name.toLowerCase()===`${first} ${last}`.toLowerCase());return p?p.id:null;};
+  const findPid=(first,last)=>{const p=PLAYERS.find(x=>_dvslCleanName(x.name)===`${first} ${last}`.toLowerCase());return p?p.id:null;};
   const cols=[
     {key:'name', label:'Player'},
     {key:'seasons', label:'Yrs'},{key:'gp', label:'GP'},{key:'ab', label:'AB'},{key:'h', label:'H'},
@@ -6318,7 +6263,7 @@ function buildRecaps(){
         }
       }
     }
-    const potgPlayer = _potgName ? PLAYERS.find(p=>p.name===_potgName||p.name?.toLowerCase()===_potgName.toLowerCase()) : null;
+    const potgPlayer = _potgName ? PLAYERS.find(p=>p.name===_potgName||_dvslCleanName(p.name)===_dvslCleanName(_potgName)) : null;
     const potgTeamObj = _potgTeam ? (TEAMS.find(t=>t.id===_potgTeam||t.short?.toLowerCase()===_potgTeam?.toLowerCase())||HIST_TEAMS.find(t=>t.id===_potgTeam)) : null;
     // POTG banner leads the recap body — star on top, name under it,
     // then the recap paragraph below. Yellow gradient + gold border
@@ -6462,14 +6407,14 @@ window._dataPromise.then(() => {
   const _urlPlayer = _urlParams.get('player');
   if(_urlPlayer){
     history.replaceState(null,'',window.location.pathname);
-    const _found = PLAYERS.find(p=>p.name.toLowerCase()===_urlPlayer.toLowerCase());
+    const _found = PLAYERS.find(p=>_dvslCleanName(p.name)===_dvslCleanName(_urlPlayer));
     if(_found){ openModal(_found.id); }
   }
   // Legacy sessionStorage approach
   const _pn = sessionStorage.getItem('dvsl_goPlayerName');
   if(_pn){
     sessionStorage.removeItem('dvsl_goPlayerName');
-    const _found2 = PLAYERS.find(p=>p.name.toLowerCase()===_pn.toLowerCase());
+    const _found2 = PLAYERS.find(p=>_dvslCleanName(p.name)===_dvslCleanName(_pn));
     if(_found2){ openModal(_found2.id); }
   }
   try{ buildTicker(); }catch(e){}
@@ -7537,10 +7482,10 @@ async function openRecap(away,home,as,hs,field,date){
     };
     let potgEntry=null;
     if(boxScore.potg_name){
-      const potgLower=boxScore.potg_name.toLowerCase();
-      potgEntry=allLineup.find(p=>p.name?.toLowerCase()===potgLower)||allLineup.find(p=>{
+      const potgLower=_dvslCleanName(boxScore.potg_name);
+      potgEntry=allLineup.find(p=>_dvslCleanName(p.name)===potgLower)||allLineup.find(p=>{
         if(!p.name) return false;
-        const nP=p.name.toLowerCase().split(/\s+/),pP=potgLower.split(/\s+/);
+        const nP=_dvslCleanName(p.name).split(/\s+/),pP=potgLower.split(/\s+/);
         if(nP.length<2||pP.length<2) return false;
         const nLast=nP.slice(1).join(' '),pLast=pP.slice(1).join(' ');
         return nLast===pLast&&(nP[0][0]===pP[0][0]||nP[0].replace(/\./g,'')===pP[0][0]);
@@ -7702,10 +7647,10 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     // Shared between basic + advanced tables to avoid duplicated matching logic.
     const resolveBatter=(p,teamShort)=>{
       const teamObj=TEAMS.find(t=>t.short===teamShort||t.id===teamShort);
-      const _pname=p.name?.toLowerCase();
+      const _pname=_dvslCleanName(p.name);
       const _teamMatch=(pl)=>!teamObj||(pl.team===teamObj.id||pl.team===teamShort||pl.team.toLowerCase()===teamShort.toLowerCase());
-      return PLAYERS.find(pl=>pl.name.toLowerCase()===_pname&&_teamMatch(pl))
-        ||PLAYERS.find(pl=>pl.name.toLowerCase()===_pname)
+      return PLAYERS.find(pl=>_dvslCleanName(pl.name)===_pname&&_teamMatch(pl))
+        ||PLAYERS.find(pl=>_dvslCleanName(pl.name)===_pname)
         ||(()=>{
           const pP=(_pname||'').split(/\s+/);
           if(pP.length<2) return undefined;
@@ -7714,7 +7659,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
           const pL=pP.slice(1).join(' ');
           const tId=teamObj?.id?.toLowerCase();
           return PLAYERS.find(pl=>{
-            const qP=pl.name.toLowerCase().split(/\s+/);
+            const qP=_dvslCleanName(pl.name).split(/\s+/);
             return qP.length>=2&&qP[0][0]===pF&&qP.slice(1).join(' ')===pL&&(!tId||pl.team.toLowerCase()===tId);
           });
         })();
@@ -8138,7 +8083,7 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup,po
   const ps=p=>{const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));return (p.hr||0)*4+h+(p.rbi||0)*2+(p.r||0);};
   let star=allL.length?allL.reduce((b,p)=>ps(p)>ps(b)?p:b,allL[0]):null;
   const hasStats=star&&ps(star)>0;
-  const adminPotg = potgName ? allL.find(p=>p.name?.toLowerCase()===potgName.toLowerCase()) || {name:potgName,_t:potgTeam||''} : null;
+  const adminPotg = potgName ? allL.find(p=>_dvslCleanName(p.name)===_dvslCleanName(potgName)) || {name:potgName,_t:potgTeam||''} : null;
 
   const statLine=p=>{
     const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
@@ -8604,7 +8549,7 @@ function getRows(){
         const histPseudoTeam = '_' + tid + '_hist';
         for (const p of ds) {
           const fullName = `${p.first} ${p.last}`;
-          const playerMatch = PLAYERS.find(pl => pl.name.toLowerCase() === fullName.toLowerCase());
+          const playerMatch = PLAYERS.find(pl => _dvslCleanName(pl.name) === _dvslCleanName(fullName));
           const avg = p.ab>0 ? p.h/p.ab : 0;
           const obp = (p.ab+p.bb)>0 ? (p.h+p.bb)/(p.ab+p.bb) : 0;
           const slg = p.ab>0 ? (p.s+2*p.d+3*p.t+4*p.hr)/p.ab : 0;

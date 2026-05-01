@@ -4498,7 +4498,16 @@ window.handleCaptainScoreUpload = async function(gameId, file) {
 // Port of admin.html v233-v236 logic so captain uploads also map
 // "Kundtz" → "Jason Kundtz" + attach pid + ask which Smith when
 // multiple roster players share a surname.
-function _captNorm(s) { return String(s||'').trim().toLowerCase(); }
+// Adam audit 4/30/26: matches admin.html / index.html name-cleaning.
+// Strips ALL Unicode whitespace (NBSP, tabs, ideographic spaces) so
+// names pasted from a PDF/Word with NBSP still dedupe correctly.
+function _captNorm(s) {
+  return String(s||'')
+    .replace(/\p{Z}+/gu, ' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
 function _captSurname(s) {
   const n = _captNorm(s);
   if (!n) return '';
