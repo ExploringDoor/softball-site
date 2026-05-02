@@ -2639,6 +2639,24 @@ window.closeCaptUploadView = function() {
   document.getElementById('scores-content').style.display = '';
 };
 
+// When the canonical game.{away,home}_score changes, the matching
+// box_score doc must move with it — otherwise the public box-score
+// modal and stats aggregator can read stale numbers and disagree
+// with the schedule/recent-games view. Idempotent: silent no-op
+// when no box_score exists for this game (common for score-only
+// games the admin types without filling a lineup).
+async function _syncBoxScoreScore(gameId, away_score, home_score) {
+  try {
+    const bsRef = doc(db, 'box_scores', gameId);
+    const snap = await getDoc(bsRef);
+    if (snap.exists()) {
+      await updateDoc(bsRef, { away_score, home_score });
+    }
+  } catch (e) {
+    console.warn('[_syncBoxScoreScore] failed for', gameId, e);
+  }
+}
+
 window.captInboxApplyUpload = async function(docId) {
   const u = CAPT_SUBMISSION_INBOX.uploads.find(x => x.id === docId);
   if (!u) return;
@@ -2651,6 +2669,7 @@ window.captInboxApplyUpload = async function(docId) {
       away_score: u.away_score, home_score: u.home_score, done: true,
       score_conflict: false, score_pending: false, score_confirmed: true, has_discrepancy: false
     });
+    await _syncBoxScoreScore(u.game_id, u.away_score, u.home_score);
     const g = GAMES.find(x => x.id === u.game_id);
     if (g) { g.away_score = u.away_score; g.home_score = u.home_score; g.done = true; g.score_conflict = false; g.score_pending = false; }
     await updateDoc(doc(db, 'score_uploads', docId), { status: 'applied', applied_at: serverTimestamp() });
@@ -2975,6 +2994,7 @@ window.saveScore = async function(gameId, markDone) {
   const wasDone = !!_pre?.done;
   try {
     await updateDoc(doc(db, 'games', gameId), { away_score: as, home_score: hs, done: markDone });
+    await _syncBoxScoreScore(gameId, as, hs);
     const g = GAMES.find(x => x.id === gameId);
     if (g) { g.away_score = as; g.home_score = hs; g.done = markDone; }
     toast(markDone ? 'Score saved and marked final!' : 'Score saved as draft');
@@ -3092,6 +3112,7 @@ window.resolveConflict = async function(gameId) {
       away_score: as, home_score: hs, done: true,
       score_conflict: false, score_pending: false, score_confirmed: true
     });
+    await _syncBoxScoreScore(gameId, as, hs);
     if (g) { g.away_score = as; g.home_score = hs; g.done = true; g.score_conflict = false; g.score_pending = false; }
     toast('Score conflict resolved and game marked final!');
     await logActivity('Score Conflict', `Admin resolved: ${getTeamName(g?.away)} ${as} – ${getTeamName(g?.home)} ${hs}`);
