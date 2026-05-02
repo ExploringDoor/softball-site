@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v254-linescore-display-and-poll-30s`;
+const VERSION = `${LEAGUE.id}-v255-precache-actual-hero-image`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
@@ -219,7 +219,9 @@ const CORE_URLS = [
   '/icons/icon-512.png',
   '/icons/apple-touch-icon.png',
   '/logos/glove.png',
-  '/dvsl-hero.png',
+  // dvsl-hero.png removed — was 320KB precache for an image not used
+  // anywhere in production. The home-page hero now uses bannersoftball.jpg.
+  '/bannersoftball.jpg',
   '/dvsl-logo-dark.png',
   '/dvsl-logo-glass.png',
   ...LOGO_URLS,
