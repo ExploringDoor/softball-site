@@ -4924,11 +4924,15 @@ window.addEventListener('popstate',e=>{
   // Unknown hash (in-page anchor like #playoffs / #mondauk4 inside the
   // rules content). Browser default scroll-to-id does NOT reliably fire
   // for hash changes when the target is inside a JS-injected innerHTML.
-  // window.scrollTo() is silently no-op on this site (some scroll-handler
-  // is resetting), so use scrollIntoView which actually works.
+  // window.scrollTo and scrollIntoView({behavior:smooth}) are both
+  // silently canceled on this site (some scroll handler is resetting
+  // them mid-animation). instant works. Use a tiny rAF chain for the
+  // visual effect of smooth scroll.
   const target = document.getElementById(h);
   if (target) {
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: 'instant', block: 'start' });
+    });
   }
 });
 
