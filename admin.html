@@ -2036,15 +2036,16 @@ window.refreshCaptainChat = async function() {
     const preview = msgs.map(m => {
       const team = m.team_name || '?';
       const txt = (m.text || '').slice(0, 80) + ((m.text || '').length > 80 ? '…' : '');
+      // esc() both — `txt` is user-written chat content (XSS surface) and `team` is admin-set (defense-in-depth)
       return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px">
-        <div style="color:var(--text);font-weight:600">${team} <span style="color:var(--muted);font-weight:400;font-size:11px">· ${fmt(m.timestamp)}</span></div>
-        <div style="color:var(--muted);margin-top:2px">${txt}</div>
+        <div style="color:var(--text);font-weight:600">${esc(team)} <span style="color:var(--muted);font-weight:400;font-size:11px">· ${fmt(m.timestamp)}</span></div>
+        <div style="color:var(--muted);margin-top:2px">${esc(txt)}</div>
       </div>`;
     }).join('');
     const hitLimit = msgs.length === 5;
     el.innerHTML = `<div style="margin-bottom:8px;color:var(--text);font-weight:600">${hitLimit ? '5+ recent' : msgs.length} message${msgs.length===1?'':'s'}</div>${preview}`;
   } catch(e) {
-    el.innerHTML = `<div style="color:var(--red);padding:8px">Failed to load: ${e.message}</div>`;
+    el.innerHTML = `<div style="color:var(--red);padding:8px">Failed to load: ${esc(e.message)}</div>`;
   }
 };
 
@@ -3372,7 +3373,6 @@ function resolveParsedNames(parsed, awayTeamId, homeTeamId) {
   const allP = (typeof PLAYERS !== 'undefined' && Array.isArray(PLAYERS)) ? PLAYERS : [];
   const awayRoster = allP.filter(p => p.team === awayTeamId && p.active !== false);
   const homeRoster = allP.filter(p => p.team === homeTeamId && p.active !== false);
-  console.log('[resolveParsedNames]', { awayTeamId, homeTeamId, awayRosterLen: awayRoster.length, homeRosterLen: homeRoster.length });
   const resolveOne = (entry, roster, side, role) => {
     if (!entry || !entry.name) return;
     const r = _matchAgainstRoster(entry.name, roster, entry.num);
