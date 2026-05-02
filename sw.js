@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v258-rules-anchor-fix-and-sticky-offsets`;
+const VERSION = `${LEAGUE.id}-v259-rules-explicit-scroll-to-anchor`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
