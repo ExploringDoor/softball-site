@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v256-stats-recalc-status-and-h-fallback`;
+const VERSION = `${LEAGUE.id}-v257-unified-shell-rules-section`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
@@ -213,6 +213,9 @@ const CORE_URLS = [
   '/photos.html',
   '/watch.html',
   '/inbox.html',
+  // Lazy-loaded content fragments for unified-shell sections in index.html.
+  // Pre-cached so first navigation to #rules etc. is instant offline too.
+  '/rules-content.html',
   '/manifest.json',
   '/offline.html',
   '/icons/icon-192.png',

@@ -3640,6 +3640,12 @@ thead th.sorted-col .sarrow{opacity:1}
   <footer class="ft"><div class="ft-logo">⬡ DVSL</div><div class="ft-copy">© 2026 DVSL</div></footer>
 </div>
 
+<!-- ── pg-rules: lazy-loaded section. Content fragment lives in
+     /rules-content.html (HTML + scoped CSS, no scripts). Page-specific
+     JS for tab switching and IntersectionObservers is in the main
+     script block. First navigation to #rules triggers _lazyLoadRules. -->
+<div class="page" id="pg-rules"></div>
+
 <div class="pop" id="scPop" onclick="if(event.target===this)closeScPop()"><div class="pop-box"><button class="pop-x" onclick="closeScPop()">✕</button><button id="scPopSaveImg" onclick="saveBoxScoreImage()" title="Save this box score as a PNG image you can share" style="position:absolute;top:14px;right:54px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;font-weight:700;height:28px;padding:0 10px;cursor:pointer;display:flex;align-items:center;gap:4px;z-index:2;font-family:inherit;white-space:nowrap">📷 Save Box Score as Picture</button><div id="scPopContent"></div></div></div>
 <div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
   <div class="modal-box">
@@ -4707,6 +4713,126 @@ function slg(v){return (v||0).toFixed(3).replace(/^0\./,'.')}
 // ════════════════════════════ ROUTING ════════════════════════════════════
 let currentTeamId=null, currentTeamTab='roster';
 
+// ═══════════════════ LAZY-LOAD STANDALONE PAGES ════════════════════════════
+// Each formerly-standalone page (rules, photos, registration, playoffs)
+// has an empty <div class="page" id="pg-X"> in this file. The actual
+// content + scoped CSS lives in a /<name>-content.html partial. First
+// navigation to #X fetches and injects it; subsequent visits are instant.
+// Page-specific JS (tab switching, observers, Firebase reads) is wired
+// in the _init<Name>Page() callback below.
+
+let _rulesLoaded = false;
+async function _lazyLoadRules(extra) {
+  const target = document.getElementById('pg-rules');
+  if (!target) return;
+  if (!_rulesLoaded) {
+    target.innerHTML = '<div style="padding:130px 48px 28px;text-align:center;color:var(--muted)">Loading rules…</div>';
+    try {
+      const r = await fetch('/rules-content.html');
+      if (!r.ok) throw new Error('fetch failed: ' + r.status);
+      target.innerHTML = await r.text();
+      _initRulesPage();
+      _rulesLoaded = true;
+    } catch (e) {
+      console.warn('[lazyLoadRules]', e);
+      target.innerHTML = '<div style="padding:60px;text-align:center;color:var(--muted)">Could not load rules. <a href="/rules.html" style="color:var(--gold)">Open standalone view</a></div>';
+      return;
+    }
+  }
+  // Allow goPage('rules', 'ground-rules') to deep-link the second tab.
+  if (extra === 'ground-rules' || extra === 'ground') {
+    setTimeout(() => {
+      try { window.showPanel('ground-rules', document.getElementById('tab-ground-rules')); } catch(_) {}
+    }, 0);
+  }
+}
+
+function _initRulesPage() {
+  // TOC active tracking — League Rules side
+  const ruleSecs = document.querySelectorAll('#pg-rules .rule-section');
+  const ruleTocAs = document.querySelectorAll('#pg-rules #toc-rules a');
+  if (ruleSecs.length && ruleTocAs.length) {
+    const rObs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const id = e.target.id;
+          ruleTocAs.forEach(a => a.classList.toggle('active-toc', a.getAttribute('href') === '#' + id));
+        }
+      });
+    }, { rootMargin: '-15% 0px -70% 0px' });
+    ruleSecs.forEach(s => rObs.observe(s));
+  }
+  // TOC active tracking — Ground Rules side
+  const grCards = document.querySelectorAll('#pg-rules .venue-card');
+  const grTocAs = document.querySelectorAll('#pg-rules #toc-gr a');
+  if (grCards.length && grTocAs.length) {
+    const grObs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const id = e.target.id;
+          grTocAs.forEach(a => a.classList.toggle('active-toc', a.getAttribute('href') === '#' + id));
+        }
+      });
+    }, { rootMargin: '-15% 0px -70% 0px' });
+    grCards.forEach(c => grObs.observe(c));
+  }
+  // Fade-in animation for venue cards
+  const fadeObs = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.style.opacity = '1';
+        e.target.style.transform = 'translateY(0)';
+        fadeObs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.04 });
+  document.querySelectorAll('#pg-rules .venue-card,#pg-rules .cluster-div').forEach(el => {
+    el.style.cssText = 'opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease';
+    fadeObs.observe(el);
+  });
+  // Pull admin-edited content overrides from Firestore site_content
+  _loadRulesAdminContent().catch(() => {});
+}
+
+async function _loadRulesAdminContent() {
+  try {
+    const db = await getDb();
+    const { collection: _c, getDocs: _gd } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    const snap = await _gd(_c(db, 'site_content'));
+    snap.forEach(d => {
+      const data = d.data();
+      const sectionId = data.section_id;
+      if (!sectionId || !data.html) return;
+      if (sectionId === 'ground-intro') {
+        const el = document.querySelector('#pg-rules #panel-ground-rules .intro-card');
+        if (el) el.innerHTML = data.html;
+      } else {
+        const section = document.querySelector('#pg-rules #' + sectionId);
+        const body = section?.querySelector('.rule-body');
+        if (body) body.innerHTML = data.html;
+      }
+    });
+  } catch(_) {}
+}
+
+// showPanel must be on window because the injected rules content uses
+// inline onclick="showPanel('league-rules', this)" / 'ground-rules'.
+window.showPanel = function(name, btn) {
+  document.querySelectorAll('#pg-rules .sec-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else { const t = document.getElementById('tab-' + name); if (t) t.classList.add('active'); }
+  document.querySelectorAll('#pg-rules .panel').forEach(p => {
+    p.classList.remove('show');
+    p.style.display = 'none';
+  });
+  const target = document.getElementById('panel-' + name);
+  if (target) {
+    target.classList.add('show');
+    target.style.display = 'block';
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
 function goPage(name,extra,skipHistory){
   // Skip intro if navigating away from home
   if(name!=='home') document.body.classList.add('intro-done');
@@ -4717,7 +4843,7 @@ function goPage(name,extra,skipHistory){
   } catch(_) {}
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('show'));
   var pg=document.getElementById('pg-'+name);
-  if(!pg){var ext={playoffs:'playoffs.html',rules:'rules.html',photos:'photos.html'};if(ext[name])window.location=ext[name];return;}
+  if(!pg){var ext={playoffs:'playoffs.html',photos:'photos.html'};if(ext[name])window.location=ext[name];return;}
   pg.classList.add('show');
   document.querySelectorAll('[id^="nl-"]').forEach(el=>el.classList.remove('active'));
   const nl=document.getElementById('nl-'+name);
@@ -4743,6 +4869,9 @@ function goPage(name,extra,skipHistory){
     if(!PLAYERS.length && window._dataPromise) {
       window._dataPromise.then(()=>{ try { buildLeadersPage(); } catch(e){} });
     }
+  }
+  if(name==='rules'){
+    _lazyLoadRules(extra);
   }
   if(name==='scores'){
     const doScores=()=>{try{setView(extra==='schedule'?'schedule':'scores');buildScoresNav();renderScores();}catch(e){console.error(e);}};
@@ -6540,7 +6669,7 @@ async function loadSiteBanner(){
   var parts = hashFull.split('/');
   var hash = parts[0];
   var hashExtra = parts[1]||null;
-  var valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings'];
+  var valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules'];
 
   // #game/<id> opens the box-score modal for a specific game. Used by
   // final-score push notifications so tapping a notification goes straight
