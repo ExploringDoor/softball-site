@@ -3662,6 +3662,16 @@ thead th.sorted-col .sarrow{opacity:1}
   </div>
 </div>
 <script>
+// ═══════════════════════════════════════ HTML ESCAPE HELPER ═════════════════
+// Used wherever user/admin/captain-written text gets interpolated into
+// innerHTML (recap text, player names, team names, etc.). Prevents stored
+// XSS — e.g. an admin typing `<script>...` in a recap would otherwise run
+// for every visitor opening the box-score modal.
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
 // ═══════════════════════════════════════ FIREBASE CONFIG ════════════════════
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
 
@@ -6273,28 +6283,28 @@ function buildRecaps(){
       <div style="background:linear-gradient(135deg,#fde047,#f5c842);border:2px solid #ca8a04;border-radius:12px;padding:14px 16px;margin-bottom:14px;text-align:center;box-shadow:0 3px 10px rgba(245,200,66,.35)">
         <div style="font-size:28px;line-height:1;margin-bottom:2px">⭐</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#78350f;margin-bottom:4px">Player of the Game</div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#1a1a1a;line-height:1.1;text-transform:uppercase;letter-spacing:.01em;cursor:${potgPlayer?'pointer':'default'}" ${potgPlayer?`onclick="openModal('${potgPlayer.id}')"`:''}>${_potgName}${potgTeamObj?` <span style="font-weight:600;font-size:13px;color:#78350f;letter-spacing:.02em">· ${potgTeamObj.short||potgTeamObj.name}</span>`:''}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#1a1a1a;line-height:1.1;text-transform:uppercase;letter-spacing:.01em;cursor:${potgPlayer?'pointer':'default'}" ${potgPlayer?`onclick="openModal('${esc(potgPlayer.id)}')"`:''}>${esc(_potgName)}${potgTeamObj?` <span style="font-weight:600;font-size:13px;color:#78350f;letter-spacing:.02em">· ${esc(potgTeamObj.short||potgTeamObj.name)}</span>`:''}</div>
       </div>` : '';
     return `<div class="recap-card">
       <div class="recap-top">
         <div>
           <div class="recap-match">
-            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${at?.id}')">${r.away}</span>
+            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${esc(at?.id)}')">${esc(r.away)}</span>
             <span style="color:var(--muted);font-size:18px;margin:0 10px">vs</span>
-            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${ht?.id}')">${r.home}</span>
+            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${esc(ht?.id)}')">${esc(r.home)}</span>
           </div>
-          <div class="recap-meta">📅 ${r.date} · 📍 ${r.field} · Week ${r.wk}</div>
+          <div class="recap-meta">📅 ${esc(r.date)} · 📍 ${esc(r.field)} · Week ${r.wk|0}</div>
         </div>
-        <div class="recap-score">${r.as}–${r.hs}</div>
+        <div class="recap-score">${r.as|0}–${r.hs|0}</div>
       </div>
       <div class="recap-body">
         ${potgHtml}
-        <p>${r.text}</p>
-        <div class="recap-stars">${r.stars.map(s=>{
+        <p>${esc(r.text)}</p>
+        <div class="recap-stars">${(r.stars||[]).map(s=>{
           const pname=s.split('·')[0].trim().replace(/^[⭐★\s]+/,'');
           const stats=s.split('·').slice(1).join('·').trim();
           const player=PLAYERS.find(p=>p.name.split(' ').pop()===pname.split(' ').pop()||p.name===pname);
-          return `<div class="star-chip" ${player?`onclick="openModal('${player.id}')" title="Click to view profile"`:''}><span>⭐</span><strong>${pname}</strong><span style="color:var(--muted)">·</span><span>${stats}</span></div>`;
+          return `<div class="star-chip" ${player?`onclick="openModal('${esc(player.id)}')" title="Click to view profile"`:''}><span>⭐</span><strong>${esc(pname)}</strong><span style="color:var(--muted)">·</span><span>${esc(stats)}</span></div>`;
         }).join('')}</div>
       </div>
     </div>`;
@@ -7539,7 +7549,7 @@ async function openRecap(away,home,as,hs,field,date){
     <div class="pop-body">
       ${potgHtml}
       <div class="pop-sec-title">Game Recap</div>
-      <div class="pop-recap">${recap?.text||boxScore?.recap||'Recap coming soon — check back after the game.'}</div>
+      <div class="pop-recap">${esc(recap?.text||boxScore?.recap)||'Recap coming soon — check back after the game.'}</div>
       ${starsHtml}
     </div>`;
 }

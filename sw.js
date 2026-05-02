@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v251-instant-stats-on-captain-and-scorer-submit`;
+const VERSION = `${LEAGUE.id}-v252-recap-xss-fix-and-config-cleanup`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
