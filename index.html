@@ -4897,10 +4897,32 @@ function goPage(name,extra,skipHistory){
 window.addEventListener('popstate',e=>{
   var mb=document.getElementById('modal-bg');
   if(mb&&mb.classList.contains('open')){mb.classList.remove('open');document.body.style.overflow='';return;}
-  const pg=(e.state&&e.state.page)||'home';
-  const ex=(e.state&&e.state.extra)||null;
-  if(pg==='modal')return;
-  goPage(pg,ex,true);
+  // popstate ALSO fires on plain hash changes (clicking <a href="#foo">),
+  // not just back/forward — and those have null state. If we just default
+  // to 'home' on null state, every in-page anchor click bounces to home.
+  // Bug surfaced after we lazy-loaded /#rules content with quickjump
+  // anchors like #playoffs / #scoring (rule sections inside pg-rules).
+  // Derive the page from location.hash instead so anchor clicks stay put.
+  if (e.state && e.state.page) {
+    const pg = e.state.page;
+    const ex = e.state.extra || null;
+    if (pg === 'modal') return;
+    goPage(pg, ex, true);
+    return;
+  }
+  // No state — this is a plain hash change (or initial load).
+  // If the hash matches a known section, route to it; otherwise
+  // leave the current page alone (browser default scroll-to-anchor).
+  const hashFull = (window.location.hash || '').replace('#', '');
+  const parts = hashFull.split('/');
+  const h = parts[0];
+  const ex = parts[1] || null;
+  const valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules'];
+  if (!h) { goPage('home', null, true); return; }
+  if (h === 'schedule') { goPage('scores', 'schedule', true); return; }
+  if (valid.includes(h)) { goPage(h, ex, true); return; }
+  // Unknown hash (in-page anchor like #playoffs / #mondauk4) — let the
+  // browser's default scroll-to-id behavior handle it. Don't navigate.
 });
 
 // ════════════════════════════ TICKER ═════════════════════════════════════
