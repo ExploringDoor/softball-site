@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v262-unified-shell-photos-section`;
+const VERSION = `${LEAGUE.id}-v263-unified-shell-registration-section`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
@@ -217,6 +217,7 @@ const CORE_URLS = [
   // Pre-cached so first navigation to #rules etc. is instant offline too.
   '/rules-content.html',
   '/photos-content.html',
+  '/registration-content.html',
   '/manifest.json',
   '/offline.html',
   '/icons/icon-192.png',

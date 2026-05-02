@@ -3651,6 +3651,12 @@ thead th.sorted-col .sarrow{opacity:1}
      loadPlayerPhotos which pulls team_media docs from Firestore. -->
 <div class="page" id="pg-photos"></div>
 
+<!-- ── pg-registration: 3-step form (info → waiver → signature → submit).
+     Content in /registration-content.html. Form logic ported into the
+     main script: loadTeams from Firestore, setStep, submitRegistration
+     (creates player doc, posts admin push, syncs MailerLite). -->
+<div class="page" id="pg-registration"></div>
+
 <div class="pop" id="scPop" onclick="if(event.target===this)closeScPop()"><div class="pop-box"><button class="pop-x" onclick="closeScPop()">✕</button><button id="scPopSaveImg" onclick="saveBoxScoreImage()" title="Save this box score as a PNG image you can share" style="position:absolute;top:14px;right:54px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;font-weight:700;height:28px;padding:0 10px;cursor:pointer;display:flex;align-items:center;gap:4px;z-index:2;font-family:inherit;white-space:nowrap">📷 Save Box Score as Picture</button><div id="scPopContent"></div></div></div>
 <div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
   <div class="modal-box">
@@ -4944,6 +4950,215 @@ window.closeLb = function() {
   setTimeout(() => { lb.style.display = 'none'; document.getElementById('lbImg').src = ''; }, 300);
 };
 
+// ─── pg-registration ─────────────────────────────────────────────────────
+let _registrationLoaded = false;
+async function _lazyLoadRegistration() {
+  const target = document.getElementById('pg-registration');
+  if (!target) return;
+  if (_registrationLoaded) return;
+  target.innerHTML = '<div style="padding:130px 48px 28px;text-align:center;color:var(--muted)">Loading…</div>';
+  try {
+    const r = await fetch('/registration-content.html');
+    if (!r.ok) throw new Error('fetch failed: ' + r.status);
+    target.innerHTML = await r.text();
+    await _initRegistrationPage();
+    _registrationLoaded = true;
+  } catch (e) {
+    console.warn('[lazyLoadRegistration]', e);
+    target.innerHTML = '<div style="padding:60px;text-align:center;color:var(--muted)">Could not load registration. <a href="/registration.html" style="color:var(--gold)">Open standalone view</a></div>';
+  }
+}
+
+const _REG_SEASON = '2026';
+async function _initRegistrationPage() {
+  // Populate teams dropdown from Firestore
+  const sel = document.querySelector('#pg-registration #f-team');
+  if (sel) {
+    try {
+      const db = await getDb();
+      const { collection: _c, getDocs: _gd, query: _q, orderBy: _ob } =
+        await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+      const snap = await _gd(_q(_c(db, 'teams'), _ob('name')));
+      const teams = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+      sel.innerHTML = '<option value="">— Select your team —</option>' +
+        teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    } catch (e) {
+      sel.innerHTML = '<option value="">Could not load teams</option>';
+    }
+  }
+  // Today's date in signature box
+  const today = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
+  const sigDate = document.querySelector('#pg-registration #sig-date-display');
+  if (sigDate) sigDate.textContent = `Date: ${today}`;
+  window._regToday = today;
+
+  // Waiver scroll tracking — enables the next button when scrolled to bottom
+  const waiverDiv = document.querySelector('#pg-registration #waiver-scroll');
+  const nextBtn   = document.querySelector('#pg-registration #waiver-next-btn');
+  const scrollInd = document.querySelector('#pg-registration #scroll-indicator');
+  if (waiverDiv && nextBtn) {
+    waiverDiv.addEventListener('scroll', () => {
+      const pct = waiverDiv.scrollTop / (waiverDiv.scrollHeight - waiverDiv.clientHeight);
+      if (pct > 0.92) {
+        nextBtn.disabled = false;
+        nextBtn.textContent = 'I Have Read the Waiver — Continue →';
+        if (scrollInd) scrollInd.classList.add('hidden');
+      }
+    });
+  }
+}
+
+// All onclick handlers in the registration content reference window.* fns.
+function _regSetStep(n) {
+  [1,2,3].forEach(i => {
+    const step = document.querySelector(`#pg-registration #step-${i}`);
+    if (step) step.style.display = i === n ? 'block' : 'none';
+    const sc = document.querySelector(`#pg-registration #sc-${i}`);
+    const sl = document.querySelector(`#pg-registration #sl-${i}`);
+    if (!sc || !sl) return;
+    if (i < n)        { sc.className = 'step-circle done';   sc.textContent = '✓'; sl.className = 'step-label done'; }
+    else if (i === n) { sc.className = 'step-circle active'; sc.textContent = String(i); sl.className = 'step-label active'; }
+    else              { sc.className = 'step-circle';        sc.textContent = String(i); sl.className = 'step-label'; }
+    if (i < 3) {
+      const ln = document.querySelector(`#pg-registration #line-${i}`);
+      if (ln) ln.className = i < n ? 'step-line done' : 'step-line';
+    }
+  });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+window.goToStep1 = () => _regSetStep(1);
+window.goToStep2 = () => {
+  const err = document.querySelector('#pg-registration #error-box-1');
+  err.className = 'error-box';
+  const first = document.querySelector('#pg-registration #f-first').value.trim();
+  const last  = document.querySelector('#pg-registration #f-last').value.trim();
+  const team  = document.querySelector('#pg-registration #f-team').value;
+  const email = document.querySelector('#pg-registration #f-email').value.trim();
+  const phone = document.querySelector('#pg-registration #f-phone').value.trim();
+  if (!first)          { err.textContent = 'Please enter your first name.';          err.className = 'error-box show'; return; }
+  if (!last)           { err.textContent = 'Please enter your last name.';           err.className = 'error-box show'; return; }
+  if (!team)           { err.textContent = 'Please select your team.';               err.className = 'error-box show'; return; }
+  if (!email && !phone){ err.textContent = 'Please enter an email or phone number.'; err.className = 'error-box show'; return; }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ err.textContent = 'Please enter a valid email address.'; err.className = 'error-box show'; return; }
+  _regSetStep(2);
+};
+window.goToStep3 = () => _regSetStep(3);
+
+window.checkSigMatch = () => {
+  const sig  = document.querySelector('#pg-registration #f-sig').value.trim().toLowerCase();
+  const full = (document.querySelector('#pg-registration #f-first').value.trim() + ' ' + document.querySelector('#pg-registration #f-last').value.trim()).toLowerCase();
+  const msg  = document.querySelector('#pg-registration #sig-match-msg');
+  if (!sig) { msg.textContent = ''; msg.style.color = ''; return; }
+  if (sig === full) {
+    msg.textContent = '✓ Name matches your registration';
+    msg.style.color = 'var(--green)';
+  } else {
+    msg.textContent = `Enter your full name exactly: "${document.querySelector('#pg-registration #f-first').value.trim()} ${document.querySelector('#pg-registration #f-last').value.trim()}"`;
+    msg.style.color = 'var(--muted2)';
+  }
+  window.checkCanSubmit();
+};
+window.checkCanSubmit = () => {
+  const sig    = document.querySelector('#pg-registration #f-sig').value.trim().toLowerCase();
+  const full   = (document.querySelector('#pg-registration #f-first').value.trim() + ' ' + document.querySelector('#pg-registration #f-last').value.trim()).toLowerCase();
+  const agreed = document.querySelector('#pg-registration #agree-check').checked;
+  const btn    = document.querySelector('#pg-registration #submit-btn');
+  if (btn) btn.disabled = !(sig === full && agreed);
+};
+
+window.submitRegistration = async () => {
+  const $ = sel => document.querySelector('#pg-registration ' + sel);
+  const btn   = $('#submit-btn');
+  const errEl = $('#error-box-submit');
+  errEl.className = 'error-box';
+  btn.disabled = true;
+  btn.textContent = 'Registering...';
+  const first    = $('#f-first').value.trim();
+  const last     = $('#f-last').value.trim();
+  const name     = `${first} ${last}`;
+  const teamId   = $('#f-team').value;
+  const teamName = $('#f-team').options[$('#f-team').selectedIndex].text;
+  const numVal   = $('#f-num').value.trim();
+  const pos      = $('#f-pos').value;
+  const email    = $('#f-email').value.trim();
+  const phone    = $('#f-phone').value.trim();
+  try {
+    const db = await getDb();
+    const { collection: _c, getDocs: _gd, query: _q, where: _w, addDoc: _ad, setDoc: _sd, doc: _doc, Timestamp: _Ts } =
+      await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    const now = _Ts.now();
+    // Duplicate-signup guard
+    if (email) {
+      try {
+        const dupSnap = await _gd(_q(_c(db, 'players'), _w('team', '==', teamId), _w('email', '==', email)));
+        const active = dupSnap.docs.find(d => (d.data()||{}).active !== false);
+        if (active) {
+          btn.disabled = false; btn.textContent = 'Register';
+          errEl.className = 'error-box show';
+          errEl.textContent = `You're already registered on ${teamName} under ${email}. If you meant to update your info, contact your captain or the commissioner.`;
+          return;
+        }
+      } catch (_) { /* fall through */ }
+    }
+    const playerRecord = {
+      first_name: first, last_name: last, name,
+      num: numVal ? parseInt(numVal, 10) : 0,
+      pos: pos || '', team: teamId,
+      email: email || null, phone: phone || null,
+      season: _REG_SEASON,
+      waiver_signed: true, waiver_signed_at: now, added_at: now,
+    };
+    if (email) {
+      const emailSlug = email.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 64);
+      const regKey = `reg__${teamId}__${emailSlug}__${_REG_SEASON}`;
+      await _sd(_doc(db, 'players', regKey), playerRecord, { merge: true });
+    } else {
+      await _ad(_c(db, 'players'), playerRecord);
+    }
+    // Admin notification (best-effort)
+    try {
+      await fetch('/api/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': window.LEAGUE_CONFIG.push.adminSecret },
+        body: JSON.stringify({
+          title: `🔔 New signup: ${name}`,
+          body: `${teamName} · #${numVal || '?'} ${pos || ''} · ${email || 'no email'}`.trim(),
+          category: 'admin', adminOnly: true, url: '/admin.html',
+        }),
+      });
+    } catch (_) {}
+    // MailerLite sync (best-effort)
+    if (email) {
+      try {
+        await fetch('/api/mailerlite-subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, name, last, phone: phone || '', team: teamName || '' }),
+        });
+      } catch (_) {}
+    }
+    // Show success
+    $('#step-3').style.display = 'none';
+    $('#step-bar').style.display = 'none';
+    const sb = $('#success-box');
+    sb.className = 'success-box show';
+    $('#success-detail').innerHTML = `
+      <div class="success-detail-row"><span>Name</span><span>${name}</span></div>
+      <div class="success-detail-row"><span>Team</span><span>${teamName}</span></div>
+      ${numVal ? `<div class="success-detail-row"><span>Jersey #</span><span>${numVal}</span></div>` : ''}
+      ${pos     ? `<div class="success-detail-row"><span>Position</span><span>${pos}</span></div>` : ''}
+      <div class="success-detail-row"><span>Season</span><span>${_REG_SEASON}</span></div>
+      <div class="success-detail-row"><span>Waiver Signed</span><span style="color:var(--green);font-weight:700">✓ ${window._regToday || ''}</span></div>
+    `;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (e) {
+    errEl.textContent = 'Something went wrong. Please try again.';
+    errEl.className = 'error-box show';
+    btn.disabled = false;
+    btn.textContent = '✍ Sign & Complete Registration';
+  }
+};
+
 // showPanel must be on window because the injected rules content uses
 // inline onclick="showPanel('league-rules', this)" / 'ground-rules'.
 window.showPanel = function(name, btn) {
@@ -5005,6 +5220,9 @@ function goPage(name,extra,skipHistory){
   if(name==='photos'){
     _lazyLoadPhotos();
   }
+  if(name==='registration'){
+    _lazyLoadRegistration();
+  }
   if(name==='scores'){
     const doScores=()=>{try{setView(extra==='schedule'?'schedule':'scores');buildScoresNav();renderScores();}catch(e){console.error(e);}};
     if(SCHEDULE_PREVIEW.length) setTimeout(doScores,50);
@@ -5049,7 +5267,7 @@ window.addEventListener('popstate',e=>{
   const parts = hashFull.split('/');
   const h = parts[0];
   const ex = parts[1] || null;
-  const valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules','photos'];
+  const valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules','photos','registration'];
   if (!h) { goPage('home', null, true); return; }
   if (h === 'schedule') { goPage('scores', 'schedule', true); return; }
   if (valid.includes(h)) { goPage(h, ex, true); return; }
@@ -6834,7 +7052,7 @@ async function loadSiteBanner(){
   var parts = hashFull.split('/');
   var hash = parts[0];
   var hashExtra = parts[1]||null;
-  var valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules','photos'];
+  var valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules','photos','registration'];
 
   // #game/<id> opens the box-score modal for a specific game. Used by
   // final-score push notifications so tapping a notification goes straight
