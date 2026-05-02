@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v252-recap-xss-fix-and-config-cleanup`;
+const VERSION = `${LEAGUE.id}-v253-sw-team-codes-from-config`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
@@ -182,11 +182,16 @@ const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 // Logos are referenced dynamically as `logos/<code>.svg` or `logos/<code>.png`,
 // so stale-while-revalidate won't pre-populate them. We precache both forms
 // up-front so they render on the very first offline visit.
-const TEAM_CODES = [
-  'aj','ba','ba1','bami','bob','boo','bor','bsb','bsmc','btbj','cha','dn',
-  'gjc','gold','ka','ki','oa','os','sa','tbi1','tbimc','tbir','ti','tsbka',
-  'tsg','tsmc',
-];
+//
+// Pulls from LEAGUE.logoTeams (config.js) so adding/removing a team in the
+// league config is enough — no SW edit required. Earlier this was a
+// hardcoded list that drifted: `toast` was missing (its logos never
+// pre-cached) and 7 historical codes (ba1, bami, boo, ka, os, tbi1, ti)
+// were still listed even though no current team uses them.
+const TEAM_CODES = (Array.isArray(LEAGUE.logoTeams) && LEAGUE.logoTeams.length)
+  ? LEAGUE.logoTeams
+  : ['aj','ba','bob','bor','bsb','bsmc','btbj','cha','dn','gjc','gold','ki',
+     'oa','sa','toast','tsbka','tsmc','tsg','tbimc','tbir'];
 const LOGO_URLS = [];
 TEAM_CODES.forEach((c) => {
   LOGO_URLS.push(`/logos/${c}.svg`);
