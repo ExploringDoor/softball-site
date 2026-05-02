@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v263-unified-shell-registration-section`;
+const VERSION = `${LEAGUE.id}-v264-unified-shell-all-pages-migrated`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
@@ -218,6 +218,7 @@ const CORE_URLS = [
   '/rules-content.html',
   '/photos-content.html',
   '/registration-content.html',
+  '/playoffs-content.html',
   '/manifest.json',
   '/offline.html',
   '/icons/icon-192.png',

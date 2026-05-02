@@ -3657,6 +3657,11 @@ thead th.sorted-col .sarrow{opacity:1}
      (creates player doc, posts admin push, syncs MailerLite). -->
 <div class="page" id="pg-registration"></div>
 
+<!-- ── pg-playoffs: bracket UI with year toggle (2026/2025) and
+     gold/silver bracket toggle. Content in /playoffs-content.html.
+     Tab handlers and matchup fade-in run on first show. -->
+<div class="page" id="pg-playoffs"></div>
+
 <div class="pop" id="scPop" onclick="if(event.target===this)closeScPop()"><div class="pop-box"><button class="pop-x" onclick="closeScPop()">✕</button><button id="scPopSaveImg" onclick="saveBoxScoreImage()" title="Save this box score as a PNG image you can share" style="position:absolute;top:14px;right:54px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;font-weight:700;height:28px;padding:0 10px;cursor:pointer;display:flex;align-items:center;gap:4px;z-index:2;font-family:inherit;white-space:nowrap">📷 Save Box Score as Picture</button><div id="scPopContent"></div></div></div>
 <div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
   <div class="modal-box">
@@ -5159,6 +5164,70 @@ window.submitRegistration = async () => {
   }
 };
 
+// ─── pg-playoffs ──────────────────────────────────────────────────────
+let _playoffsLoaded = false;
+async function _lazyLoadPlayoffs() {
+  const target = document.getElementById('pg-playoffs');
+  if (!target) return;
+  if (_playoffsLoaded) return;
+  target.innerHTML = '<div style="padding:130px 48px 28px;text-align:center;color:var(--muted)">Loading brackets…</div>';
+  try {
+    const r = await fetch('/playoffs-content.html');
+    if (!r.ok) throw new Error('fetch failed: ' + r.status);
+    target.innerHTML = await r.text();
+    _initPlayoffsPage();
+    _playoffsLoaded = true;
+  } catch (e) {
+    console.warn('[lazyLoadPlayoffs]', e);
+    target.innerHTML = '<div style="padding:60px;text-align:center;color:var(--muted)">Could not load brackets. <a href="/playoffs.html" style="color:var(--gold)">Open standalone view</a></div>';
+  }
+}
+
+function _initPlayoffsPage() {
+  // Year selector — switch between 2026 placeholder and 2025 completed bracket
+  document.querySelectorAll('#pg-playoffs .y-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const y = btn.dataset.year;
+      document.querySelectorAll('#pg-playoffs .y-tab').forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      document.querySelectorAll('#pg-playoffs .year-pane').forEach(p => p.classList.remove('active'));
+      const pane = document.querySelector('#pg-playoffs #year-' + y);
+      if (pane) pane.classList.add('active');
+      const lbl = document.querySelector('#pg-playoffs #seasonLabel');
+      if (lbl) lbl.textContent = y + ' Tournament';
+    });
+  });
+  // Gold / Silver bracket tabs
+  document.querySelectorAll('#pg-playoffs .b-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#pg-playoffs .b-tab').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('#pg-playoffs .bracket-canvas').forEach(cv => {
+        cv.classList.remove('active');
+        cv.style.display = 'none';
+      });
+      btn.classList.add('active');
+      const target = document.querySelector('#pg-playoffs #bracket-' + btn.dataset.bracket);
+      if (target) { target.classList.add('active'); target.style.display = 'block'; }
+    });
+  });
+  // Init: gold bracket visible by default
+  const goldBracket = document.querySelector('#pg-playoffs #bracket-gold');
+  if (goldBracket) goldBracket.style.display = 'block';
+  // Fade-in matchups
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.style.opacity = '1'; e.target.style.transform = 'translateY(0)'; } });
+  }, { threshold: 0.05 });
+  document.querySelectorAll('#pg-playoffs .matchup').forEach(el => {
+    el.style.opacity = '0'; el.style.transform = 'translateY(16px)';
+    el.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+    obs.observe(el);
+  });
+}
+
 // showPanel must be on window because the injected rules content uses
 // inline onclick="showPanel('league-rules', this)" / 'ground-rules'.
 window.showPanel = function(name, btn) {
@@ -5187,7 +5256,7 @@ function goPage(name,extra,skipHistory){
   } catch(_) {}
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('show'));
   var pg=document.getElementById('pg-'+name);
-  if(!pg){var ext={playoffs:'playoffs.html'};if(ext[name])window.location=ext[name];return;}
+  if(!pg){var ext={};if(ext[name])window.location=ext[name];return;}
   pg.classList.add('show');
   document.querySelectorAll('[id^="nl-"]').forEach(el=>el.classList.remove('active'));
   const nl=document.getElementById('nl-'+name);
@@ -5222,6 +5291,9 @@ function goPage(name,extra,skipHistory){
   }
   if(name==='registration'){
     _lazyLoadRegistration();
+  }
+  if(name==='playoffs'){
+    _lazyLoadPlayoffs();
   }
   if(name==='scores'){
     const doScores=()=>{try{setView(extra==='schedule'?'schedule':'scores');buildScoresNav();renderScores();}catch(e){console.error(e);}};
@@ -5267,7 +5339,7 @@ window.addEventListener('popstate',e=>{
   const parts = hashFull.split('/');
   const h = parts[0];
   const ex = parts[1] || null;
-  const valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules','photos','registration'];
+  const valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules','photos','registration','playoffs'];
   if (!h) { goPage('home', null, true); return; }
   if (h === 'schedule') { goPage('scores', 'schedule', true); return; }
   if (valid.includes(h)) { goPage(h, ex, true); return; }
@@ -7052,7 +7124,7 @@ async function loadSiteBanner(){
   var parts = hashFull.split('/');
   var hash = parts[0];
   var hashExtra = parts[1]||null;
-  var valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules','photos','registration'];
+  var valid = ['home','players','teams','team','recaps','history','leaders','scores','stats','standings','rules','photos','registration','playoffs'];
 
   // #game/<id> opens the box-score modal for a specific game. Used by
   // final-score push notifications so tapping a notification goes straight
