@@ -46,7 +46,7 @@ Changes:
 ${diff || '(none)'}
 
 You can push this to Google Calendar from the admin dashboard:
-https://dvsl-baseball.vercel.app/admin.html
+https://dvsl.vercel.app/admin.html
 
 Game ID: ${gameId}
 `;
@@ -62,7 +62,7 @@ Game ID: ${gameId}
           ${diff ? `<div style="margin-top:12px;padding:12px;background:#f1f5f9;border-radius:6px;font-family:monospace;font-size:13px;white-space:pre-wrap">${escapeHtml(diff)}</div>` : ''}
         </div>
         <div style="margin-top:20px">
-          <a href="https://dvsl-baseball.vercel.app/admin.html" style="display:inline-block;background:#002D72;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:700">Open Admin Dashboard</a>
+          <a href="https://dvsl.vercel.app/admin.html" style="display:inline-block;background:#002D72;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:700">Open Admin Dashboard</a>
         </div>
         <div style="margin-top:16px;font-size:11px;color:#94a3b8">Game ID: ${escapeHtml(gameId)}</div>
       </div>
