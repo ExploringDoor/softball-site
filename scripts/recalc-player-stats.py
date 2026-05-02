@@ -77,13 +77,20 @@ def add_line(totals, line, team):
     if key not in totals:
         totals[key] = {f: 0 for f in ["gp","ab","r","h","d","t","hr","rbi","bb","so"]}
     x = totals[key]
+    _s  = int(line.get("s")  or 0)
+    _d  = int(line.get("d")  or 0)
+    _t  = int(line.get("t")  or 0)
+    _hr = int(line.get("hr") or 0)
+    # Fallback for h: some captain submissions fill s/d/t/hr but leave h
+    # unset. index.html display handles this — aggregator must too.
+    _h  = int(line.get("h") or 0) if line.get("h") is not None else (_s + _d + _t + _hr)
     x["gp"] += 1
     x["ab"] += int(line.get("ab") or 0)
     x["r"]  += int(line.get("r")  or 0)
-    x["h"]  += int(line.get("h")  or 0)
-    x["d"]  += int(line.get("d")  or 0)
-    x["t"]  += int(line.get("t")  or 0)
-    x["hr"] += int(line.get("hr") or 0)
+    x["h"]  += _h
+    x["d"]  += _d
+    x["t"]  += _t
+    x["hr"] += _hr
     x["rbi"]+= int(line.get("rbi")or 0)
     x["bb"] += int(line.get("bb") or 0)
     x["so"] += int(line.get("so") or line.get("k") or 0)
@@ -151,11 +158,13 @@ def main():
         if gid not in by_game or (not has_team and by_game[gid]["_has_team"]):
             by_game[gid] = {"data": bd, "_has_team": has_team}
 
-    # Aggregate
+    # Aggregate. Treat 'final' and 'approved' both as finalized — earlier
+    # version filtered to only 'final' and silently skipped half the docs.
+    FINALIZED = {"final", "approved", ""}
     totals = {}
     for entry in by_game.values():
         bs = entry["data"]
-        if bs.get("status") and bs.get("status") != "final": continue
+        if bs.get("status") and bs.get("status") not in FINALIZED: continue
         for line in (bs.get("away_lineup") or []):
             add_line(totals, line, bs.get("away"))
         for line in (bs.get("home_lineup") or []):

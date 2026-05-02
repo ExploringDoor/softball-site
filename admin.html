@@ -5346,22 +5346,35 @@ async function recalcPlayerStatsFromBoxScores() {
       totalsByKey[key] = { name:line.name.trim(), team:teamId||'', gp:0, ab:0, r:0, h:0, s:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
     }
     const x = totalsByKey[key];
+    const _s  = parseInt(line.s)  || 0;
+    const _d  = parseInt(line.d)  || 0;
+    const _t  = parseInt(line.t)  || 0;
+    const _hr = parseInt(line.hr) || 0;
+    // Fallback for h: some captain-submitted lines fill the s/d/t/hr
+    // breakdown but leave the total h unset. index.htmls display layer
+    // already does this fallback (line ~4287); aggregator must too or
+    // we end up storing h=0 for those games.
+    const _h  = (line.h != null) ? (parseInt(line.h) || 0) : (_s + _d + _t + _hr);
     x.gp += 1;
     x.ab += parseInt(line.ab) || 0;
     x.r  += parseInt(line.r)  || 0;
-    x.h  += parseInt(line.h)  || 0;
-    x.s  += parseInt(line.s)  || 0;
-    x.d  += parseInt(line.d)  || 0;
-    x.t  += parseInt(line.t)  || 0;
-    x.hr += parseInt(line.hr) || 0;
+    x.h  += _h;
+    x.s  += _s;
+    x.d  += _d;
+    x.t  += _t;
+    x.hr += _hr;
     x.rbi+= parseInt(line.rbi)|| 0;
     x.bb += parseInt(line.bb) || 0;
     x.so += parseInt(line.so) || parseInt(line.k) || 0;
   }
 
+  // Treat both 'final' and 'approved' as finalized box scores. Earlier this
+  // only matched 'final' which silently skipped half of production data
+  // (captain submissions get marked 'approved' on merge). Also tolerate
+  // missing status — older docs sometimes lack the field entirely.
+  const FINALIZED = new Set(['final', 'approved', '']);
   Object.values(byGame).forEach(bs => {
-    // Skip score-only / draft entries that don't have actual batter lines.
-    if (bs.status && bs.status !== 'final') return;
+    if (bs.status && !FINALIZED.has(bs.status)) return;
     (bs.away_lineup || []).forEach(line => addLine(line, bs.away));
     (bs.home_lineup || []).forEach(line => addLine(line, bs.home));
   });

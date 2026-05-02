@@ -1453,19 +1453,29 @@ async function _captRecalcStatsFromBoxScores(awayLineup, homeLineup, awayTeam, h
       const key = (line.name||'').trim() + '||' + (teamId||'');
       if (!totalsByKey[key]) totalsByKey[key] = { gp:0, ab:0, r:0, h:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
       const x = totalsByKey[key];
+      const _s  = parseInt(line.s)  || 0;
+      const _d  = parseInt(line.d)  || 0;
+      const _t  = parseInt(line.t)  || 0;
+      const _hr = parseInt(line.hr) || 0;
+      // Fallback if total h is unset but breakdown is filled in.
+      const _h  = (line.h != null) ? (parseInt(line.h) || 0) : (_s + _d + _t + _hr);
       x.gp += 1;
       x.ab += parseInt(line.ab) || 0;
       x.r  += parseInt(line.r)  || 0;
-      x.h  += parseInt(line.h)  || 0;
-      x.d  += parseInt(line.d)  || 0;
-      x.t  += parseInt(line.t)  || 0;
-      x.hr += parseInt(line.hr) || 0;
+      x.h  += _h;
+      x.d  += _d;
+      x.t  += _t;
+      x.hr += _hr;
       x.rbi+= parseInt(line.rbi)|| 0;
       x.bb += parseInt(line.bb) || 0;
       x.so += parseInt(line.so) || parseInt(line.k) || 0;
     }
+    // Treat 'final' and 'approved' as finalized — earlier this only matched
+    // 'final', silently skipping half the production box_scores (captain
+    // submissions are marked 'approved' on merge).
+    const FINALIZED = new Set(['final', 'approved', '']);
     Object.values(byGame).forEach(bs => {
-      if (bs.status && bs.status !== 'final') return;
+      if (bs.status && !FINALIZED.has(bs.status)) return;
       (bs.away_lineup || []).forEach(line => addLine(line, bs.away));
       (bs.home_lineup || []).forEach(line => addLine(line, bs.home));
     });
