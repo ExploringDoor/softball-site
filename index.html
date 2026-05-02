@@ -548,9 +548,14 @@
         });
         window.addEventListener('pageshow', _dvslCheckPendingNav);
         window.addEventListener('focus', _dvslCheckPendingNav);
+        // Poll every 30s instead of 5s. The 5s cadence sent ~720 requests/hr
+        // per open tab to /api/check-pending-nav for an inbox-badge counter
+        // that doesn't need second-level freshness. Visibility/focus
+        // listeners above already refresh whenever the tab regains focus,
+        // so the user-perceived snappiness is unchanged.
         setInterval(() => {
           if (document.visibilityState === 'visible') _dvslCheckPendingNav();
-        }, 5000);
+        }, 30000);
 
         // Hide mobile notification bell once the user scrolls past the
         // top of the page; show again only when they're back at/near the
