@@ -5105,7 +5105,7 @@ function openBsm(gameIdx){
             <div class="pop-role-lbl">Home ${!awayWon?'✓':''}</div>
           </div>
         </div>
-        <div class="pop-meta"><span>📅 ${g.date}</span><span>📍 ${g.field}</span><span>⏰ ${g.time}</span></div>
+        <div class="pop-meta"><span>📅 ${esc(g.date)}</span><span>📍 ${esc(g.field)}</span><span>⏰ ${esc(g.time)}</span></div>
       </div>
       <div class="pop-body">
         <div class="pop-sec-title">Line Score</div>
@@ -7639,16 +7639,25 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const aE = boxScore.away_errors || 0;
     const hE = boxScore.home_errors || 0;
 
-    // Line score with innings
+    // Line score with innings.
+    // Special-case: when the linescore is all zeros but the team scored runs
+    // (admin entered the final score without filling per-inning detail),
+    // show '—' across the inning grid instead of misleading zeros. Same
+    // signal we use for missing inning entries; reads as "no inning data"
+    // rather than "scored zero in every inning."
     const innCount = Math.max(aInnings.length, hInnings.length, 7);
     const innNums  = Array.from({length:innCount},(_,i)=>i+1);
+    const aSum = aInnings.reduce((s,x)=>s+(parseInt(x)||0),0);
+    const hSum = hInnings.reduce((s,x)=>s+(parseInt(x)||0),0);
+    const aHide = aSum === 0 && (as|0) > 0;
+    const hHide = hSum === 0 && (hs|0) > 0;
     bodyHtml += `<div class="pop-sec-title">Line Score</div>
       <div style="overflow-x:auto;margin-bottom:20px">
         <table class="ptbl">
           <thead><tr><th style="text-align:left">Team</th>${innNums.map(n=>`<th>${n}</th>`).join('')}<th>R</th><th>H</th><th>E</th></tr></thead>
           <tbody>
-            <tr><td style="color:${ac};font-weight:700;white-space:nowrap;text-align:left">${away}</td>${innNums.map((_,i)=>`<td>${aInnings[i]??'–'}</td>`).join('')}<td style="font-weight:700">${as}</td><td>${aH}</td><td>${aE}</td></tr>
-            <tr><td style="color:${hc};font-weight:700;white-space:nowrap;text-align:left">${home}</td>${innNums.map((_,i)=>`<td>${hInnings[i]??'–'}</td>`).join('')}<td style="font-weight:700">${hs}</td><td>${hH}</td><td>${hE}</td></tr>
+            <tr><td style="color:${ac};font-weight:700;white-space:nowrap;text-align:left">${away}</td>${innNums.map((_,i)=>`<td>${aHide?'–':(aInnings[i]??'–')}</td>`).join('')}<td style="font-weight:700">${as}</td><td>${aH}</td><td>${aE}</td></tr>
+            <tr><td style="color:${hc};font-weight:700;white-space:nowrap;text-align:left">${home}</td>${innNums.map((_,i)=>`<td>${hHide?'–':(hInnings[i]??'–')}</td>`).join('')}<td style="font-weight:700">${hs}</td><td>${hH}</td><td>${hE}</td></tr>
           </tbody>
         </table>
       </div>`;
