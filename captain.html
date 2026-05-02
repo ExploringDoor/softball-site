@@ -1977,6 +1977,50 @@ async function _writeCaptainClaim(user, team) {
   // Best-effort: flag this device's push token as a captain so the
   // captains_chat gate in api/send-notification.js delivers to them.
   _dvslSetCaptainFlagOnPushToken(true).catch(() => {});
+  // Best-effort: backfill the captain's matching roster entry with their
+  // auth_uid + email so they show as "signed up" on the team page. Earlier,
+  // a captain who claimed via auth (without going through full registration)
+  // wouldn't get linked to their player record — Mark Schwartz showed up
+  // as "not signed up" on TBIR's roster despite being an authed captain.
+  // Match by email match (case-insensitive) on the same team. If multiple
+  // players match, do nothing (ambiguous — let admin pick manually).
+  _backfillCaptainPlayerLink(user, team).catch(() => {});
+}
+
+async function _backfillCaptainPlayerLink(user, team) {
+  if (!user?.email || !team?.id) return;
+  const email = user.email.toLowerCase();
+  try {
+    // Find players on this team — limit to small set for safety
+    const snap = await getDocs(query(
+      collection(db, 'players'),
+      where('team', '==', team.id)
+    ));
+    const matches = [];
+    for (const d of snap.docs) {
+      const p = d.data();
+      if (p.active === false) continue;
+      const peml = (p.email || '').toLowerCase();
+      // Match: exact email match. Skip if already linked to a different uid
+      // (would clobber another user's claim).
+      if (peml && peml === email) {
+        if (p.auth_uid && p.auth_uid !== user.uid) continue;
+        matches.push({ id: d.id, ...p });
+      }
+    }
+    if (matches.length !== 1) return;  // 0 or 2+ matches — bail (ambiguous)
+    const match = matches[0];
+    // Skip if already linked to this same uid (no-op)
+    if (match.auth_uid === user.uid) return;
+    await updateDoc(doc(db, 'players', match.id), {
+      auth_uid: user.uid,
+      email: email,
+    });
+    console.log('[backfillCaptainPlayerLink] linked', match.name, 'to uid', user.uid.slice(0, 8));
+  } catch (e) {
+    // Non-fatal — captain dashboard still loads
+    console.warn('[backfillCaptainPlayerLink] skipped:', e?.message || e);
+  }
 }
 
 // Set/clear is_captain_authed on this device's notification_tokens row.
