@@ -1,12 +1,22 @@
 // Vercel Serverless Function — /api/update-firebase.js
 // Receives parsed box score data and writes everything to Firebase
+//
+// Auth: requires `x-admin-secret` header matching ADMIN_SEND_SECRET env var.
+// Same shared-secret posture as send-notification.js / delete-by-source.js.
+// Without this, anyone on the internet could POST and overwrite box scores
+// or game outcomes — there's no token-hash check on the body.
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-secret');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const SECRET = process.env.ADMIN_SEND_SECRET;
+  if (SECRET && req.headers['x-admin-secret'] !== SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   const { parsed, gameId, awayTeamId, homeTeamId, date, week, field, recap } = req.body;
   const FB_KEY = process.env.FIREBASE_API_KEY;

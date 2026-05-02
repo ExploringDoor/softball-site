@@ -1,13 +1,22 @@
 // Vercel Serverless Function — /api/update-player.js
 // Updates a player's fields in Firebase (e.g., fix team assignment)
 // Usage: POST /api/update-player { playerId: "abc123", fields: { team: "tbir" } }
+//
+// Auth: requires `x-admin-secret` header matching ADMIN_SEND_SECRET env var.
+// Same shared-secret posture as the other admin endpoints. Without this,
+// anyone could mass-deactivate every player or rename them to anything.
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-admin-secret');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const SECRET = process.env.ADMIN_SEND_SECRET;
+  if (SECRET && req.headers['x-admin-secret'] !== SECRET) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
 
   const { playerId, fields } = req.body;
   if (!playerId || !fields || typeof fields !== 'object') {

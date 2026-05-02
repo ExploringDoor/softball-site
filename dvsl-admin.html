@@ -133,6 +133,9 @@ body{background:var(--bg);color:var(--white);font-family:'Segoe UI',system-ui,sa
 .player-row.over{border-color:var(--gold);background:rgba(245,200,66,.04)}
 .step-dot{width:24px;height:24px;border-radius:50%;background:var(--gold);color:#000;font-size:12px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 </style>
+<!-- Load shared LEAGUE_CONFIG so this dev tool can pull the admin secret
+     for x-admin-secret on /api/update-firebase calls. -->
+<script src="/config.js"></script>
 </head>
 <body>
 <nav class="nav">
@@ -444,7 +447,13 @@ window.handlePdfDrop=async function(file){
     document.getElementById('pdf-processing-msg').textContent='Updating Firebase...';
     const fbRes=await fetch('/api/update-firebase',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{
+        'Content-Type':'application/json',
+        // Same shared-secret pattern as send-notification calls. Endpoint
+        // was unauthed before — anyone on the internet could overwrite
+        // box scores. Now requires the x-admin-secret header.
+        'x-admin-secret': (window.LEAGUE_CONFIG && window.LEAGUE_CONFIG.push && window.LEAGUE_CONFIG.push.adminSecret) || ''
+      },
       body:JSON.stringify({
         parsed:data.parsed,
         gameId:pdfSelectedGame.id,
