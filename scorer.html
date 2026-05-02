@@ -7370,12 +7370,134 @@ async function saveBoxScore(isFinal = false) {
     // is private; admin must explicitly publish from admin.html).
     if (scoringSide !== 'admin') {
       const r = await recomputeCanonicalBoxScore(G.gameId);
+      // Refresh batting stats from the just-written canonical box_score so
+      // the public stats page picks up the change without admin needing to
+      // open admin.html. Best-effort — never block the save on this.
+      _scorerRecalcStatsFromBoxScores(G.gameId).catch(e => console.warn('recalc skipped', e));
       return { firstSubmission: r.firstSubmission, hasDiscrepancy: r.hasDiscrepancy };
     }
     return { firstSubmission: false, adminOnly: true };
   } catch (err) {
     console.warn('saveBoxScore error:', err);
     return { firstSubmission: true }; // safe default on error
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Re-aggregate batting stats from all box_scores → patch affected
+// players. Lighter than admin's full recalc: scoped to whoever
+// appears in the just-written canonical box_score for `gameId`.
+//
+// Why: previously, when scorer.html finalized a game, the public
+// stats page stayed stale until an admin loaded admin.html (which
+// auto-recalcs). Adam doesn't want admin to be the bottleneck —
+// stats should refresh the moment any game finalizes.
+async function _scorerRecalcStatsFromBoxScores(gameId) {
+  try {
+    const justWrittenSnap = await getDoc(doc(db, 'box_scores', gameId));
+    if (!justWrittenSnap.exists()) return;
+    const jw = justWrittenSnap.data();
+    const awayTeam = jw.away || '';
+    const homeTeam = jw.home || '';
+    const awayLineup = jw.away_lineup || [];
+    const homeLineup = jw.home_lineup || [];
+
+    // Aggregate from EVERY box_score so we recompute true season totals.
+    const bsSnap = await getDocs(collection(db, 'box_scores'));
+    const byGame = {};
+    bsSnap.docs.forEach(d => {
+      const x = d.data();
+      const gid = x.game_id || d.id;
+      const hasTeam = !!x.team_id;
+      if (!byGame[gid] || (!hasTeam && byGame[gid]._hasTeam)) {
+        byGame[gid] = { ...x, _hasTeam: hasTeam };
+      }
+    });
+    const totalsByKey = {};
+    function addLine(line, teamId) {
+      if (!line || !line.name) return;
+      const key = (line.name||'').trim() + '||' + (teamId||'');
+      if (!totalsByKey[key]) totalsByKey[key] = { gp:0, ab:0, r:0, h:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
+      const x = totalsByKey[key];
+      x.gp += 1;
+      x.ab += parseInt(line.ab) || 0;
+      x.r  += parseInt(line.r)  || 0;
+      x.h  += parseInt(line.h)  || 0;
+      x.d  += parseInt(line.d)  || 0;
+      x.t  += parseInt(line.t)  || 0;
+      x.hr += parseInt(line.hr) || 0;
+      x.rbi+= parseInt(line.rbi)|| 0;
+      x.bb += parseInt(line.bb) || 0;
+      x.so += parseInt(line.so) || parseInt(line.k) || 0;
+    }
+    Object.values(byGame).forEach(bs => {
+      if (bs.status && bs.status !== 'final') return;
+      (bs.away_lineup || []).forEach(line => addLine(line, bs.away));
+      (bs.home_lineup || []).forEach(line => addLine(line, bs.home));
+    });
+
+    // Only the players who appeared in the just-finalized lineup can
+    // have changed totals — skip everyone else.
+    const affectedKeys = new Set();
+    awayLineup.forEach(l => { if (l?.name) affectedKeys.add(l.name.trim() + '||' + awayTeam); });
+    homeLineup.forEach(l => { if (l?.name) affectedKeys.add(l.name.trim() + '||' + homeTeam); });
+
+    // Find player docs by name+team. `playersData` in scorer.html is
+    // keyed by player ID, each value being a single player doc.
+    // Fall back to a fresh fetch if it's empty (rare — game-start
+    // populates it).
+    let players = [];
+    if (typeof playersData === 'object' && playersData) {
+      players = Object.values(playersData);
+    }
+    if (!players.length) {
+      const pSnap = await getDocs(collection(db, 'players'));
+      players = pSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }
+
+    let written = 0;
+    for (const p of players) {
+      if (p.active === false) continue;
+      const key = (p.name||'').trim() + '||' + (p.team||'');
+      if (!affectedKeys.has(key)) continue;
+      const t = totalsByKey[key] || { gp:0, ab:0, r:0, h:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
+      const ab = t.ab, h = t.h, bb = t.bb, dbl = t.d, tr = t.t, hr = t.hr;
+      const sing = h - dbl - tr - hr;
+      const avg = ab > 0 ? h / ab : 0;
+      const obp = (ab + bb) > 0 ? (h + bb) / (ab + bb) : 0;
+      const slg = ab > 0 ? (sing + 2*dbl + 3*tr + 4*hr) / ab : 0;
+      const ops = obp + slg;
+      const update = {
+        gp: t.gp, ab, r: t.r, h, s: sing, d: dbl, t: tr, hr,
+        rbi: t.rbi, bb, so: t.so,
+        avg: parseFloat(avg.toFixed(3)),
+        obp: parseFloat(obp.toFixed(3)),
+        slg: parseFloat(slg.toFixed(3)),
+        ops: parseFloat(ops.toFixed(3)),
+      };
+      // Skip no-op writes (idempotent re-saves don't churn Firestore).
+      let dirty = false;
+      for (const k of Object.keys(update)) {
+        const sv = (typeof update[k] === 'number' && !Number.isInteger(update[k]))
+          ? Number((Number(p[k]||0)).toFixed(3))
+          : Number(p[k]||0);
+        const tv = (typeof update[k] === 'number' && !Number.isInteger(update[k]))
+          ? Number(update[k].toFixed(3))
+          : update[k];
+        if (sv !== tv) { dirty = true; break; }
+      }
+      if (!dirty) continue;
+      try {
+        await updateDoc(doc(db, 'players', p.id), update);
+        Object.assign(p, update);
+        written++;
+      } catch (e) {
+        console.warn('[_scorerRecalcStats] player update failed', p.id, e);
+      }
+    }
+    if (written) console.log(`[_scorerRecalcStats] updated ${written} player(s) post-finalize`);
+  } catch (e) {
+    console.warn('[_scorerRecalcStats] failed', e);
   }
 }
 

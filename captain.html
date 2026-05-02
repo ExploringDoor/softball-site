@@ -1415,6 +1415,107 @@ async function logActivity(action, details) {
 }
 
 // Recompute standings (W/L/PCT/RS/RA/GB/STREAK) from all finalized games.
+// Re-aggregate batting stats from all box_scores → patch only the
+// players whose totals changed. Lighter than admin's full recalc:
+// caller passes the lineups they just submitted, so we skip every
+// other player whose stats can't have changed.
+//
+// Why this exists: previously, when a captain submitted a full
+// box_score, the public stats stayed stale until an admin viewed
+// admin.html (which auto-recalcs on load). Adam doesn't want to
+// be the bottleneck. So we run the recalc inline at submit time,
+// scoped to the lineup just written.
+async function _captRecalcStatsFromBoxScores(awayLineup, homeLineup, awayTeam, homeTeam) {
+  try {
+    const bsSnap = await getDocs(collection(db, 'box_scores'));
+    // Dedupe: prefer master per-game doc (no team_id) over per-team
+    // captain submissions. Mirrors admin.html's logic exactly.
+    const byGame = {};
+    bsSnap.docs.forEach(d => {
+      const x = d.data();
+      const gid = x.game_id || d.id;
+      const hasTeam = !!x.team_id;
+      if (!byGame[gid] || (!hasTeam && byGame[gid]._hasTeam)) {
+        byGame[gid] = { ...x, _hasTeam: hasTeam };
+      }
+    });
+
+    // Aggregate by (name, team) key — same as admin.html.
+    const totalsByKey = {};
+    function addLine(line, teamId) {
+      if (!line || !line.name) return;
+      const key = (line.name||'').trim() + '||' + (teamId||'');
+      if (!totalsByKey[key]) totalsByKey[key] = { gp:0, ab:0, r:0, h:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
+      const x = totalsByKey[key];
+      x.gp += 1;
+      x.ab += parseInt(line.ab) || 0;
+      x.r  += parseInt(line.r)  || 0;
+      x.h  += parseInt(line.h)  || 0;
+      x.d  += parseInt(line.d)  || 0;
+      x.t  += parseInt(line.t)  || 0;
+      x.hr += parseInt(line.hr) || 0;
+      x.rbi+= parseInt(line.rbi)|| 0;
+      x.bb += parseInt(line.bb) || 0;
+      x.so += parseInt(line.so) || parseInt(line.k) || 0;
+    }
+    Object.values(byGame).forEach(bs => {
+      if (bs.status && bs.status !== 'final') return;
+      (bs.away_lineup || []).forEach(line => addLine(line, bs.away));
+      (bs.home_lineup || []).forEach(line => addLine(line, bs.home));
+    });
+
+    // Only touch players who appeared in the just-submitted lineup —
+    // every other player's stats can't have changed.
+    const affectedKeys = new Set();
+    (awayLineup || []).forEach(l => { if (l?.name) affectedKeys.add(l.name.trim() + '||' + (awayTeam||'')); });
+    (homeLineup || []).forEach(l => { if (l?.name) affectedKeys.add(l.name.trim() + '||' + (homeTeam||'')); });
+
+    let written = 0;
+    for (const p of (ALL_PLAYERS || [])) {
+      if (p.active === false) continue;
+      const key = (p.name||'').trim() + '||' + (p.team||'');
+      if (!affectedKeys.has(key)) continue;
+      const t = totalsByKey[key] || { gp:0, ab:0, r:0, h:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
+      const ab = t.ab, h = t.h, bb = t.bb, dbl = t.d, tr = t.t, hr = t.hr;
+      const sing = h - dbl - tr - hr;
+      const avg = ab > 0 ? h / ab : 0;
+      const obp = (ab + bb) > 0 ? (h + bb) / (ab + bb) : 0;
+      const slg = ab > 0 ? (sing + 2*dbl + 3*tr + 4*hr) / ab : 0;
+      const ops = obp + slg;
+      const update = {
+        gp: t.gp, ab, r: t.r, h, s: sing, d: dbl, t: tr, hr,
+        rbi: t.rbi, bb, so: t.so,
+        avg: parseFloat(avg.toFixed(3)),
+        obp: parseFloat(obp.toFixed(3)),
+        slg: parseFloat(slg.toFixed(3)),
+        ops: parseFloat(ops.toFixed(3)),
+      };
+      // Skip if every value already matches (idempotent re-submits don't write).
+      let dirty = false;
+      for (const k of Object.keys(update)) {
+        const sv = (typeof update[k] === 'number' && !Number.isInteger(update[k]))
+          ? Number((Number(p[k]||0)).toFixed(3))
+          : Number(p[k]||0);
+        const tv = (typeof update[k] === 'number' && !Number.isInteger(update[k]))
+          ? Number(update[k].toFixed(3))
+          : update[k];
+        if (sv !== tv) { dirty = true; break; }
+      }
+      if (!dirty) continue;
+      try {
+        await updateDoc(doc(db, 'players', p.id), update);
+        Object.assign(p, update);
+        written++;
+      } catch (e) {
+        console.warn('[_captRecalcStats] player update failed', p.id, e);
+      }
+    }
+    if (written) console.log(`[_captRecalcStats] updated ${written} player(s) from new box score`);
+  } catch (e) {
+    console.warn('[_captRecalcStats] failed', e);
+  }
+}
+
 // Must run after any captain action that marks a game done:true so team
 // records stay in sync with the source of truth.
 async function recalcStandingsFromAllGames() {
@@ -4353,6 +4454,10 @@ window.submitBoxScore = async function(gameId) {
       );
     }
     if (gameUpdate.done) await recalcStandingsFromAllGames();
+    // Refresh batting stats for the players in this lineup so the public
+    // stats page picks up the change immediately — no need for an admin
+    // to load admin.html to trigger the recalc.
+    await _captRecalcStatsFromBoxScores(awayBatters, homeBatters, g.away, g.home);
     const subId = `${gameId}_${myRole}`;
     const subData = {
       game_id: gameId, away: g.away, home: g.home,
