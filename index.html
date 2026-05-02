@@ -4923,14 +4923,12 @@ window.addEventListener('popstate',e=>{
   if (valid.includes(h)) { goPage(h, ex, true); return; }
   // Unknown hash (in-page anchor like #playoffs / #mondauk4 inside the
   // rules content). Browser default scroll-to-id does NOT reliably fire
-  // for hash changes when the target is inside a JS-injected innerHTML
-  // (rules content is lazy-loaded). Force the scroll explicitly.
+  // for hash changes when the target is inside a JS-injected innerHTML.
+  // window.scrollTo() is silently no-op on this site (some scroll-handler
+  // is resetting), so use scrollIntoView which actually works.
   const target = document.getElementById(h);
   if (target) {
-    // Account for the 62px sticky nav so the target lands below it.
-    const NAV_OFFSET = 62 + 56; // nav + sec-tabs
-    const top = target.getBoundingClientRect().top + window.scrollY - NAV_OFFSET;
-    window.scrollTo({ top, behavior: 'smooth' });
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 });
 
