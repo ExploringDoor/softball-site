@@ -2424,6 +2424,11 @@ async function loadAllData() {
     loadAdminPlayers();
     loadScoreReviews();
     loadFinancials();
+    // Auto-refresh player batting stats from current box_scores. Cheap when
+    // nothing changed (the optimized recalc skips no-op writes), so safe to
+    // run on every admin page load. Catches the staleness window between
+    // a captain submitting a box score and an admin clicking Publish.
+    recalcPlayerStatsFromBoxScores().catch(e => console.warn('auto-recalc failed', e));
   } catch(e) {
     console.error('Data load failed:', e);
     toast('Failed to load data: ' + e.message, 'error');
@@ -5363,8 +5368,13 @@ async function recalcPlayerStatsFromBoxScores() {
   // Reset every player to zeros first, then write totals; that handles
   // the case where a player appeared in last week's box score but DNP'd
   // this week — their season totals stay frozen at last week's, not stale.
+  // OPTIMIZATION: only PATCH players whose computed totals differ from
+  // what's stored. Lets us safely call this on every admin page load
+  // without writing 280+ no-op updates.
   const writes = [];
+  let _changed = 0;
   for (const p of (PLAYERS || [])) {
+    if (p.active === false) continue; // skip inactive (TSBKA stale roster, etc.)
     const key = (p.name || '').trim() + '||' + (p.team || '');
     const t = totalsByKey[key];
     const ab = t?.ab || 0;
@@ -5388,11 +5398,25 @@ async function recalcPlayerStatsFromBoxScores() {
       slg: parseFloat(slg.toFixed(3)),
       ops: parseFloat(ops.toFixed(3)),
     };
+    // Skip if everything matches — avoids 280+ no-op writes per page load
+    let dirty = false;
+    for (const k of Object.keys(update)) {
+      const stored = (typeof update[k] === 'number' && Number.isFinite(update[k]) && !Number.isInteger(update[k]))
+        ? Number((Number(p[k]||0)).toFixed(3))  // round stored to 3 dp for comparison
+        : (Number(p[k]||0));
+      const target = (typeof update[k] === 'number' && !Number.isInteger(update[k]))
+        ? Number(update[k].toFixed(3))
+        : update[k];
+      if (stored !== target) { dirty = true; break; }
+    }
+    if (!dirty) continue;
+    _changed++;
     writes.push(updateDoc(doc(db, 'players', p.id), update).then(() => {
       Object.assign(p, update);
     }).catch(e => console.warn('player update failed', p.id, e)));
   }
   await Promise.all(writes);
+  if (_changed) console.log(`[recalcPlayerStatsFromBoxScores] updated ${_changed} player(s)`);
 }
 
 async function recalcStandingsFromGames() {
