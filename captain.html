@@ -38,6 +38,29 @@
         }).catch(() => {});
         navigator.serviceWorker.addEventListener('message', (e) => {
           if (!e.data) return;
+          // Push-tap deep-links: route client-side when the PWA is already open
+          // at /captain.html so the URL hash AND the active tab actually
+          // update. Without this, taps land on captain.html but stay on
+          // whatever tab was last active. Mirrors profile.html + index.html.
+          if (e.data.type === 'NAVIGATE' && typeof e.data.url === 'string') {
+            try {
+              const u = new URL(e.data.url, location.origin);
+              if (u.origin !== location.origin) return;
+              const wantPath = u.pathname + u.search;
+              const curPath  = location.pathname + location.search;
+              if (wantPath !== curPath) { location.href = u.href; return; }
+              const newHash = (u.hash || '').replace(/^#/, '').trim();
+              if (newHash && newHash !== (location.hash || '').replace(/^#/, '')) {
+                location.hash = newHash;
+              }
+              // captain.html uses ?tab=captchat style too — handle that path.
+              const wantTab = (u.searchParams.get('tab') || newHash || '').trim();
+              if (wantTab && typeof window.captainTab === 'function') {
+                try { window.captainTab(wantTab); } catch(_){}
+              }
+            } catch(_){}
+            return;
+          }
           if (e.data.type === 'VERSION' && typeof e.data.version === 'string') {
             // Only render the build tag on /rules.html, and only in the
             // normal document flow (not a fixed overlay). User wants a single
@@ -81,7 +104,7 @@
             label: 'Account',
             items: [
               { icon: '👤', label: 'My Profile',        href: '/profile.html' },
-              { icon: '🔔', label: 'Notifications',     href: '/profile.html#notif?mode=player' },
+              { icon: '🔔', label: 'Notifications',     href: '/captain.html?tab=notif' },
               { icon: '⚾', label: 'Captain Dashboard', href: '/captain.html' },
               { icon: '✍️', label: 'Player Sign-Up',    href: '/registration.html' },
               { icon: '🛠️', label: 'Admin Access',      href: '/admin.html' },
@@ -807,7 +830,7 @@ select.form-input{cursor:pointer}
   <!-- TAB NAVIGATION -->
   <div class="tab-nav">
     <div class="tab-item active" data-tab="team" onclick="showTab('team')">My Team</div>
-    <div class="tab-item" onclick="window.location.href='/profile.html?mode=player#notif'">🔔 Notifications</div>
+    <div class="tab-item" data-tab="notif" onclick="showTab('notif')">🔔 Notifications <span class="tab-badge" id="badge-notif" hidden></span></div>
     <div class="tab-item" data-tab="roster" onclick="showTab('roster')">Roster</div>
     <div class="tab-item" data-tab="schedule" onclick="showTab('schedule')">Schedule</div>
     <div class="tab-item" data-tab="scores" onclick="showTab('scores')">Submit Score</div>
@@ -847,6 +870,13 @@ select.form-input{cursor:pointer}
         </div>
         <div id="next-up-content"><div class="loading"><div class="spinner"></div> Loading...</div></div>
       </div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div class="section" id="sec-notif">
+      <div class="section-title">Notifications</div>
+      <div class="section-sub">Game finals, schedule changes, chat pings, score conflicts — everything that pinged your phone, archived here.</div>
+      <div id="cap-notif-content" style="margin-top:14px"><div class="loading"><div class="spinner"></div> Loading…</div></div>
     </div>
 
     <!-- ROSTER -->
@@ -1638,7 +1668,7 @@ async function _enterCaptainAppFor(team) {
   // "send chat → teleported back to My Team" jump when a service-worker
   // activation reloads the page in the middle of the send flow.
   const qsTab = new URLSearchParams(location.search).get('tab');
-  const validTabs = ['team','roster','schedule','scores','payments','attendance','teamchat','captchat','announcements','help'];
+  const validTabs = ['team','notif','roster','schedule','scores','payments','attendance','teamchat','captchat','announcements','help'];
   if (qsTab && validTabs.includes(qsTab)) {
     showTab(qsTab);
   } else {
@@ -2203,7 +2233,89 @@ window.showTab = function(name) {
   }
   if (name === 'attendance') renderAttendance();
   if (name === 'payments') renderPayments();
+  if (name === 'notif') renderCaptainNotifs();
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// NOTIFICATIONS — in-place captain inbox
+// ═══════════════════════════════════════════════════════════════════
+// Captains used to be bounced to /profile.html?mode=player#notif when
+// they tapped the Notifications tab — landing them inside the player
+// portal mid-session. Now the tab renders inline so the captain stays
+// in their dashboard. Data source mirrors profile.html: we POST the
+// device's FCM token to /api/check-pending-nav and render whatever
+// pending nav rows the server has for this device.
+const _CAP_NOTIF_CAT_LABEL = {
+  scores: 'Scores', rainouts: 'Rainout', schedule: 'Schedule change',
+  playoffs: 'Playoffs', announcements: 'League announcement', live: 'Live game',
+  pregame: 'Pre-game', photos: 'Team photos', team_chat: 'Team chat',
+  captains_chat: 'Captains chat', admin: 'Admin alert',
+};
+function _capNotifAgo(ts) {
+  if (!ts) return '';
+  const d = (typeof ts === 'number') ? ts : Date.parse(ts);
+  if (!d) return '';
+  const diff = Date.now() - d;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  const days = Math.floor(h / 24);
+  if (days < 7) return days + 'd ago';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+async function renderCaptainNotifs() {
+  const el = document.getElementById('cap-notif-content');
+  if (!el) return;
+  const token = localStorage.getItem('dvsl-notif-token');
+  if (!token) {
+    el.innerHTML = `<div class="empty" style="padding:20px;text-align:center">
+      <div style="font-size:14px;margin-bottom:10px">Enable notifications on this device to see your inbox.</div>
+      <a class="btn btn-primary btn-sm" href="/notifications.html" style="text-decoration:none">Enable Notifications</a>
+    </div>`;
+    return;
+  }
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+  try {
+    const resp = await fetch('/api/check-pending-nav', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const data = resp.ok ? await resp.json() : { items: [] };
+    const items = Array.isArray(data.items) ? data.items.filter(it => it && it.id) : [];
+    if (!items.length) {
+      el.innerHTML = `<div class="empty" style="padding:24px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:10px">
+        <div style="font-size:32px;line-height:1;margin-bottom:8px">🎉</div>
+        <div style="font-size:14px;font-weight:600">All caught up!</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">No new notifications.</div>
+      </div>`;
+      return;
+    }
+    el.innerHTML = items.map(it => {
+      const titleEsc = esc(it.title || 'Notification');
+      const bodyEsc = it.body ? esc(it.body) : '';
+      const catLabel = it.category ? (_CAP_NOTIF_CAT_LABEL[it.category] || it.category) : '';
+      const imgEsc = it.image_data_url ? esc(it.image_data_url) : '';
+      const url = it.url || '';
+      return `<div class="cap-notif-card" data-id="${esc(it.id)}" style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--card);cursor:${url?'pointer':'default'}" ${url?`onclick="window.location.href='${esc(url)}'"`:''}>
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--navy);margin-top:7px;flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px;line-height:1.3">${titleEsc}</div>
+          ${bodyEsc ? `<div style="font-size:13px;color:var(--muted);margin-top:2px;line-height:1.4">${bodyEsc}</div>` : ''}
+          ${imgEsc ? `<img src="${imgEsc}" style="max-width:100%;max-height:200px;border-radius:8px;display:block;margin-top:8px" loading="lazy" alt="">` : ''}
+          <div style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">
+            ${catLabel ? `<span style="font-weight:700">${esc(catLabel)}</span>` : ''}
+            <span>${_capNotifAgo(it.ts || it.timestamp)}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty" style="padding:16px">Could not load: ' + esc(e.message) + '</div>';
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // DATA LOADING

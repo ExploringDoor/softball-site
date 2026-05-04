@@ -32,6 +32,42 @@
           if (r.active) r.active.postMessage({ type: 'GET_VERSION' });
         }).catch(() => {});
 
+        // ── SW NAVIGATE message: route push-tap deep-links to the right tab ──
+        //   When a user taps a push notification AND the PWA is already open
+        //   at /profile.html, the SW does NOT do a full reload (that would
+        //   lose state). Instead it posts a NAVIGATE message so we route
+        //   client-side. Without this listener, taps land on /profile.html
+        //   but the URL hash never updates AND the tab doesn't switch — the
+        //   user sees whatever tab they were last on, not #notif / #photos /
+        //   #chat. (index.html has the same listener; profile.html + captain.html
+        //   were missing it.)
+        navigator.serviceWorker.addEventListener('message', (e) => {
+          if (!e.data || e.data.type !== 'NAVIGATE' || typeof e.data.url !== 'string') return;
+          try {
+            const u = new URL(e.data.url, location.origin);
+            if (u.origin !== location.origin) return;
+            const wantPath = u.pathname + u.search;
+            const curPath  = location.pathname + location.search;
+            if (wantPath !== curPath) { location.href = u.href; return; }
+            // Same page — update the hash and explicitly route to the tab.
+            // We can't rely on hashchange firing AND a hashchange listener
+            // existing — set the hash AND call the tab function directly.
+            const newHash = (u.hash || '').replace(/^#/, '').trim();
+            if (newHash && newHash !== (location.hash || '').replace(/^#/, '')) {
+              location.hash = newHash;
+            }
+            const alias = { media: 'photos', availability: 'avail' };
+            const want = alias[newHash] || newHash;
+            const playerValid = ['avail','chat','notif','photos','help'];
+            const captainValid = ['team','notif','roster','schedule','scores','attendance','teamchat','captchat','announcements','payments','help'];
+            if (typeof MODE !== 'undefined' && MODE === 'captain' && captainValid.includes(want) && typeof window.captainTab === 'function') {
+              window.captainTab(want);
+            } else if (playerValid.includes(want) && typeof window.playerTab === 'function') {
+              window.playerTab(want);
+            }
+          } catch(_){}
+        });
+
         // ── Bottom tab bar + "More" sheet ─────────────────────────────
         const TABS = [
           { id: 'home',     label: 'Home',     icon: '🏠', href: '/' },
