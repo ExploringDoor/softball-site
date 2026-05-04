@@ -8220,6 +8220,16 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const hLineup  = boxScore.home_lineup  || boxScore.homeBatters  || [];
     const aPitch   = boxScore.away_pitchers || boxScore.away_pitching || [];
     const hPitch   = boxScore.home_pitchers || boxScore.home_pitching || [];
+    // Per-team Score-Only flag (captain submitted final score for one side
+    // without entering individual batting/pitching detail). Replace that
+    // side's batting + pitching tables with an explanatory message rather
+    // than rendering empty tables that look like a bug.
+    const aScoreOnly = !!boxScore.away_score_only;
+    const hScoreOnly = !!boxScore.home_score_only;
+    const scoreOnlyMsg = (teamShort, accentColor) => `<div style="padding:24px 16px;text-align:center;background:#fafbfc;border:1px dashed #d1d5db;border-radius:8px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:${accentColor||'#374151'};margin-bottom:6px">📝 Score Only Entry</div>
+      <div style="font-size:12px;color:#6b7280;line-height:1.5;max-width:280px;margin:0 auto">Individual stats were not recorded for ${esc(teamShort)}. The captain submitted a final score only.</div>
+    </div>`;
     // Support linescores (admin/scorer), innings (old admin), and away_linescore (captain portal) field names
     const aInnings = boxScore.linescores?.away || boxScore.innings?.away || boxScore.away_linescore || [];
     const hInnings = boxScore.linescores?.home || boxScore.innings?.home || boxScore.home_linescore || [];
@@ -8425,32 +8435,32 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       <div id="bs-bat-basic" class="pop-grid2">
         <div>
           <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away}</div>
-          <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(aLineup,away)}</tbody></table>
-          ${mkBatNotes(aLineup,'away')}
+          ${aScoreOnly ? scoreOnlyMsg(away, ac) : `<table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(aLineup,away)}</tbody></table>${mkBatNotes(aLineup,'away')}`}
         </div>
         <div>
           <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home}</div>
-          <table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(hLineup,home)}</tbody></table>
-          ${mkBatNotes(hLineup,'home')}
+          ${hScoreOnly ? scoreOnlyMsg(home, hc) : `<table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(hLineup,home)}</tbody></table>${mkBatNotes(hLineup,'home')}`}
         </div>
       </div>
       <div id="bs-bat-adv" class="pop-grid2" style="display:none">
         <div style="grid-column:1/-1">
           <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away}</div>
-          <div class="adv-bs-hint">← swipe to see all columns →</div>
+          ${aScoreOnly ? scoreOnlyMsg(away, ac) : `<div class="adv-bs-hint">← swipe to see all columns →</div>
           <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(aLineup,away)}</tbody></table></div>
-          ${mkBatNotes(aLineup,'away')}
+          ${mkBatNotes(aLineup,'away')}`}
         </div>
         <div style="grid-column:1/-1;margin-top:16px">
           <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home}</div>
-          <div class="adv-bs-hint">← swipe to see all columns →</div>
+          ${hScoreOnly ? scoreOnlyMsg(home, hc) : `<div class="adv-bs-hint">← swipe to see all columns →</div>
           <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(hLineup,home)}</tbody></table></div>
-          ${mkBatNotes(hLineup,'home')}
+          ${mkBatNotes(hLineup,'home')}`}
         </div>
       </div>`;
 
-    // Pitching (only if any pitcher data exists)
-    if (aPitch.length || hPitch.length) {
+    // Pitching (render if any pitcher data exists, OR if either side is
+    // explicitly score-only — so the "Score Only Entry" message gets a
+    // home in the pitching block too, not just the batting block).
+    if (aPitch.length || hPitch.length || aScoreOnly || hScoreOnly) {
       // Sanity-check pitcher lines: flag impossible values (K > outs, strikes > pitches).
       // A strikeout is always an out, so K can never exceed total outs recorded.
       // Likewise strike-pitches can never exceed total pitches.
@@ -8523,27 +8533,25 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
         <div id="bs-pitch-basic" class="pop-grid2">
           <div>
             <div class="pop-team-lbl" style="color:${ac}">${away}</div>
-            <table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>K</th></tr></thead><tbody>${mkPitchRowsBasic(aPitch)}</tbody></table>
-            ${mkPitchNotes(aPitch,'away')}
+            ${aScoreOnly ? scoreOnlyMsg(away, ac) : `<table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>K</th></tr></thead><tbody>${mkPitchRowsBasic(aPitch)}</tbody></table>${mkPitchNotes(aPitch,'away')}`}
           </div>
           <div>
             <div class="pop-team-lbl" style="color:${hc}">${home}</div>
-            <table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>K</th></tr></thead><tbody>${mkPitchRowsBasic(hPitch)}</tbody></table>
-            ${mkPitchNotes(hPitch,'home')}
+            ${hScoreOnly ? scoreOnlyMsg(home, hc) : `<table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>K</th></tr></thead><tbody>${mkPitchRowsBasic(hPitch)}</tbody></table>${mkPitchNotes(hPitch,'home')}`}
           </div>
         </div>
         <div id="bs-pitch-adv" class="pop-grid2" style="display:none">
           <div style="grid-column:1/-1">
             <div class="pop-team-lbl" style="color:${ac}">${away}</div>
-            <div class="adv-bs-hint">← swipe to see all columns →</div>
+            ${aScoreOnly ? scoreOnlyMsg(away, ac) : `<div class="adv-bs-hint">← swipe to see all columns →</div>
             <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th title="Walks+Hits per Inning Pitched">WHIP</th><th title="Batters Faced">BF</th><th title="Pitch Count">PC</th></tr></thead><tbody>${mkPitchRows(aPitch)}</tbody></table></div>
-            ${mkPitchNotes(aPitch,'away')}
+            ${mkPitchNotes(aPitch,'away')}`}
           </div>
           <div style="grid-column:1/-1;margin-top:16px">
             <div class="pop-team-lbl" style="color:${hc}">${home}</div>
-            <div class="adv-bs-hint">← swipe to see all columns →</div>
+            ${hScoreOnly ? scoreOnlyMsg(home, hc) : `<div class="adv-bs-hint">← swipe to see all columns →</div>
             <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th title="Walks+Hits per Inning Pitched">WHIP</th><th title="Batters Faced">BF</th><th title="Pitch Count">PC</th></tr></thead><tbody>${mkPitchRows(hPitch)}</tbody></table></div>
-            ${mkPitchNotes(hPitch,'home')}
+            ${mkPitchNotes(hPitch,'home')}`}
           </div>
         </div>`;
     }
