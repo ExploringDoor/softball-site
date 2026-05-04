@@ -8711,11 +8711,14 @@ window.sendPushNotification = async function() {
   const category = document.getElementById('push-category').value;
   const team = document.getElementById('push-team').value || undefined;
   // When an image is attached, default the click destination to the
-  // inbox so the user can see the full-size photo (tap-to-zoom). Without
-  // a URL, FCM notifications either no-op or open the start page; with
-  // a URL, our service worker routes the user there.
+  // user's profile #notif tab (which renders the same photo lightbox
+  // as inbox.html but lives INSIDE the player/captain portal — so tapping
+  // a photo push lands you in your portal with the nav around you, not
+  // on a bare standalone inbox page that feels like a settings screen).
+  // Without a URL, FCM notifications either no-op or open the start
+  // page; with a URL, our service worker routes the user there.
   let url = document.getElementById('push-url').value.trim();
-  if (!url && _pushImageDataUrl) url = '/inbox.html';
+  if (!url && _pushImageDataUrl) url = '/profile.html#notif';
   url = url || undefined;
   const result = document.getElementById('push-result');
 
