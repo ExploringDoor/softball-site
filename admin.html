@@ -590,6 +590,7 @@ select.form-input{cursor:pointer}
 .toast{padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.15);animation:toastIn .3s ease;max-width:360px}
 .toast.success{background:var(--green)}
 .toast.error{background:var(--red)}
+.toast.warn{background:#f59e0b;color:#1a1a1a}
 .toast.info{background:var(--navy)}
 @keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes toastOut{from{opacity:1}to{opacity:0;transform:translateY(-8px)}}
@@ -6287,6 +6288,48 @@ window.saveEditGame = async function(gameId) {
     data.time    = _prev.time || '';
   }
 
+  // ── Auto-derive `wk` when admin moves a game's date ───────────────────────
+  //   Schedule groups by `wk`, but admin commonly only edits the date input
+  //   when rescheduling. Without this guard, the game ends up labeled with
+  //   the new date but bucketed under the OLD week — exactly the "appears
+  //   in this week's group but says July 14" symptom.
+  //
+  //   Logic:
+  //     • Only kicks in when `date_iso` actually changed AND the admin did
+  //       NOT already touch the Week field (their choice wins for makeup
+  //       games — Wk 3 makeup played on a Jul 14 date stays Wk 3).
+  //     • If the new date already has games AND they all share a single wk,
+  //       auto-update wk to match. (Unambiguous: this is what the admin
+  //       almost certainly meant.)
+  //     • If the new date has games on multiple weeks OR no games at all,
+  //       warn the admin via toast — never silently change the bucket when
+  //       it's ambiguous.
+  let _wkAutoUpdated = false;
+  let _wkWarning = '';
+  if (dateIso && dateIso !== _prev.date_iso) {
+    const userChangedWk = data.wk !== (_prev.wk || 1);
+    if (!userChangedWk) {
+      const otherGamesOnDate = (GAMES || []).filter(g =>
+        g.id !== gameId && g.date_iso === dateIso
+      );
+      const uniqueWks = [...new Set(
+        otherGamesOnDate.map(g => g.wk).filter(w => w != null && w !== '')
+      )];
+      if (uniqueWks.length === 1 && uniqueWks[0] !== data.wk) {
+        const oldWk = data.wk;
+        data.wk = uniqueWks[0];
+        _wkAutoUpdated = `Auto-updated Week ${oldWk} → Week ${data.wk} to match other games on ${data.date}.`;
+        // Reflect in the open inline editor so the admin sees the change.
+        const wkEl = document.getElementById('eg-wk-' + gameId);
+        if (wkEl) wkEl.value = String(data.wk);
+      } else if (uniqueWks.length > 1) {
+        _wkWarning = `Heads up: ${data.date} has games in multiple weeks (${uniqueWks.join(', ')}). This game stays in Wk ${data.wk} — edit Week manually if needed.`;
+      } else if (uniqueWks.length === 0) {
+        _wkWarning = `Heads up: date moved to ${data.date} but Week stays at Wk ${data.wk}. Schedule groups by Week, so this game appears under Wk ${data.wk}.`;
+      }
+    }
+  }
+
   // Snapshot pre-edit state for the "what changed" activity log + push.
   const before = {
     wk: _prev.wk||'', date: _prev.date||'', time: _prev.time||'',
@@ -6310,10 +6353,19 @@ window.saveEditGame = async function(gameId) {
     await updateDoc(doc(db, 'games', gameId), data);
     const g = GAMES.find(x => x.id === gameId);
     if (g) Object.assign(g, data);
-    toast('Game updated!');
+    // Combine save confirmation with the wk auto-derive / warning message
+    // so the admin knows the schedule bucket actually moved (or didn't).
+    if (_wkAutoUpdated) {
+      toast('Game updated! ' + _wkAutoUpdated, 'success');
+    } else if (_wkWarning) {
+      toast('Game updated. ' + _wkWarning, 'warn');
+    } else {
+      toast('Game updated!');
+    }
     await logActivity(
       'Schedule',
-      `Edited ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk} — ${diffSummary}`
+      `Edited ${getTeamName(data.away)} @ ${getTeamName(data.home)} Wk ${data.wk} — ${diffSummary}` +
+      (_wkAutoUpdated ? ` (wk auto-derived from date)` : '')
     );
 
     // Push notification to subscribers of either team if date/time/field/teams changed.
