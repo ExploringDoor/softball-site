@@ -8710,15 +8710,36 @@ window.sendPushNotification = async function() {
   const body  = document.getElementById('push-body').value.trim();
   const category = document.getElementById('push-category').value;
   const team = document.getElementById('push-team').value || undefined;
-  // When an image is attached, default the click destination to the
-  // user's profile #notif tab (which renders the same photo lightbox
-  // as inbox.html but lives INSIDE the player/captain portal — so tapping
-  // a photo push lands you in your portal with the nav around you, not
-  // on a bare standalone inbox page that feels like a settings screen).
-  // Without a URL, FCM notifications either no-op or open the start
-  // page; with a URL, our service worker routes the user there.
+  // Without a URL, FCM falls back to '/' which is a useless deep-link —
+  // test pushes especially end up on whatever default the SW chose,
+  // confusing the recipient ("why did this notification dump me on the
+  // home page?"). Auto-derive a sensible default per category so a
+  // category=admin push lands on /admin.html, scores on /#scores, etc.
+  // Admin can still override by typing in the URL field.
+  //
+  // Image-attached pushes prefer /profile.html#notif (renders the photo
+  // lightbox inside the player/captain portal — see v269).
   let url = document.getElementById('push-url').value.trim();
-  if (!url && _pushImageDataUrl) url = '/profile.html#notif';
+  if (!url) {
+    if (_pushImageDataUrl) {
+      url = '/profile.html#notif';
+    } else {
+      const _categoryDefaults = {
+        scores:        '/#scores',
+        schedule:      '/#schedule',
+        rainouts:      '/#schedule',
+        playoffs:      '/playoffs.html',
+        announcements: '/profile.html#notif',
+        live:          '/watch.html',
+        pregame:       '/#schedule',
+        photos:        '/profile.html#photos',
+        team_chat:     '/profile.html#chat',
+        captains_chat: '/captain.html?tab=captchat',
+        admin:         '/admin.html',
+      };
+      url = _categoryDefaults[category] || '/profile.html#notif';
+    }
+  }
   url = url || undefined;
   const result = document.getElementById('push-result');
 
