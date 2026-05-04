@@ -874,9 +874,7 @@ select.form-input{cursor:pointer}
 
     <!-- NOTIFICATIONS -->
     <div class="section" id="sec-notif">
-      <div class="section-title">Notifications</div>
-      <div class="section-sub">Game finals, schedule changes, chat pings, score conflicts — everything that pinged your phone, archived here.</div>
-      <div id="cap-notif-content" style="margin-top:14px"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+      <div id="captnotif-content"><div class="loading"><div class="spinner"></div> Loading…</div></div>
     </div>
 
     <!-- ROSTER -->
@@ -2233,50 +2231,193 @@ window.showTab = function(name) {
   }
   if (name === 'attendance') renderAttendance();
   if (name === 'payments') renderPayments();
-  if (name === 'notif') renderCaptainNotifs();
+  if (name === 'notif') renderNotificationsTab('captnotif-content', 'captnotif-recent');
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// NOTIFICATIONS — in-place captain inbox
+// NOTIFICATIONS — in-place captain inbox (full Unread / Archive / Settings)
 // ═══════════════════════════════════════════════════════════════════
-// Captains used to be bounced to /profile.html?mode=player#notif when
-// they tapped the Notifications tab — landing them inside the player
-// portal mid-session. Now the tab renders inline so the captain stays
-// in their dashboard. Data source mirrors profile.html: we POST the
-// device's FCM token to /api/check-pending-nav and render whatever
-// pending nav rows the server has for this device.
-const _CAP_NOTIF_CAT_LABEL = {
+// Ported from profile.html so captains stay inside the captain dashboard
+// when they tap Notifications instead of being bounced to the player view.
+// Same data source (/api/check-pending-nav), same archive (localStorage),
+// same dismiss + lightbox semantics. Shared keys with profile.html so the
+// two pages see ONE inbox state per device — dismissing on profile dismisses
+// on captain too.
+const _NOTIF_ARCHIVE_KEY = 'dvsl-inbox-archive';
+const _NOTIF_ARCHIVE_MAX = 100;
+const _NOTIF_DISMISSED_KEY = 'dvsl-inbox-dismissed-ids';
+const _NOTIF_DISMISSED_MAX = 500;
+
+function _notifLoadArchive() {
+  try {
+    const raw = localStorage.getItem(_NOTIF_ARCHIVE_KEY);
+    const a = raw ? JSON.parse(raw) : [];
+    return Array.isArray(a) ? a : [];
+  } catch(_) { return []; }
+}
+function _notifSaveArchive(arr) {
+  try {
+    const trimmed = arr.slice().sort((a,b) => (b.ts||0)-(a.ts||0)).slice(0, _NOTIF_ARCHIVE_MAX);
+    localStorage.setItem(_NOTIF_ARCHIVE_KEY, JSON.stringify(trimmed));
+  } catch(_) {}
+}
+function _notifArchiveSnapshot(items) {
+  if (!Array.isArray(items) || !items.length) return;
+  const existing = _notifLoadArchive();
+  const byId = new Map(existing.map(it => [it.id, it]));
+  let changed = false;
+  items.forEach(it => {
+    if (!it || !it.id || byId.has(it.id)) return;
+    byId.set(it.id, {
+      id: it.id, title: it.title||'', body: it.body||'', url: it.url||'/',
+      ts: it.ts||Date.now(), category: it.category||'', image_data_url: it.image_data_url||'',
+      archivedAt: Date.now(),
+    });
+    changed = true;
+  });
+  if (changed) _notifSaveArchive(Array.from(byId.values()));
+}
+function _notifRemoveFromArchive(id) {
+  if (!id) return;
+  _notifSaveArchive(_notifLoadArchive().filter(it => it.id !== id));
+}
+function _notifClearArchive() { try { localStorage.removeItem(_NOTIF_ARCHIVE_KEY); } catch(_) {} }
+function _notifLoadDismissed() {
+  try {
+    const a = JSON.parse(localStorage.getItem(_NOTIF_DISMISSED_KEY) || '[]');
+    return Array.isArray(a) ? a : [];
+  } catch(_) { return []; }
+}
+function _notifMarkDismissed(id) {
+  if (!id) return;
+  const a = _notifLoadDismissed();
+  if (a.indexOf(id) === -1) {
+    a.push(id);
+    try { localStorage.setItem(_NOTIF_DISMISSED_KEY, JSON.stringify(a.slice(-_NOTIF_DISMISSED_MAX))); } catch(_) {}
+  }
+}
+function _notifServerDismiss(id) {
+  const token = localStorage.getItem('dvsl-notif-token');
+  if (!token || !id) return;
+  const payload = JSON.stringify({ token, id });
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      if (navigator.sendBeacon('/api/dismiss-pending-nav', blob)) return;
+    }
+  } catch(_) {}
+  fetch('/api/dismiss-pending-nav', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: payload, keepalive: true,
+  }).catch(() => {});
+}
+function _notifAgo(ts) {
+  const s = Math.max(0, Math.floor((Date.now() - (ts||0))/1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+const _NOTIF_CAT_LABEL = {
   scores: 'Scores', rainouts: 'Rainout', schedule: 'Schedule change',
   playoffs: 'Playoffs', announcements: 'League announcement', live: 'Live game',
   pregame: 'Pre-game', photos: 'Team photos', team_chat: 'Team chat',
   captains_chat: 'Captains chat', admin: 'Admin alert',
 };
-function _capNotifAgo(ts) {
-  if (!ts) return '';
-  const d = (typeof ts === 'number') ? ts : Date.parse(ts);
-  if (!d) return '';
-  const diff = Date.now() - d;
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return m + 'm ago';
-  const h = Math.floor(m / 60);
-  if (h < 24) return h + 'h ago';
-  const days = Math.floor(h / 24);
-  if (days < 7) return days + 'd ago';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+// Track which subtab (unread / archive / settings) is active per containerId.
+const _notifSubtabState = {};
+
+function renderNotificationsTab(containerId, recentId) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const sub = _notifSubtabState[containerId] || 'unread';
+  _notifSubtabState[containerId] = sub;
+  const tabBtn = (id, label) => {
+    const active = sub === id;
+    return `<button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}"
+      style="flex:1"
+      onclick="window._notifSetSubtab('${containerId}','${recentId}','${id}')">${label}</button>`;
+  };
+  el.innerHTML = `
+    <div class="section-title">Notifications</div>
+    <div style="display:flex;gap:6px;margin:8px 0 14px">
+      ${tabBtn('unread','Unread')}
+      ${tabBtn('archive','Archive')}
+      ${tabBtn('settings','Settings')}
+    </div>
+    <div id="${recentId}"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+  `;
+  if (sub === 'settings')      _notifRenderSettings(recentId);
+  else if (sub === 'archive')  _notifRenderArchive(recentId);
+  else                         _notifRenderUnread(recentId);
 }
-async function renderCaptainNotifs() {
-  const el = document.getElementById('cap-notif-content');
+
+window._notifSetSubtab = function(containerId, recentId, sub) {
+  _notifSubtabState[containerId] = sub;
+  renderNotificationsTab(containerId, recentId);
+};
+
+function _notifCardHtml(it, archived) {
+  const titleEsc = esc(it.title || 'Notification');
+  const bodyEsc = it.body ? esc(it.body) : '';
+  const catLabel = it.category ? (_NOTIF_CAT_LABEL[it.category] || it.category) : '';
+  const imgEsc = it.image_data_url ? esc(it.image_data_url) : '';
+  return `
+    <div class="notif-card-row ${archived ? 'archived' : ''}" data-id="${esc(it.id)}"
+         style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--card);${archived ? 'opacity:.72' : ''}">
+      ${archived ? '' : '<div style="width:8px;height:8px;border-radius:50%;background:var(--navy);margin-top:7px;flex-shrink:0"></div>'}
+      <div style="flex:1;min-width:0">
+        <div style="cursor:pointer" onclick="window._notifCardClick('${esc(it.id)}', ${archived ? 'true' : 'false'})">
+          <div style="font-weight:700;font-size:14px;line-height:1.3">${titleEsc}</div>
+          ${bodyEsc ? `<div style="font-size:13px;color:var(--muted);margin-top:2px;line-height:1.4">${bodyEsc}</div>` : ''}
+          <div style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">
+            ${catLabel ? `<span style="font-weight:700">${esc(catLabel)}</span>` : ''}
+            <span>${_notifAgo(it.ts)}</span>
+          </div>
+        </div>
+        ${imgEsc ? `<button type="button" onclick="event.preventDefault();event.stopPropagation();window._notifOpenImage('${imgEsc}')" style="all:unset;display:block;width:100%;cursor:zoom-in;-webkit-tap-highlight-color:rgba(0,45,114,.18);touch-action:manipulation;margin-top:8px"><img src="${imgEsc}" style="max-width:100%;max-height:200px;border-radius:8px;display:block;pointer-events:none" loading="lazy" alt=""></button>` : ''}
+      </div>
+      <button class="icon-btn" aria-label="Dismiss"
+              style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px"
+              onclick="event.stopPropagation();window._notifDismissCard('${esc(it.id)}', ${archived ? 'true' : 'false'})">×</button>
+    </div>
+  `;
+}
+
+// Lightbox for tap-to-zoom on push-attached images. Mirrors profile.html / inbox.html.
+let _notifImgBoxOpenedAt = 0;
+window._notifOpenImage = function(src) {
+  let bg = document.getElementById('notif-imgbox-bg');
+  if (!bg) {
+    bg = document.createElement('div');
+    bg.id = 'notif-imgbox-bg';
+    bg.style.cssText = 'display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);align-items:center;justify-content:center;padding:20px;cursor:zoom-out';
+    bg.innerHTML = '<button type="button" aria-label="Close" style="position:absolute;top:max(20px,env(safe-area-inset-top));right:20px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;font-size:20px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center">×</button><img alt="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 12px 48px rgba(0,0,0,.5)">';
+    bg.addEventListener('click', () => {
+      if (Date.now() - _notifImgBoxOpenedAt < 350) return;
+      bg.style.display = 'none';
+    });
+    document.body.appendChild(bg);
+  }
+  bg.querySelector('img').src = src;
+  requestAnimationFrame(() => {
+    bg.style.display = 'flex';
+    _notifImgBoxOpenedAt = Date.now();
+  });
+};
+
+async function _notifRenderUnread(recentId) {
+  const el = document.getElementById(recentId);
   if (!el) return;
   const token = localStorage.getItem('dvsl-notif-token');
   if (!token) {
     el.innerHTML = `<div class="empty" style="padding:20px;text-align:center">
-      <div style="font-size:14px;margin-bottom:10px">Enable notifications on this device to see your inbox.</div>
-      <a class="btn btn-primary btn-sm" href="/notifications.html" style="text-decoration:none">Enable Notifications</a>
+      <div style="font-size:14px;margin-bottom:10px">Enable notifications to see unread pings.</div>
+      <a class="btn btn-primary btn-sm" href="/notifications.html" style="text-decoration:none;display:inline-block">Enable Notifications</a>
     </div>`;
     return;
   }
-  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
   try {
     const resp = await fetch('/api/check-pending-nav', {
       method: 'POST',
@@ -2284,38 +2425,122 @@ async function renderCaptainNotifs() {
       body: JSON.stringify({ token }),
     });
     const data = resp.ok ? await resp.json() : { items: [] };
-    const items = Array.isArray(data.items) ? data.items.filter(it => it && it.id) : [];
+    const raw = Array.isArray(data.items) ? data.items : [];
+    _notifArchiveSnapshot(raw);
+    const dismissed = new Set(_notifLoadDismissed());
+    const items = raw.filter(it => it && it.id && !dismissed.has(it.id));
     if (!items.length) {
-      el.innerHTML = `<div class="empty" style="padding:24px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:10px">
-        <div style="font-size:32px;line-height:1;margin-bottom:8px">🎉</div>
-        <div style="font-size:14px;font-weight:600">All caught up!</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px">No new notifications.</div>
-      </div>`;
+      el.innerHTML = '<div class="empty" style="padding:20px;text-align:center">🎉 You\'re all caught up. No unread notifications.</div>';
       return;
     }
-    el.innerHTML = items.map(it => {
-      const titleEsc = esc(it.title || 'Notification');
-      const bodyEsc = it.body ? esc(it.body) : '';
-      const catLabel = it.category ? (_CAP_NOTIF_CAT_LABEL[it.category] || it.category) : '';
-      const imgEsc = it.image_data_url ? esc(it.image_data_url) : '';
-      const url = it.url || '';
-      return `<div class="cap-notif-card" data-id="${esc(it.id)}" style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--card);cursor:${url?'pointer':'default'}" ${url?`onclick="window.location.href='${esc(url)}'"`:''}>
-        <div style="width:8px;height:8px;border-radius:50%;background:var(--navy);margin-top:7px;flex-shrink:0"></div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:14px;line-height:1.3">${titleEsc}</div>
-          ${bodyEsc ? `<div style="font-size:13px;color:var(--muted);margin-top:2px;line-height:1.4">${bodyEsc}</div>` : ''}
-          ${imgEsc ? `<img src="${imgEsc}" style="max-width:100%;max-height:200px;border-radius:8px;display:block;margin-top:8px" loading="lazy" alt="">` : ''}
-          <div style="display:flex;gap:10px;margin-top:6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">
-            ${catLabel ? `<span style="font-weight:700">${esc(catLabel)}</span>` : ''}
-            <span>${_capNotifAgo(it.ts || it.timestamp)}</span>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
+    el.innerHTML = items.map(it => _notifCardHtml(it, false)).join('');
   } catch(e) {
     el.innerHTML = '<div class="empty" style="padding:16px">Could not load: ' + esc(e.message) + '</div>';
   }
 }
+
+function _notifRenderArchive(recentId) {
+  const el = document.getElementById(recentId);
+  if (!el) return;
+  const items = _notifLoadArchive();
+  if (!items.length) {
+    el.innerHTML = '<div class="empty" style="padding:20px;text-align:center">No archived notifications yet.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button class="btn btn-outline btn-sm" onclick="window._notifClearArchiveUi()">Clear all</button>
+    </div>
+    ${items.map(it => _notifCardHtml(it, true)).join('')}
+  `;
+}
+
+function _notifRenderSettings(recentId) {
+  const el = document.getElementById(recentId);
+  if (!el) return;
+  const isPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  const hasToken = !!localStorage.getItem('dvsl-notif-token');
+  let html = '';
+  if (!isPwa) {
+    html += `<div style="background:#fef3c7;border:1px solid #d97706;color:#92400e;padding:12px 14px;border-radius:10px;font-size:13px;line-height:1.5;margin-bottom:14px">
+      <strong>🔔 Install the app to enable push notifications</strong><br>
+      On iPhone: tap the Share button in Safari, then "Add to Home Screen."<br>
+      On Android: tap the browser menu, then "Install app."<br>
+      Push only works once installed.
+    </div>`;
+  }
+  html += `<div style="border:1px solid var(--border);border-radius:10px;padding:14px;background:var(--card)">
+    <div style="font-weight:700;font-size:14px;margin-bottom:6px">Push Notifications</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">
+      ${isPwa
+        ? (hasToken
+            ? 'You\'re subscribed. Team chat, schedule changes, scores, captain alerts, and announcements will ping this device.'
+            : 'Not subscribed yet. Enable to get pinged.')
+        : 'Install the app first, then enable notifications.'}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="/notifications.html" class="btn btn-outline btn-sm" style="text-decoration:none;display:inline-block">${hasToken ? 'Manage subscription →' : 'Enable Notifications'}</a>
+      <a href="/inbox.html" class="btn btn-outline btn-sm" style="text-decoration:none;display:inline-block">Open full Inbox →</a>
+    </div>
+  </div>`;
+  el.innerHTML = html;
+}
+
+// Card click in captain Notifications tab: archive + dismiss + follow link.
+window._notifCardClick = function(id, archived) {
+  const items = _notifLoadArchive();
+  const item = items.find(it => it.id === id);
+  const url = item && item.url;
+  if (!archived) {
+    _notifMarkDismissed(id);
+    _notifServerDismiss(id);
+    _notifRenderUnread('captnotif-recent');
+  }
+  if (url && url !== '#') {
+    window._capOpenNotif(url, (item && item.category) || '', (item && item.title) || '');
+  }
+};
+
+window._notifDismissCard = function(id, archived) {
+  if (archived) {
+    _notifRemoveFromArchive(id);
+  } else {
+    _notifMarkDismissed(id);
+    _notifServerDismiss(id);
+  }
+  if (archived) _notifRenderArchive('captnotif-recent');
+  else          _notifRenderUnread('captnotif-recent');
+};
+
+window._notifClearArchiveUi = function() {
+  if (!confirm('Clear all archived notifications? This only affects this device.')) return;
+  _notifClearArchive();
+  _notifRenderArchive('captnotif-recent');
+};
+
+// Notification deep-link router for captain.html. If the URL targets the
+// captain page itself, switch tabs in place; otherwise full navigate.
+// Mirrors profile.html's dvslOpenNotif but maps to showTab() values.
+window._capOpenNotif = function(url, category, title) {
+  try {
+    const u = new URL(url, location.origin);
+    const onCaptain = location.pathname === '/captain.html' || location.pathname.endsWith('/captain.html');
+    const samePage = u.pathname === location.pathname;
+    if (samePage || onCaptain) {
+      // Try ?tab=X first, then hash
+      const wantTab = (u.searchParams.get('tab') || u.hash.replace(/^#/, '') || '').trim();
+      const validTabs = ['team','notif','roster','schedule','scores','payments','attendance','teamchat','captchat','announcements','help'];
+      if (wantTab && validTabs.includes(wantTab)) {
+        showTab(wantTab);
+        return;
+      }
+    }
+    // Fall through: full navigate.
+    window.location.href = url;
+  } catch(_) {
+    window.location.href = url;
+  }
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // DATA LOADING
