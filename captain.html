@@ -3465,8 +3465,30 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
       <button id="bs-tab-away-${gameId}" onclick="bsSwitchTab('${gameId}','away')" style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:var(--navy);color:#fff;border-right:1px solid rgba(255,255,255,.2)">▲ ${awayTeamName}</button>
       <button id="bs-tab-home-${gameId}" onclick="bsSwitchTab('${gameId}','home')" style="flex:1;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;text-transform:uppercase;border:none;cursor:pointer;background:#f3f4f6;color:var(--muted)">▼ ${homeTeamName}</button>
     </div>
-    <div id="bs-panel-away-${gameId}">${batTable('away',awayNames)}${pitTable('away')}</div>
-    <div id="bs-panel-home-${gameId}" style="display:none">${batTable('home',homeNames)}${pitTable('home')}</div>
+    <div id="bs-panel-away-${gameId}" data-mode="full">
+      <div style="display:flex;gap:8px;padding:10px 16px 6px;border-bottom:1px solid var(--border);background:#fafbfc">
+        <button id="bs-mode-${gameId}-away-full" onclick="bsSetMode('${gameId}','away','full')" style="flex:1;padding:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--navy);border-radius:6px;cursor:pointer;background:var(--navy);color:#fff">📊 Full Box Score</button>
+        <button id="bs-mode-${gameId}-away-soonly" onclick="bsSetMode('${gameId}','away','score-only')" style="flex:1;padding:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--border);border-radius:6px;cursor:pointer;background:#f3f4f6;color:var(--muted)">📝 Score Only</button>
+      </div>
+      <div id="bs-panel-away-${gameId}-full">${batTable('away',awayNames)}${pitTable('away')}</div>
+      <div id="bs-panel-away-${gameId}-soonly" style="display:none;padding:24px 16px;text-align:center">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.04em;text-transform:uppercase;color:var(--navy);margin-bottom:8px">📝 Score Only Mode</div>
+        <div style="font-size:13px;color:var(--muted);max-width:360px;margin:0 auto;line-height:1.5">No individual stats will be saved for <strong>${esc(awayTeamName)}</strong>. Just enter their final R in the linescore at the top — that's it.</div>
+        <div style="margin-top:16px;font-size:11px;color:var(--muted2);font-style:italic">Switch back to "Full Box Score" above if you want to enter players, batting, and pitching for ${esc(awayTeamName)}.</div>
+      </div>
+    </div>
+    <div id="bs-panel-home-${gameId}" data-mode="full" style="display:none">
+      <div style="display:flex;gap:8px;padding:10px 16px 6px;border-bottom:1px solid var(--border);background:#fafbfc">
+        <button id="bs-mode-${gameId}-home-full" onclick="bsSetMode('${gameId}','home','full')" style="flex:1;padding:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--navy);border-radius:6px;cursor:pointer;background:var(--navy);color:#fff">📊 Full Box Score</button>
+        <button id="bs-mode-${gameId}-home-soonly" onclick="bsSetMode('${gameId}','home','score-only')" style="flex:1;padding:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;border:2px solid var(--border);border-radius:6px;cursor:pointer;background:#f3f4f6;color:var(--muted)">📝 Score Only</button>
+      </div>
+      <div id="bs-panel-home-${gameId}-full">${batTable('home',homeNames)}${pitTable('home')}</div>
+      <div id="bs-panel-home-${gameId}-soonly" style="display:none;padding:24px 16px;text-align:center">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.04em;text-transform:uppercase;color:var(--navy);margin-bottom:8px">📝 Score Only Mode</div>
+        <div style="font-size:13px;color:var(--muted);max-width:360px;margin:0 auto;line-height:1.5">No individual stats will be saved for <strong>${esc(homeTeamName)}</strong>. Just enter their final R in the linescore at the top — that's it.</div>
+        <div style="margin-top:16px;font-size:11px;color:var(--muted2);font-style:italic">Switch back to "Full Box Score" above if you want to enter players, batting, and pitching for ${esc(homeTeamName)}.</div>
+      </div>
+    </div>
     <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-success btn-sm" onclick="submitBoxScore('${gameId}')">✅ Mark Final</button>
       <button class="btn btn-outline btn-sm" onclick="saveBsDraft('${gameId}')">💾 Save Draft</button>
@@ -3736,10 +3758,14 @@ async function submitBoxScoreUnified(gameId, boxScoreData, myRole) {
 
   // Merge: overwrite this role's own lineup/pitchers, team score, and that
   // half of the linescore — each captain is authoritative for their own side.
+  // Also preserve the per-role score-only flag: if THIS captain submitted
+  // their own side as score-only, store true; if they submitted full data,
+  // store false (clearing any stale flag from a prior submission).
   const mergeUpdate = {
-    [`${myRole}_lineup`]:   boxScoreData[`${myRole}_lineup`]   || boxScoreData[`${myRole}Batters`] || [],
-    [`${myRole}_pitchers`]: boxScoreData[`${myRole}_pitchers`] || [],
-    [`${myRole}_score`]:    boxScoreData[`${myRole}_score`],
+    [`${myRole}_lineup`]:     boxScoreData[`${myRole}_lineup`]   || boxScoreData[`${myRole}Batters`] || [],
+    [`${myRole}_pitchers`]:   boxScoreData[`${myRole}_pitchers`] || [],
+    [`${myRole}_score`]:      boxScoreData[`${myRole}_score`],
+    [`${myRole}_score_only`]: !!boxScoreData[`${myRole}_score_only`],
     second_submitter:    myRole,
     has_discrepancy:     discrepancies.length > 0,
     discrepancies:       discrepancies,
@@ -3846,6 +3872,32 @@ window.bsSwitchTab = function(gameId, tab) {
     if(btn){btn.style.background=active?'var(--navy)':'#f3f4f6';btn.style.color=active?'#fff':'var(--muted)';}
     if(pnl) pnl.style.display=active?'':'none';
   });
+};
+
+// Per-team Full / Score-Only toggle inside the box-score editor (Step 3 stats).
+// Captain may have full data for their own team but only a final score for the
+// opposing team — toggling "Score Only" hides that side's batting + pitching
+// tables and submits with {team}_score_only=true. Stats recalc skips that team
+// (empty arrays = no players to update). The other captain can still come in
+// later with full data, which clears the flag via submitBoxScoreUnified merge.
+window.bsSetMode = function(gameId, team, mode) {
+  const panel = document.getElementById(`bs-panel-${team}-${gameId}`);
+  if (!panel) return;
+  panel.dataset.mode = mode;
+  const fullView = document.getElementById(`bs-panel-${team}-${gameId}-full`);
+  const soView   = document.getElementById(`bs-panel-${team}-${gameId}-soonly`);
+  if (fullView) fullView.style.display = mode === 'full' ? '' : 'none';
+  if (soView)   soView.style.display   = mode === 'score-only' ? '' : 'none';
+  const fullBtn = document.getElementById(`bs-mode-${gameId}-${team}-full`);
+  const soBtn   = document.getElementById(`bs-mode-${gameId}-${team}-soonly`);
+  const setBtn = (btn, active) => {
+    if (!btn) return;
+    btn.style.background   = active ? 'var(--navy)'   : '#f3f4f6';
+    btn.style.color        = active ? '#fff'          : 'var(--muted)';
+    btn.style.borderColor  = active ? 'var(--navy)'   : 'var(--border)';
+  };
+  setBtn(fullBtn, mode === 'full');
+  setBtn(soBtn,   mode === 'score-only');
 };
 
 window.removeBsRow = function(btn) {
@@ -4421,12 +4473,20 @@ window.submitBoxScore = async function(gameId) {
     }).filter(Boolean);
   }
 
-  const awayBatters = readBatters('away');
-  const homeBatters = readBatters('home');
-  const awayPitchers = readPitchers('away');
-  const homePitchers = readPitchers('home');
-  const awayErrorsList = readErrors('away');
-  const homeErrorsList = readErrors('home');
+  // Per-team Score-Only mode: if the captain toggled "📝 Score Only" for a side,
+  // skip reading that team's batters/pitchers/errors and flag the submission so
+  // stats recalc + display logic know not to expect detail rows for that team.
+  const awayMode = document.getElementById('bs-panel-away-' + gameId)?.dataset?.mode || 'full';
+  const homeMode = document.getElementById('bs-panel-home-' + gameId)?.dataset?.mode || 'full';
+  const awayScoreOnly = awayMode === 'score-only';
+  const homeScoreOnly = homeMode === 'score-only';
+
+  const awayBatters    = awayScoreOnly ? [] : readBatters('away');
+  const homeBatters    = homeScoreOnly ? [] : readBatters('home');
+  const awayPitchers   = awayScoreOnly ? [] : readPitchers('away');
+  const homePitchers   = homeScoreOnly ? [] : readPitchers('home');
+  const awayErrorsList = awayScoreOnly ? [] : readErrors('away');
+  const homeErrorsList = homeScoreOnly ? [] : readErrors('home');
   const awayTeam = ALL_TEAMS.find(t => t.id === g.away || t.short === g.away);
   const homeTeam = ALL_TEAMS.find(t => t.id === g.home || t.short === g.home);
 
@@ -4447,6 +4507,8 @@ window.submitBoxScore = async function(gameId) {
     home_pitchers: homePitchers,
     away_errors_detail: awayErrorsList,
     home_errors_detail: homeErrorsList,
+    away_score_only: awayScoreOnly,
+    home_score_only: homeScoreOnly,
     submitted_by: captainData.team_name,
     submitted_by_id: captainData.team_id,
     status: 'approved',
