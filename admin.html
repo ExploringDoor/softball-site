@@ -3233,25 +3233,26 @@ window.handleCaptainUpload = async function(file) {
     };
 
     if (file.type === 'application/pdf') {
-      // ── PDF path: extract text with PDF.js ──
+      // ── PDF path: send the PDF to Claude as a `document` block ──
+      // Previously we extracted text via pdfjs and shipped a plain string
+      // to /api/parse-boxscore. That destroyed the column alignment of
+      // Excel-exported PDFs (which is the most common admin upload case),
+      // so Claude could never parse per-batter rows — only the headline
+      // scores. Sending the raw PDF lets Claude read it visually with
+      // full table structure intact.
       procTitle.textContent = 'Reading PDF...';
-      procMsg.textContent = 'Extracting text from document';
+      procMsg.textContent = 'Uploading document for analysis';
       procBar.style.width = '20%';
-
-      const pdfjsLib = window['pdfjs-dist/build/pdf'];
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const arrayBuf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-      let text = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        text += content.items.map(item => item.str).join(' ') + '\n';
-      }
+      const pdfB64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
       procBar.style.width = '50%';
-      procTitle.textContent = 'Converting your PDF...';
+      procTitle.textContent = 'Analyzing your box score...';
       procMsg.textContent = 'Remember to double-check stats before submitting!';
-      payload.text = text;
+      payload.pdfBase64 = pdfB64;
     } else {
       // ── Image path: send base64 to Claude Vision ──
       procTitle.textContent = 'Reading photo...';

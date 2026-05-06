@@ -9,9 +9,9 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { text, imageBase64, imageType, gameId, awayTeam, homeTeam, date, week, field } = req.body;
+  const { text, imageBase64, imageType, pdfBase64, gameId, awayTeam, homeTeam, date, week, field } = req.body;
 
-  if (!text && !imageBase64) return res.status(400).json({ error: 'No box score content provided' });
+  if (!text && !imageBase64 && !pdfBase64) return res.status(400).json({ error: 'No box score content provided' });
 
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 
@@ -40,13 +40,28 @@ Return this exact JSON structure:
 }
 Rules: names may be truncated — do your best. Missing stats = 0. Return ONLY the JSON.`;
 
-  // Build message content — vision for images, text for PDFs
-  const messageContent = imageBase64
-    ? [
-        { type: 'image', source: { type: 'base64', media_type: imageType || 'image/jpeg', data: imageBase64 } },
-        { type: 'text', text: prompt }
-      ]
-    : `${prompt}\n\nBox score text:\n${text}`;
+  // Build message content. Three branches:
+  //   1. PDF — send as a `document` block. Anthropic reads PDFs natively
+  //      and PRESERVES the visual table structure (column alignment, row
+  //      ordering). This is the right path for Excel-exported PDFs where
+  //      text extraction via pdfjs destroys the columns and Claude can
+  //      no longer parse per-batter rows.
+  //   2. Image (jpg/png) — `image` block with vision.
+  //   3. Plain text — fallback for older callers that pre-extracted text.
+  let messageContent;
+  if (pdfBase64) {
+    messageContent = [
+      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 } },
+      { type: 'text', text: prompt }
+    ];
+  } else if (imageBase64) {
+    messageContent = [
+      { type: 'image', source: { type: 'base64', media_type: imageType || 'image/jpeg', data: imageBase64 } },
+      { type: 'text', text: prompt }
+    ];
+  } else {
+    messageContent = `${prompt}\n\nBox score text:\n${text}`;
+  }
 
   try {
     const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {

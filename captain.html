@@ -5103,24 +5103,25 @@ window.handleCaptainScoreUpload = async function(gameId, file) {
     };
 
     if (file.type === 'application/pdf') {
+      // Send the PDF to Claude as a `document` block (server side does the
+      // actual API call). Previously we extracted text via pdfjs and sent
+      // a plain string — that destroyed the column alignment of Excel-
+      // exported PDFs, so per-batter rows could never be parsed back.
+      // Sending the raw PDF lets Claude read it visually with full table
+      // structure preserved.
       titleEl.textContent = 'Reading PDF...';
-      msgEl.textContent = 'Extracting text from document';
+      msgEl.textContent = 'Uploading document for analysis';
       barEl.style.width = '20%';
-
-      const pdfjsLib = window['pdfjs-dist/build/pdf'];
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      const arrayBuf = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuf }).promise;
-      let text = '';
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        text += content.items.map(item => item.str).join(' ') + '\n';
-      }
+      const pdfB64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => res(e.target.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
       barEl.style.width = '50%';
-      titleEl.textContent = 'Converting your PDF...';
+      titleEl.textContent = 'Analyzing your box score...';
       msgEl.textContent = 'Remember to double-check stats before submitting!';
-      payload.text = text;
+      payload.pdfBase64 = pdfB64;
     } else {
       titleEl.textContent = 'Reading photo...';
       msgEl.textContent = 'Preparing image for AI';
