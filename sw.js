@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v276-pdf-parse-as-document-not-text`;
+const VERSION = `${LEAGUE.id}-v277-openbsm-redirect-to-openbox-no-season-overlay`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
