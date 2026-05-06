@@ -7881,6 +7881,18 @@ function sendScorerFinalPush(gameId, awayTeam, homeTeam, awayScore, homeScore, w
 }
 
 // ===== PRACTICE MODE =====
+// Auto-launch practice mode when the URL ends in `#practice`. Captain.html
+// links here from the Help tab + the per-game card "Try Practice Mode"
+// hint so a captain can warm up before their first real live-scored game
+// without finding the small button buried on the setup screen.
+if (location.hash === '#practice') {
+  // Defer one tick so the click handler below is registered before we fire
+  // it. Using setTimeout(0) is enough because the listener is attached on
+  // the same script's next statement.
+  setTimeout(() => {
+    try { document.getElementById('practice-btn').click(); } catch(_) {}
+  }, 0);
+}
 document.getElementById('practice-btn').addEventListener('click', () => {
   G.gameId = 'practice';
   G.awayTeam = { id:'dn', name:'Dead Nuts', short:'DN', color:'#C41E3A' };
