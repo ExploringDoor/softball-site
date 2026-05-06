@@ -5842,7 +5842,21 @@ window.captainRemindWaiting = async function(gameId, btn) {
   }
 };
 
-// Captain edit view — shows all players × all games, captain can set any RSVP
+// Captain edit view — week-by-week. Captain picks a week from the row of
+// pills at the top; the body shows every player on the roster with
+// Yes/Maybe/No buttons for each game in that week. Adam ask 5/5/26: "i
+// want to click on attendance and be able to change my team's attendance
+// myself by clicking on week 1 and seeing everyone's yes/no/maybes."
+//
+// Default selection: the captain's currently-active week (next non-done
+// game's wk). Selection persists across re-renders via _capEditWeek so
+// flipping a single RSVP doesn't bounce the captain back to the default
+// week.
+let _capEditWeek = null;
+window.setCapEditWeek = function(wk) {
+  _capEditWeek = String(wk);
+  renderCaptainEdit();
+};
 async function renderCaptainEdit() {
   const el = document.getElementById('attendance-content');
   el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading...</div>';
@@ -5858,20 +5872,63 @@ async function renderCaptainEdit() {
       rsvpMap[r.player_id + '_' + r.game_id] = r.status;
     });
 
-    const upcoming = MY_GAMES.filter(g => !g.done).sort((a,b) => (a.wk||0)-(b.wk||0));
-    if (!upcoming.length) { el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">No upcoming games.</div>'; return; }
+    // Captain edit covers UPCOMING games (not yet final). Sort by week, then
+    // by game id so the visual order is stable across re-renders.
+    const upcoming = MY_GAMES.filter(g => !g.done).sort((a,b) => {
+      const aw = parseInt(a.wk) || 0, bw = parseInt(b.wk) || 0;
+      if (aw !== bw) return aw - bw;
+      return (a.id || '').localeCompare(b.id || '');
+    });
+    if (!upcoming.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">No upcoming games.</div>';
+      return;
+    }
+
+    // Unique weeks in order — preserves insertion-order so wk:1 → wk:2 →
+    // wk:'PL1' lands the way the season builder set it.
+    const weeks = [];
+    const seen = new Set();
+    upcoming.forEach(g => {
+      const w = String(g.wk ?? '');
+      if (w && !seen.has(w)) { seen.add(w); weeks.push(w); }
+    });
+    if (!weeks.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">No upcoming games.</div>';
+      return;
+    }
+
+    // Default selection: the current/next week. If _capEditWeek isn't set
+    // OR points at a week that no longer has games, fall back to weeks[0].
+    if (!_capEditWeek || !weeks.includes(_capEditWeek)) {
+      _capEditWeek = weeks[0];
+    }
+    const activeWeek = _capEditWeek;
+    const weekGames = upcoming.filter(g => String(g.wk ?? '') === activeWeek);
+
+    // Week picker row — pill per week, primary-styled when active.
+    const weekPicker = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;overflow-x:auto;padding-bottom:4px">
+      ${weeks.map(w => {
+        const active = w === activeWeek;
+        const bg = active ? 'var(--navy)' : 'var(--bg2)';
+        const color = active ? '#fff' : 'var(--navy)';
+        const border = active ? 'var(--navy)' : 'var(--border)';
+        return `<button onclick="setCapEditWeek('${esc(w)}')" style="background:${bg};color:${color};border:2px solid ${border};border-radius:18px;padding:6px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;white-space:nowrap;transition:all .15s">${String(w).startsWith('PL') ? esc(w) : 'Wk ' + esc(w)}</button>`;
+      }).join('')}
+    </div>`;
 
     const btnStyle = (active, color, bg) => `padding:5px 10px;border-radius:6px;border:2px solid ${active?color:'var(--border)'};background:${active?bg:'transparent'};color:${active?color:'var(--muted)'};font-weight:700;font-size:11px;cursor:pointer;transition:all .15s`;
 
     const rows = MY_PLAYERS.map(p => {
-      const gameButtons = upcoming.map(g => {
+      const gameButtons = weekGames.map(g => {
         const status = rsvpMap[p.id + '_' + g.id] || '';
         const opp = g.away === captainData.team_id ? g.home : g.away;
         const oppTeam = ALL_TEAMS.find(t => t.id === opp);
         const oppShort = oppTeam?.short || opp?.slice(0,6).toUpperCase() || 'TBD';
         const homeAway = g.home === captainData.team_id ? 'vs' : '@';
-        return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-width:130px">
-          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:8px">Wk ${g.wk} ${homeAway} ${esc(oppShort)}</div>
+        const dateStr = g.date ? esc(g.date) : '';
+        return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-width:140px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:2px">${homeAway} ${esc(oppShort)}</div>
+          ${dateStr ? `<div style="font-size:10px;color:var(--muted2);margin-bottom:6px">${dateStr}${g.time ? ' · ' + esc(g.time) : ''}</div>` : '<div style="height:6px"></div>'}
           <div style="display:flex;gap:5px">
             <button onclick="setCaptainAvail('${g.id}','${p.id}','yes')" style="${btnStyle(status==='yes','var(--green)','rgba(34,197,94,.12)')}">✓</button>
             <button onclick="setCaptainAvail('${g.id}','${p.id}','maybe')" style="${btnStyle(status==='maybe','#f59e0b','rgba(245,158,11,.12)')}">?</button>
@@ -5880,19 +5937,54 @@ async function renderCaptainEdit() {
           </div>
         </div>`;
       }).join('');
+
+      // Quick-set helpers — set this whole row to one status for every game
+      // in the active week. Saves a lot of taps when Adam knows the captain
+      // is "Yes" for all of week 1 except player X.
+      const quickAll = (status, label, color) =>
+        `<button onclick="setCapPlayerWeek('${p.id}','${activeWeek}','${status}')" style="padding:3px 8px;border-radius:6px;border:1px solid ${color};background:transparent;color:${color};font-size:10px;cursor:pointer;font-weight:700">${esc(label)}</button>`;
+
       return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:10px">
-        <div style="font-weight:700;font-size:14px;margin-bottom:10px">${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:12px">#${p.num||'–'}</span></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="font-weight:700;font-size:14px">${esc(p.name)} <span style="font-weight:400;color:var(--muted);font-size:12px">${p.num ? '#'+esc(p.num) : ''}</span></div>
+          <div style="display:flex;gap:4px">
+            ${quickAll('yes','All ✓','var(--green)')}
+            ${quickAll('no','All ✕','var(--red)')}
+          </div>
+        </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">${gameButtons}</div>
       </div>`;
     }).join('');
 
-    el.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:16px;padding:10px 14px;background:var(--bg2);border-radius:8px;border-left:3px solid var(--navy)">
-      Captain view — edit any player's availability on their behalf. Changes save immediately.
-    </div>${rows}`;
+    el.innerHTML = `<div style="font-size:12px;color:var(--muted);margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:8px;border-left:3px solid var(--navy)">
+      Captain view — pick a week, edit anyone's availability for the games in that week. Changes save immediately.
+    </div>${weekPicker}${rows}`;
   } catch(e) {
     el.innerHTML = `<div class="empty">Could not load: ${e.message}</div>`;
   }
 }
+
+// Quick-set: mark this player Yes (or No) for every game in the chosen week.
+// Saves a captain a few taps when most of the team is "all-in" or "all-out"
+// for a given week and only a couple players are exceptions.
+window.setCapPlayerWeek = async function(playerId, wk, status) {
+  const player = MY_PLAYERS.find(p => p.id === playerId);
+  if (!player) return;
+  const games = MY_GAMES.filter(g => !g.done && String(g.wk ?? '') === String(wk));
+  if (!games.length) return;
+  try {
+    for (const g of games) {
+      const docId = captainData.team_id + '_' + g.id + '_' + playerId;
+      await setDoc(doc(db, 'availability', docId), {
+        game_id: g.id, player_id: playerId,
+        player_name: player.name || '',
+        team_id: captainData.team_id,
+        status, updated_at: new Date().toISOString()
+      });
+    }
+    await renderCaptainEdit();
+  } catch(e) { toast('Could not save: ' + e.message, 'error'); }
+};
 
 window.setCaptainAvail = async function(gameId, playerId, status) {
   const player = MY_PLAYERS.find(p => p.id === playerId);
