@@ -3437,24 +3437,42 @@ window.saveEditGame = async function(gameId) {
 // ═══════════════════════════════════════════════════════════════════
 function renderPendingGames() {
   const el = document.getElementById('pending-games');
+  const myId = captainData.team_id;
   // Show a game in pending if it isn't done yet, OR if it's done but I personally
   // haven't submitted my own scorecard (the other team finalized first).
   const pending = MY_GAMES.filter(g => {
     if (!g.done) return true;
-    const myRole = g.home === captainData.team_id ? 'home' : 'away';
+    const myRole = g.home === myId ? 'home' : 'away';
     const iSubmitted = g[`score_submitted_${myRole}_away`] !== undefined;
     return !iSubmitted;
   });
 
+  // Recently submitted — captain has already submitted (any kind: full box
+  // score, score-only, upload). Surface in a second list so they can come
+  // back to UPDATE their submission or add full detail after a score-only
+  // entry. Without this, score-only is a one-way door and stats never
+  // appear for the game.
+  // Cap to the 10 most recent (by week desc) to keep the list scannable.
+  const submitted = MY_GAMES.filter(g => {
+    if (!g.done) return false;
+    const myRole = g.home === myId ? 'home' : 'away';
+    return g[`score_submitted_${myRole}_away`] !== undefined;
+  }).sort((a, b) => (parseInt(b.wk) || 0) - (parseInt(a.wk) || 0)).slice(0, 10);
+
   // Render confirm banners for games where other team already submitted but we haven't
   renderScoreConfirmBanners();
 
-  if (!pending.length) {
+  if (!pending.length && !submitted.length) {
     el.innerHTML = '<div class="empty">All your games have final scores. Nothing to submit.</div>';
     return;
   }
 
-  el.innerHTML = pending.map(g => {
+  // Card-builder closure — shared between pending + submitted lists so any
+  // future UI/markup change lands in both places at once. Takes a kind hint
+  // so the section header above each list can describe context, but the
+  // card body itself looks identical (with the "✓ Submitted · Edit" badge
+  // appearing automatically when alreadySubmitted is true).
+  const buildCard = (g) => {
     const isHome = g.home === captainData.team_id;
     const myRole = isHome ? 'home' : 'away';
     const opponent = isHome ? g.away : g.home;
@@ -3543,7 +3561,24 @@ function renderPendingGames() {
       <div id="boxscore-entry-${g.id}" style="display:none"></div>
       `}
     </div>`;
-  }).join('');
+  };
+
+  // Render: pending first (most actionable), then submitted (history with
+  // edit access). Section header on submitted list explains its purpose so
+  // captains see why those games are listed even though they "already
+  // submitted" them.
+  let html = '';
+  if (pending.length) {
+    html += pending.map(buildCard).join('');
+  }
+  if (submitted.length) {
+    html += `<div style="margin-top:${pending.length ? '28' : '0'}px;padding:14px 16px;background:rgba(37,99,235,.06);border-left:3px solid var(--navy);border-radius:8px;margin-bottom:14px">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;text-transform:uppercase;color:var(--navy)">📊 Recently Submitted — Add Detail or Update</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5">Already submitted these games. Submitted score-only and want to add player stats now? Tap <strong>📊 Box Score</strong> on the matching game and your submission will be UPDATED. Captain edits cost nothing — score-only submissions can be promoted to full box-scores any time.</div>
+    </div>`;
+    html += submitted.map(buildCard).join('');
+  }
+  el.innerHTML = html;
 }
 
 function renderScoreConfirmBanners() {
