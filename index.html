@@ -1471,7 +1471,9 @@ html{background:#002D72;}
   letter-spacing:.15em;text-transform:uppercase;color:#ffffff;
   white-space:nowrap;flex-shrink:0;gap:6px;
 }
-.st-scroll{flex:1;overflow:hidden;position:relative;cursor:pointer}
+.st-scroll{flex:1;overflow-x:auto;overflow-y:hidden;position:relative;cursor:grab;-webkit-overflow-scrolling:touch;touch-action:pan-x;scrollbar-width:none}
+.st-scroll::-webkit-scrollbar{display:none}
+.st-scroll:active{cursor:grabbing}
 .st-track{
   display:flex;align-items:stretch;height:100%;
   width:max-content;
@@ -7206,11 +7208,56 @@ function getMobileAbbr(teamShort){
   return team.short||teamShort;
 }
 
+// Wire mouse-wheel + drag-to-scroll on the ticker scroll container.
+// Touch/trackpad already scroll natively via overflow-x:auto, but a
+// regular mouse wheel only scrolls vertically by default and doesn't
+// reach the ticker's horizontal axis. This converts vertical wheel
+// deltas to horizontal scrollLeft so wheel users can drive the ticker.
+// Click-and-drag is also enabled for mouse users — kept gentle so a
+// stray micro-drag (e.g. a 2px wiggle on a click) still fires the
+// underlying st-game onclick instead of being interpreted as a drag.
+function _wireTickerScroll(){
+  const sc = document.getElementById('st-scroll');
+  if(!sc || sc._scrollWired) return;
+  sc._scrollWired = true;
+  // Wheel → horizontal
+  sc.addEventListener('wheel', (e) => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return; // already horizontal
+    if (sc.scrollWidth <= sc.clientWidth) return;
+    e.preventDefault();
+    sc.scrollLeft += e.deltaY;
+  }, { passive: false });
+  // Click-and-drag with hysteresis: only treat as drag once the pointer
+  // has moved more than 5px from the mousedown point. Otherwise let the
+  // underlying st-game click handler fire normally.
+  let downX = 0, downScroll = 0, dragging = false, suppressClick = false;
+  sc.addEventListener('mousedown', (e) => {
+    downX = e.clientX; downScroll = sc.scrollLeft; dragging = false; suppressClick = false;
+  });
+  sc.addEventListener('mousemove', (e) => {
+    if (!e.buttons) return;
+    const dx = e.clientX - downX;
+    if (!dragging && Math.abs(dx) > 5) { dragging = true; sc.style.cursor = 'grabbing'; }
+    if (dragging) {
+      sc.scrollLeft = downScroll - dx;
+      suppressClick = true;
+    }
+  });
+  sc.addEventListener('mouseup', () => { dragging = false; sc.style.cursor = ''; });
+  sc.addEventListener('mouseleave', () => { dragging = false; sc.style.cursor = ''; });
+  // If the pointer dragged, swallow the click so we don't open a game's
+  // box-score modal mid-drag.
+  sc.addEventListener('click', (e) => {
+    if (suppressClick) { e.stopPropagation(); e.preventDefault(); suppressClick = false; }
+  }, true);
+}
+
 function buildTicker2(){
   const track = document.getElementById('st-track');
   if(!track) return;
   const tickerGames = getTickerGames();
   if(!tickerGames.length) return;
+  _wireTickerScroll();
   const isMob = window.innerWidth <= 700;
   const makeGame = g => {
     const at = getTeamByShort(g.away);
