@@ -5525,6 +5525,35 @@ window.submitScore = async function(gameId) {
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     // Update local state
     Object.assign(g, gameUpdate);
+    // Also write a box_scores doc so the public box-score modal has
+    // SOMETHING to render. Pre-2026-05-06, submitScore only wrote to
+    // /games + /score_submissions — leaving /box_scores/{gameId} empty,
+    // so the modal showed the v267 placeholder OR fell through to the
+    // legacy openBsm season-overlay (now redirected in v277). Captains
+    // who used the upload partial-parse manual-entry form created
+    // "ghost games" with scores on the schedule but nothing in the
+    // box-score modal. The May 4 BOR @ GJC game was the canonical
+    // example flagged in DATA_AUDIT_2026-05-06.md §1a.
+    // Fix: route through submitBoxScoreUnified the same way
+    // submitScoreOnly does. Marks the box-score doc as score_only:true
+    // so the public modal renders the proper "Score Only Entry"
+    // placeholder. Best-effort — failure here doesn't undo the score
+    // submission (game doc + score_submissions are already saved).
+    try {
+      const boxScoreData = {
+        game_id: gameId, week: g.wk||0, date: g.date||'', field: g.field||'',
+        away: g.away, home: g.home,
+        away_score: awayScore, home_score: homeScore,
+        score_only: true,
+        submitted_by: captainData.team_name,
+        submitted_by_id: captainData.team_id,
+        status: finalStatus,
+        timestamp: Timestamp.now(),
+      };
+      await submitBoxScoreUnified(gameId, boxScoreData, myRole);
+    } catch(bsErr) {
+      console.warn('[submitScore] box_scores write failed (non-fatal):', bsErr);
+    }
     // Fire final-score push on the transition to done, otherwise fire
     // the "score submitted / awaiting confirmation" push so every
     // captain entry generates a notification (not just the one that
