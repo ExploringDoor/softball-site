@@ -3588,6 +3588,16 @@ function renderPendingGames() {
     // Check if I've already submitted for this game in score_submitted_ fields
     const alreadySubmitted = g[`score_submitted_${myRole}_away`] !== undefined;
 
+    // Distinguish "submitted with full stats" from "submitted score-only".
+    // MY_SUBMISSIONS rows from score_submissions carry has_boxscore:true ONLY
+    // when the captain went through the full Box Score path. Score-only
+    // submissions (via submitScoreOnly or submitScore) omit it. Surfacing
+    // this lets captains see at a glance which games still have stat-detail
+    // available to add — closing the score-only trap one notch tighter than
+    // the v275 "Recently Submitted" header alone.
+    const mySub = alreadySubmitted ? MY_SUBMISSIONS.find(s => s.game_id === g.id && s.role === myRole) : null;
+    const myWasScoreOnly = alreadySubmitted && (!mySub || mySub.has_boxscore !== true);
+
     // Check if other captain already submitted
     const otherRole = myRole === 'away' ? 'home' : 'away';
     const otherHasSubmitted = g[`score_submitted_${otherRole}_away`] !== undefined;
@@ -3624,7 +3634,10 @@ function renderPendingGames() {
         </div>
         ${hasConflict ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">⚠ Conflict</span>` : ''}
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-          ${alreadySubmitted ? `<span class="badge badge-pending" title="You already submitted — adding stats now will UPDATE your submission">✓ Submitted · Edit</span>` : ''}
+          ${alreadySubmitted ? (myWasScoreOnly
+            ? `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706" title="You submitted score-only — tap 📊 Box Score to add player batting stats. The score stays the same.">📝 Score-only · Add Stats</span>`
+            : `<span class="badge badge-pending" title="You already submitted full stats — adding more will UPDATE your submission">✓ Submitted · Edit</span>`
+          ) : ''}
           <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&team=${captainData.team_id}&from=captain','_blank')">⚡ Score Live</button>
           <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="showUploadZone('${g.id}')">📄 Upload</button>
           <button class="btn btn-outline btn-sm" onclick="showScoreOnlyEntry('${g.id}')">📝 Score Only</button>
