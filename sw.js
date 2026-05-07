@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v282-submitscore-no-clobber-existing-lineups`;
+const VERSION = `${LEAGUE.id}-v283-score-only-placeholder-honors-top-level-flag`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
