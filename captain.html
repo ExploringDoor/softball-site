@@ -5173,13 +5173,43 @@ window.handleCaptainScoreUpload = async function(gameId, file) {
       _captApplyParsedToBoxScore(gameId, g, parsed);
       toast('Sheet read — review the box score below and submit.');
     } else if (parsed.awayScore != null && parsed.homeScore != null) {
+      // Partial parse: Claude got the headline scores but couldn't read
+      // individual batter rows. This is the trap that bit BSMC + BOR
+      // captains today: the manual-entry form pre-fills with the scores
+      // and an upbeat "Score sheet read!" toast — captain hits Submit
+      // thinking they got a full read, ends up locked into a score-only
+      // submission with no individual stats.
+      // Fix: show an explicit warning panel + offer two clear paths
+      // (retake photo / enter box score manually / just save the score)
+      // so the captain understands the trade-off.
       proc.style.display = 'none';
       document.getElementById('manual-entry-' + gameId).style.display = 'block';
       const awayInput = document.getElementById('ss-away-' + gameId);
       const homeInput = document.getElementById('ss-home-' + gameId);
       if (awayInput) awayInput.value = parsed.awayScore;
       if (homeInput) homeInput.value = parsed.homeScore;
-      toast('Score sheet read! Review the scores below and submit.');
+      const awayName = esc(getTeamName(g.away));
+      const homeName = esc(getTeamName(g.home));
+      const manualEntry = document.getElementById('manual-entry-' + gameId);
+      const warnId = 'partial-parse-warn-' + gameId;
+      // Insert (or update) a warn block above the score inputs.
+      let warn = document.getElementById(warnId);
+      if (!warn) {
+        warn = document.createElement('div');
+        warn.id = warnId;
+        manualEntry.insertBefore(warn, manualEntry.firstChild);
+      }
+      warn.innerHTML = `
+        <div style="background:#fef3c7;border:1px solid #d97706;border-radius:10px;padding:14px 16px;margin-bottom:14px;color:#78350f">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px">⚠ Couldn't read player stats</div>
+          <div style="font-size:13px;line-height:1.5;margin-bottom:10px">We got the final score (<strong>${awayName} ${parsed.awayScore} – ${homeName} ${parsed.homeScore}</strong>) but couldn't read individual batter rows from your sheet. <strong>Submitting now will save the score only — no individual stats will appear.</strong></div>
+          <div style="font-size:13px;line-height:1.5;margin-bottom:6px">Better options:</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary btn-sm" onclick="document.getElementById('upload-zone-${g.id}').style.display='block';document.getElementById('manual-entry-${g.id}').style.display='none';document.getElementById('${warnId}').remove();">📷 Retake / Re-upload</button>
+            <button class="btn btn-outline btn-sm" style="background:#fff" onclick="document.getElementById('manual-entry-${g.id}').style.display='none';document.getElementById('${warnId}').remove();showBoxScoreEntry('${g.id}');">📊 Enter Box Score Manually</button>
+          </div>
+        </div>`;
+      toast('Got the score — couldn\'t read player stats. See options above.', 'warn');
     } else {
       proc.innerHTML = `<div style="font-size:36px;margin-bottom:8px">✅</div><div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;color:var(--navy)">Sheet uploaded to admin for review</div>`;
     }

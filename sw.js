@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v277-openbsm-redirect-to-openbox-no-season-overlay`;
+const VERSION = `${LEAGUE.id}-v278-captain-upload-partial-parse-warning`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
