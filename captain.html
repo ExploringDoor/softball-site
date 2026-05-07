@@ -3125,7 +3125,21 @@ window.removePlayer = async function(playerId) {
   const p = MY_PLAYERS.find(x => x.id === playerId);
   if (!confirm(`Remove ${p?.name || 'this player'} from the roster?`)) return;
   try {
-    await deleteDoc(doc(db, 'players', playerId));
+    // SOFT-delete (active:false) instead of hard delete. Hard-delete
+    // orphaned availability rows + payment records and broke box-score
+    // historical name/id matching for any games this player had stats in.
+    // The rest of the codebase already filters `p.active !== false`
+    // everywhere a roster is displayed (MY_PLAYERS, ALL_PLAYERS, team
+    // page roster, admin roster), so the captain's UX is identical:
+    // the player disappears from their roster. Difference: the doc
+    // survives, so historical stats stay attached and the audit trail
+    // is preserved. To TRULY delete (e.g., wrong-team typo, duplicate)
+    // an admin can still hard-delete from admin.html.
+    await updateDoc(doc(db, 'players', playerId), {
+      active: false,
+      deactivated_at: Timestamp.now(),
+      deactivated_by: currentUser?.email || 'captain',
+    });
     MY_PLAYERS = MY_PLAYERS.filter(x => x.id !== playerId);
     toast('Player removed from roster.');
     await logActivity('Roster (Captain)', `Removed ${p?.name} from ${captainData.team_name}`);
