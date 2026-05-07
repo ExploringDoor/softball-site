@@ -800,6 +800,13 @@ select.form-input{cursor:pointer}
         <div style="font-size:13px;color:#7a5a00;margin-bottom:10px">Already signed up before? Type your email above and tap the button below — we'll email you a reset link.</div>
         <button type="button" onclick="captainForgotPassword()" class="btn btn-outline" style="width:100%;border-color:#f4c430;color:#7a5a00;font-weight:700">Send password reset email</button>
       </div>
+
+      <div id="cauth-magic-block" style="background:#e0f2fe;border:2px solid #0ea5e9;border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="font-size:15px;font-weight:700;color:#075985;margin-bottom:6px">📧 Or get a one-tap sign-in link by email</div>
+        <div style="font-size:13px;color:#075985;margin-bottom:10px">If iOS or your browser cleared your saved login, this is the easiest way back in. Type your email above, tap the button — we'll email you a link that signs you in with one tap. No password needed.</div>
+        <div style="font-size:13px;color:#075985;margin-bottom:10px">⚠️ Check <strong>JUNK / SPAM</strong> if you don't see it within a minute.</div>
+        <button type="button" onclick="captainSendSignInLink()" class="btn btn-outline" style="width:100%;border-color:#0ea5e9;color:#075985;font-weight:700">Send me a sign-in link</button>
+      </div>
     </div>
 
     <div style="text-align:center;margin-top:18px">
@@ -1267,7 +1274,7 @@ select.form-input{cursor:pointer}
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, deleteField, setDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg",
@@ -1978,6 +1985,94 @@ window.captainForgotPassword = async function() {
   }
 };
 
+// Email-link sign-in (passwordless) — survives every iOS storage-clearing
+// scenario because the captain just needs access to their email. Solves
+// the "iOS cleared my PWA storage and now I cant get back in" problem
+// without depending on either Firebase Auth IndexedDB or our localStorage
+// credential save (which both die when iOS evicts).
+//
+// Flow:
+//   1. Captain types email, taps "Send sign-in link"
+//   2. Firebase emails them a link with a magic-link query string
+//   3. Captain taps link from email → returns to /captain.html with the
+//      magic-link params in the URL
+//   4. captainTryCompleteEmailLinkSignIn (called on page load below)
+//      detects the link and completes the sign-in
+//   5. After sign-in, onAuthStateChanged fires and the existing flow
+//      enters the captain dashboard
+//
+// Requires email-link sign-in to be enabled in the Firebase console under
+// Authentication → Sign-in method → Email/Password → "Email link
+// (passwordless sign-in)" toggle. Adam enabled this when setting up the
+// project; if it ever gets disabled, the send call will fail with
+// auth/operation-not-allowed and the captain sees the error inline.
+window.captainSendSignInLink = async function() {
+  const errEl = document.getElementById('cauth-error');
+  errEl.style.display = 'none';
+  errEl.style.background = '#fff0f0';
+  errEl.style.borderColor = '#ffcccc';
+  errEl.style.color = 'var(--red)';
+  const email = (document.getElementById('cauth-email').value || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    errEl.textContent = 'Type your email above first, then tap this button.';
+    errEl.style.display = 'block';
+    return;
+  }
+  // Action code settings: where Firebase sends the user when they tap
+  // the link from their email. Must point back to captain.html so the
+  // completion handler runs.
+  const actionCodeSettings = {
+    url: window.location.origin + '/captain.html',
+    handleCodeInApp: true,
+  };
+  try {
+    await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+    // Save the email so completion can sign in without re-prompting.
+    // localStorage is fine here; if it gets cleared between send and
+    // tap, we fall back to prompting in the completion handler.
+    try { localStorage.setItem('dvsl-magic-email', email); } catch(_) {}
+    errEl.style.background = '#e6f4ea';
+    errEl.style.borderColor = '#b7dfc4';
+    errEl.style.color = '#1e6638';
+    errEl.textContent = '✓ Sign-in link sent to ' + email + '. Check your JUNK / SPAM folder if you dont see it within a minute.';
+    errEl.style.display = 'block';
+  } catch (e) {
+    errEl.textContent = (e.message || String(e)).replace(/^Firebase:\s*/, '');
+    errEl.style.display = 'block';
+  }
+};
+
+// Detect a return-from-email-link URL and complete the sign-in. Called
+// on page load before the team picker renders so a captain following the
+// link from their email lands directly in the dashboard.
+async function captainTryCompleteEmailLinkSignIn() {
+  try {
+    if (!isSignInWithEmailLink(auth, window.location.href)) return;
+  } catch(_) { return; }
+  // We have a valid email-link URL. Need the email the captain sent it
+  // to (Firebase requires it for security — proves the same user opened
+  // the email).
+  let email = '';
+  try { email = localStorage.getItem('dvsl-magic-email') || ''; } catch(_) {}
+  if (!email) {
+    email = (window.prompt('Confirm the email you used to request the sign-in link:') || '').trim().toLowerCase();
+    if (!email) return;
+  }
+  try {
+    await signInWithEmailLink(auth, email, window.location.href);
+    try { localStorage.removeItem('dvsl-magic-email'); } catch(_) {}
+    // Strip the magic-link query params from the URL so a refresh doesnt
+    // try to re-process the (now-consumed) link.
+    try { window.history.replaceState({}, document.title, window.location.pathname); } catch(_) {}
+    toast('Signed in via email link ✓', 'success');
+    // onAuthStateChanged will pick up the new session and the existing
+    // flow handles the rest (team picker → captain auth screen detects
+    // signed-in user → "Continue as X" → enter dashboard).
+  } catch (e) {
+    toast('Sign-in link failed: ' + ((e.message || String(e)).replace(/^Firebase:\s*/, '')), 'error');
+  }
+}
+
 window.captainSignOut = async function() {
   // Wipe local captain state, sign out of Firebase, return to team picker.
   if (_unsubTeamChat) { _unsubTeamChat(); _unsubTeamChat = null; }
@@ -2091,6 +2186,12 @@ onAuthStateChanged(auth, (user) => {
     showCaptainAuthScreen(CAPTAIN_PENDING_TEAM);
   }
 });
+
+// Detect a return from a magic-link sign-in email BEFORE rendering the
+// team picker. If the URL is a valid email-link sign-in URL, we sign the
+// user in here; onAuthStateChanged + the team-picker flow take over from
+// there. Best-effort — failures fall through silently to the normal flow.
+captainTryCompleteEmailLinkSignIn().catch(() => {});
 
 // Start by showing team picker, then auto-select the last-used team if we
 // know which one it was. The auth screen will short-circuit to "Continue as X"
