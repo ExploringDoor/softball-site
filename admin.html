@@ -928,6 +928,7 @@ select.form-input{cursor:pointer}
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-outline btn-sm" onclick="scanUntaggedScoreOnly()" title="Find finalized box_scores docs whose lineups are both empty but no score_only flag is set, and tag them so the public box modal renders the Score Only placeholder cleanly.">🔧 Tag Untagged Score-Only</button>
+            <button class="btn btn-outline btn-sm" onclick="rebuildMissingBoxScores()" title="Find finalized games (done:true) that have no /box_scores/{gameId} doc at all, and create a placeholder score-only doc from the game's recorded scores. Recovers the May 4 BOR@GJC class of bug where a pre-v280 score-only submission left no box_scores doc.">🛠️ Rebuild Missing Box Scores</button>
           </div>
         </div>
         <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
@@ -2710,6 +2711,73 @@ window.scanUntaggedScoreOnly = async function() {
   } catch (e) {
     console.error('[scanUntaggedScoreOnly] failed', e);
     toast('Scan failed: ' + (e.message || 'see console'), 'error');
+  }
+};
+
+// One-shot recovery: scan /games for done:true games that have NO matching
+// /box_scores/{gameId} doc and create a minimal score-only placeholder
+// using the canonical game-doc scores. Without this doc the public modal
+// has nothing to read and falls through to "Score Only Entry" via empty
+// state — but stats aggregation, recap cards, and team-page boxes can
+// regress quietly. Audit 2026-05-06 §1a found one such game (May 4 BOR
+// @ GJC) where the captain submitted score-only via the pre-v280 path
+// that wrote /games + /score_submissions but never /box_scores. v280
+// closed the going-forward gap; this fixes the historical leakage.
+window.rebuildMissingBoxScores = async function() {
+  try {
+    const [gamesSnap, boxesSnap] = await Promise.all([
+      getDocs(collection(db, 'games')),
+      getDocs(collection(db, 'box_scores')),
+    ]);
+    const haveBox = new Set();
+    boxesSnap.forEach(d => haveBox.add(d.id));
+    const candidates = [];
+    gamesSnap.forEach(d => {
+      const g = d.data() || {};
+      if (g.done !== true) return;
+      if (haveBox.has(d.id)) return;
+      candidates.push({ id: d.id, away: g.away, home: g.home, date: g.date, wk: g.wk, field: g.field, away_score: g.away_score, home_score: g.home_score });
+    });
+    if (candidates.length === 0) {
+      toast('No done games are missing a box_scores doc — clean.', 'success');
+      return;
+    }
+    const list = candidates.map(c => `  • ${c.date || '?'}  ${c.away||'?'} ${c.away_score ?? '?'}–${c.home_score ?? '?'} ${c.home||'?'}`).join('\n');
+    if (!confirm(`Found ${candidates.length} done game(s) with no box_scores doc:\n\n${list}\n\nCreate a score-only placeholder doc for each (using the recorded final score)?`)) return;
+    let ok = 0, fail = 0;
+    for (const c of candidates) {
+      try {
+        await setDoc(doc(db, 'box_scores', c.id), {
+          game_id:      c.id,
+          week:         c.wk || 0,
+          date:         c.date || '',
+          field:        c.field || '',
+          away:         c.away,
+          home:         c.home,
+          away_score:   c.away_score ?? 0,
+          home_score:   c.home_score ?? 0,
+          away_lineup:  [],
+          home_lineup:  [],
+          score_only:   true,
+          status:       'final',
+          submitted_by: 'admin-backfill',
+          first_submitter: null,
+          has_discrepancy: false,
+          discrepancies:   [],
+          created_at:    new Date().toISOString(),
+          backfilled_at: new Date().toISOString(),
+          backfill_source: 'rebuildMissingBoxScores',
+        });
+        ok++;
+      } catch (e) {
+        console.warn('[rebuildMissingBoxScores] failed for', c.id, e);
+        fail++;
+      }
+    }
+    toast(`Rebuilt ${ok} doc(s)${fail ? `, ${fail} failed` : ''}.`, fail ? 'error' : 'success');
+  } catch (e) {
+    console.error('[rebuildMissingBoxScores] failed', e);
+    toast('Rebuild failed: ' + (e.message || 'see console'), 'error');
   }
 };
 
