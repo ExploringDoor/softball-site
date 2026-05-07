@@ -927,6 +927,7 @@ select.form-input{cursor:pointer}
             <div class="main-subtitle">Enter and manage game scores</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="runDataAudit()" title="Run a read-only data integrity audit on all done games. Reports missing box_scores docs, untagged score-only docs, unresolved conflicts, asymmetric submissions, and score-only counts. Equivalent to DATA_AUDIT_2026-05-06.md but reflects current Firestore state.">🔍 Run Data Audit</button>
             <button class="btn btn-outline btn-sm" onclick="scanUntaggedScoreOnly()" title="Find finalized box_scores docs whose lineups are both empty but no score_only flag is set, and tag them so the public box modal renders the Score Only placeholder cleanly.">🔧 Tag Untagged Score-Only</button>
             <button class="btn btn-outline btn-sm" onclick="rebuildMissingBoxScores()" title="Find finalized games (done:true) that have no /box_scores/{gameId} doc at all, and create a placeholder score-only doc from the game's recorded scores. Recovers the May 4 BOR@GJC class of bug where a pre-v280 score-only submission left no box_scores doc.">🛠️ Rebuild Missing Box Scores</button>
           </div>
@@ -2778,6 +2779,102 @@ window.rebuildMissingBoxScores = async function() {
   } catch (e) {
     console.error('[rebuildMissingBoxScores] failed', e);
     toast('Rebuild failed: ' + (e.message || 'see console'), 'error');
+  }
+};
+
+// Read-only data integrity audit. Mirrors DATA_AUDIT_2026-05-06.md's
+// queries against current Firestore state. Surfaces:
+//   §1a — done games with NO /box_scores doc
+//   §1b — games with score_conflict:true
+//   §1c — box_scores with both lineups empty AND no score_only flag
+//   §2  — done games with score_only:true (true score-only count)
+//   §3  — done games where ONE side has lineup data and the other is empty
+//   summary — total done, total clean (full lineups, no flags)
+// No writes — Adam reviews the report and uses Tag/Rebuild buttons (or
+// captain follow-up) to act on findings.
+window.runDataAudit = async function() {
+  try {
+    const [gamesSnap, boxesSnap] = await Promise.all([
+      getDocs(collection(db, 'games')),
+      getDocs(collection(db, 'box_scores')),
+    ]);
+    const boxesById = new Map();
+    boxesSnap.forEach(d => boxesById.set(d.id, d.data() || {}));
+    const games = [];
+    gamesSnap.forEach(d => games.push({ id: d.id, ...(d.data() || {}) }));
+    const doneGames = games.filter(g => g.done === true);
+
+    const findings = {
+      missingBox:    [], // §1a
+      conflicts:     [], // §1b
+      untagged:      [], // §1c
+      scoreOnly:     [], // §2
+      asymmetric:    [], // §3
+      clean:         [], // baseline
+    };
+    for (const g of doneGames) {
+      const b = boxesById.get(g.id);
+      if (g.score_conflict === true) findings.conflicts.push(g);
+      if (!b) { findings.missingBox.push(g); continue; }
+
+      const aLine = Array.isArray(b.away_lineup) ? b.away_lineup.length : 0;
+      const hLine = Array.isArray(b.home_lineup) ? b.home_lineup.length : 0;
+      const anyFlag = b.score_only === true || b.away_score_only === true || b.home_score_only === true;
+      const bothEmpty = aLine === 0 && hLine === 0;
+
+      if (bothEmpty && !anyFlag) findings.untagged.push(g);
+      else if (b.score_only === true) findings.scoreOnly.push(g);
+      else if (b.away_score_only === true && b.home_score_only === true) findings.scoreOnly.push(g);
+      else if ((aLine > 0 && hLine === 0 && b.home_score_only !== true) ||
+               (hLine > 0 && aLine === 0 && b.away_score_only !== true)) findings.asymmetric.push(g);
+      else if (aLine > 0 && hLine > 0) findings.clean.push(g);
+    }
+
+    const fmtRow = g => `  • Wk${g.wk||'?'} ${g.date||'?'}  ${g.away||'?'} ${g.away_score ?? '?'}–${g.home_score ?? '?'} ${g.home||'?'}`;
+    const lines = [];
+    lines.push(`📊 DVSL Data Audit — ${new Date().toLocaleString()}`);
+    lines.push('');
+    lines.push(`Done games:        ${doneGames.length}`);
+    lines.push(`  ✅ Clean (both sides full):   ${findings.clean.length}`);
+    lines.push(`  📝 Score-only (intentional):  ${findings.scoreOnly.length}`);
+    lines.push(`  ↔️  Asymmetric (one side only): ${findings.asymmetric.length}`);
+    lines.push(`  ❌ Missing box_scores doc:    ${findings.missingBox.length}`);
+    lines.push(`  ⚠️  Untagged score-only:       ${findings.untagged.length}`);
+    lines.push(`  🚨 Score conflicts:           ${findings.conflicts.length}`);
+    lines.push('');
+    if (findings.missingBox.length) {
+      lines.push('🚨 §1a — Missing /box_scores doc (use 🛠️ Rebuild button):');
+      lines.push(...findings.missingBox.map(fmtRow));
+      lines.push('');
+    }
+    if (findings.conflicts.length) {
+      lines.push('🚨 §1b — Unresolved score conflicts (resolve in Scores tab):');
+      lines.push(...findings.conflicts.map(fmtRow));
+      lines.push('');
+    }
+    if (findings.untagged.length) {
+      lines.push('⚠️ §1c — Untagged score-only docs (use 🔧 Tag button):');
+      lines.push(...findings.untagged.map(fmtRow));
+      lines.push('');
+    }
+    if (findings.asymmetric.length) {
+      lines.push('↔️ §3 — Asymmetric submissions (one captain submitted, other didn\'t):');
+      lines.push(...findings.asymmetric.map(fmtRow));
+      lines.push('');
+    }
+    if (findings.scoreOnly.length) {
+      lines.push('📝 §2 — Score-only games (captains can promote to full stats):');
+      lines.push(...findings.scoreOnly.map(fmtRow));
+      lines.push('');
+    }
+    const report = lines.join('\n');
+    console.log(report);
+    // Show in a simple modal-ish prompt that lets Adam copy/paste if needed.
+    // Window-level alert is the simplest UI; the console log preserves details.
+    alert(report);
+  } catch (e) {
+    console.error('[runDataAudit] failed', e);
+    toast('Audit failed: ' + (e.message || 'see console'), 'error');
   }
 };
 
