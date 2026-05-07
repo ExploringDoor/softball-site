@@ -8170,8 +8170,15 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     // before this OR check, top-level-flagged docs fell through to
     // empty-batter-table "no batting data" instead of the cleaner
     // "Score Only Entry" message.
-    const aScoreOnly = !!boxScore.away_score_only || !!boxScore.score_only;
-    const hScoreOnly = !!boxScore.home_score_only || !!boxScore.score_only;
+    //
+    // v286 refinement: only let the top-level `score_only` flag flip a
+    // side to placeholder when THAT side's lineup is actually empty.
+    // Otherwise a half-stat doc (one captain submitted score-only, the
+    // other captain submitted full data; submitBoxScoreUnified merges
+    // but doesn't clear the older top-level flag) would mask the full
+    // side's real lineup behind the placeholder.
+    const aScoreOnly = !!boxScore.away_score_only || (!!boxScore.score_only && aLineup.length === 0);
+    const hScoreOnly = !!boxScore.home_score_only || (!!boxScore.score_only && hLineup.length === 0);
     const scoreOnlyMsg = (teamShort, accentColor) => `<div style="padding:24px 16px;text-align:center;background:#fafbfc;border:1px dashed #d1d5db;border-radius:8px">
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:${accentColor||'#374151'};margin-bottom:6px">📝 Score Only Entry</div>
       <div style="font-size:12px;color:#6b7280;line-height:1.5;max-width:280px;margin:0 auto">Individual stats were not recorded for ${esc(teamShort)}. The captain submitted a final score only.</div>
