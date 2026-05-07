@@ -4375,6 +4375,8 @@ window.submitScoreOnly = async function(gameId) {
   const homeHits   = parseInt(document.getElementById(`so-ls-${gameId}-home-H`)?.value)||0;
   const awayErrors = parseInt(document.getElementById(`so-ls-${gameId}-away-E`)?.value)||0;
   const homeErrors = parseInt(document.getElementById(`so-ls-${gameId}-home-E`)?.value)||0;
+  const myId = captainData.team_id;
+  const isHome = g.home===myId; const myRole=isHome?'home':'away'; const otherRole=isHome?'away':'home';
   const boxScoreData = {
     game_id: gameId, week: g.wk||0, date: g.date||'', field: g.field||'',
     away: g.away, home: g.home,
@@ -4383,13 +4385,18 @@ window.submitScoreOnly = async function(gameId) {
     away_hits: awayHits, home_hits: homeHits,
     away_errors: awayErrors, home_errors: homeErrors,
     score_only: true,
+    // Per-side flag too — without this, submitBoxScoreUnified's merge path
+    // (when this is the second submission) writes ${myRole}_score_only:false
+    // because it derives the per-side flag from boxScoreData. Result: a doc
+    // that LOOKS like the captain submitted full data with an empty lineup,
+    // a.k.a. the §1c untagged-score-only state. v287 reads handle this
+    // defensively, but tagging at write time is cleaner.
+    [`${myRole}_score_only`]: true,
     submitted_by: captainData.team_name, submitted_by_id: captainData.team_id,
     status: 'approved', timestamp: Timestamp.now(),
   };
   try {
     // Upsert via unified helper (coordinates with live scorer + full box-score form)
-    const myId = captainData.team_id;
-    const isHome = g.home===myId; const myRole=isHome?'home':'away'; const otherRole=isHome?'away':'home';
     await submitBoxScoreUnified(gameId, boxScoreData, myRole);
     const _wasDone = !!g.done;
     // First-submit-wins policy: whoever submits first finalizes the game.
@@ -5660,6 +5667,11 @@ window.submitScore = async function(gameId) {
           away: g.away, home: g.home,
           away_score: awayScore, home_score: homeScore,
           score_only: true,
+          // Per-side flag mirrors the top-level marker; without this, a
+          // second-submission merge would clear ${myRole}_score_only to
+          // false (the score_only:true here is a top-level value, not
+          // per-side). Companion to the same fix in submitScoreOnly.
+          [`${myRole}_score_only`]: true,
           submitted_by: captainData.team_name,
           submitted_by_id: captainData.team_id,
           status: finalStatus,
