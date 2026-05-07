@@ -10,6 +10,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DVSL">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <!-- Loads window.LEAGUE_CONFIG before any module/script reads it. Other
+       pages (index/admin/profile/scorer) all do this — captain.html was
+       missing it, so DVSL_FIELDS fell back to ['TBD'] and field dropdowns
+       in the schedule editor offered only TBD. -->
+  <script src="/config.js"></script>
   <script>
     // Captain Portal has been unified into profile.html. Redirect unless
     // the user explicitly requests the legacy portal via ?legacy=1 (kept
@@ -3153,12 +3158,18 @@ window.removePlayer = async function(playerId) {
 // ═══════════════════════════════════════════════════════════════════
 function renderSchedule() {
   const el = document.getElementById('schedule-content');
+  // Header bar with Add Game button — captain can append a makeup or
+  // newly-scheduled game without going through admin. Always visible
+  // even when MY_GAMES is empty.
+  const headerHtml = `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+    <button class="btn btn-success btn-sm" onclick="captOpenAddGame()" title="Add a new game to your schedule (e.g., makeup game). Both teams' captains will be notified.">+ Add Game</button>
+  </div>`;
   if (!MY_GAMES.length) {
-    el.innerHTML = '<div class="empty">No games scheduled yet.</div>';
+    el.innerHTML = headerHtml + '<div id="capt-add-game-form"></div><div class="empty">No games scheduled yet.</div>';
     return;
   }
 
-  el.innerHTML = MY_GAMES.map(g => {
+  el.innerHTML = headerHtml + '<div id="capt-add-game-form"></div>' + MY_GAMES.map(g => {
     const isHome = g.home === captainData.team_id;
     const opponent = isHome ? g.away : g.home;
     const homeAway = isHome ? 'vs' : '@';
@@ -3199,6 +3210,143 @@ function renderSchedule() {
 // plus optional `ppd_rescheduled_to` when we know the new date.
 // Fires a `rainouts` push so both teams see it.
 // ═══════════════════════════════════════════════════════════════════
+// Captain Add Game — opens an inline form above the schedule list.
+// Captain can fill in date/time/field/opponent/side; their own team is
+// always one of the two slots. On save, writes to /games and pushes a
+// notification to both teams' captains.
+window.captOpenAddGame = function() {
+  const host = document.getElementById('capt-add-game-form');
+  if (!host) return;
+  // Toggle off if already open.
+  if (host.dataset.open === '1') { host.dataset.open = ''; host.innerHTML = ''; return; }
+  host.dataset.open = '1';
+  const myTeamId = captainData.team_id;
+  const others = ALL_TEAMS.filter(t => t.id !== myTeamId)
+    .sort((a,b) => (a.name || a.short || a.id).localeCompare(b.name || b.short || b.id));
+  const opponentOptions = others.map(t =>
+    `<option value="${esc(t.id)}">${esc(t.name || t.short || t.id)}</option>`
+  ).join('');
+  // Default wk: 1 + max wk among MY_GAMES (or 1 if empty).
+  const maxWk = MY_GAMES.reduce((m, g) => Math.max(m, parseInt(g.wk) || 0), 0);
+  const defaultWk = maxWk + 1;
+  host.innerHTML = `<div style="padding:14px;background:#f0f9ff;border:2px solid #002D72;border-radius:10px;margin-bottom:14px">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;color:#002D72;margin-bottom:10px;letter-spacing:.04em;text-transform:uppercase">+ Add a Game</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><label class="form-label">Date</label><input type="date" class="form-input" id="cag-date"></div>
+      <div><label class="form-label">Time</label><input type="time" class="form-input" id="cag-time"></div>
+    </div>
+    <div style="margin-bottom:8px"><label class="form-label">Field</label><select class="form-input" id="cag-field">${fieldOptionsHtml('')}</select></div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div><label class="form-label">Opponent</label><select class="form-input" id="cag-opp">${opponentOptions}</select></div>
+      <div><label class="form-label">We are</label><select class="form-input" id="cag-side">
+        <option value="home">Home</option>
+        <option value="away">Away</option>
+      </select></div>
+      <div><label class="form-label">Week</label><input type="number" class="form-input" id="cag-wk" min="1" value="${defaultWk}"></div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.45">
+      Pushes a notification to both teams' captains and shows up in the commissioner's edit log. Use this for makeup games, rescheduled rainouts, or new playoff games.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success btn-sm" onclick="captSaveAddGame()">Save Game</button>
+      <button class="btn btn-outline btn-sm" onclick="captOpenAddGame()">Cancel</button>
+    </div>
+  </div>`;
+};
+
+window.captSaveAddGame = async function() {
+  const dateIso  = document.getElementById('cag-date')?.value || '';
+  const time24   = document.getElementById('cag-time')?.value || '';
+  const field    = document.getElementById('cag-field')?.value || '';
+  const opponent = document.getElementById('cag-opp')?.value || '';
+  const mySide   = document.getElementById('cag-side')?.value || 'home';
+  const wk       = parseInt(document.getElementById('cag-wk')?.value || '0') || 1;
+
+  if (!dateIso) { toast('Pick a date', 'error'); return; }
+  if (!opponent) { toast('Pick an opponent', 'error'); return; }
+  const myTeamId = captainData.team_id;
+  if (opponent === myTeamId) { toast('Opponent cannot be your own team', 'error'); return; }
+
+  // Build display strings
+  let dateDisplay = '', dayDisplay = '', timeDisplay = '';
+  const d = new Date(dateIso + 'T12:00:00');
+  dateDisplay = d.toLocaleDateString('en-US', { month:'short', day:'numeric' });
+  dayDisplay  = d.toLocaleDateString('en-US', { weekday:'short' });
+  if (time24) {
+    const [hh, mm] = time24.split(':').map(Number);
+    const suffix = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 || 12;
+    timeDisplay = `${h12}:${String(mm).padStart(2,'0')} ${suffix}`;
+  }
+
+  const away = mySide === 'away' ? myTeamId : opponent;
+  const home = mySide === 'home' ? myTeamId : opponent;
+
+  // Auto-fill addr from FIELD_LOCATIONS so calendar feeds + map links work.
+  const FIELD_LOC = (window.LEAGUE_CONFIG && window.LEAGUE_CONFIG.fieldLocations) || {};
+  const addr = FIELD_LOC[field] || '';
+
+  const data = {
+    wk,
+    date: dateDisplay, day: dayDisplay, time: timeDisplay,
+    date_iso: dateIso, time_24: time24,
+    away, home,
+    field, addr,
+    done: false, away_score: null, home_score: null,
+    added_by: captainData?.team_name || 'captain',
+    added_by_id: captainData?.team_id || '',
+    added_by_email: currentUser?.email || '',
+    added_at: serverTimestamp(),
+    source: 'captain_add',
+  };
+
+  try {
+    const ref = await addDoc(collection(db, 'games'), data);
+    data.id = ref.id;
+    // Push the new game into MY_GAMES so it appears immediately.
+    MY_GAMES.push(data);
+    MY_GAMES.sort((a,b) => (parseInt(a.wk)||0) - (parseInt(b.wk)||0));
+    const teamsLabel = `${getTeamName(away)} @ ${getTeamName(home)}`;
+    await logActivity(
+      'Schedule (Captain Add)',
+      `${captainData?.team_name || 'Captain'} added game: ${teamsLabel} · Wk ${wk} · ${dateDisplay} ${timeDisplay} @ ${field || 'TBD'}`
+    );
+    // Queue for Google Calendar sync (admin pushes to gcal).
+    try {
+      await setDoc(doc(db, 'pending_gcal_syncs', ref.id), {
+        game_id: ref.id,
+        teams_label: teamsLabel,
+        edited_by: captainData?.team_name || 'captain',
+        edited_by_id: captainData?.team_id || '',
+        edited_by_email: currentUser?.email || '',
+        summary: `added by captain: Wk ${wk} ${dateDisplay} ${timeDisplay} @ ${field || 'TBD'}`,
+        source: 'captain_add',
+        status: 'pending',
+        timestamp: serverTimestamp(),
+      });
+    } catch (e) { console.warn('Could not queue gcal sync for add:', e.message); }
+    // Notify admin via the existing /api/notify-admin endpoint (if configured).
+    try {
+      fetch('/api/notify-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: `Captain added a game: ${teamsLabel}`,
+          summary: `Wk ${wk} · ${dateDisplay} ${timeDisplay} @ ${field || 'TBD'}`,
+          captain: captainData?.team_name || 'captain',
+        }),
+      }).catch(() => {});
+    } catch (_) {}
+    toast('Game added — both teams will see it on their schedule.');
+    // Close form + re-render
+    const host = document.getElementById('capt-add-game-form');
+    if (host) { host.dataset.open = ''; host.innerHTML = ''; }
+    renderSchedule();
+  } catch (e) {
+    toast('Failed to add game: ' + e.message, 'error');
+  }
+};
+
 window.captTogglePpd = async function(gameId) {
   const g = MY_GAMES.find(x => x.id === gameId);
   if (!g) return;
