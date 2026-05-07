@@ -5635,25 +5635,34 @@ window.submitScore = async function(gameId) {
     // "ghost games" with scores on the schedule but nothing in the
     // box-score modal. The May 4 BOR @ GJC game was the canonical
     // example flagged in DATA_AUDIT_2026-05-06.md §1a.
-    // Fix: route through submitBoxScoreUnified the same way
-    // submitScoreOnly does. Marks the box-score doc as score_only:true
-    // so the public modal renders the proper "Score Only Entry"
-    // placeholder. Best-effort — failure here doesn't undo the score
-    // submission (game doc + score_submissions are already saved).
+    //
+    // GUARD: only write if there isn't already a box_scores doc with
+    // lineup data. Otherwise this manual-entry flow would clobber a
+    // captain's previously-submitted full box score with empty arrays
+    // (submitBoxScoreUnified treats same-role re-submission as a full
+    // overwrite). The score-only payload here is the floor, not the
+    // ceiling — never downgrade richer existing data.
     try {
-      const boxScoreData = {
-        game_id: gameId, week: g.wk||0, date: g.date||'', field: g.field||'',
-        away: g.away, home: g.home,
-        away_score: awayScore, home_score: homeScore,
-        score_only: true,
-        submitted_by: captainData.team_name,
-        submitted_by_id: captainData.team_id,
-        status: finalStatus,
-        timestamp: Timestamp.now(),
-      };
-      await submitBoxScoreUnified(gameId, boxScoreData, myRole);
+      const existingSnap = await getDoc(doc(db, 'box_scores', gameId));
+      const existing = existingSnap.exists() ? existingSnap.data() : null;
+      const existingAwayLineup = (existing?.away_lineup || existing?.awayBatters || []).length;
+      const existingHomeLineup = (existing?.home_lineup || existing?.homeBatters || []).length;
+      const hasExistingData = existing && (existingAwayLineup > 0 || existingHomeLineup > 0);
+      if (!hasExistingData) {
+        const boxScoreData = {
+          game_id: gameId, week: g.wk||0, date: g.date||'', field: g.field||'',
+          away: g.away, home: g.home,
+          away_score: awayScore, home_score: homeScore,
+          score_only: true,
+          submitted_by: captainData.team_name,
+          submitted_by_id: captainData.team_id,
+          status: finalStatus,
+          timestamp: Timestamp.now(),
+        };
+        await submitBoxScoreUnified(gameId, boxScoreData, myRole);
+      }
     } catch(bsErr) {
-      console.warn('[submitScore] box_scores write failed (non-fatal):', bsErr);
+      console.warn('[submitScore] box_scores write skipped/failed (non-fatal):', bsErr);
     }
     // Fire final-score push on the transition to done, otherwise fire
     // the "score submitted / awaiting confirmation" push so every
