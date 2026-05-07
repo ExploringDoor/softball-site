@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v292-captain-removeplayer-soft-deletes`;
+const VERSION = `${LEAGUE.id}-v293-public-conflict-badge-on-team-schedule-rows`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

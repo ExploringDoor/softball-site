@@ -4414,6 +4414,10 @@ async function loadAllData() {
         away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
         home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
         as: g.away_score, hs: g.home_score, done: g.done||false,
+        // Score conflict surfaces a "⚠ Under review" badge in the schedule
+        // rows so fans know the score may change once admin resolves the
+        // disagreement. Without this, a disputed score looks final.
+        conflict: !!g.score_conflict,
         ppd: !!(g.ppd || g.rained_out), ppdResched: g.ppd_rescheduled_to || '',
         live: (g.live||false) && (() => {
           if (!g.liveAt) return false; // no timestamp = old stale data, hide badge
@@ -4532,6 +4536,7 @@ async function refreshVolatileData() {
       away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
       home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
       as: g.away_score, hs: g.home_score, done: g.done||false,
+      conflict: !!g.score_conflict,
       ppd: !!(g.ppd || g.rained_out), ppdResched: g.ppd_rescheduled_to || '',
       live: (g.live||false) && (() => {
         if (!g.liveAt) return false;
@@ -6178,7 +6183,7 @@ function buildSchedRows(t, tgames){
     const scoreCol=g.ppd
       ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;line-height:1;color:#92400e">PPD</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#92400e;margin-top:2px">🌧 ${g.ppdResched||'TBD'}</div></div>`
       :g.done
-      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${myS}–${oppS}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${won?'#22c55e':'#ef4444'};margin-top:2px">${won?'WIN':'LOSS'}</div></div>`
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${myS}–${oppS}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(won?'#22c55e':'#ef4444')};margin-top:2px">${g.conflict?'⚠ UNDER REVIEW':(won?'WIN':'LOSS')}</div></div>`
       :'';
     const rowClick=g.done?`onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}')"`:'' ;
     const rowBg=i%2===0?'#fff':'#fafafa';
