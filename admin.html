@@ -921,9 +921,14 @@ select.form-input{cursor:pointer}
     <!-- ═══ SCORES ═══ -->
     <div class="section" id="sec-scores">
       <div id="scores-list-view">
-        <div class="main-header">
-          <div class="main-title">Scores</div>
-          <div class="main-subtitle">Enter and manage game scores</div>
+        <div class="main-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div class="main-title">Scores</div>
+            <div class="main-subtitle">Enter and manage game scores</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="scanUntaggedScoreOnly()" title="Find finalized box_scores docs whose lineups are both empty but no score_only flag is set, and tag them so the public box modal renders the Score Only placeholder cleanly.">🔧 Tag Untagged Score-Only</button>
+          </div>
         </div>
         <div class="form-row" style="margin-bottom:16px;align-items:flex-end">
           <div class="form-col" style="max-width:280px">
@@ -2664,6 +2669,49 @@ async function _syncBoxScoreScore(gameId, away_score, home_score) {
     console.warn('[_syncBoxScoreScore] failed for', gameId, e);
   }
 }
+
+// One-shot maintenance: find finalized box_scores docs where BOTH lineups
+// are empty AND no score_only flag is set, and tag them with score_only:true
+// so the public modal renders the v267 "📝 Score Only Entry" placeholder
+// instead of a misleading "no batting data" empty table. Surfaced via
+// the 2026-05-06 audit (DATA_AUDIT_2026-05-06.md, Section 1c) — these are
+// pre-v265 submissions whose flag wasn't written at submit time.
+window.scanUntaggedScoreOnly = async function() {
+  try {
+    const snap = await getDocs(collection(db, 'box_scores'));
+    const candidates = [];
+    snap.forEach(d => {
+      const b = d.data() || {};
+      if (b.status !== 'final') return;
+      const aEmpty = !Array.isArray(b.away_lineup) || b.away_lineup.length === 0;
+      const hEmpty = !Array.isArray(b.home_lineup) || b.home_lineup.length === 0;
+      if (!(aEmpty && hEmpty)) return;
+      // Already tagged in any form — skip.
+      if (b.score_only === true || b.away_score_only === true || b.home_score_only === true) return;
+      candidates.push({ id: d.id, away: b.away, home: b.home, date: b.date, away_score: b.away_score, home_score: b.home_score });
+    });
+    if (candidates.length === 0) {
+      toast('No untagged score-only docs found — already clean.', 'success');
+      return;
+    }
+    const list = candidates.map(c => `  • ${c.date || '?'}  ${c.away||'?'} ${c.away_score ?? '?'}–${c.home_score ?? '?'} ${c.home||'?'}`).join('\n');
+    if (!confirm(`Found ${candidates.length} finalized box_scores doc(s) with no lineups and no score_only flag:\n\n${list}\n\nTag these with score_only:true so the public modal renders the Score Only placeholder?`)) return;
+    let ok = 0, fail = 0;
+    for (const c of candidates) {
+      try {
+        await updateDoc(doc(db, 'box_scores', c.id), { score_only: true });
+        ok++;
+      } catch (e) {
+        console.warn('[scanUntaggedScoreOnly] failed for', c.id, e);
+        fail++;
+      }
+    }
+    toast(`Tagged ${ok} doc(s)${fail ? `, ${fail} failed` : ''}.`, fail ? 'error' : 'success');
+  } catch (e) {
+    console.error('[scanUntaggedScoreOnly] failed', e);
+    toast('Scan failed: ' + (e.message || 'see console'), 'error');
+  }
+};
 
 window.captInboxApplyUpload = async function(docId) {
   const u = CAPT_SUBMISSION_INBOX.uploads.find(x => x.id === docId);
