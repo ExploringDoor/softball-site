@@ -3595,8 +3595,15 @@ function renderPendingGames() {
     // this lets captains see at a glance which games still have stat-detail
     // available to add — closing the score-only trap one notch tighter than
     // the v275 "Recently Submitted" header alone.
+    //
+    // Only show the score-only badge when we POSITIVELY know the row is
+    // score-only: a matching /score_submissions doc exists AND has_boxscore
+    // is not true. If MY_SUBMISSIONS is missing the row entirely (offline
+    // load, pre-collection-existence submission, etc.) fall back to the
+    // generic "✓ Submitted" badge rather than confusing the captain by
+    // claiming their full submission is score-only.
     const mySub = alreadySubmitted ? MY_SUBMISSIONS.find(s => s.game_id === g.id && s.role === myRole) : null;
-    const myWasScoreOnly = alreadySubmitted && (!mySub || mySub.has_boxscore !== true);
+    const myWasScoreOnly = !!mySub && mySub.has_boxscore !== true;
 
     // Check if other captain already submitted
     const otherRole = myRole === 'away' ? 'home' : 'away';
