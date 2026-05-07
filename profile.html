@@ -2775,11 +2775,23 @@ window.dvslOpenNotif = function(url, category, title) {
       if (onProfile) return;
     }
 
-    // Off-page destination — just navigate
-    if (url && url !== '#') location.href = url;
+    // Off-page destination — just navigate, but enforce same-origin.
+    // Otherwise an admin push with `url:'https://evil.com/...'` would walk
+    // the user off-site on tap. Inbox.html already enforces this (v100).
+    if (url && url !== '#') {
+      try {
+        const target = new URL(url, location.origin);
+        location.href = (target.origin === location.origin) ? target.href : new URL('/', location.origin).href;
+      } catch(_) { location.href = '/'; }
+    }
   } catch(e) {
     console.warn('dvslOpenNotif failed:', e);
-    if (url && url !== '#') location.href = url;
+    if (url && url !== '#') {
+      try {
+        const target = new URL(url, location.origin);
+        location.href = (target.origin === location.origin) ? target.href : '/';
+      } catch(_) { location.href = '/'; }
+    }
   }
 };
 

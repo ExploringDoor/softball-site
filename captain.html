@@ -2631,6 +2631,11 @@ window._notifClearArchiveUi = function() {
 // Notification deep-link router for captain.html. If the URL targets the
 // captain page itself, switch tabs in place; otherwise full navigate.
 // Mirrors profile.html's dvslOpenNotif but maps to showTab() values.
+//
+// SECURITY: The fall-through `window.location.href = url` MUST resolve to
+// a same-origin URL. Otherwise a push admin could supply
+// `https://evil.com/...` and a tap would navigate the captain off-site.
+// Inbox.html already enforces this guard (v100); replicate here.
 window._capOpenNotif = function(url, category, title) {
   try {
     const u = new URL(url, location.origin);
@@ -2645,10 +2650,11 @@ window._capOpenNotif = function(url, category, title) {
         return;
       }
     }
-    // Fall through: full navigate.
-    window.location.href = url;
+    // Fall through: full navigate, but force same-origin.
+    const safe = (u.origin === location.origin) ? u.href : new URL('/', location.origin).href;
+    window.location.href = safe;
   } catch(_) {
-    window.location.href = url;
+    window.location.href = '/';
   }
 };
 
