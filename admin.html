@@ -6777,13 +6777,24 @@ window.loadRoster = function() {
   if (!teamId) { el.innerHTML = ''; addBtn.style.display = 'none'; return; }
   addBtn.style.display = 'inline-flex';
 
-  const teamPlayers = PLAYERS.filter(p => p.team === teamId).sort((a,b) => (a.num||99) - (b.num||99));
+  const teamPlayers = PLAYERS.filter(p => p.team === teamId).sort((a,b) => {
+    // Active players first (sorted by jersey #), then inactive at the bottom.
+    // Inactive entries are marked with active:false by captain-side
+    // soft-deletes (v292) — admin needs to see them to restore or
+    // hard-delete, but they shouldn't visually compete with the live roster.
+    const aActive = a.active !== false;
+    const bActive = b.active !== false;
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return (a.num||99) - (b.num||99);
+  });
   if (!teamPlayers.length) {
     el.innerHTML = `<div class="empty">No players found for this team</div>`;
     return;
   }
+  const activeCount = teamPlayers.filter(p => p.active !== false).length;
+  const inactiveCount = teamPlayers.length - activeCount;
   el.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
-      <div style="font-size:13px;color:var(--muted)">${teamPlayers.length} player(s)</div>
+      <div style="font-size:13px;color:var(--muted)">${activeCount} active player(s)${inactiveCount ? ` · <span style="color:#92400e;font-weight:600">${inactiveCount} inactive</span>` : ''}</div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" onclick="genAllPlayerPasswords('${teamId}')" title="Assign a random 6-character password to every player on this team that doesn't already have one">🔑 Generate Missing PWs</button>
         <button class="btn btn-outline btn-sm" onclick="copyPlayerPasswordList('${teamId}')" title="Copy a text list of every player's name + password for handing out">📋 Copy PW List</button>
@@ -6799,18 +6810,51 @@ window.loadRoster = function() {
           added = d.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
         } catch(e) {}
       }
-      return `<tr id="player-row-${p.id}">
-      <td>${p.num||'-'}</td><td><strong>${esc(p.name)}</strong></td><td>${esc(p.pos||'-')}</td>
-      <td><input type="text" class="form-input" style="width:110px;padding:5px" placeholder="set password" value="${esc(p.password||'')}" id="pl-pw-${p.id}" onchange="savePlayerPwInline('${p.id}')"></td>
+      const isInactive = p.active === false;
+      const rowStyle = isInactive ? 'opacity:.55;background:#fafafa' : '';
+      const nameMarkup = isInactive
+        ? `<strong style="text-decoration:line-through">${esc(p.name)}</strong> <span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-size:10px;margin-left:6px">INACTIVE</span>`
+        : `<strong>${esc(p.name)}</strong>`;
+      const actionsMarkup = isInactive
+        ? `<button class="btn btn-outline btn-sm" style="color:var(--green);border-color:var(--green)" onclick="restorePlayer('${p.id}')">↺ Restore</button>
+           <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')" title="Permanently delete (cannot be undone)">🗑 Delete</button>`
+        : `<button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
+           <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>`;
+      return `<tr id="player-row-${p.id}" style="${rowStyle}">
+      <td>${p.num||'-'}</td><td>${nameMarkup}</td><td>${esc(p.pos||'-')}</td>
+      <td><input type="text" class="form-input" style="width:110px;padding:5px" placeholder="set password" value="${esc(p.password||'')}" id="pl-pw-${p.id}" onchange="savePlayerPwInline('${p.id}')" ${isInactive?'disabled':''}></td>
       <td style="font-size:12px;color:var(--muted2);white-space:nowrap">${added}</td>
-      <td class="actions">
-        <button class="btn btn-outline btn-sm" onclick="editPlayer('${p.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="removePlayer('${p.id}')">Remove</button>
-      </td>
+      <td class="actions">${actionsMarkup}</td>
     </tr>
     <tr id="player-edit-${p.id}" style="display:none"><td colspan="6" id="player-edit-cell-${p.id}"></td></tr>`;
     }).join('')}
     </tbody></table></div>`;
+};
+
+// Restore a soft-deleted player (active:false → active:true). The doc
+// itself was preserved by captain.removePlayer's v292 soft-delete, so
+// the player's id, historical box-score links, and any auth_uid binding
+// are all intact — flipping the flag puts them back on the live roster.
+window.restorePlayer = async function(playerId) {
+  const p = PLAYERS.find(x => x.id === playerId);
+  if (!p) return;
+  if (!confirm(`Restore ${p.name} to the active roster for ${getTeamFull(p.team)}?`)) return;
+  try {
+    await updateDoc(doc(db, 'players', playerId), {
+      active: true,
+      restored_at: Timestamp.now(),
+      restored_by: auth?.currentUser?.email || 'admin',
+      // Leave deactivated_at/deactivated_by as historical fields.
+    });
+    p.active = true;
+    p.restored_at = new Date();
+    toast(`${p.name} restored.`);
+    await logActivity('Roster', `Restored ${p.name} to ${getTeamFull(p.team)}`);
+    window.loadRoster();
+    renderDashboard();
+  } catch (e) {
+    toast('Restore failed: ' + e.message, 'error');
+  }
 };
 
 window.openAddPlayer = function() {

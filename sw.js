@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v293-public-conflict-badge-on-team-schedule-rows`;
+const VERSION = `${LEAGUE.id}-v294-admin-roster-shows-inactive-with-restore-action`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
