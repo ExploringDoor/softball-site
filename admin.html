@@ -1002,9 +1002,10 @@ select.form-input{cursor:pointer}
             <option value="">-- Choose a team --</option>
           </select>
         </div>
-        <div style="padding-bottom:2px;display:flex;gap:8px">
+        <div style="padding-bottom:2px;display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" id="add-player-btn" onclick="openAddPlayer()" style="display:none">+ Add Player</button>
           <button class="btn btn-outline btn-sm" onclick="exportRosterPDF()" title="Download selected team's roster as PDF">📄 Export PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="bulkEmailImport()" title="One-shot: match the May 2026 player-email roster against current Firestore players and write the email field. Shows a preview before applying.">📧 Bulk Email Import</button>
         </div>
       </div>
       <div id="add-player-form" style="display:none"></div>
@@ -2877,6 +2878,518 @@ window.runDataAudit = async function() {
     toast('Audit failed: ' + (e.message || 'see console'), 'error');
   }
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// BULK EMAIL IMPORT (one-shot, May 2026)
+// Reads player→email pairs collected from imleagues, fuzzy-matches each
+// against the current /players collection, shows a preview of what would
+// change, and on confirmation writes the email field. Existing emails
+// are NOT overwritten unless Adam explicitly opts in. Special markers
+// ('private profile', 'inactive account', 'not found') are skipped.
+// ═══════════════════════════════════════════════════════════════════
+const BULK_EMAIL_DATA = {
+  "Beth Or Blue": [
+    ["Michael Demar", "mikedemar@comcast.net"],
+    ["Michael Amerstein", "mamerstein@gmail.com"],
+    ["Steve Blatstein", "stevieblat@gmail.com"],
+    ["Warren Bloom", "wbloom44@gmail.com"],
+    ["Jason Bresler", "jason.bresler@gmail.com"],
+    ["Ryan Fein", "ryanfein003@yahoo.com"],
+    ["Scott Fredd", "shfredd@gmail.com"],
+    ["David Gass", "dgass24@gmail.com"],
+    ["Matthew Goldstein", "matt.goldstein42@gmail.com"],
+    ["Adam Kratchman", "drkratchman@yahoo.com"],
+    ["Landon Kratchman", "landon.noah@yahoo.com"],
+    ["Fred Lipson", "fredriclipson@gmail.com"],
+    ["Darren Moskovitz", "darrenmosk@gmail.com"],
+    ["Craig Schulz", null],
+    ["Adam Taylor", "ATAYLOR@KAPLAW.COM"],
+    ["Daniel Wittmer", "daniel.wittmer1@gmail.com"]
+  ],
+  "BSMC": [
+    ["Jason Kessler", "jkess33@gmail.com"],
+    ["Max Miller", null],
+    ["Zach Bergman", "zachbergman@gmail.com"],
+    ["Robert Cohan", "Robmarkco@comcast.net"],
+    ["Neil Cohen", "ncohen1031@comcast.net"],
+    ["Rob Drowos", "rdrowos@gmail.com"],
+    ["Tyler Faimon", "TXF5130@gmail.com"],
+    ["Cody Gross", "codygross3@gmail.com"],
+    ["Matt Grubman", "grubbyg@gmail.com"],
+    ["David Holin", "dholin1@yahoo.com"],
+    ["Danny Kessler", "dkess0622@gmail.com"],
+    ["Marc Korman", "mkorman610@aol.com"],
+    ["Howard Koval", "hskoval@gmail.com"],
+    ["Jacob Kriegler", "jacob.kriegler@gmail.com"],
+    ["Max Lefton", "tud14837@temple.edu"],
+    ["Blake Milstein", "bmilspsu@gmail.com"],
+    ["David Minkoff", "dminkoff41@gmail.com"],
+    ["Steven Pilchik", "pilchiksubs@gmail.com"],
+    ["Alan Resnick", "alan.resnick10@gmail.com"],
+    ["Tyler Rosenblatt", "Trosenblatt5@gmail.com"],
+    ["Steven Smith", null]
+  ],
+  "Chabad": [
+    ["Michael Cook", "mecooklaw@gmail.com"],
+    ["Demetrius Barry", "deebarry2120@yahoo.com"],
+    ["Carson Cohen", "carsoncohen12@gmail.com"],
+    ["Max Fenster", "mefenster11@gmail.com"],
+    ["Aaron Goldstein", "goldstein.aaron@yahoo.com"],
+    ["Jason Goldstein", "jasongoldstein57@gmail.com"],
+    ["Brett Jacobson", "bajacobson13@gmail.com"],
+    ["Tyler Jacobson", "tylersj26@gmail.com"],
+    ["Collin Johnson", "collintjohnson@yahoo.com"],
+    ["Tom Levy", "Tlevy2424@gmail.com"],
+    ["Matt Martin", "mattmart31@gmail.com"],
+    ["Jake Miller", "jakemiller858@gmail.com"],
+    ["C.J. Mittica", "cjmittica@gmail.com"],
+    ["Rick Rosenstein", "docdesi@gmail.com"],
+    ["Jeff Schonberg", "rbcj4@comcast.net"],
+    ["Jared Shotel", "jrsmlb@gmail.com"],
+    ["Jayson Tessler", "jaysontessler@yahoo.com"],
+    ["Ian Vogt", "ianjvogt@gmail.com"]
+  ],
+  "TBIMC": [
+    ["Matthew Seltzer", "tbisoftball@gmail.com"],
+    ["Gad Ages", "gadages@gmail.com"],
+    ["Mike Blum", "Mblum98@gmail.com"],
+    ["Zack Everett", "johnzacharyeverett@yahoo.com"],
+    ["Colin Fox", "colinjfox36@gmail.com"],
+    ["Stephen Granger", "gnehpetspa@yahoo.com"],
+    ["Jared Griffin", "jgriff09@gmail.com"],
+    ["Joseph Grinenko", "joseph.grinenko@gmail.com"],
+    ["Brian Hessler", "brian@hessler.com"],
+    ["Ross Kasper", "rkasper@gmail.com"],
+    ["Joe Kesilman", "jkes182@aol.com"],
+    ["Andrew Kosoy", "andrew.r.kosoy@gmail.com"],
+    ["David Kuperstein", "dkuper18@gmail.com"],
+    ["Kevin Lefkowitz", "lefkowitzkevin@gmail.com"],
+    ["Robert Pfeifer", "philsrule0606@comcast.net"],
+    ["Shane Pfeifer", "robp62902@yahoo.com"],
+    ["Brian Schachter", "b.schachter91@gmail.com"],
+    ["Adam Schulang", "aschulang@gmail.com"],
+    ["Andy Siegel", "andrewjsiegel@hotmail.com"],
+    ["Shayna Siegel", "shaynaasiegel10@gmail.com"],
+    ["David Tener", "dtener@caesar.law"],
+    ["Jacob Weiner", "jlweiner@udel.edu"],
+    ["Harris Zettler", "hzettler225@gmail.com"]
+  ],
+  "TOAST": [
+    ["David Davis", "dave@teammikeanddave.com"],
+    ["Zach Sheard", "zachsheard@gmail.com"],
+    ["Jesse Wexelblatt", "JWEXELBLATT@gmail.com"],
+    ["Jacob Brownstein", "jbrownstein08@yahoo.com"],
+    ["Ryan Davis", "rjd0916@gmail.com"],
+    ["Andrew Devine", "andrewdevine528@gmail.com"],
+    ["Jason Harrison", "jason.craig.harrison@gmail.com"],
+    ["David Howard", "dwh610@gmail.com"],
+    ["Eugene Kuntorovsky", "eugene.kuntorovsky@gmail.com"],
+    ["Tyler Lane", "tlphila87@gmail.com"],
+    ["Bryan Maguire", "maguire.bryan@gmail.com"],
+    ["Justin Mellinger", "justin.n.mellinger@gmail.com"],
+    ["Cory Nadler", "nadler.cory@gmail.com"],
+    ["Zach Orenstein", "zorenstein13@gmail.com"],
+    ["Brandon Rose", "brrose25@gmail.com"],
+    ["Jared Rosenbloom", "jaredrosenbloom1987@gmail.com"],
+    ["Joel Rosenwasser", "Joelrosenwasser@gmail.com"],
+    ["Evan Saltzman", "evansaltzman202@gmail.com"],
+    ["Steven Schneer", "steven.schneer@gmail.com"],
+    ["Zack Schulman", "zschul13@gmail.com"],
+    ["Josh Stumpf", "jstumpf228@gmail.com"]
+  ],
+  "Goldstein's": [
+    ["Scott Crayder", "scrayder@gmail.com"],
+    ["Austin Betman", "abetman1995@yahoo.com"],
+    ["David Betman", "betmand@comcast.net"],
+    ["Kyle Bruck", "kwb5561@psu.edu"],
+    ["Matt Crayder", "mrcrayder@gmail.com"],
+    ["Brian Gelfand", "gelfand27@verizon.net"],
+    ["Justin Gelfand", "jgelf15@gmail.com"],
+    ["Kyle Katz", "Kylex6014@gmail.com"],
+    ["Allan Kaufman", "ajk404@verizon.net"],
+    ["Mitch Pratta", "mitchpratta@gmail.com"],
+    ["Evan Rosenstein", "emrosenstein@gmail.com"],
+    ["Bryce Rotkin", "Brycejacobrock@icloud.com"],
+    ["Jake Segal", "Jakese6@gmail.com"],
+    ["Darin Steinberg", "djs@darinsteinberglaw.com"],
+    ["Ryan Toltzis", "Rwtoltz113@gmail.com"],
+    ["Jason Walter", "Jason.walter.4426@gmail.com"],
+    ["Cole Weinstein", "cole18966@yahoo.com"],
+    ["Jonathan Wilk", "Jrwilk9@yahoo.com"]
+  ],
+  "Germantown Jewish Centre": [
+    ["Joel Fish", "JoelFish3@aol.com"],
+    ["Jake Greenberg", "jakesg@gmail.com"],
+    ["Erik Curtis", "encurtis@gmail.com"],
+    ["Sean Davis", "sdavis1323@gmail.com"],
+    ["Sean Fennell", "sf8305@gmail.com"],
+    ["Noah Friedman-Nathan", "noahfn1999@gmail.com"],
+    ["Chris Gerhardt", "cmgerhardt3@gmail.com"],
+    ["Jake Gold", "jgold99x2@gmail.com"],
+    ["Robert Heller", "hmtrebor11@gmail.com"],
+    ["Adam Hoch", "adhoch7@gmail.com"],
+    ["Dale Hoover", "DaleHoover8@gmail.com"],
+    ["Scott Horowitz", "scott8210@gmail.com"],
+    ["Nate Johnson", "njohnson@roofmeadowservices.com"],
+    ["Aaron Kavesh", "aaronmcabbage@gmail.com"],
+    ["Brian Kripke", "bak30105@gmail.com"],
+    ["Ned Kripke", "kripkefamily@comcast.net"],
+    ["Samuel Pitkow", "Sampit16@gmail.com"],
+    ["Sean Reisman", "glc860k@icloud.com"],
+    ["Ivan Wolnek", "ivan.wolnek@verizon.net"]
+  ],
+  "Shir Ami": [
+    ["Todd Leon", "flyguys20@verizon.net"],
+    ["Rick Phillips", "mdniu@yahoo.com"],
+    ["Andrew Abovitz", "aabovitz@gmail.com"],
+    ["Arthur Anderson", "Aanders6@gmail.com"],
+    ["Matt Catagnus", "macatagn@amazon.com"],
+    ["Adam Green", "greenlaw11@gmail.com"],
+    ["David Greenfield", "davegreeny@gmail.com"],
+    ["Michael Haberman", "michael.haberman@ubs.com"],
+    ["Jarrett Handell", "handellj@gmail.com"],
+    ["Nathaniel Holzmann", "holz001@gmail.com"],
+    ["Dan Karlyn", "danielkarlyn@gmail.com"],
+    ["George Katsanos", "gkatsanos@hotmail.com"],
+    ["Lawrance Kimmel", "lkimmel@kimmelcarter.com"],
+    ["Christopher Kuncio", "chris.kuncio@gmail.com"],
+    ["Larry Levin", "larryllevin@comcast.net"],
+    ["Ross Levine", "rosslevine818@gmail.com"],
+    ["Levi Naiditch", "levi.naiditch@gmail.com"],
+    ["Jake Nyman", "jnyman@factset.com"],
+    ["Scott Palman", "srpalman@palmanelectric.com"],
+    ["Ryan Phillips", "marylandnindiana@gmail.com"],
+    ["Matt Schwartz", "mlschwartz725@gmail.com"],
+    ["Andrew Shpigel", "ashpigel326@gmail.com"]
+  ],
+  "Beth Or Red": [
+    ["Jason Kundtz", "kundtz1@yahoo.com"],
+    ["Marcos Aliaga", "aliaga.marcos@gmail.com"],
+    ["Jason Bonder", "jbonder@bethor.org"],
+    ["Mark Chasen", "mark.chasen@verizon.net"],
+    ["Dave Erlbaum", "derlbaum@gmail.com"],
+    ["Dori Fleekop", "dori.fleekop@gmail.com"],
+    ["Allan Goldshteyn", "abGoldshteyn@aol.com"],
+    ["Brad Hersh", "brad.hersh@gmail.com"],
+    ["Scott Hogan", "srjhogan@me.com"],
+    ["Tyler Ice", "tyler.ice@gmail.com"],
+    ["Skylar Katz", "skatz113@gmail.com"],
+    ["Benjamin Kollender", "benjaminkollender@gmail.com"],
+    ["Philip Mintz", "phil.mintz314@gmail.com"],
+    ["David Rappaport", "david_rappaport@yahoo.com"],
+    ["Michael Rosenfeld", "mrosenfeld89@gmail.com"],
+    ["Zach Simon", "zsimon811@gmail.com"],
+    ["Jeff Wallis", "jwallis26@gmail.com"],
+    ["Jeff Wilderman", "j.wilderman@comcast.net"]
+  ],
+  "DN Lightning": [
+    ["Neal Jacobs", "jacobsneal@yahoo.com"],
+    ["Aaron Mondelblatt", "amondel2@gmail.com"],
+    ["Mike Altmeier", "phillyvmd@gmail.com"],
+    ["Lee Finkel", "leefinkel99@gmail.com"],
+    ["Scott Haimovitz", "scottpsu23@gmail.com"],
+    ["Eric Johnstin", "ericjohnstin73@gmail.com"],
+    ["Mike Kushner", "mpkushner@gmail.com"],
+    ["Andrew Lerner", "andrew@bentglassdesign.com"],
+    ["Adam Miller", "amillermarketing@gmail.com"],
+    ["Tad Moses", "tadmoses@gmail.com"],
+    ["Scott Parmenter", "scott.parmenter@gmail.com"],
+    ["David Silverman", "jdsilverman@verizon.net"],
+    ["Jason Smukler", "jsmukler@gmail.com"],
+    ["Noah Sokoloff", "nisokoloff@gmail.com"],
+    ["Andrew Tepela", "jt5146@gmail.com"],
+    ["Ken Weinstein", "kenwein@yahoo.com"]
+  ],
+  "BTBJ": [
+    ["Michael Drossner", "michael@drossnerlaw.com"],
+    ["Rick Abrams", "Rabrams1126@yahoo.com"],
+    ["Jeff Braverman", "jeffbraverman@gmail.com"],
+    ["Michael Frey", "militantmikef@gmail.com"],
+    ["Josh Gayl", "joshuagayl@hotmail.com"],
+    ["Joshua Goldstein", "Joshau@gmail.com"],
+    ["Aaron Greenfield", "Agreenfield84@gmail.com"],
+    ["Dan Heckman", "Danheckman@gmail.com"],
+    ["Ari Kleinman", "ari.kleinman@compass.com"],
+    ["David Kline", "dkline623@gmail.com"],
+    ["Kenneth Mann", "The_mann@verizon.net"],
+    ["Andrew Miller", "anddmil@gmail.com"],
+    ["Ben Picker", "Bap7446@gmail.com"],
+    ["Jon Rubin", "Jon.Rubin@comcast.net"],
+    ["Michael Seeherman", "meseeherman@gmail.com"],
+    ["Eric Stern", "Sternbfree@gmail.com"],
+    ["Sandy Wine", "Slwine7@yahoo.com"]
+  ],
+  "TBI Royals": [
+    ["Mark Schwartz", "MARKSCHWA@YAHOO.COM"],
+    ["Shawn Berwager", "saberwager@gmail.com"],
+    ["Eric Drossner", "ericdrossner@gmail.com"],
+    ["Ryan Drossner", "Ryguydrossner@gmail.com"],
+    ["Ben Kessel", "Benkblight@gmail.com"],
+    ["Adam Miller", "Adam.miller.22@gmail.com"],
+    ["Drew Perel", "aeperel@gmail.com"],
+    ["Brett Rosen", "bjr13076@gmail.com"],
+    ["Jason Saylor", "jesaylor23@gmail.com"],
+    ["Ben Schwartz", "benschwa99@gmail.com"],
+    ["Zach Schwartz", "zachschwa99@gmail.com"],
+    ["Ryan Seder", "rseder180@gmail.com"],
+    ["Jordan Shindell", "jordanshindell@gmail.com"],
+    ["Andrew Snyderman", "Ajsnyderman@comcast.net"],
+    ["Jason Snyderman", "jason.snyderman@blankrome.com"]
+  ],
+  "Or Ami": [
+    ["Scott Lipner", "scottlipner@gmail.com"],
+    ["Josh Benn", "joshua.benn1@gmail.com"],
+    ["Michael Carr", "scentmac@gmail.com"],
+    ["Jesse Goldberg", "jessegold35@gmail.com"],
+    ["Alexander Klein", "aklein011@gmail.com"],
+    ["Edward O'Brien", "Obrienedj@gmail.com"],
+    ["Corey Reinhart", "corey.reinhart91@gmail.com"],
+    ["Dan Roomberg", "droom826@gmail.com"],
+    ["Joel Rosen", "joelp.rosen@gmail.com"],
+    ["Adam Rothberg", "arothberg31@gmail.com"],
+    ["James Russell", "james.p.russell78@gmail.com"],
+    ["Aidan Shaw", "amshaw676@gmail.com"],
+    ["Matt Taitelman", "matttaitelman@gmail.com"],
+    ["Adam Taylor", "adamamt1212@gmail.com"],
+    ["Matthew Tomasco", "matt.tomasco@gmail.com"]
+  ],
+  "Keneseth Israel": [
+    ["Jeffrey Orlin", "honeydude614@gmail.com"],
+    ["Alec Berenbaum", "aberenbaum3@gmail.com"],
+    ["Aaron Binder", "aaron_binder@hotmail.com"],
+    ["Jeff Cohen", "jeffcoh@gmail.com"],
+    ["Rich Cohen", "bakerichie@aol.com"],
+    ["Mitchell Edelson", "Miedelson@comcast.net"],
+    ["Jonathan Fine", "Jmf113@gmail.com"],
+    ["Evan Finkelstein", "evanfink915@verizon.net"],
+    ["Kayla Finkelstein", "Kaylafink129@verizon.net"],
+    ["Ken Finkelstein", "kmfcpa@verizon.net"],
+    ["Steve Gable", "sgable1838@yahoo.com"],
+    ["Steven Hirshberg", "shirshberg@comcast.net"],
+    ["Marc Klein", "mfkleinmusic@gmail.com"],
+    ["Gary Kushner", "gskushner@hotmail.com"],
+    ["Michael Lapides", "paver79@hotmail.com"],
+    ["Ken Leese", "kenanrandi1@gmail.com"],
+    ["Michael Leese", "mleese1093@gmail.com"],
+    ["Benjamin Leon", "bleon0679@gmail.com"],
+    ["Stefan Leon", "sl715873@gmail.com"],
+    ["Stephen Singer", "stephensinger97@gmail.com"],
+    ["Jacob Snellenburg", "jdspuck12@aol.com"],
+    ["Jeffrey Snellenburg", "jgs1968@comcast.net"],
+    ["Lewis Wigod", null],
+    ["Ben Zeitz", "benzeitz63@gmail.com"]
+  ],
+  "Beth Am": [
+    ["Eric Felter", "ericfeltromeo44@gmail.com"],
+    ["Guy Abramovitz", "guyentin@yahoo.com"],
+    ["Brett Brenner", "brettsbrenner@gmail.com"],
+    ["Michael Colucciello", "mcolucciello1@gmail.com"],
+    ["Howard Dubin", "howard.dubin@gmail.com"],
+    ["Alex Fierstein", "afierst4@gmail.com"],
+    ["Steven Glassman", "sportsphan@comcast.net"],
+    ["Barry Gold", "bgoldpack@aol.com"],
+    ["Max Kramer", "Mek775@gmail.com"],
+    ["Mark Livingston", "mark.livingston@glenmede.com"],
+    ["Brett Merves", "bmerves@gmail.com"],
+    ["Ian Pearlstein", "ianm10p@gmail.com"],
+    ["Robert Pearlstein", "rjpearl4@gmail.com"],
+    ["Ian Savitz", "phillyperformancecoach@gmail.com"],
+    ["Carl Scatena", "Crs0229@yahoo.com"],
+    ["CJ Scatena", "cj.scatena@gmail.com"],
+    ["Robert Shoemaker", "robertshoemaker5@gmail.com"],
+    ["Lonnie Snyder", "lms77ster@gmail.com"],
+    ["Daniel Strauss", "Dstrauss35@gmail.com"],
+    ["Andrew Taitelman", "andrewtaitelman@gmail.com"]
+  ],
+  "TSMC": [
+    ["Samuel Domsky", "samuelmdomsky@gmail.com"],
+    ["Aaron Attermann", "aaron.attermann@gmail.com"],
+    ["Andrew Cohen", "andycohen54@gmail.com"],
+    ["David Danowitz", "Ddanowitz@gmail.com"],
+    ["Aaron Domsky", "ajdomsky@gmail.com"],
+    ["Alex Domsky", "yodarulz90@gmail.com"],
+    ["Michael Fine", "mrfine16@gmail.com"],
+    ["Matthew Gulla", "mgulla85@gmail.com"],
+    ["Sem Karetny", "equitytrade@yahoo.com"],
+    ["Ira Letofsky", "iletofsky@yahoo.com"],
+    ["Jamie McGlone", "jmcglone2001@yahoo.com"],
+    ["Eric Pincus", "ericpincus82@gmail.com"],
+    ["Joshua Sarner", "jsarner96@gmail.com"],
+    ["Bruce Schwartz", "brucemschwartzesq@comcast.net"],
+    ["Matthew Surden", "MatthewSurden@gmail.com"],
+    ["Brian Wilk", "drbrianwilk@me.com"],
+    ["Jeff Workman", "jeffworkman11@gmail.com"]
+  ]
+};
+
+// Normalize a name for matching: lowercase, strip periods/apostrophes/
+// hyphens, collapse whitespace.
+function _bulkNormName(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/[.''`]/g, '')
+    .replace(/[-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+// First+last only — drop middle initials/names (e.g. "C.J. Mittica" → "cj mittica" → match against "cj mittica" or "c j mittica")
+function _bulkFirstLast(s) {
+  const norm = _bulkNormName(s);
+  const parts = norm.split(' ').filter(Boolean);
+  if (parts.length < 2) return norm;
+  return parts[0] + ' ' + parts[parts.length - 1];
+}
+// Find a team by name OR short, lenient case.
+function _bulkFindTeam(label) {
+  const ln = _bulkNormName(label);
+  return TEAMS.find(t => _bulkNormName(t.name) === ln)
+      || TEAMS.find(t => _bulkNormName(t.short) === ln)
+      || TEAMS.find(t => _bulkNormName(t.id) === ln);
+}
+
+window.bulkEmailImport = async function() {
+  // Build a flat list of attempted matches for preview.
+  const result = {
+    matchSet:    [], // [{teamName, importName, dbPlayer, currentEmail, newEmail, action}]
+    unmatched:   [], // [{teamName, importName, email}]  — input row had no DB hit
+    teamMissing: [], // [{teamLabel, count}]              — TEAMS lacked this team
+    skipped:     [], // [{teamName, importName, reason}]  — null email (private/inactive/not found)
+  };
+
+  // Track which DB players got claimed so we don't double-assign for
+  // duplicate input names (e.g., Andy Siegel × 2 in TBIMC).
+  const claimedIds = new Set();
+
+  for (const [teamLabel, rows] of Object.entries(BULK_EMAIL_DATA)) {
+    const team = _bulkFindTeam(teamLabel);
+    if (!team) {
+      result.teamMissing.push({ teamLabel, count: rows.length });
+      continue;
+    }
+    const teamPlayers = PLAYERS.filter(p => p.team === team.id);
+    for (const [importName, email] of rows) {
+      if (!email) {
+        result.skipped.push({ teamName: team.short || team.name, importName, reason: 'no email in source' });
+        continue;
+      }
+      // Try exact normalized match first, then first+last, against
+      // unclaimed players on this team.
+      const normIn = _bulkNormName(importName);
+      const flIn   = _bulkFirstLast(importName);
+      let dbPlayer = teamPlayers.find(p => !claimedIds.has(p.id) && _bulkNormName(p.name) === normIn);
+      if (!dbPlayer) {
+        dbPlayer = teamPlayers.find(p => !claimedIds.has(p.id) && _bulkFirstLast(p.name) === flIn);
+      }
+      if (!dbPlayer) {
+        result.unmatched.push({ teamName: team.short || team.name, importName, email });
+        continue;
+      }
+      claimedIds.add(dbPlayer.id);
+      const currentEmail = (dbPlayer.email || '').trim();
+      const newEmail = email.trim();
+      let action;
+      if (!currentEmail) action = 'add';
+      else if (currentEmail.toLowerCase() === newEmail.toLowerCase()) action = 'same';
+      else action = 'overwrite';
+      result.matchSet.push({
+        teamName: team.short || team.name,
+        importName,
+        dbPlayer,
+        currentEmail,
+        newEmail,
+        action,
+      });
+    }
+  }
+
+  // Build preview text + actionable counts.
+  const adds       = result.matchSet.filter(m => m.action === 'add');
+  const overwrites = result.matchSet.filter(m => m.action === 'overwrite');
+  const sames      = result.matchSet.filter(m => m.action === 'same');
+
+  const lines = [];
+  lines.push(`📧 Bulk Email Import — Preview`);
+  lines.push('');
+  lines.push(`Players matched in DB:    ${result.matchSet.length}`);
+  lines.push(`  + Will ADD email:         ${adds.length}`);
+  lines.push(`  ⟳ Already matches:        ${sames.length}`);
+  lines.push(`  ⚠ Would OVERWRITE existing: ${overwrites.length}`);
+  lines.push('');
+  lines.push(`Skipped (no email in source): ${result.skipped.length}`);
+  lines.push(`Unmatched names (no DB row):  ${result.unmatched.length}`);
+  lines.push(`Teams not found in TEAMS:     ${result.teamMissing.length}`);
+  lines.push('');
+  if (overwrites.length) {
+    lines.push(`⚠ OVERWRITE candidates (existing email → new email):`);
+    overwrites.forEach(m => lines.push(`  • ${m.teamName} ${m.dbPlayer.name}: ${m.currentEmail} → ${m.newEmail}`));
+    lines.push('');
+  }
+  if (result.unmatched.length) {
+    lines.push(`Unmatched (need manual fix or player not in DB):`);
+    result.unmatched.forEach(u => lines.push(`  • ${u.teamName} — ${u.importName} (${u.email})`));
+    lines.push('');
+  }
+  if (result.skipped.length) {
+    lines.push(`Skipped:`);
+    result.skipped.forEach(s => lines.push(`  • ${s.teamName} — ${s.importName} (${s.reason})`));
+    lines.push('');
+  }
+  if (result.teamMissing.length) {
+    lines.push(`Team labels not matched against TEAMS:`);
+    result.teamMissing.forEach(t => lines.push(`  • "${t.teamLabel}" (${t.count} rows)`));
+    lines.push('');
+  }
+  console.log(lines.join('\n'));
+
+  // Three-way prompt: apply only fresh adds, apply all (incl. overwrites), or cancel.
+  const summaryShort =
+`Match preview:
+  + ${adds.length} fresh emails to add
+  ⚠ ${overwrites.length} would overwrite existing emails
+  ⟳ ${sames.length} already match (no change)
+  ${result.unmatched.length} unmatched names — see console for full list
+
+Pick ONE:
+  OK = apply fresh ADDS only (skip overwrites — safest)
+  Cancel = do nothing
+
+(To also overwrite existing emails, click Cancel and re-run with the second confirm.)`;
+
+  if (!confirm(summaryShort)) {
+    if (overwrites.length && confirm(`Apply ALL changes including overwrites?\n\nThis will overwrite ${overwrites.length} existing email(s) listed in the console. Are you sure?`)) {
+      // Apply all
+      await _bulkApplyEmails([...adds, ...overwrites]);
+    } else {
+      toast('Bulk import canceled.', 'info');
+    }
+    return;
+  }
+  // Default OK path: apply fresh adds only.
+  await _bulkApplyEmails(adds);
+};
+
+async function _bulkApplyEmails(rows) {
+  if (!rows.length) { toast('No rows to apply.'); return; }
+  let ok = 0, fail = 0;
+  for (const m of rows) {
+    try {
+      await updateDoc(doc(db, 'players', m.dbPlayer.id), {
+        email: m.newEmail,
+        email_imported_at: Timestamp.now(),
+        email_import_source: 'bulkEmailImport-2026-05',
+      });
+      // Patch local PLAYERS so re-renders show the new email immediately.
+      m.dbPlayer.email = m.newEmail;
+      ok++;
+    } catch (e) {
+      console.warn('[_bulkApplyEmails] failed for', m.dbPlayer.id, m.dbPlayer.name, e);
+      fail++;
+    }
+  }
+  toast(`Wrote ${ok} email(s)${fail ? `, ${fail} failed (see console)` : ''}.`, fail ? 'error' : 'success');
+  if (typeof window.loadRoster === 'function') window.loadRoster();
+  if (typeof renderDashboard === 'function') renderDashboard();
+}
 
 window.captInboxApplyUpload = async function(docId) {
   const u = CAPT_SUBMISSION_INBOX.uploads.find(x => x.id === docId);
