@@ -3533,10 +3533,18 @@ function renderScores() {
           }
           submissionLine = `<div style="width:100%;font-size:11px;color:var(--muted);margin-top:6px;padding-top:6px;border-top:1px dashed rgba(0,0,0,.08)">📝 Submitted: ${parts.join(' &middot; ')}${whenStr}</div>`;
         }
-        return `<div class="game-row-card" id="score-game-${g.id}">
+        // PPD takes precedence over Pending — a postponed game isn't
+        // 'pending' in the same sense, it's been intentionally moved.
+        // Surface as an amber badge with the rescheduled date when known,
+        // matching the public site's PPD treatment.
+        const isPpd = !!(g.ppd || g.rained_out);
+        const ppdBadge = isPpd
+          ? `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706">🌧 PPD${g.ppd_rescheduled_to ? ` · → ${esc(g.ppd_rescheduled_to)}` : ''}</span>`
+          : '';
+        return `<div class="game-row-card" id="score-game-${g.id}"${isPpd ? ' style="background:#fffbeb"' : ''}>
           <div class="teams">${getTeamName(g.away)} <span class="vs">@</span> ${getTeamName(g.home)}</div>
           <div class="meta">${g.date||''} ${g.day||''} &bull; ${g.time||''} &bull; ${g.field||''}</div>
-          ${conflictBadge}${pendingBadge}
+          ${conflictBadge}${pendingBadge}${ppdBadge}
           ${done
             ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div>
                <span class="badge badge-done">Final</span>
@@ -3546,6 +3554,9 @@ function renderScores() {
                <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="openPdfUpload('${g.id}')">📄 Upload Sheet</button>
                <button class="btn btn-outline btn-sm" style="background:#fef3c7;color:#92400e;border-color:#d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&from=admin&resume=1','_blank')" title="Resume your private admin scoring lane (the captain's submission already set the public score; this is your separate view)">⚡ Resume Live Score</button>
                <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${g.id}')">↺ Reset Game</button>`
+            : isPpd
+            ? `<button class="btn btn-outline btn-sm" onclick="editGame('${g.id}')" title="Edit this game (set new date/time/field for the make-up, or un-mark PPD)">✏ Edit / Reschedule</button>
+               <button class="btn btn-outline btn-sm" onclick="togglePpd('${g.id}')" title="Un-mark PPD and put this game back on the schedule as-is">↺ Un-mark PPD</button>`
             : `<span class="badge badge-pending">Pending</span>
                <button class="btn btn-outline btn-sm" onclick="adminShowScoreOnly('${g.id}')">📝 Score Only</button>
                <button class="btn btn-outline btn-sm" onclick="openBoxScore('${g.id}')">Box Score</button>
