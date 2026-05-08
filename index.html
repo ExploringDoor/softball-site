@@ -6150,8 +6150,11 @@ function loadTeam(teamId){
             <a href="${googleCalUrl}" target="_blank" rel="noopener" style="${baseBtnStyle};background:#1A73E8" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                ${calIcon}<span> Google Calendar</span>
             </a>
+            <button onclick="dvslShowCalLink('${calUrl.replace(/'/g,'&#39;')}','${(t.short||t.name||'').replace(/'/g,'&#39;')}')" style="${baseBtnStyle};background:#374151;border:none;cursor:pointer" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+               ${calIcon}<span> Copy Link</span>
+            </button>
           </div>
-          <div style="font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.02em;text-align:right">Add team schedule to your phone &middot; <span style="opacity:.7">each player taps once</span></div>
+          <div style="font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.02em;text-align:right">Add team schedule to your phone &middot; <span style="opacity:.7">on Android? Use Copy Link</span></div>
         </div>
       `;
     } else {
@@ -6165,6 +6168,60 @@ function loadTeam(teamId){
   document.querySelectorAll('.ttab').forEach(tab=>{tab.classList.remove('on');if(tab.dataset.tab==='roster')tab.classList.add('on')});
   renderTeamTab('roster');
 }
+
+// Calendar subscribe helper for Android / fallback users.
+// Google Calendar's `?cid=` URL doesn't reliably auto-subscribe for
+// external .ics feeds (works on web, often fails in the Android Google
+// Calendar app). Best path: have the user copy the .ics URL and paste
+// it into Settings → Add Calendar → From URL. This modal shows the URL
+// with a one-tap copy button and step-by-step Android instructions.
+window.dvslShowCalLink = function(url, teamLabel) {
+  // Try clipboard write first; fall back to selecting the input if it fails.
+  let copied = false;
+  try {
+    navigator.clipboard.writeText(url).then(() => { copied = true; }).catch(() => {});
+  } catch(_) {}
+  // Build modal.
+  document.getElementById('dvsl-cal-link-modal')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'dvsl-cal-link-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:#fff;max-width:480px;width:100%;border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.04em;text-transform:uppercase;color:#002D72;margin-bottom:6px">${teamLabel || 'Team'} Calendar Link</div>
+      <div style="font-size:13px;color:#555;margin-bottom:14px;line-height:1.5">
+        For Android / Google Calendar app users — the auto-subscribe button doesn't always work. Copy this link and paste it into Google Calendar's "From URL" field.
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <input id="dvsl-cal-link-inp" type="text" readonly value="${url.replace(/"/g,'&quot;')}" style="flex:1;font-size:12px;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-family:'SF Mono',Menlo,Consolas,monospace;background:#f9fafb;color:#111;min-width:0">
+        <button onclick="(async()=>{try{await navigator.clipboard.writeText(document.getElementById('dvsl-cal-link-inp').value);this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1500);}catch(_){const i=document.getElementById('dvsl-cal-link-inp');i.select();document.execCommand('copy');this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1500);}})()" style="background:#002D72;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;cursor:pointer;flex-shrink:0">Copy</button>
+      </div>
+      <div style="background:#f0f9ff;border-left:4px solid #002D72;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.55;margin-bottom:14px">
+        <div style="font-weight:700;color:#002D72;margin-bottom:6px">Android — Add to Google Calendar</div>
+        <ol style="margin:0;padding-left:20px;color:#374151">
+          <li>Tap <strong>Copy</strong> above.</li>
+          <li>On a <strong>computer</strong>, open <a href="https://calendar.google.com" target="_blank" rel="noopener" style="color:#1A73E8;font-weight:600">calendar.google.com</a>.</li>
+          <li>Left sidebar → <strong>+ Other calendars</strong> → <strong>From URL</strong>.</li>
+          <li>Paste the link → <strong>Add calendar</strong>.</li>
+          <li>The calendar syncs to your phone's Google Calendar app automatically. May take a few minutes.</li>
+        </ol>
+        <div style="margin-top:8px;font-size:11px;color:#6b7280;font-style:italic">The "From URL" option doesn't exist in the Android app itself — it has to be added on a computer. After that, your phone picks it up automatically.</div>
+      </div>
+      <div style="background:#fafafa;border-left:4px solid #6b7280;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.55;margin-bottom:14px">
+        <div style="font-weight:700;color:#374151;margin-bottom:6px">Outlook / Other</div>
+        <div style="color:#374151">Most calendar apps have an "Add from URL" or "Subscribe" option in their settings. Paste the same link there.</div>
+      </div>
+      <button onclick="document.getElementById('dvsl-cal-link-modal').remove()" style="width:100%;background:#002D72;color:#fff;border:none;border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">Done</button>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  // Auto-select the input so user can also Ctrl+C if the button copy failed.
+  setTimeout(() => {
+    const inp = document.getElementById('dvsl-cal-link-inp');
+    if (inp) inp.select();
+  }, 50);
+};
 
 // ── Shared schedule-rows builder (used by roster split + schedule tab) ──
 // Sort key for the per-team schedule view. SCHEDULE_PREVIEW is sorted
