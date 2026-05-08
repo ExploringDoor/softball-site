@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v300-pdf-parser-receives-rosters-resolves-abbrev-names`;
+const VERSION = `${LEAGUE.id}-v301-admin-box-editor-batter-name-always-editable`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
