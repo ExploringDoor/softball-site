@@ -6167,6 +6167,51 @@ function loadTeam(teamId){
 }
 
 // ── Shared schedule-rows builder (used by roster split + schedule tab) ──
+// Sort key for the per-team schedule view. SCHEDULE_PREVIEW is sorted
+// by `wk` first, but a postponed game can land in a later week with an
+// earlier calendar date than its replacement (or a captain can add a
+// makeup at any week). On the team page schedule we want strict
+// chronological order — date first, then time, then week as a final
+// tiebreaker. Adam ask 2026-05-07: Chabad page showed May 7 above
+// May 5 because of week ordering. This helper fixes that.
+const _MONTHS_IDX = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+function _teamSchedDateKey(g) {
+  // Prefer date_iso (YYYY-MM-DD) when present.
+  if (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) return g.date_iso;
+  if (g.date && /^\d{4}-\d{2}-\d{2}$/.test(g.date)) return g.date;
+  // Parse "Apr 27" / "May 7" style strings against the configured season year.
+  const _yr = (window.LEAGUE_CONFIG?.season?.year) || new Date().getFullYear();
+  const m = String(g.date || '').trim().match(/^([A-Za-z]+)\s+(\d{1,2})$/);
+  if (m) {
+    const mi = _MONTHS_IDX[m[1].slice(0,3).replace(/^([a-z])/, c => c.toUpperCase())];
+    if (mi != null) {
+      return `${_yr}-${String(mi+1).padStart(2,'0')}-${String(parseInt(m[2])).padStart(2,'0')}`;
+    }
+  }
+  return '9999-99-99';
+}
+function _teamSchedTimeKey(g) {
+  if (g.time_24 && /^\d{2}:\d{2}/.test(g.time_24)) return g.time_24;
+  // "6:15 PM" → 18:15
+  const m = String(g.time || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (m) {
+    let h = parseInt(m[1]);
+    const min = m[2];
+    const ampm = (m[3] || '').toUpperCase();
+    if (ampm === 'PM' && h !== 12) h += 12;
+    if (ampm === 'AM' && h === 12) h = 0;
+    return `${String(h).padStart(2,'0')}:${min}`;
+  }
+  return '99:99';
+}
+function _teamSchedSort(a, b) {
+  const dk = _teamSchedDateKey(a).localeCompare(_teamSchedDateKey(b));
+  if (dk !== 0) return dk;
+  const tk = _teamSchedTimeKey(a).localeCompare(_teamSchedTimeKey(b));
+  if (tk !== 0) return tk;
+  return (parseInt(a.wk)||0) - (parseInt(b.wk)||0);
+}
+
 function buildSchedRows(t, tgames){
   return tgames.map((g,i)=>{
     const isH=g.home===t.short;
@@ -6287,7 +6332,7 @@ function renderTeamTab(tab){
       </tr>`;}).join('')}</tbody>
     </table></div>`;
     // ── Desktop split: append schedule panel on the right ──
-    const _sg=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short);
+    const _sg=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short).slice().sort(_teamSchedSort);
     const _sw=_sg.filter(g=>g.done&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
     const _sl=_sg.filter(g=>g.done&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
     body.innerHTML=`<div class="team-roster-split"><div class="trs-left">${body.innerHTML}</div><div class="trs-right">
@@ -6298,7 +6343,7 @@ function renderTeamTab(tab){
       <div style="border:1px solid rgba(0,0,0,.1);border-radius:12px;overflow:hidden">${buildSchedRows(t,_sg)}</div>
     </div></div>`;
   } else if(tab==='schedule'){
-    const tgames=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short);
+    const tgames=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short).slice().sort(_teamSchedSort);
     const wins=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
     const losses=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
     body.innerHTML=`
@@ -6310,7 +6355,7 @@ function renderTeamTab(tab){
     ${buildSchedRows(t,tgames)}</div>`;
 
   } else if(tab==='gamelog'){
-    const tgames=SCHEDULE_PREVIEW.filter(g=>(g.away===t.short||g.home===t.short)&&g.done);
+    const tgames=SCHEDULE_PREVIEW.filter(g=>(g.away===t.short||g.home===t.short)&&g.done).slice().sort(_teamSchedSort);
     let w=0,l=0;
     const rows=tgames.map((g,i)=>{
       const isH=g.home===t.short;
