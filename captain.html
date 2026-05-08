@@ -5438,12 +5438,27 @@ window.handleCaptainScoreUpload = async function(gameId, file) {
   const homeTeam = ALL_TEAMS.find(t => t.id === g.home || t.short === g.home);
 
   try {
+    // Build per-team rosters from ALL_PLAYERS so the parser can map
+    // abbreviated names on the scorecard ("A Snyder", "Snyderman", etc.)
+    // back to the canonical roster name ("Andrew Snyderman"). Without
+    // this hint, Claude transcribes whatever string appears on the PDF
+    // and the captain has to fix every short name by hand. Each entry
+    // is just {name, num} — no PII beyond what's already on the public
+    // roster page.
+    const _rosterEntry = p => ({ name: p.name || '', num: p.num != null ? String(p.num) : '' });
+    const awayRoster = (ALL_PLAYERS || [])
+      .filter(p => p.active !== false && p.team === (awayTeam?.id || g.away))
+      .map(_rosterEntry);
+    const homeRoster = (ALL_PLAYERS || [])
+      .filter(p => p.active !== false && p.team === (homeTeam?.id || g.home))
+      .map(_rosterEntry);
     let payload = {
       gameId: g.id, week: g.wk || g.week || '',
       awayTeam: awayTeam?.name || g.away,
       homeTeam: homeTeam?.name || g.home,
       awayTeamId: awayTeam?.id || g.away,
       homeTeamId: homeTeam?.id || g.home,
+      awayRoster, homeRoster,
       date: g.date || '', field: g.field || ''
     };
 

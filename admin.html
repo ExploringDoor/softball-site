@@ -3949,12 +3949,23 @@ window.handleCaptainUpload = async function(file) {
   const homeTeam = TEAMS.find(t => t.id === g.home || t.short === g.home);
 
   try {
+    // Roster hints — see captain.html for rationale. Lets the AI parser
+    // resolve "A Snyder" / "Snyderman" / etc. back to the canonical
+    // roster name without manual fix-up.
+    const _rosterEntry = p => ({ name: p.name || '', num: p.num != null ? String(p.num) : '' });
+    const awayRoster = (PLAYERS || [])
+      .filter(p => p.active !== false && p.team === (awayTeam?.id || g.away))
+      .map(_rosterEntry);
+    const homeRoster = (PLAYERS || [])
+      .filter(p => p.active !== false && p.team === (homeTeam?.id || g.home))
+      .map(_rosterEntry);
     let payload = {
       gameId: g.id, week: g.wk || g.week || '',
       awayTeam: awayTeam?.name || g.away,
       homeTeam: homeTeam?.name || g.home,
       awayTeamId: awayTeam?.id || g.away,
       homeTeamId: homeTeam?.id || g.home,
+      awayRoster, homeRoster,
       date: g.date || '', field: g.field || ''
     };
 

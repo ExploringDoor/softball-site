@@ -9,11 +9,26 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { text, imageBase64, imageType, pdfBase64, gameId, awayTeam, homeTeam, date, week, field } = req.body;
+  const { text, imageBase64, imageType, pdfBase64, gameId, awayTeam, homeTeam, awayRoster, homeRoster, date, week, field } = req.body;
 
   if (!text && !imageBase64 && !pdfBase64) return res.status(400).json({ error: 'No box score content provided' });
 
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+
+  // Format rosters for inclusion in the prompt. Scorecards typically
+  // write names abbreviated (last name only, "A Snyder", "Snyderman",
+  // initial + last, sometimes nicknames). Without the actual roster,
+  // Claude transcribes whatever string appears and the captain has to
+  // hand-fix every short name. Pass both rosters so the model can
+  // resolve abbreviations to the canonical full name.
+  const fmtRoster = (arr, label) => {
+    if (!Array.isArray(arr) || !arr.length) return `${label} roster: (not provided — use the name as written on the scorecard)`;
+    const lines = arr.map(p => {
+      const num = p.num ? `#${p.num} ` : '';
+      return `  - ${num}${p.name || ''}`;
+    }).join('\n');
+    return `${label} roster (use these EXACT names whenever the scorecard entry resolves to one of them):\n${lines}`;
+  };
 
   const prompt = `You are parsing a softball box score. Extract ALL data and return ONLY valid JSON, no other text.
 
@@ -23,6 +38,17 @@ Game info:
 - Date: ${date}
 - Week: ${week}
 - Field: ${field}
+
+${fmtRoster(awayRoster, awayTeam || 'Away')}
+
+${fmtRoster(homeRoster, homeTeam || 'Home')}
+
+NAME RESOLUTION RULES (very important):
+- Scorecards typically use abbreviated names: last name only ("Snyderman"), first initial + last ("A Snyder", "A. Snyder"), nicknames, or sometimes a number with no name. ALWAYS try to map an abbreviated entry to a full-name entry on the matching team's roster above.
+- If a scorecard entry like "A Snyder" or "Snyderman" matches a full-name roster entry like "Andrew Snyderman", output the FULL ROSTER NAME ("Andrew Snyderman") in the "name" field.
+- Match by jersey number first when present — # is the strongest signal. Then by last name (case-insensitive). Then by first initial + last name. Only when no roster match is plausible should you keep the raw scorecard string.
+- If the scorecard's first/last initials or jersey # don't match anyone on the roster (a sub, walk-on, or scorecard error), keep the raw text as written.
+- Disambiguate same-last-name teammates by jersey # or first initial.
 
 Return this exact JSON structure:
 {
@@ -38,7 +64,7 @@ Return this exact JSON structure:
     "awayErrors": 0, "homeErrors": 0
   }
 }
-Rules: names may be truncated — do your best. Missing stats = 0. Return ONLY the JSON.`;
+Rules: Missing stats = 0. Return ONLY the JSON, no commentary.`;
 
   // Build message content. Three branches:
   //   1. PDF — send as a `document` block. Anthropic reads PDFs natively
