@@ -3455,15 +3455,17 @@ window.toggleEditGame = function(gameId) {
       <div><label class="form-label">Time</label><input type="time" class="form-input" id="ceg-time-${gameId}" value="${esc(time24Val)}"></div>
     </div>
     <div style="margin-bottom:8px"><label class="form-label">Field</label><select class="form-input" id="ceg-field-${gameId}">${fieldOptionsHtml(g.field||'')}</select></div>
-    <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:10px">
       <div><label class="form-label">Opponent</label><select class="form-input" id="ceg-opp-${gameId}">${opponentOptions}</select></div>
-      <div><label class="form-label">We are</label><select class="form-input" id="ceg-side-${gameId}">
+      <div><label class="form-input-wrap"><label class="form-label">We are</label><select class="form-input" id="ceg-side-${gameId}">
         <option value="home" ${iAmHome ? 'selected' : ''}>Home</option>
         <option value="away" ${!iAmHome ? 'selected' : ''}>Away</option>
       </select></div>
+      <div><label class="form-label">Week</label><input type="number" class="form-input" id="ceg-wk-${gameId}" min="1" value="${esc(String(g.wk||''))}" title="The schedule groups games by week. If you reschedule a make-up to a date in another week, update this too."></div>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.45">
-      Changing opponent or home/away pushes a notification to BOTH teams' captains and shows up in the commissioner's edit log.
+      Changing opponent or home/away pushes a notification to BOTH teams' captains and shows up in the commissioner's edit log.<br>
+      <strong>Rescheduling a make-up?</strong> If the new date is in a different week, set Week to match — otherwise the schedule may show this game grouped under the original week.
     </div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-success btn-sm" onclick="saveEditGame('${gameId}')">Save</button>
@@ -3611,6 +3613,8 @@ window.saveEditGame = async function(gameId) {
   const field   = document.getElementById('ceg-field-' + gameId)?.value;
   const opponent = document.getElementById('ceg-opp-' + gameId)?.value || '';
   const mySide   = document.getElementById('ceg-side-' + gameId)?.value || ''; // 'home' or 'away'
+  const wkInput  = document.getElementById('ceg-wk-' + gameId)?.value;
+  const wkTyped  = parseInt(wkInput) || 0;
   // Convert ISO date → display string (e.g. "Apr 14")
   let dateDisplay = '', dayDisplay = '';
   if (dateIso) {
@@ -3654,13 +3658,47 @@ window.saveEditGame = async function(gameId) {
     } else if (!newAddr && FIELD_LOC[field]) {
       newAddr = FIELD_LOC[field];
     }
+    // Determine the final wk value. Three sources, in order:
+    //   1. Captain explicitly typed a Week → respect their choice (this is
+    //      the makeup-game escape hatch — Wk 3 game played on a Jul 13
+    //      makeup date, captain wants to keep it as Wk 3).
+    //   2. Captain DIDN'T touch Week, and the new date matches an existing
+    //      week unambiguously → auto-derive (a manager last night moved a
+    //      Wk 3 PPD to Jul 13 without updating wk; schedule then showed
+    //      'Wk 3 spans May 4 - Jul 13' which is wrong).
+    //   3. Otherwise → toast a warning so the captain knows the game stayed
+    //      in the original week and can fix it manually if needed.
+    let newWk = (g?.wk != null) ? parseInt(g.wk) || 0 : 0;
+    let _wkAutoDerived = '';
+    let _wkWarning = '';
+    if (wkTyped && wkTyped !== newWk) {
+      newWk = wkTyped; // captain set it explicitly
+    } else if (dateIso && dateIso !== before?.date_iso) {
+      // Date moved AND captain didn't touch Week. Try to auto-derive.
+      const otherGamesOnDate = (window.GAMES || MY_GAMES || []).filter(x =>
+        x.id !== gameId && x.date_iso === dateIso
+      );
+      const uniqueWks = [...new Set(
+        otherGamesOnDate.map(x => x.wk).filter(w => w != null && w !== '')
+      )];
+      if (uniqueWks.length === 1 && uniqueWks[0] !== newWk) {
+        const oldWk = newWk;
+        newWk = parseInt(uniqueWks[0]) || newWk;
+        _wkAutoDerived = `Auto-set Week ${oldWk} → Week ${newWk} to match other games on ${dateDisplay}.`;
+      } else if (uniqueWks.length > 1) {
+        _wkWarning = `${dateDisplay} has games in multiple weeks (${uniqueWks.join(', ')}). Game stays in Wk ${newWk} — edit Week manually if needed.`;
+      } else if (uniqueWks.length === 0) {
+        _wkWarning = `Date moved to ${dateDisplay} but no other games on that date — Wk ${newWk} stays. Edit Week if needed.`;
+      }
+    }
+
     const updatePayload = {
       date: dateDisplay, day: dayDisplay, time: timeDisplay, time_24: time24||'',
       date_iso: dateIso||'', field: field||'', addr: newAddr,
-      away: newAway, home: newHome
+      away: newAway, home: newHome, wk: newWk
     };
     await updateDoc(doc(db, 'games', gameId), updatePayload);
-    if (g) { g.date = dateDisplay; g.day = dayDisplay; g.time = timeDisplay; g.time_24 = time24||''; g.date_iso = dateIso||''; g.field = field||''; g.addr = newAddr; g.away = newAway; g.home = newHome; }
+    if (g) { g.date = dateDisplay; g.day = dayDisplay; g.time = timeDisplay; g.time_24 = time24||''; g.date_iso = dateIso||''; g.field = field||''; g.addr = newAddr; g.away = newAway; g.home = newHome; g.wk = newWk; }
 
     const after  = { date: dateDisplay, day: dayDisplay, time: timeDisplay, field: field||'', date_iso: dateIso||'', away: newAway, home: newHome };
 
@@ -3741,7 +3779,13 @@ window.saveEditGame = async function(gameId) {
       }
     } catch(_) {}
 
-    toast('Game updated!');
+    if (_wkAutoDerived) {
+      toast('Game updated! ' + _wkAutoDerived, 'success');
+    } else if (_wkWarning) {
+      toast('Game updated. ⚠ ' + _wkWarning, 'warn');
+    } else {
+      toast('Game updated!');
+    }
     renderSchedule();
   } catch(e) { toast('Failed to save: ' + e.message, 'error'); }
 };
