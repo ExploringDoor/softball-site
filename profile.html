@@ -1195,11 +1195,16 @@ const PUSH_SECRET = window.LEAGUE_CONFIG.push.adminSecret;
 
 // Fire-and-forget admin notification on a new player or captain sign-up.
 // Mirrors captain.html's _dvslNotifyAdminOfSignup. Push targets only
-// admin-flagged tokens; email hits /api/notify-admin (Resend).
+// admin-flagged tokens; email hits /api/notify-admin (Resend); a row also
+// goes to /activity_log so admin's Notifications panel + dashboard show
+// the signup. v306 fired push+email but skipped the activity_log write,
+// which is why the admin panel was silent on profile.html signups (Adam
+// reported the gap on 2026-05-09).
 async function _dvslNotifyAdminOfSignup({ kind, name, team, teamId, email }) {
   const label = kind === 'captain' ? 'Captain Sign-Up' : 'Player Sign-Up';
   const title = `🆕 ${label}: ${team || ''}`;
   const body  = `${name || email || 'unknown'} just signed up${team ? ` for ${team}` : ''}.`;
+  // Push (admin-only).
   try {
     fetch('/api/send-notification', {
       method: 'POST',
@@ -1212,6 +1217,7 @@ async function _dvslNotifyAdminOfSignup({ kind, name, team, teamId, email }) {
       }),
     }).catch(() => {});
   } catch (_) {}
+  // Email.
   try {
     fetch('/api/notify-admin', {
       method: 'POST',
@@ -1222,6 +1228,15 @@ async function _dvslNotifyAdminOfSignup({ kind, name, team, teamId, email }) {
       }),
     }).catch(() => {});
   } catch (_) {}
+  // Activity log — surfaces in admin's Notifications panel + dashboard.
+  try {
+    await addDoc(collection(db, 'activity_log'), {
+      action: label,
+      details: `${name || email || 'unknown'} signed up${team ? ` for ${team}` : ''}${email ? ` (${email})` : ''}`,
+      timestamp: Timestamp.now(),
+      user: email || 'unknown',
+    });
+  } catch (e) { console.warn('[notifyAdminOfSignup] activity_log write failed:', e); }
 }
 
 // ═══════════════════════════════════════════════════════════════════
