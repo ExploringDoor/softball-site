@@ -1469,6 +1469,47 @@ async function logActivity(action, details) {
   } catch(e) { console.error('Failed to log activity:', e); }
 }
 
+// Fire-and-forget admin notification on a new player or captain sign-up.
+// - Push: targets only tokens flagged is_admin:true (so ONLY Adam's devices
+//   buzz, not the league)
+// - Email: hits /api/notify-admin which emails ADMIN_EMAIL via Resend
+// Skips silently if either endpoint isn't configured (503 on missing env
+// vars). Caller catches its own promise rejection so a misconfigured
+// notification path never blocks the user-facing signup.
+async function _dvslNotifyAdminOfSignup({ kind, name, team, teamId, email }) {
+  const label = kind === 'captain' ? 'Captain Sign-Up' : 'Player Sign-Up';
+  const title = `🆕 ${label}: ${team || ''}`;
+  const body  = `${name || email || 'unknown'} just signed up${team ? ` for ${team}` : ''}.`;
+  // Push to admin only.
+  try {
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': CAPTAIN_PUSH_SECRET },
+      body: JSON.stringify({
+        title,
+        body,
+        category: 'admin',
+        adminOnly: true,
+        url: '/admin.html',
+      }),
+    }).catch(() => {});
+  } catch (_) {}
+  // Email.
+  try {
+    fetch('/api/notify-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: `${label}: ${team || ''} — ${name || email || ''}`,
+        summary: `${name || email || 'unknown'} signed up as ${kind} for ${team || 'unknown team'} (${email || 'no email'}).`,
+        captain: name || email || 'unknown',
+        teamsLabel: team || '',
+      }),
+    }).catch(() => {});
+  } catch (_) {}
+}
+window._dvslNotifyAdminOfSignup = _dvslNotifyAdminOfSignup;
+
 // Recompute standings (W/L/PCT/RS/RA/GB/STREAK) from all finalized games.
 // Re-aggregate batting stats from all box_scores → patch only the
 // players whose totals changed. Lighter than admin's full recalc:
@@ -2101,7 +2142,17 @@ window.captainSignOut = async function() {
 async function _writeCaptainClaim(user, team) {
   if (!user || !team) throw new Error('missing user or team');
   const docId = team.id + '__' + user.uid;
-  await setDoc(doc(db, 'captain_claims', docId), {
+  const ref = doc(db, 'captain_claims', docId);
+  // Detect first-time claim vs re-sign-in. setDoc(..., {merge:true}) below
+  // collapses both cases into a single write, but we want to ping admin
+  // only when a NEW captain shows up (not every time an existing captain
+  // opens the app).
+  let isFirstClaim = false;
+  try {
+    const existing = await getDoc(ref);
+    isFirstClaim = !existing.exists();
+  } catch (_) { /* if read fails, default to !isFirstClaim so we don't spam admin */ }
+  await setDoc(ref, {
     team_id: team.id,
     team_name: team.name || team.short || team.id,
     auth_uid: user.uid,
@@ -2110,7 +2161,20 @@ async function _writeCaptainClaim(user, team) {
     last_seen: serverTimestamp(),
     revoked: false
   }, { merge: true });
-  console.log('[captain_claims] wrote', docId, 'for', user.email);
+  console.log('[captain_claims] wrote', docId, 'for', user.email, 'firstClaim:', isFirstClaim);
+  if (isFirstClaim) {
+    _dvslNotifyAdminOfSignup({
+      kind: 'captain',
+      name: user.email || 'unknown captain',
+      team: team.name || team.short || team.id,
+      teamId: team.id,
+      email: (user.email || '').toLowerCase(),
+    }).catch(() => {});
+    logActivity('Captain Sign-Up', `${user.email} claimed captain role for ${team.name || team.short || team.id}`).catch(() => {});
+  } else {
+    // Existing captain re-opening the app — keep noise down, don't notify.
+    logActivity('Captain Sign-In', `${user.email} re-signed in as captain of ${team.name || team.short || team.id}`).catch(() => {});
+  }
   // Best-effort: flag this device's push token as a captain so the
   // captains_chat gate in api/send-notification.js delivers to them.
   _dvslSetCaptainFlagOnPushToken(true).catch(() => {});

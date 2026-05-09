@@ -1193,6 +1193,37 @@ const AUTH_READY = (async () => {
 
 const PUSH_SECRET = window.LEAGUE_CONFIG.push.adminSecret;
 
+// Fire-and-forget admin notification on a new player or captain sign-up.
+// Mirrors captain.html's _dvslNotifyAdminOfSignup. Push targets only
+// admin-flagged tokens; email hits /api/notify-admin (Resend).
+async function _dvslNotifyAdminOfSignup({ kind, name, team, teamId, email }) {
+  const label = kind === 'captain' ? 'Captain Sign-Up' : 'Player Sign-Up';
+  const title = `🆕 ${label}: ${team || ''}`;
+  const body  = `${name || email || 'unknown'} just signed up${team ? ` for ${team}` : ''}.`;
+  try {
+    fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
+      body: JSON.stringify({
+        title, body,
+        category: 'admin',
+        adminOnly: true,
+        url: '/admin.html',
+      }),
+    }).catch(() => {});
+  } catch (_) {}
+  try {
+    fetch('/api/notify-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subject: `${label}: ${team || ''} — ${name || email || ''}`,
+        summary: `${name || email || 'unknown'} signed up as ${kind} for ${team || 'unknown team'} (${email || 'no email'}).`,
+      }),
+    }).catch(() => {});
+  } catch (_) {}
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════
@@ -1732,6 +1763,16 @@ window.submitPlayerAuth = async function() {
       });
       PENDING_WELCOME = 'claimed';
       _dvslSaveCredential(email, pw);
+      // Notify admin of the new player sign-up. Fire-and-forget — won't
+      // block the welcome screen if the endpoint is misconfigured.
+      const _claimedPlayer = MY_PLAYERS.find(p => p.id === PENDING_PICK_PID);
+      _dvslNotifyAdminOfSignup({
+        kind: 'player',
+        name: _claimedPlayer?.name || email,
+        team: MY_TEAM?.name || MY_TEAM?.short || '',
+        teamId: MY_TEAM?.id || '',
+        email,
+      }).catch(() => {});
       // onAuthStateChanged will route via _routeFromAuthUser → welcome screen.
     } else {
       // Sign in to existing account — go straight in, no welcome screen.
@@ -1812,6 +1853,15 @@ window.submitAddSelf = async function() {
     });
     PENDING_WELCOME = 'pending';
     _dvslSaveCredential(email, pw);
+    // Notify admin: a brand new player just self-added (and is awaiting
+    // captain approval). Fire-and-forget.
+    _dvslNotifyAdminOfSignup({
+      kind: 'player',
+      name: fullName + ' (self-added, pending captain approval)',
+      team: MY_TEAM?.name || MY_TEAM?.short || '',
+      teamId: MY_TEAM?.id || '',
+      email,
+    }).catch(() => {});
     // onAuthStateChanged handles routing → welcome screen.
   } catch (e) {
     let msg = e.message || String(e);
