@@ -906,7 +906,10 @@ select.form-input{cursor:pointer}
       </div>
       <div class="panel">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-          <div class="panel-title" style="margin:0">All Notifications</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button id="notif-tab-inbox" class="btn btn-sm btn-primary" onclick="setNotifView('inbox')">Inbox <span id="notif-count-inbox" style="margin-left:4px;font-weight:400;opacity:.7"></span></button>
+            <button id="notif-tab-archive" class="btn btn-sm btn-outline" onclick="setNotifView('archive')">Archive <span id="notif-count-archive" style="margin-left:4px;font-weight:400;opacity:.7"></span></button>
+          </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-outline btn-sm" onclick="loadAllNotifications()">↻ Refresh</button>
             <button class="btn btn-outline btn-sm" style="color:var(--red);border-color:var(--red)" onclick="clearActivityLog()">Clear All</button>
@@ -1874,18 +1877,44 @@ window.logActivity = logActivity;
 function _renderActivityRow(a, containerKey) {
   const t = a.timestamp?.toDate ? a.timestamp.toDate() : new Date();
   const isCaptainEdit = a.action === 'Schedule (Captain Edit)';
+  const isArchived = a.archived === true;
   const rowStyle = isCaptainEdit
     ? 'background:#fff7ed;border-left:3px solid #ea580c;padding-left:10px;position:relative'
     : 'position:relative';
-  const dotStyle = isCaptainEdit ? 'background:#ea580c' : '';
-  return `<div class="activity-item" data-act-id="${a.id}" id="act-row-${containerKey}-${a.id}" style="${rowStyle};display:flex;align-items:flex-start;gap:8px;padding-right:32px">
+  const dimStyle = isArchived ? 'opacity:.6;' : '';
+  const dotStyle = isCaptainEdit ? 'background:#ea580c' : (isArchived ? 'background:#9ca3af' : '');
+  // Two action buttons in the top-right corner of each row.
+  // Inbox rows: 📥 Archive (soft, sets archived:true) + ✕ hard-delete.
+  // Archived rows: ↺ Unarchive + ✕ hard-delete.
+  // Dashboard panel only renders dismiss (✕) so the dashboard stays simple.
+  let actionBtns = '';
+  if (containerKey === 'full') {
+    if (isArchived) {
+      actionBtns = `
+        <button onclick="unarchiveActivity('${a.id}')" title="Move back to Inbox" aria-label="Unarchive"
+          style="position:absolute;top:8px;right:36px;width:28px;height:24px;border:0;background:transparent;color:var(--muted);font-size:14px;line-height:1;cursor:pointer;border-radius:4px;padding:0" onmouseover="this.style.background='rgba(0,0,0,.06)'" onmouseout="this.style.background='transparent'">↺</button>
+        <button onclick="dismissActivity('${a.id}')" title="Delete permanently" aria-label="Delete"
+          style="position:absolute;top:8px;right:8px;width:24px;height:24px;border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;border-radius:4px;padding:0">&times;</button>`;
+    } else {
+      actionBtns = `
+        <button onclick="archiveActivity('${a.id}')" title="Archive (move out of Inbox without deleting)" aria-label="Archive"
+          style="position:absolute;top:8px;right:36px;width:28px;height:24px;border:0;background:transparent;color:var(--muted);font-size:14px;line-height:1;cursor:pointer;border-radius:4px;padding:0" onmouseover="this.style.background='rgba(0,0,0,.06)'" onmouseout="this.style.background='transparent'">📥</button>
+        <button onclick="dismissActivity('${a.id}')" title="Delete permanently" aria-label="Delete"
+          style="position:absolute;top:8px;right:8px;width:24px;height:24px;border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;border-radius:4px;padding:0">&times;</button>`;
+    }
+  } else {
+    // Dashboard panel: just hard-delete, same as before.
+    actionBtns = `<button onclick="dismissActivity('${a.id}')" title="Dismiss this notification" aria-label="Dismiss"
+      style="position:absolute;top:8px;right:8px;width:24px;height:24px;border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;border-radius:4px;padding:0">&times;</button>`;
+  }
+  const padRight = containerKey === 'full' ? '64px' : '32px';
+  return `<div class="activity-item" data-act-id="${a.id}" data-archived="${isArchived?'1':'0'}" id="act-row-${containerKey}-${a.id}" style="${rowStyle};${dimStyle}display:flex;align-items:flex-start;gap:8px;padding-right:${padRight}">
     <div class="activity-dot" style="${dotStyle}"></div>
     <div style="flex:1;min-width:0">
       <div class="activity-text"><strong>${esc(a.action)}</strong> &mdash; ${esc(a.details)}</div>
       <div class="activity-time">${t.toLocaleDateString()} ${t.toLocaleTimeString()} &bull; ${esc(a.user||'')}</div>
     </div>
-    <button onclick="dismissActivity('${a.id}')" title="Dismiss this notification" aria-label="Dismiss"
-      style="position:absolute;top:8px;right:8px;width:24px;height:24px;border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;border-radius:4px;padding:0">&times;</button>
+    ${actionBtns}
   </div>`;
 }
 
@@ -1899,6 +1928,26 @@ function updateNotifNavBadge(n) {
   badge.textContent = n > 99 ? '99+' : String(n);
 }
 
+// Tracks whether the Notifications section is showing Inbox or Archive.
+// Persisted on window so re-renders pick up the active tab.
+window._notifView = window._notifView || 'inbox';
+window.setNotifView = function(view) {
+  window._notifView = view === 'archive' ? 'archive' : 'inbox';
+  // Toggle button styles.
+  const inboxBtn = document.getElementById('notif-tab-inbox');
+  const archiveBtn = document.getElementById('notif-tab-archive');
+  if (inboxBtn && archiveBtn) {
+    if (window._notifView === 'inbox') {
+      inboxBtn.classList.add('btn-primary'); inboxBtn.classList.remove('btn-outline');
+      archiveBtn.classList.add('btn-outline'); archiveBtn.classList.remove('btn-primary');
+    } else {
+      archiveBtn.classList.add('btn-primary'); archiveBtn.classList.remove('btn-outline');
+      inboxBtn.classList.add('btn-outline'); inboxBtn.classList.remove('btn-primary');
+    }
+  }
+  loadActivityLog();
+};
+
 async function loadActivityLog() {
   const el = document.getElementById('activity-log');
   const elFull = document.getElementById('notifications-list-full');
@@ -1907,7 +1956,11 @@ async function loadActivityLog() {
     const snap = await getDocs(q2);
     // Carry the doc id so each row can be dismissed independently.
     const allItems = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const items = allItems.slice(0, 10);
+    const inboxItems = allItems.filter(a => a.archived !== true);
+    const archivedItems = allItems.filter(a => a.archived === true);
+    // Dashboard panel: latest 25 from the inbox (skips already-archived).
+    // Bumped from 10 to 25 so heavier days don't truncate the recent view.
+    const dashItems = inboxItems.slice(0, 25);
 
     // Count captain schedule edits in the last 7 days for the dashboard banner.
     const now = Date.now();
@@ -1919,18 +1972,29 @@ async function loadActivityLog() {
     });
     renderCaptainEditAlert(recentCaptainEdits);
 
-    // Update sidebar count badge.
-    updateNotifNavBadge(allItems.length);
+    // Sidebar count = unread (inbox), not total. Archived items don't count
+    // as "needs attention."
+    updateNotifNavBadge(inboxItems.length);
 
-    // Dashboard panel: latest 10 only.
+    // Tab counters.
+    const cInbox = document.getElementById('notif-count-inbox');
+    const cArch  = document.getElementById('notif-count-archive');
+    if (cInbox) cInbox.textContent = inboxItems.length ? `(${inboxItems.length})` : '';
+    if (cArch)  cArch.textContent  = archivedItems.length ? `(${archivedItems.length})` : '';
+
+    // Dashboard panel: latest 25 from the inbox.
     if (el) {
-      if (!items.length) el.innerHTML = '<div class="empty">No notifications</div>';
-      else el.innerHTML = items.map(a => _renderActivityRow(a, 'dash')).join('');
+      if (!dashItems.length) el.innerHTML = '<div class="empty">No notifications</div>';
+      else el.innerHTML = dashItems.map(a => _renderActivityRow(a, 'dash')).join('');
     }
-    // Full Notifications section: everything.
+    // Full Notifications section: respect the active tab.
     if (elFull) {
-      if (!allItems.length) elFull.innerHTML = '<div class="empty">No notifications</div>';
-      else elFull.innerHTML = allItems.map(a => _renderActivityRow(a, 'full')).join('');
+      const list = (window._notifView === 'archive') ? archivedItems : inboxItems;
+      if (!list.length) {
+        elFull.innerHTML = `<div class="empty">${window._notifView === 'archive' ? 'No archived notifications' : 'No notifications'}</div>`;
+      } else {
+        elFull.innerHTML = list.map(a => _renderActivityRow(a, 'full')).join('');
+      }
     }
   } catch(e) {
     if (el) el.innerHTML = '<div class="empty">Could not load notifications</div>';
@@ -1946,6 +2010,32 @@ window.loadAllNotifications = loadActivityLog;
 // clearActivityLog() behaves for the bulk "Clear" button, just one
 // at a time). If the total drops to zero, swap the list for an
 // empty-state message instead of leaving a blank panel.
+// Soft-archive a notification: sets archived:true on the doc, moving it
+// out of the Inbox view but keeping the record. Reversible via unarchive.
+// Caller responsibility: this DOES NOT delete. dismissActivity is the
+// hard-delete path.
+window.archiveActivity = async function(id) {
+  if (!id) return;
+  try {
+    await updateDoc(doc(db, 'activity_log', id), { archived: true, archived_at: Timestamp.now() });
+    // Re-render so the row moves to Archive (or disappears from Inbox).
+    loadActivityLog();
+  } catch (e) {
+    toast('Archive failed: ' + (e.message || 'see console'), 'error');
+  }
+};
+
+// Move an archived notification back to the inbox.
+window.unarchiveActivity = async function(id) {
+  if (!id) return;
+  try {
+    await updateDoc(doc(db, 'activity_log', id), { archived: false, archived_at: deleteField() });
+    loadActivityLog();
+  } catch (e) {
+    toast('Unarchive failed: ' + (e.message || 'see console'), 'error');
+  }
+};
+
 window.dismissActivity = async function(id) {
   if (!id) return;
   // The same doc id may be rendered in two places (dashboard panel + full
