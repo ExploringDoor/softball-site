@@ -3068,11 +3068,14 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebas
 import {
   getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, query, where, serverTimestamp, Timestamp
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getAnalytics, isSupported as _gaIsSupported } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js';
 
 const firebaseConfig = window.LEAGUE_CONFIG.firebase;
 
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
+// Firebase Analytics — auto-logs page_view. Quiet failure on unsupported envs.
+_gaIsSupported().then(ok => { if (ok) try { getAnalytics(fbApp); } catch(_){} }).catch(()=>{});
 
 // ===== GAME STATE =====
 const G = {

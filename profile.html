@@ -1169,10 +1169,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;line-
 // Firebase setup
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getAnalytics, isSupported as _gaIsSupported } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js';
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, doc, query, orderBy, where, onSnapshot, serverTimestamp, limit, limitToLast, Timestamp, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence, fetchSignInMethodsForEmail } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const app = initializeApp(window.LEAGUE_CONFIG.firebase);
+// Firebase Analytics — auto-logs page_view on init. Wrapped in
+// isSupported() because Analytics throws in environments without the
+// browser APIs it needs (some PWA contexts on iOS, in-app browsers,
+// etc.). Failure is silent — we never want analytics to break the page.
+_gaIsSupported().then(ok => { if (ok) try { getAnalytics(app); } catch(_){} }).catch(()=>{});
 const db = getFirestore(app);
 const auth = getAuth(app);
 // Local persistence = session survives browser restart / app close. This is

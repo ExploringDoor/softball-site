@@ -1278,6 +1278,7 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getAnalytics, isSupported as _gaIsSupported } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js';
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, deleteField, setDoc, doc, query, orderBy, where, Timestamp, onSnapshot, serverTimestamp, limit, writeBatch } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail, setPersistence, browserLocalPersistence, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
@@ -1291,6 +1292,9 @@ const FIREBASE_CONFIG = {
 };
 
 const app = initializeApp(FIREBASE_CONFIG);
+// Firebase Analytics — auto-logs page_view. isSupported() guards against
+// environments where Analytics throws (PWA edge cases, in-app browsers).
+_gaIsSupported().then(ok => { if (ok) try { getAnalytics(app); } catch(_){} }).catch(()=>{});
 const db = getFirestore(app);
 const auth = getAuth(app);
 // Persist auth across browser restarts so captains only sign in once per device.

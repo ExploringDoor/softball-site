@@ -55,7 +55,13 @@
       projectId: 'dvsl-292dd',
       storageBucket: 'dvsl-292dd.firebasestorage.app',
       messagingSenderId: '145862305559',
-      appId: '1:145862305559:web:153ec455bad57e17517952'
+      appId: '1:145862305559:web:153ec455bad57e17517952',
+      // measurementId enables Firebase Analytics. Without it, getAnalytics()
+      // initializes but no page-view events flow to the Firebase Console.
+      // Get this from Firebase Console → Project Settings → General →
+      // "Your apps" → Web app config. Added 2026-05-09 to enable visitor
+      // tracking after league email rollout.
+      measurementId: 'G-HJV86E217K'
     },
 
     // ── Push / FCM ───────────────────────────────────────────────────────

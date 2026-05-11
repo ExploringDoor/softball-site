@@ -1824,12 +1824,16 @@ select.form-input{cursor:pointer}
 // FIREBASE SETUP
 // ═══════════════════════════════════════════════════════════════════
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getAnalytics, isSupported as _gaIsSupported } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js';
 import { getFirestore, collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, query, orderBy, where, limit, setDoc, Timestamp, deleteField, onSnapshot, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
 
 const app = initializeApp(FIREBASE_CONFIG);
+// Firebase Analytics — admin sessions count too. isSupported() guards
+// edge environments. Fire-and-forget.
+_gaIsSupported().then(ok => { if (ok) try { getAnalytics(app); } catch(_){} }).catch(()=>{});
 const db = getFirestore(app);
 const auth = getAuth(app);
 
