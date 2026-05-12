@@ -413,11 +413,21 @@ function buildEventForGame(g, teamId) {
   const vsAt = isHome ? 'vs' : '@';
   const field = g.field || 'TBD';
   const addr = g.addr || '';
+  // PPD games get a visual prefix on the summary so the calendar event
+  // reads as postponed at a glance, plus a header in the description
+  // with the reschedule target (or "TBD"). We keep the original date/time
+  // so users see WHEN the game was supposed to happen — useful context
+  // for "did I miss it" / "when was that PPD'd?" questions later.
+  const isPpd = !!(g.ppd || g.rained_out);
+  const ppdPrefix = isPpd ? '🌧 PPD: ' : '';
+  const ppdHeader = isPpd
+    ? `⚠️ POSTPONED — ${g.ppd_rescheduled_to ? 'Rescheduled to: ' + g.ppd_rescheduled_to : 'Reschedule TBD'}\n\n`
+    : '';
   return {
-    summary: `⚾ ${team.short} ${vsAt} ${oppShort}`,
+    summary: `${ppdPrefix}⚾ ${team.short} ${vsAt} ${oppShort}`,
     // GAMEID marker lets future targeted syncs find this exact event
     // without regex-guessing from summary/date.
-    description: `DVSL Softball 2026 — Week ${g.wk}\n${awayShort} @ ${homeShort}\nField: ${field}${addr ? '\n'+addr : ''}\n\nGAMEID:${g.id}\nFull schedule: https://dvsl.vercel.app`,
+    description: `${ppdHeader}DVSL Softball 2026 — Week ${g.wk}\n${awayShort} @ ${homeShort}\nField: ${field}${addr ? '\n'+addr : ''}\n\nGAMEID:${g.id}\nFull schedule: https://dvsl.vercel.app`,
     location: field + (addr ? ', ' + addr : ''),
     start: { dateTime: dateStr, timeZone: 'America/New_York' },
     end: { dateTime: endStr, timeZone: 'America/New_York' }
@@ -653,11 +663,19 @@ async function syncTeamCalendars(token) {
       const field = g.field || 'TBD';
       const addr = g.addr || '';
 
+      // PPD games get a 🌧 prefix on the title and a POSTPONED header
+      // in the description. Same pattern as buildEvent above; kept in
+      // sync because this loop bypasses buildEvent for full-rebuild mode.
+      const isPpd = !!(g.ppd || g.rained_out);
+      const ppdPrefix = isPpd ? '🌧 PPD: ' : '';
+      const ppdHeader = isPpd
+        ? `⚠️ POSTPONED — ${g.ppd_rescheduled_to ? 'Rescheduled to: ' + g.ppd_rescheduled_to : 'Reschedule TBD'}\n\n`
+        : '';
       const event = {
-        summary: `⚾ ${team.short} ${vsAt} ${oppShort}`,
+        summary: `${ppdPrefix}⚾ ${team.short} ${vsAt} ${oppShort}`,
         // GAMEID marker lets later targeted syncs find this exact event
         // without heuristic matching.
-        description: `DVSL Softball 2026 — Week ${g.wk}\n${awayShort} @ ${homeShort}\nField: ${field}${addr ? '\n'+addr : ''}\n\nGAMEID:${g.id}\nFull schedule: https://dvsl.vercel.app`,
+        description: `${ppdHeader}DVSL Softball 2026 — Week ${g.wk}\n${awayShort} @ ${homeShort}\nField: ${field}${addr ? '\n'+addr : ''}\n\nGAMEID:${g.id}\nFull schedule: https://dvsl.vercel.app`,
         location: field + (addr ? ', ' + addr : ''),
         start: { dateTime: dateStr, timeZone: 'America/New_York' },
         end: { dateTime: endStr, timeZone: 'America/New_York' }
