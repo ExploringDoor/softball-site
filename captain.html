@@ -3433,6 +3433,21 @@ window.captTogglePpd = async function(gameId) {
         ppd_rescheduled_to: null, ppd_at: null, ppd_by: null,
       });
       Object.assign(g, { ppd: false, rained_out: false, ppd_rescheduled_to: null });
+      // Queue a Google Calendar sync — admin's Schedule banner picks it up
+      // so they can push the change to team calendars with one click.
+      try {
+        await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
+          game_id: gameId,
+          teams_label: `${awayName} @ ${homeName}`,
+          edited_by: captainData?.team_name || 'captain',
+          edited_by_id: captainData?.team_id || '',
+          edited_by_email: currentUser?.email || '',
+          summary: `un-marked PPD by captain: Wk ${g.wk||'?'} ${g.date||''} ${g.time||''} @ ${g.field||''}`,
+          source: 'captain_ppd_clear',
+          status: 'pending',
+          timestamp: serverTimestamp(),
+        });
+      } catch (e) { console.warn('Could not queue gcal sync for captain PPD-clear:', e.message); }
       await logActivity('Schedule (Captain)', `Un-marked PPD: ${awayName} @ ${homeName} Wk ${g.wk||'?'}`).catch(()=>{});
       renderSchedule();
     } catch(e) { alert('Failed: ' + e.message); }
@@ -3455,6 +3470,20 @@ window.captTogglePpd = async function(gameId) {
       ppd_by: captainData.team_id || 'captain',
     });
     Object.assign(g, { ppd: true, rained_out: true, ppd_rescheduled_to: rescheduledTo });
+    // Queue gcal sync for admin to push to team calendars.
+    try {
+      await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
+        game_id: gameId,
+        teams_label: `${awayName} @ ${homeName}`,
+        edited_by: captainData?.team_name || 'captain',
+        edited_by_id: captainData?.team_id || '',
+        edited_by_email: currentUser?.email || '',
+        summary: `marked PPD by captain: Wk ${g.wk||'?'} ${g.date||''} ${g.time||''} @ ${g.field||''}${rescheduledTo ? ' → ' + rescheduledTo : ''}`,
+        source: 'captain_ppd_mark',
+        status: 'pending',
+        timestamp: serverTimestamp(),
+      });
+    } catch (e) { console.warn('Could not queue gcal sync for captain PPD-mark:', e.message); }
     fetch('/api/send-notification', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': CAPTAIN_PUSH_SECRET },

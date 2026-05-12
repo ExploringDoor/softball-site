@@ -6919,7 +6919,21 @@ window.togglePpd = async function(gameId) {
         ppd_rescheduled_to: null, ppd_at: null, ppd_by: null,
       });
       Object.assign(g, { ppd: false, rained_out: false, ppd_rescheduled_to: null });
-      toast('PPD cleared');
+      // Queue a Google Calendar sync so the team calendars get updated to
+      // reflect the un-PPD'd state. Admin's Schedule section shows a yellow
+      // banner with the pending-sync count and a "Sync Now" button.
+      try {
+        await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
+          game_id: gameId,
+          teams_label: `${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
+          edited_by: 'admin',
+          summary: `un-marked PPD: Wk ${g.wk||'?'} ${g.date||''} ${g.time||''} @ ${g.field||''}`,
+          source: 'admin_ppd_clear',
+          status: 'pending',
+          timestamp: serverTimestamp(),
+        });
+      } catch (e) { console.warn('Could not queue gcal sync for PPD-clear:', e.message); }
+      toast('PPD cleared. Calendar sync queued — hit "🔄 Sync Google Calendars" on the Schedule tab to push the update.');
       await logActivity('Schedule', `Cleared PPD: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk||'?'}`);
       renderSchedule(); renderDashboard();
       if (typeof window.closeScheduleEdit === 'function') window.closeScheduleEdit();
@@ -6947,7 +6961,23 @@ window.togglePpd = async function(gameId) {
       ppd: true, rained_out: true,
       ppd_rescheduled_to: rescheduledTo,
     });
-    toast('Marked PPD');
+    // Queue a Google Calendar sync so the team calendars reflect the PPD.
+    // The Schedule tab's yellow banner picks up the pending count via the
+    // onSnapshot listener on pending_gcal_syncs; admin clicks 'Sync Now'
+    // to push the update through. Without this, the games doc has PPD but
+    // the team Google Calendars still show the original event.
+    try {
+      await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
+        game_id: gameId,
+        teams_label: `${getTeamName(g.away)} @ ${getTeamName(g.home)}`,
+        edited_by: 'admin',
+        summary: `marked PPD: Wk ${g.wk||'?'} ${g.date||''} ${g.time||''} @ ${g.field||''}${rescheduledTo ? ' → ' + rescheduledTo : ''}`,
+        source: 'admin_ppd_mark',
+        status: 'pending',
+        timestamp: serverTimestamp(),
+      });
+    } catch (e) { console.warn('Could not queue gcal sync for PPD-mark:', e.message); }
+    toast('Marked PPD. Calendar sync queued — hit "🔄 Sync Google Calendars" on the Schedule tab to push the update to all subscribers.');
     await logActivity('Schedule', `Marked PPD: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk||'?'}${rescheduledTo ? ' (→ ' + rescheduledTo + ')' : ''}`);
     fetch('/api/send-notification', {
       method: 'POST',
