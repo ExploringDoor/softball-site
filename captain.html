@@ -5433,8 +5433,43 @@ window.submitBoxScore = async function(gameId) {
   // Per-team Score-Only mode: if the captain toggled "📝 Score Only" for a side,
   // skip reading that team's batters/pitchers/errors and flag the submission so
   // stats recalc + display logic know not to expect detail rows for that team.
-  const awayMode = document.getElementById('bs-panel-away-' + gameId)?.dataset?.mode || 'full';
-  const homeMode = document.getElementById('bs-panel-home-' + gameId)?.dataset?.mode || 'full';
+  let awayMode = document.getElementById('bs-panel-away-' + gameId)?.dataset?.mode || 'full';
+  let homeMode = document.getElementById('bs-panel-home-' + gameId)?.dataset?.mode || 'full';
+
+  // Safety net: if a panel is in score-only mode BUT actually has batter data
+  // populated in its (hidden) tbody, the captain almost certainly didn't mean
+  // to throw the lineup away. The BOR vs KI 5/12 incident: captain uploaded,
+  // AI parsed batters, captain reviewed them, then submitted and the lineup
+  // came up empty in box_scores with score_only:true set. Best theory: the
+  // "📝 Score Only" toggle got tapped accidentally (it looks like a tab),
+  // switching the panel into score-only mode without the captain realizing.
+  // Detect that mismatch and ask the captain before silently discarding.
+  const _peekBatters = (team) => {
+    const tbody = document.getElementById('bs-' + gameId + '-' + team + '-tbody');
+    if (!tbody) return 0;
+    return Array.from(tbody.querySelectorAll('tr')).filter(tr => {
+      const nameInput = tr.querySelector('input[type="text"]');
+      const name = (nameInput?.value || '').trim();
+      if (!name) return false;
+      // Treat a row as "has data" if any numeric stat is non-zero.
+      return Array.from(tr.querySelectorAll('input[type="number"]')).some(inp => (parseInt(inp.value) || 0) > 0);
+    }).length;
+  };
+  if (awayMode === 'score-only' && _peekBatters('away') > 0) {
+    const proceed = confirm(`You have batter stats entered for ${getTeamName(g.away)}, but Score-Only mode is selected — submitting now will THROW AWAY those stats.\n\nTap OK to switch back to Full Box Score and save the stats.\nTap Cancel to submit as Score-Only anyway.`);
+    if (proceed) {
+      bsSetMode(gameId, 'away', 'full');
+      awayMode = 'full';
+    }
+  }
+  if (homeMode === 'score-only' && _peekBatters('home') > 0) {
+    const proceed = confirm(`You have batter stats entered for ${getTeamName(g.home)}, but Score-Only mode is selected — submitting now will THROW AWAY those stats.\n\nTap OK to switch back to Full Box Score and save the stats.\nTap Cancel to submit as Score-Only anyway.`);
+    if (proceed) {
+      bsSetMode(gameId, 'home', 'full');
+      homeMode = 'full';
+    }
+  }
+
   const awayScoreOnly = awayMode === 'score-only';
   const homeScoreOnly = homeMode === 'score-only';
 

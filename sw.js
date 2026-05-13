@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v312-captain-self-correction-not-flagged-conflict`;
+const VERSION = `${LEAGUE.id}-v313-warn-before-discarding-batter-data-on-score-only-mode`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
