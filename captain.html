@@ -5490,13 +5490,30 @@ window.submitBoxScore = async function(gameId) {
   let finalStatus = 'approved';
   let toastMsg = 'Box score submitted — game is now final! (Admin can edit later if needed.)';
 
-  if (!_wasDone) {
+  // Self-correction detection: if THIS role has already submitted and the
+  // OTHER role hasn't, the captain is fixing their own prior submission.
+  // The old logic flagged this as a conflict ("12 !== 0") because the
+  // first submission could've had the opponent's score wrong (left at 0
+  // because the PDF only had this captain's team) — then any correction
+  // got refused. BSMC manager hit this exactly: uploaded 16-X with X=0,
+  // tried to fix to 16-12, system kept showing 16-0.
+  //
+  // Fix: when nobody else has weighed in yet, let this captain overwrite
+  // their previous numbers cleanly. Only flag a conflict when ANOTHER
+  // captain has submitted and we actually disagree.
+  const _iAlreadySubmitted  = g[`score_submitted_${myRole}_away`]    !== undefined;
+  const _otherHasSubmitted  = g[`score_submitted_${otherRole}_away`] !== undefined;
+
+  if (!_wasDone || (_iAlreadySubmitted && !_otherHasSubmitted)) {
     gameUpdate.done = true;
     gameUpdate.away_score = awayFinal;
     gameUpdate.home_score = homeFinal;
     gameUpdate.score_confirmed = true;
     gameUpdate.score_pending = false;
     gameUpdate.score_conflict = false;
+    if (_wasDone) {
+      toastMsg = 'Score updated — your previous submission was replaced.';
+    }
   } else {
     const storedAway = (typeof g.away_score === 'number') ? g.away_score : awayFinal;
     const storedHome = (typeof g.home_score === 'number') ? g.home_score : homeFinal;
@@ -5982,13 +5999,22 @@ window.submitScore = async function(gameId) {
   let finalStatus = 'approved';
   let toastMsg = 'Score submitted — game is now final! (Admin can edit later if needed.)';
 
-  if (!_wasDone) {
+  // Self-correction: same captain re-submitting before the other side
+  // has weighed in. Companion to the same fix in submitBoxScore — see
+  // there for the BSMC-vs-KI bug write-up.
+  const _iAlreadySubmitted = g[`score_submitted_${myRole}_away`]    !== undefined;
+  const _otherHasSubmitted = g[`score_submitted_${otherRole}_away`] !== undefined;
+
+  if (!_wasDone || (_iAlreadySubmitted && !_otherHasSubmitted)) {
     gameUpdate.done = true;
     gameUpdate.away_score = awayScore;
     gameUpdate.home_score = homeScore;
     gameUpdate.score_confirmed = true;
     gameUpdate.score_pending = false;
     gameUpdate.score_conflict = false;
+    if (_wasDone) {
+      toastMsg = 'Score updated — your previous submission was replaced.';
+    }
   } else {
     const storedAway = (typeof g.away_score === 'number') ? g.away_score : awayScore;
     const storedHome = (typeof g.home_score === 'number') ? g.home_score : homeScore;
