@@ -5087,8 +5087,17 @@ document.addEventListener('input', function(e) {
   const oneB = id.match(/^bs-(.+)-(away|home)-1B(\d+)$/);
   // bs-GAMEID-TEAM-2B/3B/HR N  — recalc linescore H
   const xbhM = id.match(/^bs-(.+)-(away|home)-(2B|3B|HR)(\d+)$/);
+  // bs-GAMEID-ls-TEAM-R — direct linescore-total R edit (typically used for
+  // Score-Only mode when there's no batter table to auto-sum from). Without
+  // this branch the big scoreboard at the top of the form ignores manual
+  // R-total edits — captain types 12 in KI's R column, scoreboard stays 0.
+  const lsR = id.match(/^bs-(.+)-ls-(away|home)-R$/);
   if (rM) bsAutoLinescore(rM[1], rM[2], 'R');
   else if (oneB) bsAutoLinescore(oneB[1], oneB[2], '1B');
+  else if (lsR) {
+    const val = parseInt(e.target.value || '0') || 0;
+    _bsUpdateSB(lsR[1], lsR[2], val);
+  }
   else if (xbhM) {
     const [, gid, team2] = xbhM;
     bsAutoLinescore(gid, team2, xbhM[3]);
