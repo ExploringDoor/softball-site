@@ -5934,6 +5934,20 @@ function _captShowAmbiguousNamePicker(ambiguousList) {
 // by ID. Mirrors admin.html applyParsedToBoxScore in spirit, but works
 // against captain.html's two-step _bsState + _renderBsStats UI.
 function _captApplyParsedToBoxScore(gameId, g, parsed) {
+  // Strip "did-not-play" batters: any parsed row where every stat column
+  // (AB, R, H, RBI, BB, K, HR, 2B, 3B, ROE, FC, SAC, SF) is zero/blank.
+  // Adam ask 2026-05-14: rosters in PDFs often list every player even
+  // when half didn't get a plate appearance — leaving those names in
+  // the form clutters the lineup with 0-everything rows the captain
+  // has to manually delete. Strip on the way in. If the captain
+  // legitimately wants a 0-row (e.g. player walked once, no other
+  // stats — that'd have BB=1 so not all zero), they keep it.
+  const STAT_FIELDS = ['ab','r','h','rbi','bb','so','k','hr','doubles','triples','roe','fc','sac','sf'];
+  const _isAllZero = (p) => STAT_FIELDS.every(f => !(parseInt(p?.[f]) || 0));
+  const _stripDnp = (arr) => (arr || []).filter(p => !_isAllZero(p));
+  parsed.awayBatters = _stripDnp(parsed.awayBatters);
+  parsed.homeBatters = _stripDnp(parsed.homeBatters);
+
   // Build lineup objects from parsed batters
   const toLineupItem = p => ({ name: p.name || '', num: p.num || '' });
   const awayLineup = (parsed.awayBatters || []).map(toLineupItem).filter(p => p.name);

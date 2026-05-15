@@ -4354,6 +4354,15 @@ function showAmbiguousNamePicker(ambiguousList) {
 }
 
 function applyParsedToBoxScore(parsed) {
+  // Strip "did-not-play" batters — every stat column zero. See captain.html
+  // for the same rule (Adam ask 2026-05-14). Keeps the box-score table from
+  // filling up with roster names that didn't actually bat.
+  const STAT_FIELDS = ['ab','r','h','rbi','bb','so','k','hr','doubles','triples','roe','fc','sac','sf'];
+  const _isAllZero = (p) => STAT_FIELDS.every(f => !(parseInt(p?.[f]) || 0));
+  const _stripDnp = (arr) => (arr || []).filter(p => !_isAllZero(p));
+  parsed.awayBatters = _stripDnp(parsed.awayBatters);
+  parsed.homeBatters = _stripDnp(parsed.homeBatters);
+
   const toLineup = (batters) => (batters || []).map(p => {
     const hr = parseInt(p.hr) || 0;
     const d = parseInt(p.doubles) || 0;
