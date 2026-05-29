@@ -8349,8 +8349,14 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     // Support linescores (admin/scorer), innings (old admin), and away_linescore (captain portal) field names
     const aInnings = boxScore.linescores?.away || boxScore.innings?.away || boxScore.away_linescore || [];
     const hInnings = boxScore.linescores?.home || boxScore.innings?.home || boxScore.home_linescore || [];
-    const aH = aLineup.reduce((s,p)=>s+(p.h||0),0);
-    const hH = hLineup.reduce((s,p)=>s+(p.h||0),0);
+    // Admin + captain box-score editors store hits as separate 1B/2B/3B/HR
+    // columns (p.s, p.d, p.t, p.hr) — no consolidated p.h field. The scorer
+    // path DOES write p.h (live scoring increments it directly). Sum from
+    // whichever shape is present so the team H total in the public modal
+    // matches the visible per-batter rows regardless of submission path.
+    const _batH = p => (p.h != null ? +p.h : ((+p.s||0)+(+p.d||0)+(+p.t||0)+(+p.hr||0)));
+    const aH = aLineup.reduce((s,p)=>s+_batH(p),0);
+    const hH = hLineup.reduce((s,p)=>s+_batH(p),0);
     const aE = boxScore.away_errors || 0;
     const hE = boxScore.home_errors || 0;
 
