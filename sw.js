@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v318-home-upcoming-schedule-skips-past-dated-not-done`;
+const VERSION = `${LEAGUE.id}-v319-ticker-skips-past-dated-not-done-weeks`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

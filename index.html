@@ -7332,8 +7332,19 @@ function getTickerGames(){
 
   const allWks=Object.keys(wkMap).sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true}));
   // Same PPD caveat as buildSchedule — a week with only done+ppd games is
-  // effectively complete; move the ticker on to the next week.
-  const curWk=allWks.find(w=>wkMap[w].some(g=>!g.done && !g.ppd));
+  // effectively complete; move the ticker on to the next week. v319: also
+  // require the not-done game to be today-or-later; otherwise a stale
+  // awaiting-score game from weeks ago keeps the ticker pinned to that
+  // historic week.
+  const _todayMid_T = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  const _isFutureNotDone_T = (g) => {
+    if (g.done) return false;
+    if (g.ppd) return false;
+    const k = dateKey(g);
+    if (!k) return false;
+    return k >= _todayMid_T.getTime();
+  };
+  const curWk=allWks.find(w=>wkMap[w].some(_isFutureNotDone_T));
   if(!curWk) return SCHEDULE_PREVIEW.slice().sort(sortByDateTime).slice(-10); // all done, show last 10
   // Show current week + next week
   const curIdx=allWks.indexOf(curWk);
