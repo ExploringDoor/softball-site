@@ -5912,12 +5912,43 @@ function buildSchedule(){
   // PPD games are stuck at done=false until they're rescheduled, so exclude
   // them from "has upcoming games" — otherwise the Upcoming Schedule block
   // clings to a week whose real games already wrapped up.
-  let currentWk=allWkNums.find(w=>wkMap[w].some(g=>!g.done && !g.ppd));
+  //
+  // v318: also exclude past-dated not-done games. Without this, a forgotten
+  // captain entry (e.g. May 14 GOLD@TBIR still 'awaiting') keeps the home
+  // page Upcoming Schedule pinned to its week and shows all the OTHER
+  // already-played games from that week as 'upcoming' too. Adam ask
+  // 2026-06-07: home page Upcoming Schedule was still showing a May 12 game.
+  const _MO_IDX_S = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const _yr_S = (window.LEAGUE_CONFIG?.season?.year) || new Date().getFullYear();
+  const _todayMid_S = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  const _parseGD_S = (g) => {
+    const iso = g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso) ? g.date_iso : '';
+    if (iso) return new Date(iso + 'T00:00:00');
+    const s = String(g.rawDate || g.date || '').trim();
+    const m = s.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
+    if (m) {
+      const mo = _MO_IDX_S[m[1].slice(0,3)];
+      if (mo != null) return new Date(_yr_S, mo, parseInt(m[2]));
+    }
+    return null;
+  };
+  const _isFutureUpcoming = (g) => {
+    if (g.done) return false;
+    if (g.ppd) return false;
+    const d = _parseGD_S(g);
+    if (!d) return false;
+    return d >= _todayMid_S;
+  };
+
+  let currentWk=allWkNums.find(w=>wkMap[w].some(_isFutureUpcoming));
   if(!currentWk) currentWk=allWkNums[allWkNums.length-1];
   if(!currentWk){ wrap.innerHTML=''; return; }
 
   const weekGames=wkMap[currentWk];
-  const upGames=weekGames.filter(g=>!g.done && !g.ppd);
+  // Only show games whose dates are today-or-later AND not done. This
+  // prevents a week with a mix of done + stale not-done games from
+  // surfacing the stale ones as 'upcoming'.
+  const upGames=weekGames.filter(_isFutureUpcoming);
   const gamesToShow=(upGames.length?upGames:weekGames).slice().sort((a,b) => {
     // Within a week, always show games in chronological order. Prefer
     // ISO date when present; fall back to the human-readable date string
