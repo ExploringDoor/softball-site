@@ -5384,8 +5384,35 @@ let NEXT_GAME_DATA = {
 };
 
 function initNextGame(){
-  // Find first upcoming game from real schedule
-  const upcoming = SCHEDULE_PREVIEW.find(g => !g.done);
+  // Find first upcoming game from real schedule. CRITICAL: must filter
+  // out past-dated games that were never marked done (awaiting scores,
+  // forgotten captain entries, stale data). Without this filter, a
+  // months-old game with done:false floats to the top as "next upcoming"
+  // and the homepage countdown ticks toward a date in the past.
+  // Adam ask 2026-06-07: home page was showing a May 12 game as next
+  // upcoming.
+  const _MO_IDX = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const _yr = (window.LEAGUE_CONFIG?.season?.year) || new Date().getFullYear();
+  const _todayMid = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  const _parseGD = (g) => {
+    // Prefer date_iso (YYYY-MM-DD) when present.
+    const iso = g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso) ? g.date_iso : '';
+    if (iso) return new Date(iso + 'T00:00:00');
+    const s = String(g.rawDate || g.date || '').trim();
+    const m = s.match(/^([A-Za-z]+)\s+(\d{1,2})$/);
+    if (m) {
+      const mo = _MO_IDX[m[1].slice(0,3)];
+      if (mo != null) return new Date(_yr, mo, parseInt(m[2]));
+    }
+    return null;
+  };
+  const upcoming = SCHEDULE_PREVIEW.find(g => {
+    if (g.done) return false;
+    if (g.ppd) return false;
+    const d = _parseGD(g);
+    if (!d) return false;
+    return d >= _todayMid;
+  });
   if(upcoming){
     const atm = getTeamByShort(upcoming.away);
     const htm = getTeamByShort(upcoming.home);
