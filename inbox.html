@@ -9,7 +9,6 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="DVSL">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A5%8E%3C/text%3E%3C/svg%3E">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <!-- League config (must load before any page script or module) -->
   <script src="/config.js"></script>
@@ -17,3 +16,1301 @@
     // SW registration + bottom tab bar + "More" sheet.
     //
     // The app-shell pattern: every page (fan or role) shares a single
+    // bottom tab bar on mobile (≤767px). Tabs navigate — tapping Inbox
+    // goes to /inbox.html; tapping More opens a bottom-sheet list of
+    // secondary destinations. On desktop the tab bar is hidden and the
+    // page's own hamburger is used. On mobile the hamburger is hidden.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').then(r => { try { r.update(); } catch(_){} }).catch(() => {});
+        let _dvslReloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (_dvslReloaded) return;
+          _dvslReloaded = true;
+          window.location.reload();
+        });
+        navigator.serviceWorker.ready.then(r => {
+          if (r.active) r.active.postMessage({ type: 'GET_VERSION' });
+        }).catch(() => {});
+        navigator.serviceWorker.addEventListener('message', (e) => {
+          if (!e.data) return;
+          if (e.data.type === 'VERSION' && typeof e.data.version === 'string') {
+            // Only render the build tag on /rules.html, and only in the
+            // normal document flow (not a fixed overlay). User wants a single
+            // place to check which build is live without the chip cluttering
+            // every page.
+            if (location.pathname !== '/rules.html') return;
+            let b = document.getElementById('dvsl-sw-version');
+            if (!b) {
+              b = document.createElement('div');
+              b.id = 'dvsl-sw-version';
+              b.style.cssText = 'text-align:center;padding:24px 0 8px;font:11px/1.2 ui-monospace,monospace;color:rgba(0,0,0,.35);user-select:none;';
+              document.body.appendChild(b);
+            }
+            b.textContent = e.data.version;
+          }
+        });
+
+        // ── Bottom tab bar + "More" sheet ─────────────────────────────
+        const TABS = [
+          { id: 'home',     label: 'Home',     icon: '🏠', href: '/' },
+          { id: 'scores',   label: 'Scores',   icon: '🥎', href: '/#scores' },
+          { id: 'schedule', label: 'Schedule', icon: '📅', href: '/#schedule' },
+          { id: 'profile',  label: 'Profile',  icon: '👤', href: '/profile.html', badge: true },
+          { id: 'more',     label: 'More',     icon: '⋯',  more: true },
+        ];
+        // Every secondary destination lives here. Grouped for scanning.
+        // Add/remove items here only — nothing else to edit downstream.
+        const MORE_GROUPS = [
+          {
+            label: 'Compete',
+            items: [
+              { icon: '🏆', label: 'Standings',   href: '/#standings' },
+              { icon: '📊', label: 'Stats',       href: '/#stats' },
+              { icon: '👥', label: 'Teams',       href: '/#players' },
+              { icon: '🥇', label: 'Leaders',     href: '/#leaders' },
+              { icon: '🏅', label: 'Playoffs',    href: '/playoffs.html' },
+              { icon: '📜', label: 'History',     href: '/#history' },
+            ],
+          },
+          {
+            label: 'Account',
+            items: [
+              { icon: '👤', label: 'My Profile',        href: '/profile.html' },
+              { icon: '🔔', label: 'Notifications',     href: '/inbox.html' },
+              { icon: '⚾', label: 'Captain Dashboard', href: '/captain.html' },
+              { icon: '✍️', label: 'Player Sign-Up',    href: '/registration.html' },
+              { icon: '🛠️', label: 'Admin Access',      href: '/admin.html' },
+            ],
+          },
+          {
+            label: 'Content',
+            items: [
+              { icon: '📸', label: 'Gallery',     href: '/photos.html' },
+              { icon: '🎥', label: 'Watch Live',  href: '/watch.html' },
+              { icon: '📋', label: 'Rules',       href: '/rules.html' },
+            ],
+          },
+        ];
+
+        // Figure out which tab (if any) is "active" for the current URL —
+        // so the active tab gets highlighted on the bar.
+        function _dvslCurrentTab() {
+          const path = location.pathname.replace(/\/$/, '');
+          const hash = location.hash || '';
+          if (path === '/profile.html' || path === '/inbox.html') return 'profile';
+          // Fan index: / and /index.html both count
+          if (path === '' || path === '/index.html') {
+            if (hash.startsWith('#scores'))   return 'scores';
+            if (hash.startsWith('#schedule')) return 'schedule';
+            if (hash === '' || hash === '#' || hash.startsWith('#home')) return 'home';
+          }
+          return null; // other pages → nothing lit up
+        }
+
+        function _dvslEnsureTabBar() {
+          if (document.getElementById('dvsl-tabbar')) return;
+          // Scoped CSS block — injected once on first build. Keeps all of
+          // the tab-bar presentation here so individual pages don't need to
+          // touch their own stylesheets.
+          if (!document.getElementById('dvsl-tabbar-css')) {
+            const st = document.createElement('style');
+            st.id = 'dvsl-tabbar-css';
+            st.textContent = `
+            /* Tab bar lives on a <nav>, and most fan pages have global
+               "nav { position:fixed; top:48px; ... }" rules that would otherwise
+               hijack this element. !important overrides force our intent to win
+               without having to touch every page's stylesheet. */
+            #dvsl-tabbar {
+              position: fixed !important;
+              top: auto !important;
+              right: auto !important;
+              left: 50% !important;
+              bottom: 0 !important;
+              transform: translateX(-50%) !important;
+              width: 100% !important;
+              max-width: 480px !important;
+              /* Taller bar + extra padding-bottom beyond safe-area so icons
+                 sit visibly higher off the physical bottom edge of the phone.
+                 Adam said v32's 68px/6px pad change wasn't enough — icons still
+                 felt like they were hugging the home-indicator. Here the inner
+                 content area gets 8px of top pad AND 14px of pad below the
+                 system safe-area, so icons float ~14px higher than before. */
+              height: calc(56px + env(safe-area-inset-bottom)) !important;
+              padding-top: 2px !important;
+              padding-left: max(8px, env(safe-area-inset-left)) !important;
+              padding-right: max(8px, env(safe-area-inset-right)) !important;
+              padding-bottom: calc(env(safe-area-inset-bottom) + 6px) !important;
+              margin: 0 !important;
+              display: flex !important;
+              align-items: stretch !important;
+              justify-content: stretch !important;
+              gap: 0 !important;
+              background: #fff !important;
+              border: 0 !important;
+              border-top: 1px solid #e6e6e6 !important;
+              backdrop-filter: none !important;
+              -webkit-backdrop-filter: none !important;
+              box-shadow: 0 -4px 16px rgba(0,0,0,.06) !important;
+              z-index: 99995 !important;
+              box-sizing: border-box !important;
+              font: 600 10px/1.1 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,Inter,sans-serif !important;
+            }
+            #dvsl-tabbar > * {
+              flex: 1 1 0; min-width: 0;
+              display: flex; flex-direction: column;
+              align-items: center; justify-content: center;
+              gap: 3px; padding: 4px 2px;
+              background: transparent; border: 0;
+              color: #8b8b8b; text-decoration: none; cursor: pointer;
+              position: relative; -webkit-tap-highlight-color: transparent;
+              overflow: visible;
+              box-sizing: border-box;
+              transition: color 160ms ease, transform 160ms ease;
+            }
+            /* Active tab: vivid blue, bolder label, STRONG glow on the icon.
+               The old top-of-bar chip indicator has been removed — Adam said
+               the line above the icon read awkwardly, and amping up the glow
+               on the icon / label alone is a cleaner "this is where you are"
+               cue. Triple layered box-less text-shadow gives the icon a halo
+               without needing extra DOM. */
+            #dvsl-tabbar > *.active { color: #0057ff; }
+            #dvsl-tabbar > *.active .dt-ico {
+              text-shadow:
+                0 0 4px rgba(0,87,255,.95),
+                0 0 12px rgba(0,87,255,.75),
+                0 0 24px rgba(0,87,255,.55),
+                0 0 40px rgba(0,87,255,.35);
+              transform: translateY(-1px) scale(1.1);
+            }
+            #dvsl-tabbar > *.active .dt-label {
+              font-weight: 900 !important;
+              letter-spacing: .05em !important;
+              color: #0046B4 !important;
+              text-shadow: 0 0 6px rgba(0,70,180,.35);
+            }
+            #dvsl-tabbar .dt-ico {
+              font-size: 20px; line-height: 1;
+              transition: text-shadow 160ms ease, transform 160ms ease;
+            }
+            #dvsl-tabbar .dt-label {
+              font: 700 9.5px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif !important;
+              letter-spacing: 0; text-transform: uppercase;
+              white-space: nowrap;
+              overflow: visible !important;
+              text-align: center;
+            }
+            #dvsl-tabbar .dt-badge {
+              position: absolute; top: 4px; right: calc(50% - 20px);
+              background: #e53935; color: #fff;
+              min-width: 16px; height: 16px; padding: 0 4px;
+              border-radius: 8px; font: 700 10px/16px system-ui,sans-serif;
+              text-align: center; display: none;
+              box-shadow: 0 1px 3px rgba(0,0,0,.3);
+            }
+            #dvsl-more-backdrop {
+              position: fixed; inset: 0; z-index: 99996;
+              background: rgba(0,0,0,.32);
+              opacity: 0; transition: opacity 150ms; touch-action: none;
+            }
+            #dvsl-more-sheet {
+              position: fixed; left: 50%; bottom: 0;
+              transform: translate(-50%, 100%);
+              transition: transform 220ms cubic-bezier(.2,.8,.2,1);
+              width: 100%; max-width: 480px;
+              max-height: 82vh; display: flex; flex-direction: column;
+              background: #fff;
+              border-radius: 18px 18px 0 0;
+              box-shadow: 0 -12px 40px rgba(0,0,0,.25);
+              z-index: 99997;
+              overflow: hidden;
+              font: 500 15px/1.35 system-ui,-apple-system,Segoe UI,Inter,sans-serif;
+              color: #111;
+            }
+            #dvsl-more-sheet.open { transform: translate(-50%, 0); }
+            #dvsl-more-grab {
+              flex: 0 0 auto; padding: 10px 0 4px; display: flex; justify-content: center;
+            }
+            #dvsl-more-grab::before {
+              content: ''; width: 42px; height: 4px; background: #d4d4d4; border-radius: 2px;
+            }
+            #dvsl-more-head {
+              flex: 0 0 auto; display: flex; align-items: center;
+              padding: 4px 16px 10px;
+            }
+            #dvsl-more-head h3 {
+              margin: 0; flex: 1; font: 700 18px/1.2 system-ui,sans-serif; color: #111;
+            }
+            #dvsl-more-close {
+              background: transparent; border: 0; font: 400 26px/1 system-ui,sans-serif;
+              color: #8b8b8b; cursor: pointer; padding: 4px 8px; margin: -4px -8px;
+            }
+            #dvsl-more-list {
+              flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain;
+              -webkit-overflow-scrolling: touch;
+              padding-bottom: calc(24px + env(safe-area-inset-bottom));
+            }
+            .dvsl-more-group-label {
+              font: 700 11px/1 system-ui,sans-serif; color: #888;
+              text-transform: uppercase; letter-spacing: .1em;
+              padding: 16px 18px 6px;
+            }
+            .dvsl-more-row {
+              display: flex; align-items: center; gap: 14px;
+              padding: 14px 18px;
+              color: #111; text-decoration: none;
+              border-bottom: 1px solid #f3f3f3;
+              -webkit-tap-highlight-color: rgba(0,45,114,.12);
+            }
+            .dvsl-more-row:active { background: #f5f7fb; }
+            .dvsl-more-row .dmr-ico {
+              flex: 0 0 auto; font-size: 22px; width: 28px; text-align: center;
+            }
+            .dvsl-more-row .dmr-lbl { flex: 1 1 auto; font-weight: 600; }
+            .dvsl-more-row .dmr-chev { flex: 0 0 auto; color: #bbb; font-size: 18px; }
+            /* Mobile-only display rules */
+            @media (min-width: 768px) {
+              #dvsl-tabbar { display: none !important; }
+              body { padding-bottom: 0 !important; }
+            }
+            @media (max-width: 767px) {
+              /* Hide the legacy hamburger on mobile — the tab bar replaces it. */
+              .hamburger, #hbg, .menu-btn, .nav-toggle { display: none !important; }
+            }
+            `;
+            document.head.appendChild(st);
+          }
+
+          const bar = document.createElement('nav');
+          bar.id = 'dvsl-tabbar';
+          bar.setAttribute('aria-label', 'Primary');
+          const active = _dvslCurrentTab();
+          TABS.forEach(t => {
+            const el = t.more ? document.createElement('button') : document.createElement('a');
+            el.dataset.tab = t.id;
+            if (!t.more) { el.href = t.href; }
+            if (t.id === active) el.classList.add('active');
+            const ico = document.createElement('span'); ico.className = 'dt-ico'; ico.textContent = t.icon;
+            const lbl = document.createElement('span'); lbl.className = 'dt-label'; lbl.textContent = t.label;
+            el.appendChild(ico); el.appendChild(lbl);
+            if (t.badge) {
+              const bg = document.createElement('span');
+              bg.className = 'dt-badge';
+              bg.id = 'dvsl-tab-inbox-badge';
+              el.appendChild(bg);
+            }
+            if (t.more) {
+              el.type = 'button';
+              el.setAttribute('aria-label', 'More destinations');
+              el.addEventListener('click', (e) => { e.preventDefault(); _dvslOpenMore(); });
+            }
+            bar.appendChild(el);
+          });
+          document.body.appendChild(bar);
+
+          // Keep the bar out of content. Padding is applied via JS so we can
+          // respond to the media query without the CSS fighting page-level rules.
+          _dvslApplyBodyPad();
+        }
+
+        function _dvslApplyBodyPad() {
+          const mobile = window.matchMedia('(max-width: 767px)').matches;
+          const hasTabBar = !!document.getElementById('dvsl-tabbar');
+          if (mobile && hasTabBar) {
+            // 74px bar + 8px top pad + 14px bottom pad + ~8px gap = 104px clearance.
+            document.body.style.paddingBottom = 'calc(78px + env(safe-area-inset-bottom))';
+          } else {
+            document.body.style.paddingBottom = '';
+          }
+        }
+        window.addEventListener('resize', _dvslApplyBodyPad);
+
+        // Tab bar is built once at load, but the active-tab highlight
+        // needs to react to client-side nav. Fan pages use location.hash
+        // routing (goPage sets #scores / #schedule / #home etc.), and the
+        // History API via goPage fires 'hashchange' or pushState which
+        // doesn't, so we listen to both. User reported: tapping Scores /
+        // Schedule kept Home glowing blue because this only ran at load.
+        function _dvslSyncActiveTab() {
+          const bar = document.getElementById('dvsl-tabbar');
+          if (!bar) return;
+          const active = _dvslCurrentTab();
+          bar.querySelectorAll('[data-tab]').forEach(el => {
+            if (el.dataset.tab === active) el.classList.add('active');
+            else el.classList.remove('active');
+          });
+        }
+        window.addEventListener('hashchange', _dvslSyncActiveTab);
+        window.addEventListener('popstate', _dvslSyncActiveTab);
+        // Also poll briefly after goPage-style navs (pushState doesn't fire
+        // hashchange). Cheap enough — runs on any tab-bar click.
+        document.addEventListener('click', (e) => {
+          const a = e.target && e.target.closest && e.target.closest('#dvsl-tabbar [data-tab]');
+          if (a) setTimeout(_dvslSyncActiveTab, 50);
+        });
+
+        // ── More sheet ────────────────────────────────────────────────
+        let _dvslSavedScrollY = null;
+        function _dvslLockBody() {
+          if (_dvslSavedScrollY != null) return;
+          _dvslSavedScrollY = window.scrollY || 0;
+          document.body.style.position = 'fixed';
+          document.body.style.top = '-' + _dvslSavedScrollY + 'px';
+          document.body.style.left = '0';
+          document.body.style.right = '0';
+          document.body.style.width = '100%';
+        }
+        function _dvslUnlockBody() {
+          if (_dvslSavedScrollY == null) return;
+          const y = _dvslSavedScrollY;
+          document.body.style.position = '';
+          document.body.style.top = '';
+          document.body.style.left = '';
+          document.body.style.right = '';
+          document.body.style.width = '';
+          _dvslSavedScrollY = null;
+          window.scrollTo(0, y);
+        }
+
+        function _dvslOpenMore() {
+          if (document.getElementById('dvsl-more-sheet')) return;
+          _dvslLockBody();
+          const backdrop = document.createElement('div');
+          backdrop.id = 'dvsl-more-backdrop';
+          backdrop.addEventListener('click', _dvslCloseMore);
+          document.body.appendChild(backdrop);
+
+          const sheet = document.createElement('div');
+          sheet.id = 'dvsl-more-sheet';
+          sheet.setAttribute('role', 'dialog');
+          sheet.setAttribute('aria-label', 'More destinations');
+          let html = '<div id="dvsl-more-grab"></div>' +
+            '<div id="dvsl-more-head"><h3>More</h3><button id="dvsl-more-close" aria-label="Close">×</button></div>' +
+            '<div id="dvsl-more-list">';
+          MORE_GROUPS.forEach(g => {
+            html += '<div class="dvsl-more-group-label">' + g.label + '</div>';
+            g.items.forEach(it => {
+              const safeLabel = String(it.label).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+              html += '<a class="dvsl-more-row" href="' + it.href + '">' +
+                '<span class="dmr-ico">' + it.icon + '</span>' +
+                '<span class="dmr-lbl">' + safeLabel + '</span>' +
+                '<span class="dmr-chev">›</span>' +
+              '</a>';
+            });
+          });
+          html += '</div>';
+          sheet.innerHTML = html;
+          document.body.appendChild(sheet);
+          sheet.querySelector('#dvsl-more-close').addEventListener('click', _dvslCloseMore);
+          // Close sheet on ANY row tap. For same-page hash routes (#standings,
+          // #stats, etc.) the anchor only changes location.hash and doesn't
+          // unload the page, so without this the sheet would stay mounted
+          // covering the page the user just navigated to. Real-page hrefs
+          // unload naturally; closing here is harmless in that case.
+          sheet.querySelectorAll('.dvsl-more-row').forEach(row => {
+            row.addEventListener('click', () => { _dvslCloseMore(); });
+          });
+          requestAnimationFrame(() => { backdrop.style.opacity = '1'; sheet.classList.add('open'); });
+        }
+        function _dvslCloseMore() {
+          const b = document.getElementById('dvsl-more-backdrop');
+          const s = document.getElementById('dvsl-more-sheet');
+          if (s) s.classList.remove('open');
+          if (b) b.style.opacity = '0';
+          setTimeout(() => { if (s) s.remove(); if (b) b.remove(); _dvslUnlockBody(); }, 220);
+        }
+
+        // Build the tab bar ONLY when running as an installed PWA (home-
+        // screen app). In regular Safari / Chrome we leave the page's own
+        // hamburger menu in place — a phone-style tab bar at the bottom of
+        // a browser tab looks out of place and fights the browser's own
+        // toolbar for screen space.
+        const _dvslIsPwa = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+        if (_dvslIsPwa) _dvslEnsureTabBar();
+
+        // ── Inbox badge polling (was the bell) ────────────────────────
+        let _dvslLastCheck = 0;
+        let _dvslLastCount = -1;
+
+        async function _dvslCheckPendingNav() {
+          const now = Date.now();
+          if (now - _dvslLastCheck < 3000) return;
+          _dvslLastCheck = now;
+          const token = localStorage.getItem('dvsl-notif-token');
+          if (!token) { _dvslSetBadge(0); return; }
+          try {
+            const resp = await fetch('/api/check-pending-nav', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ token }),
+            });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const items = Array.isArray(data && data.items) ? data.items : [];
+            _dvslSetBadge(items.length);
+          } catch(_) {}
+        }
+        function _dvslSetBadge(count) {
+          if (count === _dvslLastCount) return;
+          _dvslLastCount = count;
+          const el = document.getElementById('dvsl-tab-inbox-badge');
+          if (!el) return;
+          if (count > 0) {
+            el.style.display = 'block';
+            el.textContent = count > 99 ? '99+' : String(count);
+          } else {
+            el.style.display = 'none';
+          }
+        }
+
+        _dvslCheckPendingNav();
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') _dvslCheckPendingNav();
+        });
+        window.addEventListener('pageshow', _dvslCheckPendingNav);
+        window.addEventListener('focus', _dvslCheckPendingNav);
+        setInterval(() => {
+          if (document.visibilityState === 'visible') _dvslCheckPendingNav();
+        }, 5000);
+      });
+    }
+  </script>
+<title>Notifications — DVSL Softball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;700;800;900&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#ffffff; --card:#ffffff; --card2:#f8f8f8; --card3:#f0f0f0;
+  --border:rgba(0,0,0,0.1); --border2:rgba(0,0,0,0.18);
+  --text:#1a1a1a; --muted:rgba(0,0,0,0.5); --muted2:rgba(0,0,0,0.35);
+  --navy:#002D72; --navy-dim:rgba(0,45,114,.08); --navy-hover:rgba(0,45,114,.05);
+  --red:#c8102e; --green:#22c55e;
+}
+html,body{overflow-x:hidden}
+html{background:#002D72}
+body{
+  background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;
+  min-height:100vh;padding-top:env(safe-area-inset-top);
+  padding-bottom:calc(60px + env(safe-area-inset-bottom));
+}
+a{color:inherit;text-decoration:none}
+
+/* top bar */
+.topbar{
+  position:sticky;top:0;z-index:10;background:rgba(255,255,255,.96);
+  backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+  border-bottom:1px solid var(--border);
+  padding:12px 20px;display:flex;align-items:center;gap:14px;
+  padding-top:calc(12px + env(safe-area-inset-top));
+}
+.topbar-back{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;letter-spacing:.08em;
+  text-transform:uppercase;font-size:13px;color:var(--navy);
+  padding:6px 2px;
+}
+.topbar-back:hover{opacity:.7}
+.topbar-sep{flex:1 1 auto}
+.topbar-clear{
+  background:transparent;border:1px solid var(--border2);color:var(--navy);
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;
+  letter-spacing:.08em;text-transform:uppercase;
+  padding:8px 14px;border-radius:100px;cursor:pointer;transition:all .2s;
+}
+.topbar-clear:hover{background:var(--navy);color:#fff;border-color:var(--navy)}
+.topbar-clear:disabled{opacity:.35;cursor:not-allowed}
+.topbar-settings{
+  display:inline-flex;align-items:center;gap:4px;
+  background:transparent;border:0;color:var(--navy);
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;
+  letter-spacing:.08em;text-transform:uppercase;
+  padding:8px 6px;cursor:pointer;
+}
+.topbar-settings:hover{opacity:.7}
+
+/* page header */
+.page-head{padding:28px 20px 8px}
+.page-title{
+  font-family:'Barlow Condensed',sans-serif;font-weight:900;
+  font-size:clamp(32px,7vw,48px);text-transform:uppercase;line-height:.95;
+}
+.page-title span{color:var(--navy)}
+.page-sub{font-size:13px;color:var(--muted);margin-top:6px;font-weight:500}
+
+/* list */
+.list{padding:16px 20px 40px;display:flex;flex-direction:column;gap:10px}
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:16px 18px;display:flex;align-items:flex-start;gap:12px;
+  cursor:pointer;transition:all .15s;
+}
+.card:hover{border-color:rgba(0,45,114,.35);box-shadow:0 4px 16px rgba(0,0,0,.06);transform:translateY(-1px)}
+.card:active{transform:translateY(0)}
+.card-dot{
+  flex:0 0 auto;width:10px;height:10px;border-radius:50%;
+  background:var(--navy);margin-top:7px;
+  box-shadow:0 0 0 3px rgba(0,45,114,.12);
+}
+.card-body{flex:1 1 auto;min-width:0}
+/* Source label shown above the title for league-originated pushes
+   (announcements, schedule changes, playoffs, admin alerts etc) so
+   a push Adam sends from admin reads clearly as "from the league"
+   instead of just the bare title. */
+.card-source{
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--navy);margin-bottom:3px;
+}
+/* Photo attached to a league push (Adam uploads from admin). Base64
+   data URI stored inline on the pending_nav doc; rendered here as
+   a clean rounded thumbnail under the body text. */
+.card-img{
+  display:block;width:100%;max-height:280px;object-fit:cover;
+  border-radius:10px;margin-top:8px;
+  border:1px solid var(--border);
+  background:#f1f5f9;
+  cursor:zoom-in;
+  -webkit-tap-highlight-color:rgba(0,45,114,.15);
+}
+/* Lightbox overlay shown when an inbox image is tapped */
+.imgbox-bg{
+  display:none;position:fixed;inset:0;z-index:9999;
+  background:rgba(0,0,0,.92);
+  align-items:center;justify-content:center;padding:20px;
+  cursor:zoom-out;
+}
+.imgbox-bg.open{display:flex}
+.imgbox-bg img{
+  max-width:100%;max-height:100%;object-fit:contain;
+  border-radius:8px;box-shadow:0 12px 48px rgba(0,0,0,.5);
+}
+.imgbox-close{
+  position:absolute;top:max(20px,env(safe-area-inset-top));right:20px;
+  width:44px;height:44px;border-radius:50%;
+  background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);
+  color:#fff;font-size:20px;font-weight:900;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  -webkit-tap-highlight-color:rgba(255,255,255,.2);
+}
+.card-title{
+  font-family:'Barlow',sans-serif;font-weight:700;font-size:15px;
+  color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.card-msg{font-size:14px;color:var(--muted);margin-top:3px;line-height:1.4}
+.card-meta{
+  display:flex;align-items:center;gap:8px;margin-top:8px;
+  font-size:11px;color:var(--muted2);font-weight:600;letter-spacing:.04em;
+}
+.card-cat{
+  display:inline-block;padding:2px 8px;background:var(--navy-dim);
+  color:var(--navy);border-radius:100px;font-size:10px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.card-x{
+  flex:0 0 auto;background:transparent;border:0;color:var(--muted);
+  width:32px;height:32px;border-radius:8px;cursor:pointer;font:400 22px/1 system-ui,sans-serif;
+  padding:0;transition:all .15s;
+}
+.card-x:hover{background:var(--card3);color:var(--red)}
+
+/* empty state */
+.empty{
+  text-align:center;padding:64px 20px;color:var(--muted);
+}
+.empty-icon{font-size:48px;margin-bottom:12px;opacity:.4}
+.empty-title{
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;
+  text-transform:uppercase;color:var(--text);margin-bottom:6px;letter-spacing:.02em;
+}
+.empty-sub{font-size:13px;color:var(--muted);max-width:320px;margin:0 auto}
+.empty-link{
+  display:inline-block;margin-top:20px;padding:10px 22px;
+  background:var(--navy);color:#fff;border-radius:100px;
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;
+  letter-spacing:.08em;text-transform:uppercase;
+}
+.empty-link:hover{background:#001a4a}
+
+/* loading */
+.loading{text-align:center;padding:48px;color:var(--muted);font-size:13px}
+
+/* Tabs: Unread | Archive.
+   Archive is a client-side cache in localStorage (dvsl-inbox-archive).
+   The server deletes pending_nav docs on dismiss, so if we didn't snapshot
+   every notification we see, the user could never revisit an old one. The
+   cache is capped at 100 items, keyed by id, and lives per-device. */
+.inbox-tabs{
+  display:flex;gap:4px;padding:0 20px 0;margin-top:-6px;
+  border-bottom:1px solid var(--border);
+}
+.inbox-tab{
+  background:transparent;border:0;color:var(--muted);cursor:pointer;
+  font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;
+  letter-spacing:.08em;text-transform:uppercase;
+  padding:12px 16px;border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:all .15s;
+}
+.inbox-tab:hover{color:var(--text)}
+.inbox-tab.active{color:var(--navy);border-bottom-color:var(--navy)}
+.inbox-tab-count{
+  display:inline-block;margin-left:6px;padding:1px 7px;
+  background:var(--navy-dim);color:var(--navy);border-radius:100px;
+  font-size:10px;font-weight:800;min-width:18px;
+}
+.inbox-tab:not(.active) .inbox-tab-count{
+  background:var(--card3);color:var(--muted);
+}
+
+/* Archive cards: muted (no unread dot, faded), but still tappable to
+   re-navigate and still have an X to wipe from local archive. */
+.card.archived{opacity:.72}
+.card.archived .card-dot{display:none}
+
+/* Bell retired in v27 — inbox is now reachable via the bottom Inbox tab. */
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a href="/" class="topbar-back">← DVSL</a>
+  <div class="topbar-sep"></div>
+  <a href="/notifications.html" class="topbar-settings" aria-label="Alert settings">⚙ Settings</a>
+  <button id="clearAllBtn" class="topbar-clear" disabled>Clear all</button>
+</header>
+
+<section class="page-head">
+  <!-- Single-color title: the old split "Notifi<span>cations</span>"
+       rendered half-black / half-blue because .page-title span was
+       styled navy. Adam said it looked broken. Keeping one color. -->
+  <h1 class="page-title">Notifications</h1>
+  <div class="page-sub" id="pageSub">Recent alerts from DVSL</div>
+</section>
+
+<div class="inbox-tabs" role="tablist">
+  <button class="inbox-tab active" id="tab-unread"  role="tab" aria-selected="true">
+    Unread<span class="inbox-tab-count" id="tab-unread-count">0</span>
+  </button>
+  <button class="inbox-tab" id="tab-archive" role="tab" aria-selected="false">
+    Archive<span class="inbox-tab-count" id="tab-archive-count">0</span>
+  </button>
+</div>
+
+<div id="archive-sync-status" style="display:none;background:#fef3c7;color:#92400e;padding:8px 14px;font-size:12px;border-bottom:1px solid #fbbf24;text-align:center"></div>
+<!-- Debug build-stamp banner removed — was hardcoded to v189 (stale; SW
+     is now v254+). The asks-the-user-to-reset-cache UX never served its
+     purpose since the version was static. If we need a build-version
+     debug aid again, query the SW via postMessage({type:'GET_VERSION'})
+     so the displayed string is always live. -->
+<div id="inbox-build-stamp" style="display:none"></div>
+<div id="list" class="list">
+  <div class="loading">Loading…</div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+
+const _fbApp = initializeApp(window.LEAGUE_CONFIG.firebase);
+const _fbAuth = getAuth(_fbApp);
+const _fbDb = getFirestore(_fbApp);
+setPersistence(_fbAuth, browserLocalPersistence).catch(()=>{});
+
+// Expose for the legacy non-module script below this block.
+window._fbAuth = _fbAuth;
+window._fbDb = _fbDb;
+window._fbDeps = { doc, getDoc, setDoc, onAuthStateChanged };
+</script>
+<script>
+// /api bindings — the same endpoints the chip uses. This page reads
+// the unread list (server-side) and also keeps a client-side archive
+// in localStorage so the user can revisit notifications even after the
+// server-side pending_nav doc is deleted on dismiss.
+const TOKEN = localStorage.getItem('dvsl-notif-token');
+const listEl = document.getElementById('list');
+const clearBtn = document.getElementById('clearAllBtn');
+const pageSub = document.getElementById('pageSub');
+const tabUnread  = document.getElementById('tab-unread');
+const tabArchive = document.getElementById('tab-archive');
+const tabUnreadCount  = document.getElementById('tab-unread-count');
+const tabArchiveCount = document.getElementById('tab-archive-count');
+
+// Which tab is showing right now.
+let CURRENT_TAB = 'unread';
+let LAST_UNREAD = []; // most recent fetch — used for tab switching without re-fetching
+
+// ── Archive (localStorage) ──────────────────────────────────────────────
+// Cap at 100 to keep storage trivial; oldest evicted first. Keyed by id
+// so re-snapshotting an item we've already archived is a no-op.
+const ARCHIVE_KEY = 'dvsl-inbox-archive';
+const ARCHIVE_MAX = 100;
+
+// Locally-dismissed id set. Adam asked that tapping a notification move
+// it to Archive immediately, without having to press the X — but the
+// dismiss POST races against the page navigation and sometimes loses,
+// so the server keeps returning the doc and the item "comes back" in
+// the unread list. Keeping our own set lets us filter out anything the
+// user has tapped, regardless of whether the server ack'd. Cap/evict
+// so this doesn't grow forever.
+const DISMISSED_KEY = 'dvsl-inbox-dismissed-ids';
+const DISMISSED_MAX = 500;
+
+function loadDismissed() {
+  try {
+    const raw = localStorage.getItem(DISMISSED_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (_) { return []; }
+}
+function saveDismissed(arr) {
+  try {
+    const trimmed = arr.slice(-DISMISSED_MAX);
+    localStorage.setItem(DISMISSED_KEY, JSON.stringify(trimmed));
+  } catch (_) {}
+}
+function markDismissedLocal(id) {
+  if (!id) return;
+  const arr = loadDismissed();
+  if (arr.indexOf(id) === -1) { arr.push(id); saveDismissed(arr); }
+}
+function isDismissedLocal(id) {
+  if (!id) return false;
+  return loadDismissed().indexOf(id) !== -1;
+}
+
+function loadArchive() {
+  try {
+    const raw = localStorage.getItem(ARCHIVE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (_) { return []; }
+}
+function saveArchive(arr) {
+  try {
+    // Sort newest first, cap at MAX
+    const trimmed = arr
+      .slice()
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+      .slice(0, ARCHIVE_MAX);
+    localStorage.setItem(ARCHIVE_KEY, JSON.stringify(trimmed));
+  } catch (_) {}
+}
+function archiveSnapshot(items) {
+  if (!Array.isArray(items) || !items.length) return;
+  const existing = loadArchive();
+  const byId = new Map(existing.map(it => [it.id, it]));
+  let changed = false;
+  items.forEach(it => {
+    if (!it || !it.id) return;
+    if (!byId.has(it.id)) {
+      // Strip token_hash etc — only keep what we render
+      byId.set(it.id, {
+        id: it.id,
+        title: it.title || '',
+        body: it.body || '',
+        url: it.url || '/',
+        ts: it.ts || Date.now(),
+        category: it.category || '',
+        image_data_url: it.image_data_url || '',
+        archivedAt: Date.now(),
+      });
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveArchive(Array.from(byId.values()));
+    pushArchiveToFirestore(); // best-effort cross-device sync
+  }
+}
+function removeFromArchive(id) {
+  if (!id) return;
+  const arr = loadArchive().filter(it => it.id !== id);
+  saveArchive(arr);
+  pushArchiveToFirestore();
+}
+function clearArchive() {
+  try { localStorage.removeItem(ARCHIVE_KEY); } catch (_) {}
+  pushArchiveToFirestore();
+}
+
+// ── Cross-device archive sync (Firestore) ──────────────────────────────
+// Adam reported: archived notifications visible on phone don't show up on
+// desktop and vice-versa. The archive used to live only in per-device
+// localStorage. Now: when the user is signed in via Firebase Auth, we
+// also mirror the archive to inbox_archive/{auth_uid} in Firestore.
+// On every load, we pull the remote, merge with local, and write the
+// union back. So both phone and desktop end up with the same list.
+let _ARCHIVE_AUTH_UID = null;
+let _ARCHIVE_PUSH_TIMER = null;
+
+async function pullArchiveFromFirestore() {
+  if (!_ARCHIVE_AUTH_UID || !window._fbDeps) return;
+  try {
+    const { doc, getDoc } = window._fbDeps;
+    const snap = await getDoc(doc(window._fbDb, 'inbox_archive', _ARCHIVE_AUTH_UID));
+    if (!snap.exists()) return;
+    const remote = (snap.data() || {}).items || [];
+    if (!Array.isArray(remote) || !remote.length) return;
+    // Merge with local; remote items we don't have locally get added.
+    const local = loadArchive();
+    const byId = new Map(local.map(it => [it.id, it]));
+    let merged = false;
+    remote.forEach(it => {
+      if (!it || !it.id) return;
+      if (!byId.has(it.id)) { byId.set(it.id, it); merged = true; }
+    });
+    if (merged) {
+      saveArchive(Array.from(byId.values()));
+      // Re-render archive view if user is on it.
+      if (typeof CURRENT_TAB !== 'undefined' && CURRENT_TAB === 'archive') render();
+    }
+  } catch (e) { console.warn('archive pull failed:', e); }
+}
+
+function pushArchiveToFirestore() {
+  if (!_ARCHIVE_AUTH_UID || !window._fbDeps) return;
+  // Coalesce rapid writes (multiple archives in a row) into one Firestore
+  // round-trip. 800ms debounce.
+  clearTimeout(_ARCHIVE_PUSH_TIMER);
+  _ARCHIVE_PUSH_TIMER = setTimeout(async () => {
+    try {
+      const { doc, setDoc } = window._fbDeps;
+      const items = loadArchive();
+      await setDoc(doc(window._fbDb, 'inbox_archive', _ARCHIVE_AUTH_UID), {
+        items, updated_at: new Date().toISOString(),
+      });
+    } catch (e) { console.warn('archive push failed:', e); }
+  }, 800);
+}
+
+// Wire up: when Firebase Auth knows the user, capture their uid, pull
+// remote archive, then push local up to merge. Also re-pull on every
+// pageshow so switching back to the inbox tab/app shows the latest.
+function _initArchiveSync() {
+  if (!window._fbAuth || !window._fbDeps) {
+    setTimeout(_initArchiveSync, 200);
+    return;
+  }
+  window._fbDeps.onAuthStateChanged(window._fbAuth, async (user) => {
+    const banner = document.getElementById('archive-sync-status');
+    if (!user) {
+      _ARCHIVE_AUTH_UID = null;
+      if (banner) {
+        banner.style.display = 'block';
+        banner.innerHTML = '⚠️ Not signed in — archive only stored on this device. <a href="/profile.html" style="color:inherit;text-decoration:underline">Sign in</a> to sync across devices.';
+      }
+      return;
+    }
+    _ARCHIVE_AUTH_UID = user.uid;
+    if (banner) {
+      banner.style.display = 'block';
+      banner.innerHTML = `✓ Synced as ${user.email || 'signed-in user'} — archive shared across your devices.`;
+      banner.style.background = '#dcfce7';
+      banner.style.color = '#166534';
+    }
+    await pullArchiveFromFirestore();
+    pushArchiveToFirestore();
+  });
+}
+_initArchiveSync();
+// Re-sync whenever the page becomes visible (tab switch, app foreground)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && _ARCHIVE_AUTH_UID) {
+    pullArchiveFromFirestore();
+  }
+});
+window.addEventListener('pageshow', () => {
+  if (_ARCHIVE_AUTH_UID) pullArchiveFromFirestore();
+});
+
+function ago(ts) {
+  const s = Math.max(0, Math.floor((Date.now() - (ts || 0)) / 1000));
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+async function fetchItems() {
+  if (!TOKEN) return [];
+  try {
+    const resp = await fetch('/api/check-pending-nav', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: TOKEN }),
+    });
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return Array.isArray(data && data.items) ? data.items : [];
+  } catch (_) { return []; }
+}
+
+function dismiss(item) {
+  if (!TOKEN || !item || !item.id) return;
+  const payload = JSON.stringify({ token: TOKEN, id: item.id });
+  // Use sendBeacon when we're about to navigate away (tap-to-open). Regular
+  // fetch gets cancelled by the browser mid-flight when window.location
+  // changes, which is why Adam kept seeing tapped notifications stay in the
+  // list after coming back -- the dismiss never reached the server. sendBeacon
+  // is designed exactly for "fire a request during page unload / nav". Falls
+  // back to keepalive: true fetch if sendBeacon is unavailable (old browsers).
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([payload], { type: 'application/json' });
+      if (navigator.sendBeacon('/api/dismiss-pending-nav', blob)) return;
+    }
+  } catch (_) {}
+  fetch('/api/dismiss-pending-nav', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: payload,
+    keepalive: true,
+  }).catch(() => {});
+}
+
+function dismissAll() {
+  if (!TOKEN) return;
+  fetch('/api/dismiss-pending-nav', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: TOKEN, dismissAll: true }),
+  }).catch(() => {});
+}
+
+function render(items, mode = 'unread') {
+  listEl.innerHTML = '';
+  // Update tab counts (uses LAST_UNREAD and archive, not just `items`).
+  tabUnreadCount.textContent  = String(LAST_UNREAD.length);
+  tabArchiveCount.textContent = String(loadArchive().length);
+
+  if (mode === 'unread' && !TOKEN) {
+    listEl.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">🔕</div>
+        <div class="empty-title">Push notifications off</div>
+        <div class="empty-sub">Enable game-day alerts to see score updates, reminders, and chat messages here.</div>
+        <a class="empty-link" href="/notifications.html">Open settings</a>
+      </div>`;
+    clearBtn.disabled = true;
+    pageSub.textContent = 'Not subscribed to pushes on this device';
+    return;
+  }
+  if (!items.length) {
+    if (mode === 'archive') {
+      listEl.innerHTML = `
+        <div class="empty">
+          <div class="empty-icon">🗂️</div>
+          <div class="empty-title">No archived notifications</div>
+          <div class="empty-sub">Once you receive notifications, they'll be saved here so you can revisit them even after dismissing.</div>
+        </div>`;
+      clearBtn.disabled = true;
+      pageSub.textContent = 'Archive is empty';
+      return;
+    }
+    listEl.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📭</div>
+        <div class="empty-title">No new notifications</div>
+        <div class="empty-sub">You're all caught up. New score updates and chat messages will show up here.</div>
+        <a class="empty-link" href="/">Back to home</a>
+      </div>`;
+    clearBtn.disabled = true;
+    pageSub.textContent = 'All caught up';
+    return;
+  }
+  clearBtn.disabled = false;
+  if (mode === 'archive') {
+    clearBtn.textContent = 'Clear archive';
+    pageSub.textContent = items.length + ' archived ' + (items.length === 1 ? 'alert' : 'alerts');
+  } else {
+    clearBtn.textContent = 'Clear all';
+    pageSub.textContent = items.length + ' unread ' + (items.length === 1 ? 'alert' : 'alerts');
+  }
+
+  // Human-readable category labels + which categories are broadcast from
+  // the commissioner (admin) vs from automated systems / captains. Adam's
+  // feedback: a push he sent from admin showed up in inbox as "test test"
+  // with just "scores" under it, no hint that the league office sent it.
+  // Adding a small "📣 DVSL League" source line above the title makes it
+  // obvious; category gets a friendlier human label too.
+  const CATEGORY_LABEL = {
+    scores:          'Scores',
+    rainouts:        'Rainout',
+    schedule:        'Schedule change',
+    playoffs:        'Playoffs',
+    announcements:   'League announcement',
+    live:            'Live game',
+    pregame:         'Pre-game reminder',
+    photos:          'Team photos',
+    team_chat:       'Team chat',
+    captains_chat:   'Captains chat',
+    admin:           'Admin alert',
+  };
+  // Any push in one of these categories is, by definition, from the
+  // commissioner's office -- render a "From DVSL League" source header.
+  const LEAGUE_SOURCE_CATS = new Set([
+    'announcements', 'rainouts', 'schedule', 'playoffs', 'admin', 'pregame',
+  ]);
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'card' + (mode === 'archive' ? ' archived' : '');
+
+    const dot = document.createElement('div');
+    dot.className = 'card-dot';
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+
+    // The text region is a SEPARATE clickable zone from the image.
+    // Click on text → archive + navigate. Click on image → open
+    // lightbox. The image lives outside this wrapper so taps on it
+    // can't possibly trigger the navigation handler. (After three
+    // attempts to win an event-propagation race I gave up and
+    // structurally separated the two click targets — Adam ask
+    // 2026-04-26.)
+    const textZone = document.createElement('div');
+    textZone.className = 'card-textzone';
+    textZone.style.cursor = 'pointer';
+
+    if (LEAGUE_SOURCE_CATS.has(item.category)) {
+      const src = document.createElement('div');
+      src.className = 'card-source';
+      src.textContent = '📣 From DVSL League Admin';
+      textZone.appendChild(src);
+    }
+
+    const title = document.createElement('div');
+    title.className = 'card-title';
+    title.textContent = item.title || 'DVSL';
+    textZone.appendChild(title);
+
+    if (item.body) {
+      const msg = document.createElement('div');
+      msg.className = 'card-msg';
+      msg.textContent = item.body;
+      textZone.appendChild(msg);
+    }
+
+    body.appendChild(textZone);
+
+    // Image lives OUTSIDE the textZone — sibling, not descendant. The
+    // image is wrapped in a <button> rather than a bare <img> because
+    // iOS PWA standalone mode treats buttons as native interactive
+    // elements with explicit click priority — bare images sometimes
+    // had their tap routed to ancestors via synthetic-click hit-test
+    // weirdness. Wrapping in a button is the most-reliable opt-in to
+    // single-element-target click behavior. Also bound on multiple
+    // event types so something fires regardless of iOS quirks.
+    if (item.image_data_url) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'card-imgbtn';
+      btn.style.cssText = 'all:unset;display:block;width:100%;cursor:zoom-in;-webkit-tap-highlight-color:rgba(0,45,114,.18);touch-action:manipulation';
+      btn.setAttribute('aria-label', 'Open image full screen');
+      const img = document.createElement('img');
+      img.className = 'card-img';
+      img.src = item.image_data_url;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.style.pointerEvents = 'none'; // taps go to the button wrapper, never the IMG
+      btn.appendChild(img);
+      const openHandler = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+        window.openImgBox(item.image_data_url);
+      };
+      btn.addEventListener('click', openHandler);
+      btn.addEventListener('pointerup', openHandler);
+      body.appendChild(btn);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'card-meta';
+    if (item.category) {
+      const cat = document.createElement('span');
+      cat.className = 'card-cat';
+      cat.textContent = CATEGORY_LABEL[item.category] || item.category;
+      meta.appendChild(cat);
+    }
+    const when = document.createElement('span');
+    when.textContent = ago(item.ts);
+    meta.appendChild(when);
+    // Meta inside textZone so the timestamp/category area is also nav-clickable.
+    textZone.appendChild(meta);
+
+    const x = document.createElement('button');
+    x.className = 'card-x';
+    x.setAttribute('aria-label', 'Dismiss');
+    x.textContent = '×';
+    x.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (mode === 'archive') {
+        // Archive X: remove from localStorage only. Don't touch server —
+        // the doc was already deleted when it was dismissed the first time.
+        removeFromArchive(item.id);
+      } else {
+        markDismissedLocal(item.id);
+        dismiss(item);
+        // Unread dismiss: also remove id from LAST_UNREAD so tab counts update.
+        LAST_UNREAD = LAST_UNREAD.filter(it => it.id !== item.id);
+      }
+      card.style.transition = 'all .2s';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(20px)';
+      setTimeout(() => {
+        card.remove();
+        const remaining = listEl.querySelectorAll('.card').length;
+        if (!remaining) {
+          render([], mode);
+        } else {
+          tabUnreadCount.textContent  = String(LAST_UNREAD.length);
+          tabArchiveCount.textContent = String(loadArchive().length);
+          if (mode === 'archive') {
+            pageSub.textContent = remaining + ' archived ' + (remaining === 1 ? 'alert' : 'alerts');
+          } else {
+            pageSub.textContent = remaining + ' unread ' + (remaining === 1 ? 'alert' : 'alerts');
+          }
+        }
+      }, 200);
+    });
+
+    // Navigation handler bound to the textZone, NOT the whole card.
+    // Image is a sibling of textZone so taps on it never run this.
+    textZone.addEventListener('click', () => {
+      // Adam asked that tapping a notification move it to Archive right
+      // away — don't require pressing the × first.
+      if (mode !== 'archive') {
+        archiveSnapshot([item]);
+        markDismissedLocal(item.id);
+        LAST_UNREAD = LAST_UNREAD.filter(it => it.id !== item.id);
+        dismiss(item);
+      }
+      try {
+        // v100: open-redirect guard. A push sender (admin) could put an
+        // arbitrary https://evil.com URL in the notification; before this
+        // guard we'd follow it off-site. Force same-origin or fall back
+        // to the home page.
+        let t = new URL(item.url || '/', location.origin);
+        if (t.origin !== location.origin) t = new URL('/', location.origin);
+        window.location.href = t.href;
+      } catch (_) { window.location.href = '/'; }
+    });
+
+    card.appendChild(dot);
+    card.appendChild(body);
+    card.appendChild(x);
+    listEl.appendChild(card);
+  });
+}
+
+clearBtn.addEventListener('click', () => {
+  if (CURRENT_TAB === 'archive') {
+    if (!confirm('Clear all archived notifications from this device? This cannot be undone.')) return;
+    clearArchive();
+    render([], 'archive');
+  } else {
+    dismissAll();
+    LAST_UNREAD = [];
+    render([], 'unread');
+  }
+});
+
+function setTab(tab) {
+  CURRENT_TAB = tab;
+  tabUnread .classList.toggle('active', tab === 'unread');
+  tabArchive.classList.toggle('active', tab === 'archive');
+  tabUnread .setAttribute('aria-selected', tab === 'unread'  ? 'true' : 'false');
+  tabArchive.setAttribute('aria-selected', tab === 'archive' ? 'true' : 'false');
+  if (tab === 'archive') {
+    render(loadArchive(), 'archive');
+  } else {
+    render(LAST_UNREAD, 'unread');
+  }
+}
+tabUnread .addEventListener('click', () => setTab('unread'));
+tabArchive.addEventListener('click', () => setTab('archive'));
+
+async function refresh() {
+  const raw = await fetchItems();
+  // Snapshot everything we saw (regardless of dismiss state) so the archive
+  // is complete. Even if the user dismisses immediately, we'll still have
+  // a copy there for later reference.
+  archiveSnapshot(raw);
+  // Filter out ids the user has already tapped — guards against the race
+  // where the dismiss POST is cancelled by the page navigation and the
+  // server keeps returning the doc for another few seconds.
+  const dismissed = new Set(loadDismissed());
+  const items = raw.filter(it => it && it.id && !dismissed.has(it.id));
+  LAST_UNREAD = items;
+  render(CURRENT_TAB === 'archive' ? loadArchive() : items, CURRENT_TAB);
+}
+
+refresh();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') refresh();
+});
+window.addEventListener('pageshow', refresh);
+window.addEventListener('focus', refresh);
+
+// Image lightbox: tap any push-attached image to open full size.
+// Close by tapping the × button or anywhere on the dark background.
+let _imgBoxOpenedAt = 0;
+window.openImgBox = function(src){
+  let bg = document.getElementById('imgbox-bg');
+  if (!bg) {
+    bg = document.createElement('div');
+    bg.id = 'imgbox-bg';
+    bg.className = 'imgbox-bg';
+    bg.innerHTML = '<button class="imgbox-close" aria-label="Close" type="button">×</button><img alt="">';
+    bg.addEventListener('click', (e) => {
+      if (Date.now() - _imgBoxOpenedAt < 350) return; // ignore the click that opened us
+      bg.classList.remove('open');
+    });
+    document.body.appendChild(bg);
+  }
+  bg.querySelector('img').src = src;
+  requestAnimationFrame(() => {
+    bg.classList.add('open');
+    _imgBoxOpenedAt = Date.now();
+  });
+};
+
+// Capture-phase listener on the document: the FIRST handler to see any
+// click in the page. If the originating target is a .card-img, we
+// open the lightbox and aggressively stop the event so the card's
+// bubble-phase nav handler never runs. Earlier per-element listener +
+// stopPropagation strategies were defeated by iOS PWA's synthetic-click
+// hit-testing — the click sometimes targeted the parent card and ran
+// the nav handler. Capture-phase at document root catches everything.
+function _dvslImgBoxIntercept(e) {
+  const t = e.target;
+  if (!t) return;
+  const img = t.tagName === 'IMG' && t.classList?.contains('card-img')
+    ? t
+    : (t.closest && t.closest('.card-img'));
+  if (!img) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+  window.openImgBox(img.src || img.getAttribute('src'));
+}
+// Capture phase = third arg true. Both click and touchend covered for
+// belt-and-suspenders on iOS.
+document.addEventListener('click', _dvslImgBoxIntercept, true);
+document.addEventListener('touchend', (e) => {
+  // Only intercept if the touch target is the image itself; otherwise let
+  // normal touch handling continue.
+  const t = e.target;
+  if (t && (t.tagName === 'IMG' && t.classList?.contains('card-img'))) {
+    e.preventDefault();
+    if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    window.openImgBox(t.src || t.getAttribute('src'));
+  }
+}, true);
+</script>
+
+</body>
+</html>
