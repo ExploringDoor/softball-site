@@ -4114,7 +4114,7 @@ async function loadAllData() {
       .map(t => ({
         id: t.id, name: t.name, short: t.short, div: t.div, color: t.color,
         displayName: SHORT_DISPLAY_IDS.has(t.id) ? t.short : t.name,
-        w: t.w||0, l: t.l||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
+        w: t.w||0, l: t.l||0, ti: t.ti||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
         streak: t.streak||'—', rs: t.rs||0, ra: t.ra||0,
         founded: t.founded, field: t.field
       }))
@@ -4544,7 +4544,7 @@ async function refreshVolatileData() {
     TEAMS = freshTeams.map(t => ({
       id: t.id, name: t.name, short: t.short, div: t.div, color: t.color,
       displayName: SHORT_DISPLAY_IDS.has(t.id) ? t.short : t.name,
-      w: t.w||0, l: t.l||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
+      w: t.w||0, l: t.l||0, ti: t.ti||0, pct: parseFloat(t.pct)||0, gb: t.gb||'—',
       streak: t.streak||'—', rs: t.rs||0, ra: t.ra||0,
       founded: t.founded, field: t.field
     })).sort((a,b) => b.pct - a.pct);
@@ -5787,7 +5787,7 @@ function buildStandings(){
     ${sorted.map((t,i)=>{
       const active=isActive(t);
       const streak=t.streak&&t.streak!=='—'?'<span class="'+(t.streak[0]==='W'?'badge-w':'badge-l')+'">'+t.streak+'</span>':'<span style="color:var(--muted)">—</span>';
-      const record='<div style="font-size:12px;font-weight:700;color:var(--muted);margin-top:2px;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:.04em">'+t.w+'-'+t.l+'</div>';
+      const record='<div style="font-size:12px;font-weight:700;color:var(--muted);margin-top:2px;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:.04em">'+t.w+'-'+t.l+(t.ti?'-'+t.ti:'')+'</div>';
       return '<tr class="'+(i===0?'leader':'')+'" style="'+(active?'cursor:pointer':'opacity:.55')+'" onclick="'+(active?'goPage(\'team\',\''+t.id+'\')':'')+'">'
         +'<td style="color:var(--muted);font-size:12px;width:32px">'+(i+1)+'</td>'
         +'<td style="padding-left:4px"><span style="display:inline-flex;align-items:center;gap:12px">'+(LOGO_TEAMS.has(t.id)?'<img src="logos/'+t.id+'.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0" loading="lazy">':'<span style="width:10px;height:10px;border-radius:50%;background:'+t.color+';flex-shrink:0;display:inline-block"></span>')+'<span style="display:flex;flex-direction:column;justify-content:center"><span class="tname" style="color:#1a1a1a;font-weight:600'+(active?';cursor:pointer':'')+'" onclick="'+(active?'event.stopPropagation();goPage(\'team\',\''+t.id+'\')':'')+'">'+(active?'<span style="text-decoration:underline dotted;text-underline-offset:3px"><span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span></span>':'<span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span>')+'</span>'+record+'</span></span>'+(!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':'')+'</td>'
