@@ -3423,6 +3423,13 @@ thead th.sorted-col .sarrow{opacity:1}
 
   <div class="filter-row" id="filterRow"></div>
 
+  <!-- Min-AB disclaimer. Only visible on Player + Hitting view (hidden
+       on Team stats and Pitching) via CSS classes set by setContext()
+       / setType() helpers further down. -->
+  <div id="stats-min-ab-note" style="margin:0 0 14px;padding:10px 14px;background:rgba(245,200,66,.08);border-left:3px solid var(--gold);border-radius:6px;font-size:13px;color:var(--muted);line-height:1.45">
+    <strong style="color:#1a1a1a">Minimum 10 at-bats</strong> to appear on this leaderboard. Players with fewer than 10 AB are still tracked on their individual profile + team page — just hidden here so small-sample averages don't skew the rankings.
+  </div>
+
   <div class="stats-wrap">
     <table class="stats-table" id="statsTable">
       <thead id="statsHead"></thead>
@@ -9338,6 +9345,12 @@ function applyPlayerSplit(p){
   return {...p,ab,r,s:_s,d,t,hr,rbi,bb,so,h,avg,slg,ops:obp+slg,gp:filtered.length};
 }
 
+// Minimum at-bats required for a player to appear on the public hitting
+// stats / leaderboards. Filters out 1-game small-sample skews. Doesn't
+// affect team stats, pitching stats, or individual player profiles —
+// only the league-wide hitting leaderboard view.
+const PLAYER_HITTING_MIN_AB = 10;
+
 function getRows(){
   if(ctx==='team'){
     // Adam ask 4/30/26: 2026 team-stats view was including historical
@@ -9400,6 +9413,11 @@ function getRows(){
   if(team!=='all') rows = rows.filter(p=>p.team===team);
   // For pitching, only show players with real recorded innings
   if(type==='pitching') rows = rows.filter(p => p.ip > 0);
+  // For hitting, enforce a minimum AB threshold so the leaderboard
+  // reflects actual qualified hitters (1-for-1 doesn't earn a .1000
+  // average at the top of the page). Adam ask 2026-06-07. Threshold is
+  // PLAYER_HITTING_MIN_AB — tweak in config or here when policy changes.
+  if(type==='hitting') rows = rows.filter(p => (parseInt(p.ab)||0) >= PLAYER_HITTING_MIN_AB);
   return rows.map(applyPlayerSplit);
 }
 
@@ -9419,6 +9437,14 @@ function renderStats(){
   const sk = getSortKey();
   const col = cols.find(c=>c.key===sk);
   const lowerBetter = col && col.lowerBetter;
+
+  // Min-AB disclaimer is only relevant on player + hitting view.
+  // Team stats aggregate across players (no individual AB filter), and
+  // pitching has its own IP-based filter — neither needs the banner.
+  const minAbNote = document.getElementById('stats-min-ab-note');
+  if (minAbNote) {
+    minAbNote.style.display = (ctx === 'player' && type === 'hitting' && year === '2026') ? '' : 'none';
+  }
 
   // Sort
   let rows = getRows();

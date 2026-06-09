@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v324-standings-streak-green-for-wins-red-for-losses`;
+const VERSION = `${LEAGUE.id}-v325-stats-page-min-10-ab-filter-and-disclaimer`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
