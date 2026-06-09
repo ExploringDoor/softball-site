@@ -6362,6 +6362,7 @@ function buildSchedRows(t, tgames){
     const opp=isH?g.away:g.home;
     const myS=isH?g.hs:g.as, oppS=isH?g.as:g.hs;
     const won=g.done&&myS>oppS;
+    const tied=g.done&&myS===oppS;
     const oppTeam=getTeamByShort(opp);
     const oppColor=oppTeam?.color||'#9ca3af';
     const logo=oppTeam?.id&&LOGO_TEAMS.has(oppTeam.id)
@@ -6374,7 +6375,7 @@ function buildSchedRows(t, tgames){
     const scoreCol=g.ppd
       ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;line-height:1;color:#92400e">PPD</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#92400e;margin-top:2px">🌧 ${g.ppdResched||'TBD'}</div></div>`
       :g.done
-      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${myS}–${oppS}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(won?'#22c55e':'#ef4444')};margin-top:2px">${g.conflict?'⚠ UNDER REVIEW':(won?'WIN':'LOSS')}</div></div>`
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${myS}–${oppS}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(tied?'#6b7280':(won?'#22c55e':'#ef4444'))};margin-top:2px">${g.conflict?'⚠ UNDER REVIEW':(tied?'TIE':(won?'WIN':'LOSS'))}</div></div>`
       :'';
     const rowClick=g.done?`onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}')"`:'' ;
     const rowBg=i%2===0?'#fff':'#fafafa';
@@ -6490,10 +6491,11 @@ function renderTeamTab(tab){
     const tgames=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short).slice().sort(_teamSchedSort);
     const wins=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
     const losses=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
+    const ties=tgames.filter(g=>g.done&&g.hs===g.as).length;
     body.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">2026 Schedule</div>
-      <span style="font-size:13px;font-weight:600;color:var(--muted)">${tgames.length} Games${wins||losses?' · '+wins+'-'+losses:''}</span>
+      <span style="font-size:13px;font-weight:600;color:var(--muted)">${tgames.length} Games${wins||losses||ties?' · '+wins+'-'+losses+(ties?'-'+ties:''):''}</span>
     </div>
     <div style="border:1px solid rgba(0,0,0,.1);border-radius:12px;overflow:hidden">
     ${buildSchedRows(t,tgames)}</div>`;
@@ -6501,12 +6503,14 @@ function renderTeamTab(tab){
   } else if(tab==='gamelog'){
     const tgames=SCHEDULE_PREVIEW.filter(g=>(g.away===t.short||g.home===t.short)&&g.done).slice().sort(_teamSchedSort);
     let w=0,l=0;
+    let ti = 0;
     const rows=tgames.map((g,i)=>{
       const isH=g.home===t.short;
       const opp=isH?g.away:g.home;
       const myS=isH?g.hs:g.as, oppS=isH?g.as:g.hs;
       const won=myS>oppS;
-      if(won)w++;else l++;
+      const tied=myS===oppS;
+      if(tied) ti++; else if(won) w++; else l++;
       const oppTeam=getTeamByShort(opp);
       const logo=oppTeam?.id&&LOGO_TEAMS.has(oppTeam.id)
         ?`<img src="logos/${oppTeam.id}.png" style="width:28px;height:28px;object-fit:contain;vertical-align:middle;margin-right:6px" loading="lazy">`
@@ -6520,9 +6524,9 @@ function renderTeamTab(tab){
         <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;white-space:nowrap">${g.date||''}</td>
         <td style="padding:10px 8px">${haLabel}</td>
         <td style="padding:10px 8px;white-space:nowrap">${logo}<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;text-transform:uppercase">${oppTeam?.short||opp}</span></td>
-        <td style="padding:10px 12px;text-align:center"><span style="display:inline-block;padding:3px 10px;border-radius:5px;background:${won?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)'};color:${won?'#16a34a':'#dc2626'};font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.06em">${won?'W':'L'}</span></td>
+        <td style="padding:10px 12px;text-align:center"><span style="display:inline-block;padding:3px 10px;border-radius:5px;background:${tied?'rgba(107,114,128,.12)':(won?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)')};color:${tied?'#6b7280':(won?'#16a34a':'#dc2626')};font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.06em">${tied?'T':(won?'W':'L')}</span></td>
         <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#1a1a1a;white-space:nowrap">${myS}–${oppS}</td>
-        <td style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap">${w}-${l}</td>
+        <td style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap">${w}-${l}${ti?'-'+ti:''}</td>
         <td style="padding:10px 12px;font-size:11px;color:var(--muted);white-space:nowrap">${g.field||''}</td>
       </tr>`;
     });
@@ -6530,7 +6534,7 @@ function renderTeamTab(tab){
     body.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">Game Log</div>
-      <span style="font-size:13px;font-weight:600;color:var(--muted)">${tgames.length} games · ${w}-${l}</span>
+      <span style="font-size:13px;font-weight:600;color:var(--muted)">${tgames.length} games · ${w}-${l}${ti?'-'+ti:''}</span>
     </div>
     ${tgames.length?`<div style="overflow-x:auto;border:1px solid rgba(0,0,0,.1);border-radius:12px;overflow:hidden">
     <table style="width:100%;border-collapse:collapse;min-width:520px">
