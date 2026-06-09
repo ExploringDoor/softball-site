@@ -9804,7 +9804,15 @@ function buildStandTable(yr, sortKey, sortDir){
   // Build body
   const tb = document.getElementById('tbody-'+yr);
   tb.innerHTML = rows.map((r,i)=>{
-    const strk=r.strk.startsWith('Won')
+    // Streak format is `W7` / `L3` / `T1` (admin recalc stores it as
+    // `lastResult + count`). Historical 2025 data may use the verbose
+    // `Won 3` / `Loss 2` form. Match either: anything starting with
+    // 'W' (or 'Won') is a win streak → green; anything else → red.
+    // Adam ask 2026-06-07: standings page was rendering every streak
+    // red because the old check was `startsWith('Won')`, which never
+    // matches the current short-form data.
+    const isWinStreak = r.strk && (r.strk[0] === 'W' || /^won/i.test(r.strk));
+    const strk = isWinStreak
       ?`<span class="streak-w">${r.strk}</span>`
       :`<span class="streak-l">${r.strk}</span>`;
     const diff=r.diff>0?`<span class="diff-pos">+${r.diff}</span>`:r.diff<0?`<span class="diff-neg">${r.diff}</span>`:`<span class="diff-zero">0</span>`;

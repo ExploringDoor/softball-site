@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v323-standings-page-loads-ties-from-firestore`;
+const VERSION = `${LEAGUE.id}-v324-standings-streak-green-for-wins-red-for-losses`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
