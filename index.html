@@ -4147,8 +4147,19 @@ async function loadAllData() {
       .sort((a,b) => b.avg - a.avg);
 
     // ── Aggregate real stats from box_scores ──────────────────────────
-    // Include final + any draft that has actual lineup data entered
-    const finalBS = boxScores.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup || bs.awayLineup || bs.awayBatters) && (bs.away_lineup || bs.awayLineup || bs.awayBatters).length > 0));
+    // Include final + any draft that has actual lineup data entered on
+    // EITHER side. Previously the filter only checked away_lineup, so a
+    // doc where the home team has full stats but the away team never
+    // submitted (e.g. CHA @ BSMC 5/26 — BSMC home had 13 batters, CHA
+    // away never filed) got dropped entirely from the season aggregation.
+    // BSMC players' GP counts came up short by 1 across the board.
+    // Adam ask 2026-06-07.
+    const _hasAnyLineup = (bs) => {
+      const a = bs.away_lineup || bs.awayLineup || bs.awayBatters;
+      const h = bs.home_lineup || bs.homeLineup || bs.homeBatters;
+      return (Array.isArray(a) && a.length > 0) || (Array.isArray(h) && h.length > 0);
+    };
+    const finalBS = boxScores.filter(bs => bs.status === 'final' || _hasAnyLineup(bs));
     // Expose for recap-card POTG fallback (buildRecaps reads window.FINAL_BOX_SCORES)
     window.FINAL_BOX_SCORES = finalBS;
     if (finalBS.length > 0) {
@@ -4559,7 +4570,15 @@ async function refreshVolatileData() {
 
     // Re-aggregate stats from box_scores
     const freshBS = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-    const finalBS = freshBS.filter(bs => bs.status === 'final' || (Array.isArray(bs.away_lineup || bs.awayLineup || bs.awayBatters) && (bs.away_lineup || bs.awayLineup || bs.awayBatters).length > 0));
+    // Mirror of the same either-side-has-lineup fix as the initial filter
+    // above. Without this, the post-action recompute also drops home-only
+    // games from the aggregation. See line 4151 for full rationale.
+    const _hasAnyLineup2 = (bs) => {
+      const a = bs.away_lineup || bs.awayLineup || bs.awayBatters;
+      const h = bs.home_lineup || bs.homeLineup || bs.homeBatters;
+      return (Array.isArray(a) && a.length > 0) || (Array.isArray(h) && h.length > 0);
+    };
+    const finalBS = freshBS.filter(bs => bs.status === 'final' || _hasAnyLineup2(bs));
     if (finalBS.length > 0) {
       const batMap = {};
       const pitMap = {};
