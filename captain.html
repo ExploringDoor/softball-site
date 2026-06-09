@@ -3896,7 +3896,12 @@ function renderPendingGames() {
   const myId = captainData.team_id;
   // Show a game in pending if it isn't done yet, OR if it's done but I personally
   // haven't submitted my own scorecard (the other team finalized first).
+  // EXCLUDE PPD / rained_out games — those don't need a score submission;
+  // they need to be rescheduled. Surfacing them in the Submit Score list
+  // is misleading and clutters the captain's actionable queue.
+  // Adam ask 2026-06-09.
   const pending = MY_GAMES.filter(g => {
+    if (g.ppd || g.rained_out) return false;
     if (!g.done) return true;
     const myRole = g.home === myId ? 'home' : 'away';
     const iSubmitted = g[`score_submitted_${myRole}_away`] !== undefined;
@@ -4064,6 +4069,7 @@ function renderScoreConfirmBanners() {
   // Find games where other team submitted but I haven't yet
   const needsConfirm = MY_GAMES.filter(g => {
     if (g.done || g.score_conflict) return false;
+    if (g.ppd || g.rained_out) return false;
     if (!g.score_pending) return false;
     const isHome = g.home === myId;
     const myRole = isHome ? 'home' : 'away';
