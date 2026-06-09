@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v326-captain-submit-score-excludes-ppd-games`;
+const VERSION = `${LEAGUE.id}-v327-captain-profile-rank-matches-standings-points-sort`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

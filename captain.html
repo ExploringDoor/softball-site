@@ -2830,7 +2830,22 @@ function renderTeam() {
   const w = t.w || 0;
   const l = t.l || 0;
   const pct = t.pct || 0;
-  const rank = ALL_TEAMS.findIndex(x => x.id === t.id) + 1;
+  // Rank should match the public Standings page sort: POINTS (3W+2T+1L)
+  // desc, then PCT desc, then W desc as tiebreakers. Previously the rank
+  // came from ALL_TEAMS.findIndex, which uses whatever order ALL_TEAMS
+  // was last sorted into (typically PCT) — so a 3-1 team with .750 PCT
+  // would show as #3 even though the standings page (sorted by PTS)
+  // ranked them lower. Adam ask 2026-06-09: TBIR (3-1, 10 pts) was
+  // showing as #3 in captain profile but is actually behind BSMC
+  // (4-2, 14 pts) on the league standings page.
+  const _withPts = ALL_TEAMS.filter(x => x.active !== false).map(x => ({
+    id: x.id,
+    pts: (x.w||0)*3 + (x.ti||0)*2 + (x.l||0)*1,
+    pct: x.pct || 0,
+    w: x.w || 0,
+  }));
+  _withPts.sort((a, b) => b.pts - a.pts || b.pct - a.pct || b.w - a.w);
+  const rank = _withPts.findIndex(x => x.id === t.id) + 1;
   const gamesPlayed = MY_GAMES.filter(g => g.done).length;
   const gamesLeft = MY_GAMES.filter(g => !g.done).length;
 
