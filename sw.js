@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v327-captain-profile-rank-matches-standings-points-sort`;
+const VERSION = `${LEAGUE.id}-v328-stats-leaders-obp-column-and-10ab-min`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

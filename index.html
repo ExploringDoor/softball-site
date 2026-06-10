@@ -3122,6 +3122,11 @@ thead th.sorted-col .sarrow{opacity:1}
   </div>
   <div class="leaders-page-wrap">
     <div class="stat-filter-bar" id="lp-filters"></div>
+    <!-- Same 10-AB min disclaimer as the Stats page. Mirrors the rule so a
+         visitor browsing here sees the same threshold + reasoning. -->
+    <div style="margin:0 0 14px;padding:10px 14px;background:rgba(245,200,66,.08);border-left:3px solid var(--gold);border-radius:6px;font-size:13px;color:var(--muted);line-height:1.45">
+      <strong style="color:#1a1a1a">Minimum 10 at-bats</strong> to appear on this leaderboard. Players with fewer than 10 AB are still tracked on their individual profile + team page — just hidden here so small-sample averages don't skew the rankings.
+    </div>
     <div class="leaders-table-wrap">
       <table class="leaders-table" id="lp-table">
         <thead id="lp-thead"></thead>
@@ -5595,6 +5600,7 @@ const STAT_CATS = [
   {key:'r',    label:'R',            fmt:p=>p.r,                               group:'Batting', desc:'Runs',            higherBetter:true},
   {key:'ab',   label:'AB',           fmt:p=>p.ab,                              group:'Batting', desc:'At Bats',         higherBetter:true},
   {key:'bb',   label:'BB',           fmt:p=>p.bb,                              group:'Batting', desc:'Walks',           higherBetter:true},
+  {key:'obp',  label:'OBP',          fmt:p=>(p.obp||0).toFixed(3).replace(/^0/,''),group:'Advanced',desc:'On-Base %',        higherBetter:true},
   {key:'slg',  label:'SLG',          fmt:p=>(p.slg||0).toFixed(3).replace(/^0/,''),group:'Advanced',desc:'Slugging %',      higherBetter:true},
   {key:'ops',  label:'OPS',          fmt:p=>(p.ops||0).toFixed(3).replace(/^0/,''),group:'Advanced',desc:'OPS',             higherBetter:true},
 ];
@@ -5616,11 +5622,15 @@ function buildLeadersPage(statKey, dir){
     `<button class="sf-btn ${s.key===statKey?'active':''}" onclick="buildLeadersPage('${s.key}','desc')">${s.desc}</button>`
   ).join('');
 
-  // Filter out players with no at-bats (season hasn't started)
-  const active = PLAYERS.filter(p => p.ab > 0);
+  // Filter to qualified hitters only — same threshold as the stats page
+  // (PLAYER_HITTING_MIN_AB, currently 10). Below the threshold, small-
+  // sample averages skew rankings and a 1-for-1 player tops the list.
+  // Adam ask 2026-06-09: apply the same 10-AB filter to Individual
+  // Leaders + show a matching disclaimer banner.
+  const active = PLAYERS.filter(p => (parseInt(p.ab)||0) >= PLAYER_HITTING_MIN_AB);
   if(active.length === 0){
     document.getElementById('lp-thead').innerHTML = '';
-    document.getElementById('lp-tbody').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:60px 20px;font-size:16px;color:var(--muted)">No stats yet — the season hasn't started.</td></tr>`;
+    document.getElementById('lp-tbody').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:60px 20px;font-size:16px;color:var(--muted)">No qualified hitters yet — need at least ${PLAYER_HITTING_MIN_AB} at-bats to appear here.</td></tr>`;
     return;
   }
 
@@ -5636,6 +5646,7 @@ function buildLeadersPage(statKey, dir){
     <th style="text-align:right" onclick="buildLeadersPage('hr','desc')" class="${statKey==='hr'?'sorted':''}">HR</th>
     <th style="text-align:right" onclick="buildLeadersPage('rbi','desc')" class="${statKey==='rbi'?'sorted':''}">RBI</th>
     <th style="text-align:right" onclick="buildLeadersPage('avg','desc')" class="${statKey==='avg'?'sorted':''}">AVG</th>
+    <th style="text-align:right" onclick="buildLeadersPage('obp','desc')" class="${statKey==='obp'?'sorted':''}">OBP</th>
     <th style="text-align:right" onclick="buildLeadersPage('ops','desc')" class="${statKey==='ops'?'sorted':''}">OPS</th>
     <th class="lt-bar-cell" style="text-align:left"></th>
   </tr>`;
@@ -5662,6 +5673,7 @@ function buildLeadersPage(statKey, dir){
       <td class="lt-stat">${p.hr}</td>
       <td class="lt-stat">${p.rbi}</td>
       <td class="lt-stat">${(p.avg||0).toFixed(3).replace(/^0/,'')}</td>
+      <td class="lt-stat">${(p.obp||0).toFixed(3).replace(/^0/,'')}</td>
       <td class="lt-stat">${(p.ops||0).toFixed(3).replace(/^0/,'')}</td>
       <td class="lt-bar-cell"><div class="lt-bar-bg"><div class="lt-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div></td>
     </tr>`;
@@ -9274,6 +9286,7 @@ const HIT_COLS = [
   {key:'rbi',   label:'RBI',   cls:'',            sortable:true},
   {key:'bb',    label:'BB',    cls:'',            sortable:true},
   {key:'avg',   label:'AVG',   cls:'',            sortable:true, fmt:v=>v.toFixed(3).replace(/^0/,'')},
+  {key:'obp',   label:'OBP',   cls:'',            sortable:true, fmt:v=>v.toFixed(3).replace(/^0/,'')},
   {key:'slg',   label:'SLG',   cls:'',            sortable:true, fmt:v=>v.toFixed(3).replace(/^0/,'')},
   {key:'ops',   label:'OPS',   cls:'',            sortable:true, fmt:v=>v.toFixed(3).replace(/^0/,'')},
 ];
