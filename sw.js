@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v328-stats-leaders-obp-column-and-10ab-min`;
+const VERSION = `${LEAGUE.id}-v329-standings-streak-sort-wins-before-losses`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

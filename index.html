@@ -9785,17 +9785,32 @@ function buildStandTable(yr, sortKey, sortDir){
   sortDir = sortDir || sortState[yr]?.dir || 'desc';
   sortState[yr] = {key:sortKey, dir:sortDir};
 
+  // Convert a streak string into a single signed magnitude so sorting is
+  // unambiguous: win streaks positive (+n), loss streaks negative (-n),
+  // ties / none at 0. Handles BOTH formats: short-form `W7`/`L3`/`T1`
+  // (2026 Firebase data, written by admin recalc as lastResult+count) AND
+  // verbose `Won 7`/`Loss 3` (historical 2025 archive). Adam ask
+  // 2026-06-09: filtering by streak put big LOSING streaks at the top
+  // because the old check only matched `startsWith('Won')`, which never
+  // matched the short-form data → every row read as a loss and sorted by
+  // raw number (so L13 outranked W3).
+  const streakVal = (s) => {
+    s = String(s || '').trim();
+    if (!s || s === '-' || s === '—') return 0;
+    const n = parseInt(s.replace(/\D/g, '')) || 0;
+    const c = s[0].toUpperCase();
+    if (c === 'W') return n;          // win streak → positive
+    if (c === 'L') return -n;         // loss streak → negative
+    return 0;                         // tie / unknown → neutral
+  };
   // Sort rows
   rows.sort((a,b)=>{
     let av = a[sortKey], bv = b[sortKey];
     if(sortKey==='strk'){
-      // Won beats Loss, then number
-      const aw = av.startsWith('Won') ? 1 : -1;
-      const bw = bv.startsWith('Won') ? 1 : -1;
-      if(aw!==bw) return bw-aw;
-      const an = parseInt(av.replace(/\D/g,''))||0;
-      const bn = parseInt(bv.replace(/\D/g,''))||0;
-      return sortDir==='desc'?bn-an:an-bn;
+      const sa = streakVal(av), sb = streakVal(bv);
+      // desc: longest win streak first → ties/none → loss streaks last
+      //       (and within losses, shortest loss streak before longest).
+      return sortDir==='desc' ? sb - sa : sa - sb;
     }
     if(typeof av==='string') av=parseFloat(av)||0;
     if(typeof bv==='string') bv=parseFloat(bv)||0;
