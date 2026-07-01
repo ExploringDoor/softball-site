@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v329-standings-streak-sort-wins-before-losses`;
+const VERSION = `${LEAGUE.id}-v330-fix-sw-reload-loop-sessionstorage-guard`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

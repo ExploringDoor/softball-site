@@ -23,10 +23,13 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(r => { try { r.update(); } catch(_){} }).catch(() => {});
-        let _dvslReloaded = false;
+        // sessionStorage guard prevents SW controllerchange reload loops.
+        // See captain.html for the full write-up (Steve/BSMC 2026-06).
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (_dvslReloaded) return;
-          _dvslReloaded = true;
+          try {
+            if (sessionStorage.getItem('dvsl-sw-reloaded') === '1') return;
+            sessionStorage.setItem('dvsl-sw-reloaded', '1');
+          } catch(_) {}
           window.location.reload();
         });
         navigator.serviceWorker.ready.then(r => {

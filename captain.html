@@ -33,10 +33,19 @@
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(r => { try { r.update(); } catch(_){} }).catch(() => {});
-        let _dvslReloaded = false;
+        // Reload once when a new SW takes control so the page runs latest
+        // code. Guard with sessionStorage (NOT a page-local var): a local
+        // boolean resets on every reload, so if controllerchange fires
+        // repeatedly (unstable activation / multiple tabs / iOS PWA
+        // controller flapping) the old guard caused an INFINITE reload
+        // loop — the page kept reloading before the captain could sign in.
+        // sessionStorage survives reloads within the tab session, so we
+        // reload at most once. (Steve/BSMC captain login loop, 2026-06.)
         navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (_dvslReloaded) return;
-          _dvslReloaded = true;
+          try {
+            if (sessionStorage.getItem('dvsl-sw-reloaded') === '1') return;
+            sessionStorage.setItem('dvsl-sw-reloaded', '1');
+          } catch(_) {}
           window.location.reload();
         });
         navigator.serviceWorker.ready.then(r => {
