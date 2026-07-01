@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v330-fix-sw-reload-loop-sessionstorage-guard`;
+const VERSION = `${LEAGUE.id}-v331-captain-box-only-my-team-toggle`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

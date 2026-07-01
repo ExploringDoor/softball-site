@@ -4348,10 +4348,30 @@ function _renderBsStats(gameId, g, awayNames, homeNames, awayTeamName, homeTeamN
     </div>`;
   }
 
+  // Which side is the captain's own team vs the opponent. Used by the
+  // "Only my team" banner below so a captain uploading a two-team game
+  // sheet can drop the opponent's individual stats in one tap (leaving
+  // the opponent's side for THEIR captain to submit — the 3-lane model).
+  const _bsMyId = captainData.team_id;
+  const _bsIAmHome = g.home === _bsMyId;
+  const _bsMySide = _bsIAmHome ? 'home' : 'away';
+  const _bsOppSide = _bsIAmHome ? 'away' : 'home';
+  const _bsMyName = _bsIAmHome ? homeTeamName : awayTeamName;
+  const _bsOppName = _bsIAmHome ? awayTeamName : homeTeamName;
+
   el.innerHTML = `<div style="margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden">
     <div style="background:var(--navy);color:#fff;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.04em;display:flex;align-items:center;justify-content:space-between">
       <span>📊 BOX SCORE — Wk ${g.wk||'?'}: ${awayTeamName} @ ${homeTeamName}</span>
       <button onclick="showBoxScoreEntry('${gameId}')" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:700">← Lineup</button>
+    </div>
+    <!-- Only-my-team helper: for a captain uploading a sheet that has BOTH
+         teams' stats but who only wants to submit their own side. Tapping
+         sets the opponent's panel to score-only (final score kept, no
+         individual players), so the opponent's captain can still enter
+         their own detail later without a conflict. -->
+    <div style="background:#eff6ff;border-bottom:1px solid #bfdbfe;padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div id="bs-onlyteam-note-${gameId}" style="font-size:12px;color:#1e40af;line-height:1.4;flex:1;min-width:180px">Sheet has both teams? Tap to save only <strong>${_bsMyName}</strong>'s stats and leave ${_bsOppName} for their captain.</div>
+      <button id="bs-onlyteam-btn-${gameId}" onclick="bsToggleOnlyMyTeam('${gameId}','${_bsOppSide}','${_bsMySide}')" style="flex-shrink:0;background:var(--navy);color:#fff;border:none;border-radius:6px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;white-space:nowrap">📋 Only My Team</button>
     </div>
     <div style="background:rgba(0,0,0,.02);border-bottom:1px solid var(--border)">
       <!-- Scoreboard: big team names + live score -->
@@ -4886,6 +4906,32 @@ window.bsSetMode = function(gameId, team, mode) {
   };
   setBtn(fullBtn, mode === 'full');
   setBtn(soBtn,   mode === 'score-only');
+};
+
+// "Only My Team" toggle: flips the OPPONENT's panel to score-only (or
+// back to full). Lets a captain who uploaded a two-team game sheet save
+// just their own individual stats and leave the opponent's players for
+// the opponent's captain to submit — avoids double-entering the other
+// side (which would flag a conflict when they submit their own).
+// Adam ask 2026-06-30.
+window.bsToggleOnlyMyTeam = function(gameId, oppSide, mySide) {
+  const panel = document.getElementById(`bs-panel-${oppSide}-${gameId}`);
+  const btn   = document.getElementById(`bs-onlyteam-btn-${gameId}`);
+  const note  = document.getElementById(`bs-onlyteam-note-${gameId}`);
+  const isOn  = panel && panel.dataset.mode === 'score-only';
+  if (isOn) {
+    // Undo → opponent back to full box score.
+    bsSetMode(gameId, oppSide, 'full');
+    if (btn) { btn.textContent = '📋 Only My Team'; btn.style.background = 'var(--navy)'; }
+    if (note) note.innerHTML = "Sheet has both teams? Tap to save only <strong>your team</strong>'s stats and leave the opponent for their captain.";
+  } else {
+    // Turn on → opponent set to score-only (keeps final score, drops lineup).
+    bsSetMode(gameId, oppSide, 'score-only');
+    if (btn) { btn.textContent = '✓ On — Undo'; btn.style.background = '#16a34a'; }
+    if (note) note.innerHTML = "✓ Only <strong>your team</strong>'s individual stats will be saved. The opponent's side is score-only (final score kept, no players) — their captain can add their detail later.";
+    // Jump to the captain's own team so their lineup is what's visible.
+    if (typeof bsSwitchTab === 'function') { try { bsSwitchTab(gameId, mySide); } catch(_){} }
+  }
 };
 
 window.removeBsRow = function(btn) {
