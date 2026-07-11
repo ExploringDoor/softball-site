@@ -3785,7 +3785,7 @@ async function fbFetch(collectionName, orderField) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-// Live data arrays — populated from Supabase on load
+// Live data arrays — populated from Firebase/Firestore on load
 let TEAMS = [];
 let HIST_TEAMS = [];
 let ALL_TEAMS = [];
@@ -7190,7 +7190,7 @@ const io=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersect
 function observeAll(){document.querySelectorAll('.div-card,.ldr-card,.game-row,.pcard,.recap-card,.hist-row,.tsg-cell').forEach(el=>{el.classList.add('fade-in');io.observe(el)})}
 
 // ════════════════════════════ INIT ═══════════════════════════════════════
-// ── INIT: Load from Supabase then render ──────────────────────
+// ── INIT: Load from Firebase/Firestore then render ──────────────────────
 window._dataPromise = loadAllData();
 window._dataPromise.then(() => {
   // Check for cross-page player navigation: ?player=NAME URL param (from leaders.html)
@@ -7850,6 +7850,9 @@ let weekOffset = -1; // -1 = auto-set to last completed week on first render
 let view = 'scores';
 let selectedDay = null; // null = auto-pick first day of selected week
 
+// ⚠️ DEAD CODE — unused. Generates FAKE random scores; only ever called by
+// the equally-dead gameBlock() below. Do NOT wire either into rendering —
+// real scores come from Firestore /games + /box_scores. (Audit 2026-07.)
 function fakeScore(away,home,seed){
   const s=(away.charCodeAt(0)+home.charCodeAt(0)+seed*7)%15;
   let a=4+(s%8), h=3+((s*3+5)%7);
@@ -8007,6 +8010,9 @@ function setView(v){
 
 const DAY_FULL={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday'};
 
+// ⚠️ DEAD CODE — no callers. Renders FAKE scores via fakeScore() for past
+// games. Superseded by scheduleBlock(). Kept only to avoid a risky bulk
+// delete in this live file; never call it. (Audit 2026-07.)
 function gameBlock(g,wkIdx,gi,isPast,isNext){
   const ac=tc(g.away),hc=tc(g.home);
   const field=cleanField(g.field), time=parseTime(g);
