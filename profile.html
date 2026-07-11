@@ -4281,14 +4281,45 @@ async function captSubmitBoxScoreUnified(gameId, boxScoreData, myRole) {
   const snap = await getDoc(ref);
   const existing = snap.exists() ? snap.data() : null;
   if (!existing || !existing.first_submitter || existing.first_submitter === myRole) {
+    // AUDIT C5: full setDoc replace used to wipe the OTHER captain's already-
+    // submitted side when this captain re-opened the editor to fix a stat.
+    // Preserve the other role's fields, but ONLY when this submission left
+    // that side empty (a two-team sheet still lets fresh data win). Mirrors
+    // captain.html submitBoxScoreUnified.
+    const otherRole = myRole === 'away' ? 'home' : 'away';
+    const _isEmpty = v => !Array.isArray(v) || v.length === 0;
+    const preserved = {};
+    if (existing) {
+      const newOther = boxScoreData[`${otherRole}_lineup`] || boxScoreData[`${otherRole}Batters`];
+      const oldOther = existing[`${otherRole}_lineup`] || existing[`${otherRole}Batters`];
+      if (_isEmpty(newOther) && !_isEmpty(oldOther)) {
+        preserved[`${otherRole}_lineup`] = existing[`${otherRole}_lineup`] || oldOther;
+        preserved[`${otherRole}Batters`] = existing[`${otherRole}Batters`] || oldOther;
+        [`${otherRole}_pitchers`, `${otherRole}_score`, `${otherRole}_score_only`,
+         `${otherRole}_linescore`, `${otherRole}_hits`, `${otherRole}_errors`,
+         `${otherRole}_errors_detail`].forEach(f => {
+          if (existing[f] !== undefined) preserved[f] = existing[f];
+        });
+        if (existing.linescores && existing.linescores[otherRole] !== undefined) {
+          preserved.linescores = { ...(boxScoreData.linescores || {}), [otherRole]: existing.linescores[otherRole] };
+        }
+        if (existing.second_submitter) preserved.second_submitter = existing.second_submitter;
+        if (existing.has_discrepancy) {
+          preserved.has_discrepancy = existing.has_discrepancy;
+          preserved.discrepancies = existing.discrepancies || [];
+        }
+      }
+    }
     await setDoc(ref, {
-      ...boxScoreData,
-      first_submitter: myRole,
       has_discrepancy: false,
       discrepancies: [],
+      ...boxScoreData,
+      ...preserved,
+      first_submitter: (existing && existing.first_submitter) || myRole,
       created_at: existing?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     });
-    return { firstSubmission: !existing, hasDiscrepancy: false };
+    return { firstSubmission: !existing, hasDiscrepancy: !!preserved.has_discrepancy };
   }
   // Second submission — detect score discrepancy
   const discrepancies = [];

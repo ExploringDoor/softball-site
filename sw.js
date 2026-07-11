@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v333-standings-ties-unified-ti-field-all-recalcs`;
+const VERSION = `${LEAGUE.id}-v334-boxscore-resubmit-no-longer-wipes-other-side`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
