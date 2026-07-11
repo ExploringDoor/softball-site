@@ -6290,8 +6290,13 @@ async function recalcPlayerStatsFromBoxScores() {
 }
 
 async function recalcStandingsFromGames() {
+  // Audit H1 (2026-07): admin wrote the tie count to field `t`, but the
+  // public standings page + profile.html read `ti`. So admin-driven recalcs
+  // populated a field the public page ignored → ties vanished publicly.
+  // Migrated admin fully to `ti` to match. (captain.html/scorer.html also
+  // write `ti` now.)
   const stats = {};
-  TEAMS.forEach(t => { stats[t.id] = { w:0, l:0, t:0, rs:0, ra:0, results:[] }; });
+  TEAMS.forEach(t => { stats[t.id] = { w:0, l:0, ti:0, rs:0, ra:0, results:[] }; });
 
   // Sort games by week for streak calc.
   // PPD / rained-out games never count toward W/L/RS/RA even if some stale
@@ -6305,21 +6310,21 @@ async function recalcStandingsFromGames() {
       stats[g.away].rs += as; stats[g.away].ra += hs;
       if (as > hs) { stats[g.away].w++; stats[g.away].results.push('W'); }
       else if (as < hs) { stats[g.away].l++; stats[g.away].results.push('L'); }
-      else { stats[g.away].t++; stats[g.away].results.push('T'); }
+      else { stats[g.away].ti++; stats[g.away].results.push('T'); }
     }
     if (stats[g.home]) {
       stats[g.home].rs += hs; stats[g.home].ra += as;
       if (hs > as) { stats[g.home].w++; stats[g.home].results.push('W'); }
       else if (hs < as) { stats[g.home].l++; stats[g.home].results.push('L'); }
-      else { stats[g.home].t++; stats[g.home].results.push('T'); }
+      else { stats[g.home].ti++; stats[g.home].results.push('T'); }
     }
   });
 
   // Calculate PCT (ties count as 0.5 win), GB, Streak
   let maxWinDiff = -Infinity;
   Object.values(stats).forEach(s => {
-    const gp = s.w + s.l + s.t;
-    s.pct = gp > 0 ? ((s.w + 0.5 * s.t) / gp) : 0;
+    const gp = s.w + s.l + s.ti;
+    s.pct = gp > 0 ? ((s.w + 0.5 * s.ti) / gp) : 0;
     const wd = s.w - s.l;
     if (wd > maxWinDiff) maxWinDiff = wd;
     // Streak
@@ -6344,10 +6349,10 @@ async function recalcStandingsFromGames() {
     if (!s) continue;
     try {
       await updateDoc(doc(db, 'teams', t.id), {
-        w: s.w, l: s.l, t: s.t, pct: parseFloat(s.pct.toFixed(3)),
+        w: s.w, l: s.l, ti: s.ti, pct: parseFloat(s.pct.toFixed(3)),
         rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
       });
-      t.w = s.w; t.l = s.l; t.t = s.t; t.pct = parseFloat(s.pct.toFixed(3));
+      t.w = s.w; t.l = s.l; t.ti = s.ti; t.pct = parseFloat(s.pct.toFixed(3));
       t.rs = s.rs; t.ra = s.ra; t.gb = s.gb; t.streak = s.streak;
     } catch(e) { console.error('Failed to update team', t.id, e); }
   }
@@ -6391,7 +6396,7 @@ function renderStandings() {
   // with a hotter winning pct from fewer games played. Sort by POINTS
   // (3·W + 2·T + 1·L, matches public standings) DESC, then PCT desc as
   // tiebreaker, then alphabetical name as final tiebreak.
-  const _pts = (t) => (t.w||0)*3 + (t.t||0)*2 + (t.l||0)*1;
+  const _pts = (t) => (t.w||0)*3 + (t.ti||0)*2 + (t.l||0)*1;
   const sorted = [...TEAMS].sort((a,b) =>
     _pts(b) - _pts(a) ||
     (b.pct||0) - (a.pct||0) ||
@@ -6404,8 +6409,8 @@ function renderStandings() {
       <td><strong>${esc(t.name)}</strong></td>
       <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.w||0}" id="st-w-${t.id}" min="0"></td>
       <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.l||0}" id="st-l-${t.id}" min="0"></td>
-      <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.t||0}" id="st-t-${t.id}" min="0"></td>
-      <td style="font-weight:800;color:#b8860b" id="st-pts-${t.id}">${(t.w||0)*3 + (t.t||0)*2 + (t.l||0)*1}</td>
+      <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${t.ti||0}" id="st-t-${t.id}" min="0"></td>
+      <td style="font-weight:800;color:#b8860b" id="st-pts-${t.id}">${(t.w||0)*3 + (t.ti||0)*2 + (t.l||0)*1}</td>
       <td>${(t.pct||0).toFixed(3)}</td>
       <td>${t.gb||'-'}</td>
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${t.rs||0}" id="st-rs-${t.id}" min="0"></td>
@@ -6428,7 +6433,7 @@ window.saveOneStanding = async function(teamId) {
   const pw = (document.getElementById('st-pw-' + teamId)?.value || '').trim();
   const cpw = (document.getElementById('st-cpw-' + teamId)?.value || '').trim();
   try {
-    const update = { w, l, t: ties, pct, rs, ra };
+    const update = { w, l, ti: ties, pct, rs, ra };
     // v96: only write passwords when the input is non-empty. Previously we wrote
     // `pw !== undefined` which was always true (`.value.trim()` is always a string),
     // so clearing the input to save numeric changes would wipe the captain's login.
@@ -6439,7 +6444,7 @@ window.saveOneStanding = async function(teamId) {
     await updateDoc(doc(db, 'teams', teamId), update);
     const tm = TEAMS.find(x => x.id === teamId);
     if (tm) {
-      tm.w = w; tm.l = l; tm.t = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra;
+      tm.w = w; tm.l = l; tm.ti = ties; tm.pct = pct; tm.rs = rs; tm.ra = ra;
       if (pw)  tm.player_password = pw;
       if (cpw) tm.captain_password = cpw;
     }
@@ -9800,7 +9805,7 @@ window.exportStandingsPDF = function() {
       t.name || t.id,
       t.w || 0,
       t.l || 0,
-      t.t || 0,
+      t.ti || 0,
       (t.pct || 0).toFixed(3),
       t.gb || '-',
       t.rs || 0,

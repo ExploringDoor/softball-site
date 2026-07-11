@@ -1644,26 +1644,39 @@ async function recalcStandingsFromAllGames() {
     const teamsSnap = await getDocs(collection(db, 'teams'));
     const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
     const stats = {};
-    allTeams.forEach(t => { stats[t.id] = { w:0, l:0, rs:0, ra:0, results:[] }; });
+    allTeams.forEach(t => { stats[t.id] = { w:0, l:0, ti:0, rs:0, ra:0, results:[] }; });
 
-    const doneGames = gamesSnap.docs.map(d => d.data()).sort((a,b) => (a.wk||0) - (b.wk||0));
+    // Audit H1 (2026-07): this recalc used to drop ties entirely (no
+    // as===hs branch, ti never written) — a captain submitting a score
+    // silently erased ties from the standings. It also counted PPD games
+    // and treated null scores as 0-0 ties. Fixed: exclude ppd/rained_out
+    // and null-score games, handle ties, write the `ti` field the public
+    // standings page reads, and sort chronologically (date_iso) so streaks
+    // are correct even with makeup games.
+    const _dk = g => (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) ? g.date_iso : String(g.wk||0).padStart(4,'0');
+    const doneGames = gamesSnap.docs.map(d => d.data())
+      .filter(g => !g.ppd && !g.rained_out && g.away_score != null && g.home_score != null)
+      .sort((a,b) => _dk(a).localeCompare(_dk(b)));
     doneGames.forEach(g => {
-      const as = g.away_score || 0, hs = g.home_score || 0;
+      const as = g.away_score, hs = g.home_score;
       if (stats[g.away]) {
-        stats[g.away].rs += as; stats[g.away].ra += hs;
-        if (as > hs) { stats[g.away].w++; stats[g.away].results.push('W'); }
-        else if (as < hs) { stats[g.away].l++; stats[g.away].results.push('L'); }
+        const s = stats[g.away]; s.rs += as; s.ra += hs;
+        if (as > hs) { s.w++; s.results.push('W'); }
+        else if (as < hs) { s.l++; s.results.push('L'); }
+        else { s.ti++; s.results.push('T'); }
       }
       if (stats[g.home]) {
-        stats[g.home].rs += hs; stats[g.home].ra += as;
-        if (hs > as) { stats[g.home].w++; stats[g.home].results.push('W'); }
-        else if (hs < as) { stats[g.home].l++; stats[g.home].results.push('L'); }
+        const s = stats[g.home]; s.rs += hs; s.ra += as;
+        if (hs > as) { s.w++; s.results.push('W'); }
+        else if (hs < as) { s.l++; s.results.push('L'); }
+        else { s.ti++; s.results.push('T'); }
       }
     });
 
     let maxWinDiff = -Infinity;
     Object.values(stats).forEach(s => {
-      s.pct = (s.w + s.l) > 0 ? (s.w / (s.w + s.l)) : 0;
+      const gp = s.w + s.l + s.ti;
+      s.pct = gp > 0 ? ((s.w + 0.5 * s.ti) / gp) : 0;
       const wd = s.w - s.l;
       if (wd > maxWinDiff) maxWinDiff = wd;
       const r = s.results;
@@ -1681,7 +1694,7 @@ async function recalcStandingsFromAllGames() {
     for (const t of allTeams) {
       const s = stats[t.id]; if (!s) continue;
       await updateDoc(doc(db, 'teams', t.id), {
-        w: s.w, l: s.l, pct: parseFloat(s.pct.toFixed(3)),
+        w: s.w, l: s.l, ti: s.ti, pct: parseFloat(s.pct.toFixed(3)),
         rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
       }).catch(() => {});
     }
