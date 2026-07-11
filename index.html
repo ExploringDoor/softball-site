@@ -4644,7 +4644,11 @@ async function refreshVolatileData() {
           for (const p of lineup) {
             const nm = (p.name || '').trim(); if (!nm) continue;
             const key = _dvslCleanName(nm) + '||' + (sid || '').toLowerCase();
-            if (!batMap[key]) batMap[key] = { name: nm, team: (sid||'').toLowerCase(), gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0 };
+            // Audit M1: init must include sf (+ sac/roe/fc for parity with the
+            // initial-load path). Without sf here, b.sf stays undefined and the
+            // OBP denominator below silently drops sac flies on refresh, so a
+            // player's OBP/OPS changed between first load and any later refresh.
+            if (!batMap[key]) batMap[key] = { name: nm, team: (sid||'').toLowerCase(), gp:0, ab:0, r:0, s:0, d:0, tri:0, hr:0, rbi:0, bb:0, so:0, sac:0, sf:0, roe:0, fc:0 };
             const b = batMap[key];
             b.gp++;
             b.ab += parseInt(p.ab)||0;                b.r  += parseInt(p.r)||0;
@@ -4656,6 +4660,8 @@ async function refreshVolatileData() {
             b.s  += _s2;  b.d += _d2;  b.tri += _t2;  b.hr += _hr2;
             b.rbi+= parseInt(p.rbi)||0;               b.bb += parseInt(p.bb)||0;
             b.so += parseInt(p.so ?? p.k)||0;
+            b.sac += parseInt(p.sac)||0;              b.sf  += parseInt(p.sf)||0;
+            b.roe += parseInt(p.roe)||0;              b.fc  += parseInt(p.fc)||0;
             if (!splitLog[key]) splitLog[key] = [];
             splitLog[key].push({ side: gameSide, date: bsDate, time: bsTime, opp: oppId||'',
               ab: parseInt(p.ab)||0, r: parseInt(p.r)||0, s:_s2, d:_d2, t:_t2, hr:_hr2,
@@ -5482,7 +5488,10 @@ function initNextGame(){
     const atm = getTeamByShort(upcoming.away);
     const htm = getTeamByShort(upcoming.home);
     NEXT_GAME_DATA = {
-      date: upcoming.date + ', 2026',
+      // Audit M4: was hardcoded ', 2026' — the "next game" banner + countdown
+      // would show 2026 (and the countdown would read all zeros) once the
+      // calendar rolls to 2027. Pull the current-season year from config.
+      date: upcoming.date + ', ' + (window.LEAGUE_CONFIG?.season?.year || 2026),
       time: upcoming.time || '7:00 PM',
       day: upcoming.day || '',
       field: upcoming.field || 'TBD',

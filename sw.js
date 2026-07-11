@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v335-xss-hardening-sanitize-player-names-filter-pending`;
+const VERSION = `${LEAGUE.id}-v336-obp-sf-refresh-fix-plus-next-game-year-from-config`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
