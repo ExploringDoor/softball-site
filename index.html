@@ -3730,6 +3730,19 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 }
 
+// Audit H3 (2026-07): player + position names are free text from the PUBLIC
+// registration form (anyone can register on a team, no auth). They're then
+// interpolated straight into innerHTML in ~20 fan-facing spots (leaderboards,
+// ticker, stat tables, recap notes) that don't call esc(). Rather than wrap
+// every one, we neutralize the payload at ingestion: strip the characters
+// that can open a tag (`<` `>`) or break out of a double-quoted attribute
+// (`"`). Apostrophes / periods are kept so real names (O'Brien, Jr.) display
+// naturally. Applied to PLAYERS + box-score lineup names.
+function safeName(s) {
+  if (s == null) return '';
+  return String(s).replace(/[<>"]/g, '').trim();
+}
+
 // ═══════════════════════════════════════ FIREBASE CONFIG ════════════════════
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
 
@@ -4164,9 +4177,13 @@ async function loadAllData() {
     // removed players would keep showing in fan-facing stats/leaders/
     // team pages even after the captain dropped them.
     PLAYERS = players
-      .filter(p => p.active !== false)
+      // active:false = captain soft-deleted them. pending_approval = a
+      // profile.html self-signup an admin hasn't confirmed yet (Audit H3):
+      // those must not appear in public stats/leaders until approved, and
+      // keeping them out also shrinks the untrusted-name surface.
+      .filter(p => p.active !== false && !p.pending_approval)
       .map(p => ({
-        id: p.id, name: p.name, num: p.num, team: p.team, pos: p.pos,
+        id: p.id, name: safeName(p.name), num: p.num, team: p.team, pos: safeName(p.pos),
         avg: parseFloat(p.avg)||0, hr: p.hr||0, rbi: p.rbi||0,
         h: p.h||0, ab: p.ab||0, r: p.r||0, bb: p.bb||0,
         d: p.d||0, t: p.t||0, gp: p.gp||0,
@@ -8303,8 +8320,8 @@ async function openRecap(away,home,as,hs,field,date){
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;color:#1a1a1a;line-height:1.05;text-transform:uppercase;letter-spacing:.01em">${recap.potg_name}</div>
     </div>`;
   } else if(boxScore){
-    const aLineup=boxScore.away_lineup||boxScore.awayBatters||[];
-    const hLineup=boxScore.home_lineup||boxScore.homeBatters||[];
+    const aLineup=(boxScore.away_lineup||boxScore.awayBatters||[]).map(p=>({...p,name:safeName(p.name)}));
+    const hLineup=(boxScore.home_lineup||boxScore.homeBatters||[]).map(p=>({...p,name:safeName(p.name)}));
     const allLineup=[...aLineup.map(p=>({...p,_team:away})),...hLineup.map(p=>({...p,_team:home}))];
     const potgScore=p=>{
       const h=p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0));
@@ -8447,8 +8464,8 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
 
   if (boxScore) {
     // ── Real box score stats ──
-    const aLineup  = boxScore.away_lineup  || boxScore.awayBatters  || [];
-    const hLineup  = boxScore.home_lineup  || boxScore.homeBatters  || [];
+    const aLineup  = (boxScore.away_lineup  || boxScore.awayBatters  || []).map(p=>({...p,name:safeName(p.name)}));
+    const hLineup  = (boxScore.home_lineup  || boxScore.homeBatters  || []).map(p=>({...p,name:safeName(p.name)}));
     const aPitch   = boxScore.away_pitchers || boxScore.away_pitching || [];
     const hPitch   = boxScore.home_pitchers || boxScore.home_pitching || [];
     // Per-team Score-Only flag (captain submitted final score for one side
@@ -8621,12 +8638,12 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
         const hrStrs=hrLog.map(h=>{
           const innSfx=(n)=>{if(n===11||n===12||n===13)return'th';const r=n%10;return r===1?'st':r===2?'nd':r===3?'rd':'th';};
           const inn=h.inning?`${h.inning}${innSfx(h.inning)} inning`:'';
-          const off=h.pitcher?`off ${h.pitcher}`:'';
+          const off=h.pitcher?`off ${safeName(h.pitcher)}`:'';
           const ron=h.runnersOn!=null?`${h.runnersOn} on`:'';
           const outsStr=h.outs!=null?`${h.outs} Out`:'';
           const rbi=h.rbi>1?` (${h.rbi} RBI)`:'';
           const details=[inn,off,ron,outsStr].filter(Boolean).join(', ');
-          return `${h.name}${rbi}${details?` (${details})`:''}`;
+          return `${safeName(h.name)}${rbi}${details?` (${details})`:''}`;
         });
         notes.push(`<b>HR</b> — ${hrStrs.join('; ')}`);
       } else {
