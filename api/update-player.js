@@ -13,8 +13,12 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
+  // Fail CLOSED — see update-firebase.js. (Audit C3, 2026-07.)
   const SECRET = process.env.ADMIN_SEND_SECRET;
-  if (SECRET && req.headers['x-admin-secret'] !== SECRET) {
+  if (!SECRET) {
+    return res.status(503).json({ error: 'Not configured', detail: 'Set ADMIN_SEND_SECRET env var.' });
+  }
+  if (req.headers['x-admin-secret'] !== SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 

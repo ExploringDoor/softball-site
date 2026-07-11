@@ -28,7 +28,9 @@ export default async function handler(req, res) {
   const SVC_JSON   = process.env.FCM_SERVICE_ACCOUNT_JSON;
   const SECRET     = process.env.ADMIN_SEND_SECRET;
   if (!PROJECT_ID || !SVC_JSON) return res.status(503).json({ error: 'Not configured' });
-  if (SECRET && req.headers['x-admin-secret'] !== SECRET) {
+  // Fail CLOSED — see update-firebase.js. (Audit C3, 2026-07.)
+  if (!SECRET) return res.status(503).json({ error: 'Not configured', detail: 'Set ADMIN_SEND_SECRET env var.' });
+  if (req.headers['x-admin-secret'] !== SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
