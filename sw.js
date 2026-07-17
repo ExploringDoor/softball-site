@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v336-obp-sf-refresh-fix-plus-next-game-year-from-config`;
+const VERSION = `${LEAGUE.id}-v337-2026-gold-silver-playoff-brackets`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
