@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v337-2026-gold-silver-playoff-brackets`;
+const VERSION = `${LEAGUE.id}-v338-clickable-field-map-links-schedule-and-preview`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

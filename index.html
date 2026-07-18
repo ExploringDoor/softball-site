@@ -1399,6 +1399,14 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 .wx-temp{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;color:var(--white);line-height:1}
 .wx-desc{font-size:11px;color:var(--muted);text-transform:capitalize}
 .wx-field{font-size:10px;color:var(--muted2);margin-top:2px}
+/* Clickable field/venue -> Google Maps (schedule + game preview). Inherits the
+   surrounding text color so it blends in, with a subtle underline to signal
+   it's tappable; brightens to the accent on hover/focus. Works on light cards
+   and dark popups. See fieldLink() in JS. */
+.field-link{color:inherit;text-decoration:underline;text-decoration-color:rgba(0,45,114,.4);text-decoration-thickness:1px;text-underline-offset:2px;cursor:pointer;transition:color .15s,text-decoration-color .15s;-webkit-tap-highlight-color:rgba(0,45,114,.12)}
+.field-link:hover,.field-link:focus-visible{color:var(--gold);text-decoration-color:var(--gold);outline:none}
+body.dark .field-link{text-decoration-color:rgba(91,154,255,.45)}
+body.dark .field-link:hover,body.dark .field-link:focus-visible{color:#5b9aff;text-decoration-color:#5b9aff}
 .wx-loading{font-size:12px;color:var(--muted);font-style:italic}
 
 @keyframes alertGlow{0%,100%{box-shadow:0 0 8px #FFD700,0 0 16px rgba(255,215,0,.4)}50%{box-shadow:0 0 20px #FFD700,0 0 40px rgba(255,215,0,.6)}}
@@ -5516,8 +5524,8 @@ function initNextGame(){
   document.getElementById('ng-home').style.color = 'var(--white)';
   document.getElementById('ng-date').textContent = g.date;
   document.getElementById('ng-time').textContent = g.time;
-  document.getElementById('ng-field').textContent = g.field;
-  document.getElementById('wx-field-name').textContent = g.field + (g.addr ? ' · ' + g.addr : '');
+  document.getElementById('ng-field').innerHTML = fieldLink(g.field, g.addr);
+  document.getElementById('wx-field-name').innerHTML = fieldLink(g.field, g.addr) + (g.addr ? ' · ' + esc(g.addr) : '');
   startCountdown(g.date + ' ' + g.time);
   fetchWeather(g.lat, g.lon);
 }
@@ -5759,7 +5767,7 @@ function openRecap(gameIdx){
     '<span class="bsm-badge badge-w">Final</span></div>' +
     '<div class="bsm-team"><div class="bsm-abbr" style="color:'+hc+'">'+(g.home||'—')+'</div><div class="bsm-label">Home</div></div>' +
     '</div>' +
-    '<div class="bsm-meta"><span>📅 '+(recap&&recap.date?recap.date:g.date||'')+'</span><span>📍 '+(recap&&recap.field?recap.field:g.field||'')+'</span></div>' +
+    '<div class="bsm-meta"><span>📅 '+(recap&&recap.date?recap.date:g.date||'')+'</span><span>📍 '+fieldLink(recap&&recap.field?recap.field:g.field||'')+'</span></div>' +
     '</div>' +
     '<div class="bsm-section">' +
     '<div class="bsm-section-title">Game Recap</div>' +
@@ -5809,13 +5817,13 @@ function openBsm(gameIdx){
           </div>
         </div>
         <div class="bsm-meta">
-          <span>📅 ${g.date}</span><span>📍 ${g.field}</span><span>⏰ ${g.time}</span>
+          <span>📅 ${g.date}</span><span>📍 ${fieldLink(g.field, g.addr)}</span><span>⏰ ${g.time}</span>
         </div>
       </div>
       <div class="bsm-upcoming">
         <div class="bsm-date-big">${g.day}, ${g.date}</div>
         <div>Game time: <strong>${g.time}</strong></div>
-        <div style="margin-top:6px">📍 ${g.field} · ${g.addr}</div>
+        <div style="margin-top:6px">📍 ${fieldLink(g.field, g.addr)}${g.addr?` · ${esc(g.addr)}`:''}</div>
         <div style="margin-top:16px;font-size:12px;color:var(--muted2)">Box score available after the game</div>
       </div>`;
   }
@@ -6057,7 +6065,7 @@ function buildSchedule(){
     const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
     const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
     return `<div class="preview-card">
-      <div class="preview-time">${g.day?g.day.slice(0,3).toUpperCase()+' ':''}${g.date||''}${g.date?' · ':''}${g.time||'TBD'}${g.field?` · ${g.field}`:''}</div>
+      <div class="preview-time">${g.day?g.day.slice(0,3).toUpperCase()+' ':''}${g.date||''}${g.date?' · ':''}${g.time||'TBD'}${g.field?` · ${fieldLink(g.field, g.addr)}`:''}</div>
       ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${g.ppdResched}`:' · Reschedule TBD'}</div>`:''}
       <div class="preview-teams">
         <div class="preview-team-row">
@@ -6457,7 +6465,7 @@ function buildSchedRows(t, tgames){
       <div style="flex-shrink:0">${logo}</div>
       <div style="flex:1;min-width:0;padding-left:2px">
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15px;color:#1a1a1a;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${oppLabel}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.field||''}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.field?fieldLink(g.field, g.addr):''}</div>
       </div>
       ${scoreCol}
     </div>`;
@@ -6595,7 +6603,7 @@ function renderTeamTab(tab){
         <td style="padding:10px 12px;text-align:center"><span style="display:inline-block;padding:3px 10px;border-radius:5px;background:${tied?'rgba(107,114,128,.12)':(won?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)')};color:${tied?'#6b7280':(won?'#16a34a':'#dc2626')};font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.06em">${tied?'T':(won?'W':'L')}</span></td>
         <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#1a1a1a;white-space:nowrap">${myS}–${oppS}</td>
         <td style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap">${w}-${l}${ti?'-'+ti:''}</td>
-        <td style="padding:10px 12px;font-size:11px;color:var(--muted);white-space:nowrap">${g.field||''}</td>
+        <td style="padding:10px 12px;font-size:11px;color:var(--muted);white-space:nowrap">${g.field?fieldLink(g.field, g.addr):''}</td>
       </tr>`;
     });
     const thS='padding:9px 12px;text-align:left;font-family:\'Barlow Condensed\',sans-serif;font-weight:800;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid rgba(0,0,0,.1);white-space:nowrap;background:#f8f9fa';
@@ -7090,7 +7098,7 @@ function buildRecaps(){
             <span style="color:var(--muted);font-size:18px;margin:0 10px">vs</span>
             <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${esc(ht?.id)}')">${esc(r.home)}</span>
           </div>
-          <div class="recap-meta">📅 ${esc(r.date)} · 📍 ${esc(r.field)} · Week ${r.wk|0}</div>
+          <div class="recap-meta">📅 ${esc(r.date)} · 📍 ${fieldLink(r.field)} · Week ${r.wk|0}</div>
         </div>
         <div class="recap-score">${r.as|0}–${r.hs|0}</div>
       </div>
@@ -7737,6 +7745,35 @@ function shortToId(short){
 }
 
 function cleanField(f){return f.replace(/\s*\d+pm$/i,'').trim()}
+
+// Field/venue name → a tappable Google Maps link (Adam ask 2026-07: fields
+// clickable in schedule + game preview). Resolves the street address from
+// LEAGUE_CONFIG.fieldLocations when the caller doesn't pass one, so any site
+// can call fieldLink(g.field) or fieldLink(g.field, g.addr) uniformly.
+//   • "TBD"/empty → returns escaped plain text, never a dead map link.
+//   • event.stopPropagation() so tapping the venue inside a clickable game
+//     card/row opens Maps instead of firing the card's own onclick.
+//   • label defaults to the exact text passed in (preserves current display);
+//     the address lookup uses the cleaned field name.
+// Uses the Google Maps universal URL (?api=1&query=…): opens the Maps app on
+// phones, maps.google.com on desktop.
+function fieldLink(field, addr, opts) {
+  opts = opts || {};
+  const raw = (field == null ? '' : String(field)).trim();
+  if (!raw || /^tbd$/i.test(raw)) return esc(raw);
+  const clean = cleanField(raw);
+  const FL = (window.LEAGUE_CONFIG && window.LEAGUE_CONFIG.fieldLocations) || {};
+  const address = (addr && String(addr).trim()) || FL[raw] || FL[clean] || '';
+  const query = address || (clean + ', Pennsylvania');
+  const href = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
+  const title = address ? ('Directions to ' + clean + ' — ' + address) : ('Find ' + clean + ' on the map');
+  const cls = 'field-link' + (opts.cls ? ' ' + opts.cls : '');
+  const st = opts.style ? ' style="' + opts.style + '"' : '';
+  const label = (opts.label != null) ? opts.label : raw;
+  return '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer" class="' + cls +
+         '"' + st + ' onclick="event.stopPropagation()" title="' + esc(title) + '">' + esc(label) + '</a>';
+}
+
 function parseTime(g){
   if(g.time&&/^\d/.test(g.time))return g.time;
   const m=g.field.match(/(\d+)pm/i);
@@ -8153,7 +8190,7 @@ function scheduleBlock(g, isNext){
     const timeStr=g.time||'TBD';
     const dayPrefix=g.day?g.day.slice(0,3).toUpperCase()+' ':'';
     const datePart=g.date?`${dayPrefix}${g.date} · `:'';
-    const timeField=datePart+timeStr+(g.field?` · ${g.field}`:'');
+    const timeField=datePart+timeStr+(g.field?` · ${fieldLink(g.field, g.addr)}`:'');
     return `<div class="preview-card${isNext?' next':''}">
       <div class="preview-time">${timeField}${g.live?' <span class="live-badge">🔴 LIVE</span>':''}</div>
       ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${g.ppdResched}`:' · Reschedule TBD'}</div>`:''}
@@ -8311,7 +8348,7 @@ async function openRecap(away,home,as,hs,field,date){
         </div>
         <div class="pop-team" style="cursor:pointer" onclick="goTeam('${home}')"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
       </div>
-      <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${field}</span></div>
+      <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${fieldLink(field)}</span></div>
     </div>`;
   document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999"><div style="font-size:20px;margin-bottom:8px">⏳</div>Loading…</div>`;
   openScPop();
@@ -8446,7 +8483,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
           <div class="pop-role-lbl">Home</div>
         </div>
       </div>
-      <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${field}</span></div>
+      <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${fieldLink(field)}</span></div>
     </div>`;
 
   document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999"><div style="font-size:20px;margin-bottom:8px">⏳</div>Loading…</div>`;
@@ -8904,7 +8941,7 @@ function generateGamePreview(atm,htm,g){
   const parts=[];
 
   // ── Sentence 1: lede — travel, field, records ──
-  const fieldStr=field?` to ${field}`:'';
+  const fieldStr=field?` to ${fieldLink(field, g.addr)}`:'';
   if(hasRecs){
     const aR=`${atm.w}-${atm.l}`, hR=`${htm.w}-${htm.l}`;
     if(aRank===1&&hRank===1){
@@ -8921,7 +8958,7 @@ function generateGamePreview(atm,htm,g){
       parts.push(`${aShort} (${aR}) travels${fieldStr} to square off against ${hShort} (${hR}) in a pivotal mid-season matchup.`);
     }
   } else {
-    parts.push(`${aShort} heads${fieldStr} to take on ${hShort}${field?' at '+field:''} in what should be a great game.`);
+    parts.push(`${aShort} heads${fieldStr} to take on ${hShort}${field?' at '+fieldLink(field, g.addr):''} in what should be a great game.`);
   }
 
   // ── Sentence 2: streaks for both teams ──
@@ -9004,7 +9041,7 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup,po
   const parts=[];
 
   // S1: Result — "FIELD — WinTeam verb LoseTeam score on date."
-  const fieldPfx=field?`${field.toUpperCase()} — `:'';
+  const fieldPfx=field?`${fieldLink(field, null, {label: field.toUpperCase()})} — `:'';
   const dt=date?` on ${date}`:'';
   if(tied){
     parts.push(`${fieldPfx}${awayAbbr} and ${homeAbbr} played to a ${as}–${hs} tie${dt}.`);
@@ -9141,7 +9178,7 @@ function openGameday(away,home,field,time){
           ${ht && ht.w != null ? `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:rgba(0,0,0,.55);letter-spacing:.04em;margin-top:2px">${ht.w}-${ht.l}${ht.ti?'-'+ht.ti:''}</div>` : ''}
         </div>
       </div>
-      <div class="pop-meta"><span>📍 ${field}</span></div>
+      <div class="pop-meta"><span>📍 ${fieldLink(field)}</span></div>
     </div>
     <div class="pop-body">
       ${prevText?`<div style="font-size:13px;line-height:1.6;color:rgba(0,0,0,.6);padding:14px 24px 0;border-bottom:1px solid rgba(0,0,0,.07);padding-bottom:14px;margin-bottom:4px">${prevText}</div>`:''}
