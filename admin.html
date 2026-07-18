@@ -836,6 +836,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item active" data-section="dashboard" data-sec="dashboard" onclick="showSection('dashboard')"><span class="icon">&#128202;</span> Dashboard</div>
       <div class="nav-item" data-section="notifications" data-sec="notifications" onclick="showSection('notifications')"><span class="icon">&#128276;</span> Notifications<span id="notif-nav-badge" style="display:none;margin-left:6px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px;vertical-align:middle">0</span></div>
       <div class="nav-item" data-section="scores" data-sec="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
+      <div class="nav-item" data-section="gamechanger" data-sec="gamechanger" onclick="showSection('gamechanger')"><span class="icon">&#128229;</span> GameChanger</div>
       <div class="nav-item" data-section="schedule" data-sec="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
       <div class="nav-item" data-section="rosters" data-sec="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
       <div class="nav-item" data-section="waivers" data-sec="waivers" onclick="showSection('waivers')"><span class="icon">&#128221;</span> Waivers</div>
@@ -1468,6 +1469,34 @@ select.form-input{cursor:pointer}
         </div>
         <div style="font-size:12px;color:var(--muted2);line-height:1.6">
           💡 Sent campaigns are managed at <a href="https://dashboard.mailerlite.com" target="_blank" style="color:var(--blue)">dashboard.mailerlite.com</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ GAMECHANGER IMPORT (Phase 1: link hub) ═══ -->
+    <div class="section" id="sec-gamechanger">
+      <div class="main-header">
+        <div class="main-title">GameChanger</div>
+        <div class="main-subtitle">Store each team's GameChanger share link, then Collect new games + box scores from all of them</div>
+      </div>
+      <div style="max-width:860px">
+        <div class="card" style="padding:18px 24px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div id="gc-status" style="font-size:13px;color:var(--muted2);font-weight:600">Loading links…</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <button class="btn btn-outline" onclick="openAllGcLinks()" id="gc-openall-btn">&#128279; Open all links</button>
+              <button class="btn btn-primary" onclick="collectGameChanger()" id="gc-collect-btn">&#128229; Collect new games</button>
+            </div>
+          </div>
+          <div id="gc-collect-note" style="margin-top:12px;font-size:12.5px;color:var(--muted2);line-height:1.6;display:none"></div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <div id="gc-links-body"><div style="padding:24px;color:var(--muted2);font-size:13px">Loading teams…</div></div>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted2);line-height:1.7;margin-top:14px">
+          &#128161; A GameChanger <strong>team share link</strong> looks like <code style="font-size:11px">https://web.gc.com/teams/XXXX/live?…&amp;c=team_share_link</code>. Paste one per team and hit Save. GameChanger is used to pull <strong>player box scores</strong>; game scores and standings stay driven by IMLeagues.
         </div>
       </div>
     </div>
@@ -2484,6 +2513,7 @@ window.showSection = function(name) {
   if (name === 'pages') loadPageEditor();
   if (name === 'waivers') initWaiversSection();
   if (name === 'media') loadAdminMedia();
+  if (name === 'gamechanger') renderGcLinks();
   // Notifications section lazy-loads the full list on first open; if the
   // dashboard already fetched activity_log its render is reused.
   if (name === 'notifications') loadActivityLog();
@@ -2492,6 +2522,92 @@ window.showSection = function(name) {
 window.toggleSidebar = function() {
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebar-overlay').classList.toggle('open');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// GAMECHANGER LINK HUB (Phase 1)
+// ═══════════════════════════════════════════════════════════════════
+// The link is stored ON the team doc as `gc_url` (teams/{teamId}.gc_url).
+// A separate /gc_links collection is blocked by Firestore rules (per-
+// collection allowlist), but team docs are already client-writable — and
+// the link naturally belongs with the team. Phase 2 will add a GitHub
+// Action that scrapes each link for new games + box scores into a review
+// queue; the Collect button will fire it. For now Collect explains that
+// status and "Open all links" is the manual fallback.
+let GC_TEAMS = [];
+async function renderGcLinks() {
+  const body = document.getElementById('gc-links-body');
+  const statusEl = document.getElementById('gc-status');
+  try {
+    // Always refetch teams — the module-load TEAMS cache won't reflect a
+    // gc_url written after startup.
+    const ts = await getDocs(collection(db, 'teams'));
+    const teams = ts.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(t => t.active !== false)
+      .sort((a, b) => (a.short || a.name || a.id).localeCompare(b.short || b.name || b.id));
+    GC_TEAMS = teams;
+    const withLink = teams.filter(t => (t.gc_url || '').trim()).length;
+    statusEl.textContent = `${withLink} of ${teams.length} teams have a GameChanger link`;
+    body.innerHTML = teams.map(t => {
+      const url = (t.gc_url || '').trim();
+      const has = !!url;
+      const label = esc(t.short || t.name || t.id);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--border)">
+        <div style="width:120px;flex-shrink:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:var(--navy);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(t.name || t.short || t.id)}">${label}</div>
+        <input type="text" class="form-input" style="flex:1;min-width:0;font-size:12px;padding:7px 10px" id="gc-url-${t.id}" value="${esc(url)}" placeholder="Paste GameChanger share link…" onkeydown="if(event.key==='Enter')saveGcLink('${t.id}')">
+        <button class="btn btn-primary btn-sm" style="flex-shrink:0" onclick="saveGcLink('${t.id}')">Save</button>
+        <a class="btn btn-outline btn-sm" style="flex-shrink:0;${has ? '' : 'opacity:.35;pointer-events:none'}" href="${has ? esc(url) : '#'}" target="_blank" rel="noopener">Open</a>
+        <button class="btn btn-outline btn-sm" style="flex-shrink:0;color:var(--red);border-color:var(--red);${has ? '' : 'display:none'}" onclick="removeGcLink('${t.id}', '${label.replace(/'/g, "\\'")}')">&#10005;</button>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    body.innerHTML = `<div style="padding:24px;color:var(--red);font-size:13px">Failed to load: ${esc(e.message || String(e))}</div>`;
+  }
+}
+
+window.saveGcLink = async function(teamId) {
+  const input = document.getElementById('gc-url-' + teamId);
+  if (!input) return;
+  const url = (input.value || '').trim();
+  if (url && !/^https?:\/\/(web\.)?gc\.com\//i.test(url)) {
+    if (!confirm("That doesn't look like a GameChanger link (web.gc.com). Save it anyway?")) return;
+  }
+  try {
+    if (!url) {
+      await updateDoc(doc(db, 'teams', teamId), { gc_url: deleteField(), gc_url_updated: deleteField() });
+      toast('Link cleared.');
+    } else {
+      await updateDoc(doc(db, 'teams', teamId), { gc_url: url, gc_url_updated: new Date().toISOString() });
+      toast('Link saved.');
+    }
+    try { await logActivity('GameChanger', `${url ? 'Set' : 'Cleared'} GC link for ${getTeamFull(teamId)}`); } catch (_) {}
+    renderGcLinks();
+  } catch (e) { toast('Save failed: ' + (e.message || e), 'error'); }
+};
+
+window.removeGcLink = async function(teamId, label) {
+  if (!confirm(`Remove the GameChanger link for ${label}?`)) return;
+  try {
+    await updateDoc(doc(db, 'teams', teamId), { gc_url: deleteField(), gc_url_updated: deleteField() });
+    toast('Link removed.');
+    try { await logActivity('GameChanger', `Removed GC link for ${getTeamFull(teamId)}`); } catch (_) {}
+    renderGcLinks();
+  } catch (e) { toast('Remove failed: ' + (e.message || e), 'error'); }
+};
+
+window.openAllGcLinks = function() {
+  const urls = GC_TEAMS.map(t => (t.gc_url || '').trim()).filter(Boolean);
+  if (!urls.length) { toast('No GameChanger links saved yet.', 'error'); return; }
+  if (urls.length > 6 && !confirm(`Open all ${urls.length} GameChanger links in new tabs?`)) return;
+  urls.forEach(u => window.open(u, '_blank', 'noopener'));
+};
+
+window.collectGameChanger = function() {
+  const note = document.getElementById('gc-collect-note');
+  const saved = GC_TEAMS.filter(t => (t.gc_url || '').trim()).length;
+  note.style.display = 'block';
+  note.innerHTML = `&#9203; <strong>Automated Collect is Phase 2.</strong> The GitHub Action that scrapes every saved link for new games and player box scores into a review queue isn't wired up yet. ` +
+    `You have <strong>${saved}</strong> link${saved === 1 ? '' : 's'} saved. For now, use <strong>Open all links</strong> to eyeball new games. Once the Action is set up, this button pulls everything in automatically.`;
 };
 
 // ═══════════════════════════════════════════════════════════════════

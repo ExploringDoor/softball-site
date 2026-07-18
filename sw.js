@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v338-clickable-field-map-links-schedule-and-preview`;
+const VERSION = `${LEAGUE.id}-v339-gamechanger-link-hub-admin-phase1`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
