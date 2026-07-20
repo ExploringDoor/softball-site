@@ -24,6 +24,13 @@
 
   var CARD_W = 210, CARD_H = 137, COL_GAP = 76, ROW_GAP = 26, Y_PAD = 26;
 
+  // Optional integration points supplied by the host page, so the engine
+  // itself stays free of site-specific dependencies:
+  //   logo(teamName)  -> HTML for a small crest beside the team name
+  //   onGameClick     -> host wires its own click handling via data-tkey/data-g
+  var HOOKS = {};
+  function setHooks(h) { HOOKS = h || {}; }
+
   function esc(s) {
     if (s == null) return '';
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -167,7 +174,13 @@
     var A = sideDisplay(t, g.away), H = sideDisplay(t, g.home);
     var played = isPlayed(g), aWin = played && g.as > g.hs, hWin = played && g.hs > g.as;
     function side(s, sc, win) {
+      // Crest only for a resolved team — TBD/BYE slots get a blank spacer so
+      // every row still lines up.
+      var crest = (!s.tbd && !s.bye && typeof HOOKS.logo === 'function')
+        ? '<span class="bk-logo">' + HOOKS.logo(s.name) + '</span>'
+        : '<span class="bk-logo bk-logo-empty"></span>';
       return '<div class="bk-side' + (win ? ' win' : '') + (s.tbd ? ' tbd' : '') + (s.bye ? ' bye' : '') + '">' +
+        crest +
         '<span class="nm">' + esc(s.name) + (s.via ? '<span class="via">via ' + esc(s.via) + '</span>' : '') + '</span>' +
         '<span class="sc">' + (sc != null && sc !== '' ? esc(sc) : '') + '</span></div>';
     }
@@ -189,7 +202,12 @@
       '<div class="bk-mtop"><span class="g">Game ' + g.g + '</span>' + tag + '</div>' +
       side(A, g.as, aWin) + side(H, g.hs, hWin) +
       '<div class="bk-mfoot"><div class="bk-when">' + esc(when || 'TBD') + '</div>' +
-      '<div class="bk-frow"><span class="bk-field">' + fieldHTML + '</span></div></div></div>';
+      '<div class="bk-frow"><span class="bk-field">' + fieldHTML + '</span>' +
+      // Click cue. The host wires the actual handler by delegating off the
+      // card's data-tkey / data-g attributes; only shown once both sides
+      // are real teams, since there's nothing to open for a TBD matchup.
+      ((!A.tbd && !H.tbd) ? '<span class="gm-cue ' + (played ? 'recap' : 'preview') + '">' + (played ? 'Recap' : 'Preview') + ' &rsaquo;</span>' : '') +
+      '</div></div></div>';
   }
 
   // ── layout ──────────────────────────────────────────────────────────
@@ -497,6 +515,7 @@
 
   window.DVSLBracket = {
     render: render,
+    setHooks: setHooks,
     build8TeamDoubleElim: build8TeamDoubleElim,
     zoomBy: zoomBy,
     fit: fit,

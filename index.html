@@ -5322,10 +5322,62 @@ async function _loadPlayoffBrackets() {
   }
 }
 
+// Bracket games carry team NAMES (what admin picked), but the rest of the site
+// keys off short codes / ids — resolve by name, short, or id.
+function _bkTeamByName(name) {
+  if (!name) return null;
+  const n = String(name).trim().toLowerCase();
+  return TEAMS.find(t =>
+    (t.name  || '').toLowerCase() === n ||
+    (t.short || '').toLowerCase() === n ||
+    (t.id    || '').toLowerCase() === n) || null;
+}
+
+// Click a bracket card -> open the same modals the rest of the site uses:
+// a played game opens the box score, an upcoming one opens gameday.
+function _bkCardClick(tkey, gnum) {
+  const t = PLAYOFF_DATA && PLAYOFF_DATA[tkey];
+  if (!t) return;
+  const g = t.games.find(x => x.g === +gnum);
+  if (!g) return;
+  const B = window.DVSLBracket;
+  const A = B.sideDisplay(t, g.away), H = B.sideDisplay(t, g.home);
+  if (A.tbd || H.tbd) return;                       // nothing to open yet
+  const aT = _bkTeamByName(A.name), hT = _bkTeamByName(H.name);
+  const aShort = (aT && aT.short) || A.name, hShort = (hT && hT.short) || H.name;
+  // bracket times are stored 24h ("18:15"); the modals display them raw, so
+  // hand over a friendly 12-hour string.
+  const pretty = (t) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim());
+    if (!m) return t || 'TBD';
+    let h = +m[1]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
+    return `${h}:${m[2]} ${ap}`;
+  };
+  if (B.isPlayed(g)) openBox(aShort, hShort, g.as, g.hs, g.field || '', g.date || '', '');
+  else openGameday(aShort, hShort, g.field || '', pretty(g.time));
+}
+
 async function _initLiveBrackets() {
   const goldEl = document.getElementById('bk-gold');
   const silverEl = document.getElementById('bk-silver');
   if (!goldEl || !silverEl || !window.DVSLBracket) return;
+
+  window.DVSLBracket.setHooks({
+    logo: (name) => {
+      const t = _bkTeamByName(name);
+      return t ? teamLogoEl(t.id, t.short || name) : '';
+    }
+  });
+  // delegate card clicks once per container
+  [goldEl, silverEl].forEach(el => {
+    if (el.dataset.bkWired) return;
+    el.dataset.bkWired = '1';
+    el.addEventListener('click', ev => {
+      if (ev.target.closest('a')) return;            // let venue map links through
+      const card = ev.target.closest('.bk-match');
+      if (card) _bkCardClick(card.dataset.tkey, card.dataset.g);
+    });
+  });
   goldEl.innerHTML = '<div class="bk-empty">Loading bracket…</div>';
   PLAYOFF_DATA = await _loadPlayoffBrackets();
   window.DVSLBracket.render(goldEl, PLAYOFF_DATA.gold);
