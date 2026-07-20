@@ -13,6 +13,11 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <!-- League config (must load before any page script or module) -->
   <script src="/config.js"></script>
+  <!-- Live double-elim bracket engine (playoffs). Ported from the D27/STS
+       district brackets; see js/dvsl-bracket.js. Loaded here (not inside the
+       lazily-injected playoffs fragment) because scripts in injected HTML
+       don't execute. -->
+  <script src="/js/dvsl-bracket.js"></script>
   <script>
     // SW registration + bottom tab bar + "More" sheet.
     //
@@ -5278,7 +5283,67 @@ async function _lazyLoadPlayoffs() {
   }
 }
 
+// ─── 2026 LIVE BRACKETS ───────────────────────────────────────────────
+// Bracket state (structure + entered scores) lives in ONE Firestore doc:
+// teams/__playoff_brackets. It sits in `teams` because the security rules use
+// a per-collection allowlist that rejects brand-new collections, and it carries
+// active:false so every existing team query (they all filter active !== false)
+// ignores it. Falls back to an empty seeded structure if the doc isn't there.
+const PLAYOFF_DOC_ID = '__playoff_brackets';
+let PLAYOFF_DATA = null;
+
+// Seeds are filled from the doc once admin sets them; until then the bracket
+// renders with TBD placeholders so the structure is still visible.
+function _defaultBrackets() {
+  const B = window.DVSLBracket;
+  return {
+    gold:   B.build8TeamDoubleElim({ key:'gold',   name:'Gold Bracket',   sub:'Seeds 1-8 · Double elimination · 15 games',  seeds: [] }),
+    silver: B.build8TeamDoubleElim({ key:'silver', name:'Silver Bracket', sub:'Seeds 9-16 · Double elimination · 15 games', seeds: [] }),
+  };
+}
+
+async function _loadPlayoffBrackets() {
+  const fallback = _defaultBrackets();
+  try {
+    const db = await getDb();
+    const { doc: _doc, getDoc: _getDoc } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    const snap = await _getDoc(_doc(db, 'teams', PLAYOFF_DOC_ID));
+    if (!snap.exists()) return fallback;
+    const d = snap.data() || {};
+    // stored as JSON strings so the doc stays a flat, rules-friendly shape
+    const parse = (raw, fb) => { try { return raw ? JSON.parse(raw) : fb; } catch(_) { return fb; } };
+    return {
+      gold:   parse(d.gold,   fallback.gold),
+      silver: parse(d.silver, fallback.silver),
+    };
+  } catch(e) {
+    console.warn('[playoffs] bracket load failed, using empty structure:', e);
+    return fallback;
+  }
+}
+
+async function _initLiveBrackets() {
+  const goldEl = document.getElementById('bk-gold');
+  const silverEl = document.getElementById('bk-silver');
+  if (!goldEl || !silverEl || !window.DVSLBracket) return;
+  goldEl.innerHTML = '<div class="bk-empty">Loading bracket…</div>';
+  PLAYOFF_DATA = await _loadPlayoffBrackets();
+  window.DVSLBracket.render(goldEl, PLAYOFF_DATA.gold);
+  window.DVSLBracket.render(silverEl, PLAYOFF_DATA.silver);
+  // Deliberately NOT auto-fitting: a 15-game double-elim canvas is ~1400px
+  // wide, so fit-on-load lands around 30% and is unreadable. Start at 100%
+  // (the canvas scrolls horizontally) and let Fit be an explicit choice.
+}
+
+window.dvslBkZoom = function(d) {
+  window.DVSLBracket.zoomBy(document.getElementById('bkZoomWrap'), d, document.getElementById('bkZoomLabel'));
+};
+window.dvslBkFit = function() {
+  window.DVSLBracket.fit(document.getElementById('bkZoomWrap'), document.getElementById('bkZoomLabel'));
+};
+
 function _initPlayoffsPage() {
+  _initLiveBrackets();   // 2026 pane: render Gold + Silver via the bracket engine
   // Year selector — switch between 2026 placeholder and 2025 completed bracket
   document.querySelectorAll('#pg-playoffs .y-tab').forEach(btn => {
     btn.addEventListener('click', () => {
