@@ -13,6 +13,9 @@
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <!-- League config (must load before any page script or module) -->
   <script src="/config.js"></script>
+  <!-- Bracket engine — admin uses it to resolve "WG-5" into the real team as
+       scores are entered, so the Playoffs tab shows live matchups. -->
+  <script src="/js/dvsl-bracket.js"></script>
   <script>
     // SW registration + bottom tab bar + "More" sheet.
     //
@@ -836,6 +839,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item active" data-section="dashboard" data-sec="dashboard" onclick="showSection('dashboard')"><span class="icon">&#128202;</span> Dashboard</div>
       <div class="nav-item" data-section="notifications" data-sec="notifications" onclick="showSection('notifications')"><span class="icon">&#128276;</span> Notifications<span id="notif-nav-badge" style="display:none;margin-left:6px;background:#dc2626;color:#fff;font-size:11px;font-weight:700;padding:1px 6px;border-radius:10px;vertical-align:middle">0</span></div>
       <div class="nav-item" data-section="scores" data-sec="scores" onclick="showSection('scores')"><span class="icon">&#9917;</span> Scores</div>
+      <div class="nav-item" data-section="playoffs" data-sec="playoffs" onclick="showSection('playoffs')"><span class="icon">&#127942;</span> Playoffs</div>
       <div class="nav-item" data-section="gamechanger" data-sec="gamechanger" onclick="showSection('gamechanger')"><span class="icon">&#128229;</span> GameChanger</div>
       <div class="nav-item" data-section="schedule" data-sec="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
       <div class="nav-item" data-section="rosters" data-sec="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
@@ -1469,6 +1473,42 @@ select.form-input{cursor:pointer}
         </div>
         <div style="font-size:12px;color:var(--muted2);line-height:1.6">
           💡 Sent campaigns are managed at <a href="https://dashboard.mailerlite.com" target="_blank" style="color:var(--blue)">dashboard.mailerlite.com</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ PLAYOFFS — bracket seeds + score entry ═══ -->
+    <div class="section" id="sec-playoffs">
+      <div class="main-header">
+        <div class="main-title">Playoffs</div>
+        <div class="main-subtitle">Set the seeds, then enter scores &mdash; winners advance on the bracket automatically</div>
+      </div>
+      <div style="max-width:960px">
+
+        <div class="card" style="padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-primary btn-sm po-tab active" data-po="gold" onclick="poSelect('gold')">Gold (1-8)</button>
+            <button class="btn btn-outline btn-sm po-tab" data-po="silver" onclick="poSelect('silver')">Silver (9-16)</button>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <span id="po-status" style="font-size:12px;color:var(--muted2)"></span>
+            <button class="btn btn-outline btn-sm" onclick="poSeedFromStandings()" title="Fill the seeds from the current standings (Gold = top 8 by points, Silver = 9-16)">&#9889; Seed from standings</button>
+            <button class="btn btn-primary btn-sm" onclick="poSave()" id="po-save-btn">&#128190; Save</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:18px 20px;margin-bottom:14px">
+          <div class="panel-title" style="margin-bottom:10px">Seeds</div>
+          <div id="po-seeds" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px"></div>
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden">
+          <div class="panel-title" style="padding:16px 20px 10px;margin:0">Games</div>
+          <div id="po-games"><div style="padding:20px;color:var(--muted2);font-size:13px">Loading…</div></div>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted2);line-height:1.7;margin-top:14px">
+          &#128161; Leave a score blank if the game hasn't been played. Matchups shown as <em>Winner G5</em> fill in on their own once that game has a score. The <strong>if&nbsp;necessary</strong> game (15) only counts if the losers-bracket team wins game 14.
         </div>
       </div>
     </div>
@@ -2514,6 +2554,7 @@ window.showSection = function(name) {
   if (name === 'waivers') initWaiversSection();
   if (name === 'media') loadAdminMedia();
   if (name === 'gamechanger') renderGcLinks();
+  if (name === 'playoffs') loadPlayoffs();
   // Notifications section lazy-loads the full list on first open; if the
   // dashboard already fetched activity_log its render is reused.
   if (name === 'notifications') loadActivityLog();
@@ -2522,6 +2563,180 @@ window.showSection = function(name) {
 window.toggleSidebar = function() {
   document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sidebar-overlay').classList.toggle('open');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYOFFS — bracket seeds + score entry
+// ═══════════════════════════════════════════════════════════════════
+// Both brackets live in ONE doc: teams/__playoff_brackets, each stored as a
+// JSON string (gold / silver). It sits in `teams` because the Firestore rules
+// use a per-collection allowlist that rejects new collections, and it carries
+// active:false so every team query (they all filter active !== false) skips it.
+// The public bracket (index.html → js/dvsl-bracket.js) reads the same doc.
+const PO_DOC_ID = '__playoff_brackets';
+let PO_DATA = null;        // { gold: tournament, silver: tournament }
+let PO_CUR  = 'gold';
+
+function poBlank() {
+  const B = window.DVSLBracket;
+  return {
+    gold:   B.build8TeamDoubleElim({ key:'gold',   name:'Gold Bracket',   sub:'Seeds 1-8 · Double elimination · 15 games',  seeds: [] }),
+    silver: B.build8TeamDoubleElim({ key:'silver', name:'Silver Bracket', sub:'Seeds 9-16 · Double elimination · 15 games', seeds: [] }),
+  };
+}
+
+async function loadPlayoffs() {
+  const gamesEl = document.getElementById('po-games');
+  try {
+    // The seed dropdowns are built from TEAMS. Don't depend on load order —
+    // if the tab is opened before the main data load finishes, fetch teams
+    // here so the dropdowns are never empty.
+    if (!Array.isArray(TEAMS) || !TEAMS.length) {
+      const ts = await getDocs(collection(db, 'teams'));
+      TEAMS = ts.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+    }
+    const snap = await getDoc(doc(db, 'teams', PO_DOC_ID));
+    const blank = poBlank();
+    if (snap.exists()) {
+      const d = snap.data() || {};
+      const parse = (raw, fb) => { try { return raw ? JSON.parse(raw) : fb; } catch (_) { return fb; } };
+      PO_DATA = { gold: parse(d.gold, blank.gold), silver: parse(d.silver, blank.silver) };
+      document.getElementById('po-status').textContent = d.updated_at
+        ? 'Last saved ' + new Date(d.updated_at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' })
+        : '';
+    } else {
+      PO_DATA = blank;
+      document.getElementById('po-status').textContent = 'Not saved yet';
+    }
+    poRender();
+  } catch (e) {
+    gamesEl.innerHTML = `<div style="padding:20px;color:var(--red);font-size:13px">Failed to load: ${esc(e.message || e)}</div>`;
+  }
+}
+
+window.poSelect = function(which) {
+  PO_CUR = which;
+  document.querySelectorAll('.po-tab').forEach(b => {
+    const on = b.dataset.po === which;
+    b.classList.toggle('active', on);
+    b.classList.toggle('btn-primary', on);
+    b.classList.toggle('btn-outline', !on);
+  });
+  poRender();
+};
+
+function poRender() {
+  if (!PO_DATA) return;
+  const t = PO_DATA[PO_CUR];
+  const base = PO_CUR === 'gold' ? 0 : 8;
+
+  // ── seeds ──
+  const teamOpts = ['<option value="">— TBD —</option>'].concat(
+    TEAMS.slice().sort((a,b)=>(a.short||a.name||a.id).localeCompare(b.short||b.name||b.id))
+      .map(tm => `<option value="${esc(tm.name || tm.short || tm.id)}">${esc(tm.short || tm.name || tm.id)}</option>`)
+  ).join('');
+  document.getElementById('po-seeds').innerHTML = (t.teams || []).map((tm, i) => `
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="width:26px;flex-shrink:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;color:var(--navy)">#${base + i + 1}</span>
+      <select class="form-input" style="flex:1;min-width:0;font-size:12px;padding:6px 8px" id="po-seed-${i}" onchange="poSeedChanged()">${teamOpts}</select>
+    </div>`).join('');
+  (t.teams || []).forEach((tm, i) => {
+    const sel = document.getElementById('po-seed-' + i);
+    if (sel) sel.value = (tm.name && tm.name !== 'TBD') ? tm.name : '';
+  });
+
+  // ── games ──
+  const B = window.DVSLBracket;
+  const cls = B.classify(t);
+  const tagFor = g => cls[g.g] === 'f' ? '<span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(201,162,39,.22);color:#8a6d10">Final</span>'
+    : cls[g.g] === 'l' ? '<span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(200,16,46,.1);color:#c8102e">Losers</span>'
+    : '<span style="font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(0,45,114,.1);color:var(--navy)">Winners</span>';
+
+  document.getElementById('po-games').innerHTML = t.games.map(g => {
+    const A = B.sideDisplay(t, g.away), H = B.sideDisplay(t, g.home);
+    const nm = s => s.tbd
+      ? `<span style="color:var(--muted2);font-style:italic">${esc(s.name)}</span>`
+      : `<strong>${esc(s.name)}</strong>${s.via ? `<span style="font-size:10px;color:var(--muted2);margin-left:4px">via ${esc(s.via)}</span>` : ''}`;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="width:64px;flex-shrink:0;display:flex;flex-direction:column;gap:3px">
+        <span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:var(--navy)">Game ${g.g}</span>
+        ${tagFor(g)}
+      </div>
+      <div style="flex:1;min-width:190px;font-size:13px;line-height:1.7">
+        <div>${nm(A)} <input type="number" min="0" class="form-input" style="width:56px;padding:4px 6px;font-size:12px;margin-left:6px" id="po-as-${g.g}" value="${g.as == null ? '' : g.as}" placeholder="—"></div>
+        <div>${nm(H)} <input type="number" min="0" class="form-input" style="width:56px;padding:4px 6px;font-size:12px;margin-left:6px" id="po-hs-${g.g}" value="${g.hs == null ? '' : g.hs}" placeholder="—"></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+        <input type="date" class="form-input" style="width:140px;padding:5px 7px;font-size:12px" id="po-date-${g.g}" value="${esc(g.date || '')}">
+        <input type="time" class="form-input" style="width:110px;padding:5px 7px;font-size:12px" id="po-time-${g.g}" value="${esc(g.time || '')}">
+        <input type="text" class="form-input" style="width:120px;padding:5px 7px;font-size:12px" id="po-field-${g.g}" value="${esc(g.field || '')}" placeholder="Field" list="po-fieldlist">
+      </div>
+    </div>`;
+  }).join('') + `<datalist id="po-fieldlist">${((window.LEAGUE_CONFIG && LEAGUE_CONFIG.fields) || []).map(f => `<option value="${esc(f)}">`).join('')}</datalist>`;
+}
+
+// Re-seeding rewrites only round-1 matchups (games 1-4); every later game is a
+// WG-/LG- reference so it re-resolves on its own.
+window.poSeedChanged = function() {
+  const t = PO_DATA[PO_CUR];
+  const seeds = (t.teams || []).map((_, i) => {
+    const sel = document.getElementById('po-seed-' + i);
+    return sel && sel.value ? sel.value : 'TBD';
+  });
+  t.teams = seeds.map((n, i) => ({ n: i + 1, name: n, abbr: '' }));
+  const nm = i => seeds[i] || 'TBD';
+  const pair = { 1: [0, 7], 2: [3, 4], 3: [2, 5], 4: [1, 6] };
+  t.games.forEach(g => {
+    if (pair[g.g]) { g.away = nm(pair[g.g][0]); g.home = nm(pair[g.g][1]); }
+  });
+  poRender();
+};
+
+window.poSeedFromStandings = function() {
+  const ranked = TEAMS.slice()
+    .filter(t => t.active !== false)
+    .map(t => ({ t, pts: (t.w || 0) * 3 + (t.ti || 0) * 2 + (t.l || 0) * 1, diff: (t.rs || 0) - (t.ra || 0) }))
+    .sort((a, b) => b.pts - a.pts || b.diff - a.diff)
+    .map(x => x.t.name || x.t.short || x.t.id);
+  const slice = PO_CUR === 'gold' ? ranked.slice(0, 8) : ranked.slice(8, 16);
+  if (!slice.length) { toast('No standings loaded yet.', 'error'); return; }
+  slice.forEach((n, i) => { const sel = document.getElementById('po-seed-' + i); if (sel) sel.value = n; });
+  poSeedChanged();
+  toast(`Seeded ${PO_CUR === 'gold' ? 'Gold' : 'Silver'} from standings. Review, then Save.`);
+};
+
+window.poSave = async function() {
+  if (!PO_DATA) return;
+  const btn = document.getElementById('po-save-btn');
+  btn.disabled = true;
+  try {
+    // pull the on-screen values into the current bracket before saving
+    const t = PO_DATA[PO_CUR];
+    const num = v => (v === '' || v == null) ? null : (isNaN(+v) ? null : +v);
+    t.games.forEach(g => {
+      g.as    = num((document.getElementById('po-as-'    + g.g) || {}).value);
+      g.hs    = num((document.getElementById('po-hs-'    + g.g) || {}).value);
+      g.date  = ((document.getElementById('po-date-'  + g.g) || {}).value || '').trim();
+      g.time  = ((document.getElementById('po-time-'  + g.g) || {}).value || '').trim();
+      g.field = ((document.getElementById('po-field-' + g.g) || {}).value || '').trim();
+    });
+    await setDoc(doc(db, 'teams', PO_DOC_ID), {
+      // active:false keeps this doc invisible to every existing team query
+      active: false,
+      name: 'Playoff brackets (data only — not a team)',
+      gold: JSON.stringify(PO_DATA.gold),
+      silver: JSON.stringify(PO_DATA.silver),
+      updated_at: new Date().toISOString(),
+    }, { merge: true });
+    document.getElementById('po-status').textContent = 'Last saved just now';
+    toast('Playoff bracket saved.');
+    try { await logActivity('Playoffs', `Saved ${PO_CUR === 'gold' ? 'Gold' : 'Silver'} bracket`); } catch (_) {}
+    poRender();   // re-resolve matchups from the scores just entered
+  } catch (e) {
+    toast('Save failed: ' + (e.message || e), 'error');
+  } finally {
+    btn.disabled = false;
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════════

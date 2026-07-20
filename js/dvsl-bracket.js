@@ -475,7 +475,12 @@
       key: opts.key || 'bracket',
       name: opts.name || 'Bracket',
       sub: opts.sub || 'Double elimination · 15 games',
-      teams: s.map(function (n, i) { return { n: i + 1, name: (n && String(n).trim()) || 'TBD', abbr: opts.abbrs ? opts.abbrs[i] : '' }; }),
+      // Always 8 seed slots, even when no seeds are known yet — the admin
+      // seed editor renders one row per slot, so an empty seeds array must
+      // still yield 8 TBD placeholders rather than nothing.
+      teams: [0, 1, 2, 3, 4, 5, 6, 7].map(function (i) {
+        return { n: i + 1, name: nm(i), abbr: (opts.abbrs || [])[i] || '' };
+      }),
       games: [
         G(1, nm(0), nm(7)), G(2, nm(3), nm(4)), G(3, nm(2), nm(5)), G(4, nm(1), nm(6)),
         G(5, 'WG-1', 'WG-2'), G(6, 'WG-3', 'WG-4'),
