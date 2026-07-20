@@ -5297,8 +5297,8 @@ let PLAYOFF_DATA = null;
 function _defaultBrackets() {
   const B = window.DVSLBracket;
   return {
-    gold:   B.build8TeamDoubleElim({ key:'gold',   name:'Gold Bracket',   sub:'Seeds 1-8 · Double elimination · 15 games',  seeds: [] }),
-    silver: B.build8TeamDoubleElim({ key:'silver', name:'Silver Bracket', sub:'Seeds 9-16 · Double elimination · 15 games', seeds: [] }),
+    gold:   B.build8TeamDoubleElim({ key:'gold',   name:'Gold Bracket',   sub:'Seeds 1-8 · Double elimination · 15 games',  seeds: [], seedBase: 0 }),
+    silver: B.build8TeamDoubleElim({ key:'silver', name:'Silver Bracket', sub:'Seeds 9-16 · Double elimination · 15 games', seeds: [], seedBase: 8 }),
   };
 }
 
@@ -7793,6 +7793,47 @@ buildTicker2();
     if (overlay) overlay.style.display = 'none';
   } catch(_) {}
 })();
+// ═══ PLAYOFF PROMO INTERSTITIAL ═══
+// One-time nudge toward the brackets. Deliberately conservative given the
+// 4/27/26 incident where a full-screen overlay + scroll lock left mobile
+// visitors with a blank page:
+//   • never touches body.overflow — the overlay scrolls on its own
+//   • only shows once the page has actually painted (rAF + load)
+//   • self-expires after the playoffs start, so it can't linger
+//   • dismissible five ways: button, "maybe later", X, backdrop, Esc
+const PLAYOFF_PROMO_KEY = 'dvsl_playoff_promo_2026';
+const PLAYOFF_PROMO_UNTIL = new Date('2026-07-23T00:00:00').getTime();
+
+window.dismissPlayoffModal = function() {
+  try { localStorage.setItem(PLAYOFF_PROMO_KEY, '1'); } catch(_) {}
+  const el = document.getElementById('playoff-modal');
+  if (el) el.style.display = 'none';
+  document.body.style.overflow = '';   // defensive, in case anything else set it
+};
+window.goPlayoffsFromModal = function() {
+  window.dismissPlayoffModal();
+  try { goPage('playoffs'); } catch(_) { location.hash = '#playoffs'; }
+};
+(function _initPlayoffPromo() {
+  try {
+    if (Date.now() > PLAYOFF_PROMO_UNTIL) return;              // playoffs started
+    if (localStorage.getItem(PLAYOFF_PROMO_KEY) === '1') return; // already seen
+    const show = () => {
+      const el = document.getElementById('playoff-modal');
+      if (!el) return;
+      el.style.display = 'flex';
+      el.addEventListener('click', ev => { if (ev.target === el) window.dismissPlayoffModal(); });
+      document.addEventListener('keydown', ev => { if (ev.key === 'Escape') window.dismissPlayoffModal(); });
+    };
+    // Wait until after load so we can never be blamed for an empty-looking
+    // page. Uses setTimeout rather than requestAnimationFrame on purpose:
+    // rAF never fires in a hidden/background tab, so a visitor who opened
+    // the site in a background tab would never see this.
+    if (document.readyState === 'complete') setTimeout(show, 350);
+    else window.addEventListener('load', () => setTimeout(show, 350), { once: true });
+  } catch(_) {}
+})();
+
 window.dismissWelcomeCard = function() {
   try { localStorage.setItem('dvsl_welcome_dismissed', '1'); } catch(_){}
   const overlay = document.getElementById('welcome-overlay');
@@ -10168,6 +10209,23 @@ function initStandings(){
 </div>
 
 <!-- PWA install banner — only shows on mobile, once, dismissable -->
+<!-- ══ PLAYOFF PROMO INTERSTITIAL ══
+     Shown once per visitor until the playoffs begin, then never again.
+     IMPORTANT: this deliberately does NOT lock body scroll. The previous
+     full-screen welcome overlay was kill-switched on 4/27/26 because a stuck
+     body.overflow:hidden left mobile visitors staring at a blank page. The
+     overlay scrolls internally instead, and it's only shown after load. -->
+<div id="playoff-modal" role="dialog" aria-modal="true" aria-labelledby="po-modal-title" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,8,20,.86);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px;overflow-y:auto">
+  <div style="position:relative;background:#fff;border-radius:18px;max-width:430px;width:100%;padding:34px 28px 26px;text-align:center;box-shadow:0 24px 70px rgba(0,0,0,.5);border-top:6px solid #C9A227">
+    <button onclick="dismissPlayoffModal()" aria-label="Close" style="position:absolute;top:10px;right:12px;background:transparent;border:none;font-size:26px;line-height:1;color:#9ca3af;cursor:pointer;padding:4px 8px">&times;</button>
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#C9A227;margin-bottom:6px">DVSL 2026 Postseason</div>
+    <div id="po-modal-title" style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(34px,9vw,46px);line-height:.95;text-transform:uppercase;color:#002D72;letter-spacing:-.01em">Playoffs<br>Start July 22</div>
+    <div style="font-size:14px;line-height:1.6;color:#4b5563;margin:14px 0 22px">Gold and Silver brackets are set. Follow every game as winners advance and teams get knocked out.</div>
+    <button onclick="goPlayoffsFromModal()" style="width:100%;background:#002D72;color:#fff;border:none;border-radius:10px;padding:15px 18px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer">View the Brackets</button>
+    <button onclick="dismissPlayoffModal()" style="margin-top:10px;background:transparent;border:none;color:#6b7280;font-size:13px;cursor:pointer;padding:6px 10px;text-decoration:underline">Maybe later</button>
+  </div>
+</div>
+
 <div id="pwa-install-banner" style="display:none;position:fixed;bottom:12px;left:12px;right:12px;z-index:9998;background:#002D72;color:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-family:system-ui,-apple-system,sans-serif;font-size:14px;align-items:center;gap:12px;max-width:440px;margin:0 auto">
   <div style="flex:1;line-height:1.4">
     <div style="font-weight:800;margin-bottom:2px">📱 Add DVSL to Home Screen</div>
@@ -10186,6 +10244,12 @@ function initStandings(){
     if (isStandalone) return;
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (!isMobile) return;
+
+    // Don't stack the install banner on top of the playoff interstitial.
+    try {
+      const pm = document.getElementById('playoff-modal');
+      if (pm && pm.style.display === 'flex') return;
+    } catch (_) {}
 
     const banner = document.getElementById('pwa-install-banner');
     const installBtn = document.getElementById('pwa-install-btn');

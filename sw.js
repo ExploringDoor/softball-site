@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v342-bracket-logos-and-game-clickthrough`;
+const VERSION = `${LEAGUE.id}-v343-bracket-seed-numbers-plus-playoff-promo`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 

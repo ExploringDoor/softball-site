@@ -173,14 +173,22 @@
   function matchHTML(t, g, cls, x, y) {
     var A = sideDisplay(t, g.away), H = sideDisplay(t, g.home);
     var played = isPlayed(g), aWin = played && g.as > g.hs, hWin = played && g.hs > g.as;
+    // Seed number for a resolved team. t.seedBase offsets the display so the
+    // Silver bracket reads 9-16 (its league seeds) rather than 1-8 again.
+    function seedOf(name) {
+      var rec = (t.teams || []).find(function (x) { return x.name === name; });
+      return rec ? (rec.n + (t.seedBase || 0)) : null;
+    }
     function side(s, sc, win) {
       // Crest only for a resolved team — TBD/BYE slots get a blank spacer so
       // every row still lines up.
       var crest = (!s.tbd && !s.bye && typeof HOOKS.logo === 'function')
         ? '<span class="bk-logo">' + HOOKS.logo(s.name) + '</span>'
         : '<span class="bk-logo bk-logo-empty"></span>';
+      var sd = (!s.tbd && !s.bye) ? seedOf(s.name) : null;
+      var seedEl = '<span class="bk-seed">' + (sd != null ? sd : '') + '</span>';
       return '<div class="bk-side' + (win ? ' win' : '') + (s.tbd ? ' tbd' : '') + (s.bye ? ' bye' : '') + '">' +
-        crest +
+        seedEl + crest +
         '<span class="nm">' + esc(s.name) + (s.via ? '<span class="via">via ' + esc(s.via) + '</span>' : '') + '</span>' +
         '<span class="sc">' + (sc != null && sc !== '' ? esc(sc) : '') + '</span></div>';
     }
@@ -493,6 +501,9 @@
       key: opts.key || 'bracket',
       name: opts.name || 'Bracket',
       sub: opts.sub || 'Double elimination · 15 games',
+      // Added to each team's slot number when a seed is displayed, so Silver
+      // shows 9-16 (its league seeds) instead of repeating 1-8.
+      seedBase: opts.seedBase || 0,
       // Always 8 seed slots, even when no seeds are known yet — the admin
       // seed editor renders one row per slot, so an empty seeds array must
       // still yield 8 TBD placeholders rather than nothing.
