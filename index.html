@@ -4771,7 +4771,7 @@ async function refreshVolatileData() {
     try { buildHomeSidebar(); } catch(e) {}        // home-page standings
     try { buildStand2026(); } catch(e) {}          // full standings page
     try { buildSchedule(); } catch(e) {}
-    try { _ensurePlayoffDataForHome(); } catch(e) {}   // may re-render the block
+    try { _ensurePlayoffData(); } catch(e) {}   // folds playoff games into the schedule
     try { buildHomeRecentScores(); } catch(e) {}
     try { applyHomeSectionOrder(); } catch(e) {}
     try { buildLeaderboard(); } catch(e) {}
@@ -6201,27 +6201,73 @@ function _renderUpcomingCards(wrap, games, label){
     `<div class="preview-grid">${cards}</div>`;
 }
 
-// The home page's Upcoming Schedule needs the bracket doc once the regular
-// season is over, but that doc is normally only fetched when you open the
-// playoffs page. Load it once here (cheap, single doc) and re-render the
-// block if it was showing the empty state.
-let _poHomeLoadStarted = false;
-function _ensurePlayoffDataForHome(){
-  if (PLAYOFF_DATA || _poHomeLoadStarted) return;
-  // Only bother when there's nothing upcoming in the regular season.
-  const hasRegularUpcoming = (SCHEDULE_PREVIEW || []).some(g => {
-    if (g.done || g.ppd) return false;
-    const iso = g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso) ? g.date_iso : '';
-    if (!iso) return false;
-    const d = new Date(iso + 'T00:00:00'), t = new Date(); t.setHours(0,0,0,0);
-    return d >= t;
-  });
-  if (hasRegularUpcoming) return;
-  _poHomeLoadStarted = true;
+// Playoff games live in teams/__playoff_brackets, not /games, so nothing that
+// reads SCHEDULE_PREVIEW knows about them. Load that one small doc once per
+// visit, fold the playoff games into SCHEDULE_PREVIEW as a "PL" week, and
+// re-render whatever is on screen. That gives the schedule page its Playoffs
+// tab and the home page its upcoming block for free.
+let _poLoadStarted = false;
+function _ensurePlayoffData(){
+  if (_poLoadStarted) return;
+  _poLoadStarted = true;
   _loadPlayoffBrackets().then(data => {
     PLAYOFF_DATA = data;
+    try { _injectPlayoffGamesIntoSchedule(); } catch(_) {}
     try { buildSchedule(); } catch(_) {}
+    try { if (typeof buildScoresNav === 'function') buildScoresNav(); } catch(_) {}
+    try { if (typeof renderScores === 'function') renderScores(); } catch(_) {}
   }).catch(() => {});
+}
+
+// Convert decided playoff matchups into SCHEDULE_PREVIEW-shaped rows under a
+// single "PL" week. Only games whose BOTH sides are known are included — a
+// "Winner G5 vs Winner G6" row can't render a team, and would just look
+// broken on the schedule. Later rounds appear as they get decided.
+const PO_GAME_PREFIX = 'po__';
+function _playoffScheduleGames(){
+  if (!PLAYOFF_DATA || !window.DVSLBracket) return [];
+  const B = window.DVSLBracket;
+  const out = [];
+  [['gold','Gold'],['silver','Silver']].forEach(([key,label]) => {
+    const t = PLAYOFF_DATA[key];
+    if (!t || !Array.isArray(t.games)) return;
+    t.games.forEach(g => {
+      if (!g.date || !/^\d{4}-\d{2}-\d{2}$/.test(g.date)) return;
+      const A = B.sideDisplay(t, g.away), H = B.sideDisplay(t, g.home);
+      if (A.tbd || H.tbd || A.bye || H.bye) return;
+      const aT = _bkTeamByName(A.name), hT = _bkTeamByName(H.name);
+      const d = new Date(g.date + 'T12:00:00');
+      const played = B.isPlayed(g);
+      out.push({
+        id: PO_GAME_PREFIX + key + '_' + g.g,
+        wk: 'PL',
+        away: (aT && aT.short) || A.name,
+        home: (hT && hT.short) || H.name,
+        as: played ? g.as : null,
+        hs: played ? g.hs : null,
+        done: played,
+        date: d.toLocaleDateString('en-US', { month:'short', day:'numeric' }),
+        date_iso: g.date,
+        day: d.toLocaleDateString('en-US', { weekday:'short' }),
+        time: (() => { const m=/^(\d{1,2}):(\d{2})$/.exec(g.time||''); if(!m) return g.time||'TBD';
+                       let h=+m[1]; const ap=h>=12?'PM':'AM'; h=h%12||12; return `${h}:${m[2]} ${ap}`; })(),
+        field: g.field || '', addr: '', ppd: false, rained_out: false,
+        poTag: `${label} G${g.g}`,
+      });
+    });
+  });
+  return out.sort((a,b) => (a.date_iso||'').localeCompare(b.date_iso||'') ||
+                           (a.poTag||'').localeCompare(b.poTag||''));
+}
+
+function _injectPlayoffGamesIntoSchedule(){
+  if (!Array.isArray(SCHEDULE_PREVIEW)) return;
+  // drop any previously injected rows so repeat calls don't duplicate
+  for (let i = SCHEDULE_PREVIEW.length - 1; i >= 0; i--) {
+    if (String(SCHEDULE_PREVIEW[i].id || '').startsWith(PO_GAME_PREFIX)) SCHEDULE_PREVIEW.splice(i, 1);
+  }
+  const po = _playoffScheduleGames();
+  if (po.length) SCHEDULE_PREVIEW.push(...po);
 }
 
 // Next playoff games, pulled from the bracket doc (they don't live in /games).
@@ -7411,7 +7457,7 @@ window._dataPromise.then(() => {
   try{ buildHomeSidebar(); }catch(e){}
   try{ buildHomeRecentScores(); }catch(e){}
   try{ buildSchedule(); }catch(e){}
-  try{ _ensurePlayoffDataForHome(); }catch(e){}   // season over -> show playoffs
+  try{ _ensurePlayoffData(); }catch(e){}   // folds playoff games into the schedule
   try{ applyHomeSectionOrder(); }catch(e){}
   try{ initNextGame(); }catch(e){}
   try{ buildLeaderboard(); }catch(e){}
@@ -8185,7 +8231,8 @@ function buildScoresNav(){
   if(weekOffset<0)weekOffset=off;
   const dnSlots=document.getElementById('dnSlots');
   dnSlots.innerHTML=wks.map((w,i)=>{
-    const label=String(w.wk).startsWith('PL')?w.wk:'WK '+w.wk;
+    // "PL" is the synthetic playoff week folded in from the bracket doc.
+    const label=String(w.wk).startsWith('PL')?'PLAYOFFS':'WK '+w.wk;
     const dr=w.dateRange||w.date||'';
     const isRange=dr.includes('–');
     return`<div class="dn-slot${i===off?' active':''}" data-idx="${i}" role="button" tabindex="0" style="${isRange?'min-width:90px':''}">
@@ -8483,7 +8530,8 @@ function renderScores(){
     weekOffset=off;
     const w=doneWks[off];
     const doneGames=w.games.filter(g=>g.done);
-    wrap.innerHTML=`<div class="sb-week-head">Week ${w.wk} · ${w.date} <span style="font-size:13px;color:var(--muted);font-weight:400">${doneGames.length} game${doneGames.length!==1?'s':''}</span></div>`
+    const _wkHead = String(w.wk).startsWith('PL') ? 'Playoffs' : ('Week ' + w.wk);
+    wrap.innerHTML=`<div class="sb-week-head">${_wkHead} · ${w.date} <span style="font-size:13px;color:var(--muted);font-weight:400">${doneGames.length} game${doneGames.length!==1?'s':''}</span></div>`
       +`<div class="gc-cards-grid">`
       +doneGames.map(g=>scheduleBlock(g,false)).join('')
       +`</div>`;
