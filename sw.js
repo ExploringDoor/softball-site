@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v343-bracket-seed-numbers-plus-playoff-promo`;
+const VERSION = `${LEAGUE.id}-v344-playoffs-drop-2025-bracket-and-heading`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
