@@ -4771,6 +4771,7 @@ async function refreshVolatileData() {
     try { buildHomeSidebar(); } catch(e) {}        // home-page standings
     try { buildStand2026(); } catch(e) {}          // full standings page
     try { buildSchedule(); } catch(e) {}
+    try { _ensurePlayoffDataForHome(); } catch(e) {}   // may re-render the block
     try { buildHomeRecentScores(); } catch(e) {}
     try { applyHomeSectionOrder(); } catch(e) {}
     try { buildLeaderboard(); } catch(e) {}
@@ -6133,15 +6134,30 @@ function buildSchedule(){
   };
 
   let currentWk=allWkNums.find(w=>wkMap[w].some(_isFutureUpcoming));
-  if(!currentWk) currentWk=allWkNums[allWkNums.length-1];
-  if(!currentWk){ wrap.innerHTML=''; return; }
+
+  // ── Season over? Show the playoffs instead. ────────────────────────────
+  // Once the last regular-season game is played there is no week with future
+  // games. This block used to fall back to the LAST week and then, because
+  // that week had no upcoming games either, fall back again to ALL of its
+  // games — rendering already-final games under "Upcoming Schedule" (Adam
+  // reported the Jul 20 games showing as upcoming while sitting in Recent
+  // Scores with final scores right below). Playoff games live in the bracket
+  // doc rather than /games, so pull the next ones from there.
+  if(!currentWk){
+    const po = _upcomingPlayoffGames();
+    if (po.length) { _renderUpcomingCards(wrap, po, 'Playoffs'); return; }
+    // Nothing upcoming anywhere — say so rather than resurrect old games.
+    wrap.innerHTML = `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:rgba(0,0,0,.4);margin-bottom:6px">Upcoming</div>` +
+      `<div style="padding:18px 2px;color:rgba(0,0,0,.45);font-size:14px">No games scheduled right now. Check the <span style="color:#002D72;font-weight:700;cursor:pointer" onclick="goPage('playoffs')">playoff brackets</span> for what's next.</div>`;
+    return;
+  }
 
   const weekGames=wkMap[currentWk];
   // Only show games whose dates are today-or-later AND not done. This
   // prevents a week with a mix of done + stale not-done games from
   // surfacing the stale ones as 'upcoming'.
   const upGames=weekGames.filter(_isFutureUpcoming);
-  const gamesToShow=(upGames.length?upGames:weekGames).slice().sort((a,b) => {
+  const gamesToShow=upGames.slice().sort((a,b) => {
     // Within a week, always show games in chronological order. Prefer
     // ISO date when present; fall back to the human-readable date string
     // (e.g. "Apr 28") which still sorts month-then-day correctly when
@@ -6152,16 +6168,19 @@ function buildSchedule(){
     return (a.time || '').localeCompare(b.time || '', undefined, { numeric: true });
   });
 
-  // Show every upcoming game in the current week. Previously capped at 6,
-  // which silently hid games when a week had 7+ matchups (e.g. wk2 has 8
-  // including the rescheduled SA @ BOR).
-  const cards=gamesToShow.map(g=>{
+  const wkLabel=String(currentWk).startsWith('PL')?'Playoffs':'Week '+currentWk;
+  _renderUpcomingCards(wrap, gamesToShow, wkLabel);
+}
+
+// Render a set of upcoming games as preview cards. Shared by the regular
+// season path and the playoff path so both look identical.
+function _renderUpcomingCards(wrap, games, label){
+  const cards=games.map(g=>{
     const atm=getTeamByShort(g.away), htm=getTeamByShort(g.home);
-    const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
     const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
     const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
     return `<div class="preview-card">
-      <div class="preview-time">${g.day?g.day.slice(0,3).toUpperCase()+' ':''}${g.date||''}${g.date?' · ':''}${g.time||'TBD'}${g.field?` · ${fieldLink(g.field, g.addr)}`:''}</div>
+      <div class="preview-time">${g.day?g.day.slice(0,3).toUpperCase()+' ':''}${g.date||''}${g.date?' · ':''}${g.time||'TBD'}${g.field?` · ${fieldLink(g.field, g.addr)}`:''}${g.poTag?` · <span style="color:#C9A227;font-weight:800">${esc(g.poTag)}</span>`:''}</div>
       ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${g.ppdResched}`:' · Reschedule TBD'}</div>`:''}
       <div class="preview-teams">
         <div class="preview-team-row">
@@ -6177,11 +6196,68 @@ function buildSchedule(){
       ${g.done?`<span class="preview-link" style="margin-top:4px" onclick="event.stopPropagation();shareGame('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Share</span>`:''}
     </div>`;
   }).join('');
-
-  const wkLabel=String(currentWk).startsWith('PL')?'Playoffs':'Week '+currentWk;
   wrap.innerHTML =
-    `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:rgba(0,0,0,.4);margin-bottom:6px">${wkLabel}</div>` +
+    `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:rgba(0,0,0,.4);margin-bottom:6px">${esc(label)}</div>` +
     `<div class="preview-grid">${cards}</div>`;
+}
+
+// The home page's Upcoming Schedule needs the bracket doc once the regular
+// season is over, but that doc is normally only fetched when you open the
+// playoffs page. Load it once here (cheap, single doc) and re-render the
+// block if it was showing the empty state.
+let _poHomeLoadStarted = false;
+function _ensurePlayoffDataForHome(){
+  if (PLAYOFF_DATA || _poHomeLoadStarted) return;
+  // Only bother when there's nothing upcoming in the regular season.
+  const hasRegularUpcoming = (SCHEDULE_PREVIEW || []).some(g => {
+    if (g.done || g.ppd) return false;
+    const iso = g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso) ? g.date_iso : '';
+    if (!iso) return false;
+    const d = new Date(iso + 'T00:00:00'), t = new Date(); t.setHours(0,0,0,0);
+    return d >= t;
+  });
+  if (hasRegularUpcoming) return;
+  _poHomeLoadStarted = true;
+  _loadPlayoffBrackets().then(data => {
+    PLAYOFF_DATA = data;
+    try { buildSchedule(); } catch(_) {}
+  }).catch(() => {});
+}
+
+// Next playoff games, pulled from the bracket doc (they don't live in /games).
+// Only games whose BOTH sides are decided are shown — a card reading
+// "Winner G5 vs Winner G6" isn't useful on the home page.
+function _upcomingPlayoffGames(){
+  if (!PLAYOFF_DATA || !window.DVSLBracket) return [];
+  const B = window.DVSLBracket;
+  const today = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  const out = [];
+  [['gold','Gold'],['silver','Silver']].forEach(([key,label]) => {
+    const t = PLAYOFF_DATA[key];
+    if (!t || !Array.isArray(t.games)) return;
+    t.games.forEach(g => {
+      if (B.isPlayed(g)) return;
+      if (!g.date || !/^\d{4}-\d{2}-\d{2}$/.test(g.date)) return;
+      if (new Date(g.date + 'T00:00:00') < today) return;
+      const A = B.sideDisplay(t, g.away), H = B.sideDisplay(t, g.home);
+      if (A.tbd || H.tbd || A.bye || H.bye) return;      // matchup not decided yet
+      const aT = _bkTeamByName(A.name), hT = _bkTeamByName(H.name);
+      const d = new Date(g.date + 'T12:00:00');
+      out.push({
+        away: (aT && aT.short) || A.name,
+        home: (hT && hT.short) || H.name,
+        date: d.toLocaleDateString('en-US', { month:'short', day:'numeric' }),
+        date_iso: g.date,
+        day: d.toLocaleDateString('en-US', { weekday:'short' }),
+        time: (() => { const m=/^(\d{1,2}):(\d{2})$/.exec(g.time||''); if(!m) return g.time||'TBD';
+                       let h=+m[1]; const ap=h>=12?'PM':'AM'; h=h%12||12; return `${h}:${m[2]} ${ap}`; })(),
+        field: g.field || '', addr: '', done: false, ppd: false,
+        poTag: `${label} G${g.g}`,
+      });
+    });
+  });
+  return out.sort((a,b) => (a.date_iso||'').localeCompare(b.date_iso||'') ||
+                           (a.poTag||'').localeCompare(b.poTag||''));
 }
 
 // ════════════════════════════ LEADERBOARD ════════════════════════════════
@@ -7335,6 +7411,7 @@ window._dataPromise.then(() => {
   try{ buildHomeSidebar(); }catch(e){}
   try{ buildHomeRecentScores(); }catch(e){}
   try{ buildSchedule(); }catch(e){}
+  try{ _ensurePlayoffDataForHome(); }catch(e){}   // season over -> show playoffs
   try{ applyHomeSectionOrder(); }catch(e){}
   try{ initNextGame(); }catch(e){}
   try{ buildLeaderboard(); }catch(e){}

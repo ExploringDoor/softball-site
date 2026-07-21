@@ -174,7 +174,7 @@ self.addEventListener('notificationclick', function(event) {
   })());
 });
 
-const VERSION = `${LEAGUE.id}-v344-playoffs-drop-2025-bracket-and-heading`;
+const VERSION = `${LEAGUE.id}-v345-upcoming-block-shows-playoffs-not-played-games`;
 const CORE_CACHE = `${LEAGUE.id}-core-${VERSION}`;
 const RUNTIME_CACHE = `${LEAGUE.id}-runtime-${VERSION}`;
 
