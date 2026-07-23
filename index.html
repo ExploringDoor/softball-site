@@ -4261,7 +4261,10 @@ async function loadAllData() {
       const h = bs.home_lineup || bs.homeLineup || bs.homeBatters;
       return (Array.isArray(a) && a.length > 0) || (Array.isArray(h) && h.length > 0);
     };
-    const finalBS = boxScores.filter(bs => bs.status === 'final' || _hasAnyLineup(bs));
+    // Playoff box scores (po__*) are captured + viewable per game, but kept out
+    // of the season leaderboards so the frozen regular-season stats don't move.
+    const _isPoBs = (bs) => String(bs.id || bs.game_id || '').startsWith('po__');
+    const finalBS = boxScores.filter(bs => (bs.status === 'final' || _hasAnyLineup(bs)) && !_isPoBs(bs));
     // Expose for recap-card POTG fallback (buildRecaps reads window.FINAL_BOX_SCORES)
     window.FINAL_BOX_SCORES = finalBS;
     if (finalBS.length > 0) {
@@ -4680,7 +4683,8 @@ async function refreshVolatileData() {
       const h = bs.home_lineup || bs.homeLineup || bs.homeBatters;
       return (Array.isArray(a) && a.length > 0) || (Array.isArray(h) && h.length > 0);
     };
-    const finalBS = freshBS.filter(bs => bs.status === 'final' || _hasAnyLineup2(bs));
+    // Playoff box scores (po__*) stay out of the season leaderboards.
+    const finalBS = freshBS.filter(bs => (bs.status === 'final' || _hasAnyLineup2(bs)) && !String(bs.id || bs.game_id || '').startsWith('po__'));
     if (finalBS.length > 0) {
       const batMap = {};
       const pitMap = {};
@@ -5347,6 +5351,25 @@ function _defaultBrackets() {
   };
 }
 
+// Ids of playoff box scores that exist (po__<key>_<g>). Captains can enter box
+// scores for playoff games; only those games get a "Recap" cue on the bracket.
+let _poBoxScoreIds = new Set();
+async function _loadPoBoxScoreIds() {
+  try {
+    const db = await getDb();
+    const m = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
+    // Range scan the box_scores collection for ids in the "po__" namespace.
+    const q = m.query(m.collection(db, 'box_scores'), m.orderBy(m.documentId()),
+                      m.startAt('po__'), m.endAt('po__'));
+    const snap = await m.getDocs(q);
+    const set = new Set();
+    snap.forEach(d => set.add(d.id));
+    _poBoxScoreIds = set;
+  } catch (e) {
+    console.warn('[playoffs] playoff box-score id scan failed (recap cues off):', e);
+  }
+}
+
 async function _loadPlayoffBrackets() {
   const fallback = _defaultBrackets();
   try {
@@ -5407,11 +5430,15 @@ async function _initLiveBrackets() {
   const silverEl = document.getElementById('bk-silver');
   if (!goldEl || !silverEl || !window.DVSLBracket) return;
 
+  // Which playoff games have a box score (captain-entered) → those get a
+  // "Recap" cue that opens the box-score modal. Score-only games get none.
+  await _loadPoBoxScoreIds();
   window.DVSLBracket.setHooks({
     logo: (name) => {
       const t = _bkTeamByName(name);
       return t ? teamLogoEl(t.id, t.short || name) : '';
-    }
+    },
+    hasRecap: (key, g) => _poBoxScoreIds.has('po__' + key + '_' + g),
   });
   // Open the game preview only from the "Preview" cue. Taps anywhere else on a
   // card (a team name/logo) are left for the engine's path-trace to handle, so

@@ -6516,6 +6516,9 @@ async function recalcPlayerStatsFromBoxScores() {
   bsSnap.docs.forEach(d => {
     const x = d.data();
     const gid = x.game_id || d.id;
+    // Playoff box scores (po__*) are viewable per game but excluded from
+    // season batting/pitching totals so the frozen regular season stays put.
+    if (String(gid).startsWith('po__') || String(d.id).startsWith('po__')) return;
     if (!byGame[gid] || (!x.team_id && byGame[gid]._hasTeamId)) {
       byGame[gid] = { ...x, _hasTeamId: !!x.team_id };
     }

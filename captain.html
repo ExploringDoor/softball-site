@@ -1283,6 +1283,12 @@ select.form-input{cursor:pointer}
 <!-- EmailJS — handles email notifications for chat messages -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 
+<!-- Shared bracket engine (window.DVSLBracket) — lets the captain portal
+     resolve playoff matchups from teams/__playoff_brackets so captains can
+     enter box scores for their playoff games. Classic script so it's ready
+     before the module below runs. -->
+<script src="/js/dvsl-bracket.js"></script>
+
 <script type="module">
 // ═══════════════════════════════════════════════════════════════════
 // FIREBASE SETUP
@@ -1432,6 +1438,106 @@ function sendScoreSubmittedPush(g, awayScore, homeScore, submittedBy) {
     }),
   }).catch(e => console.warn('Score submitted push failed:', e));
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYOFFS — let captains enter box scores for their bracket games
+// ═══════════════════════════════════════════════════════════════════
+// Playoff games live ONLY in teams/__playoff_brackets (a score-only bracket
+// doc), never in /games — deliberately, so they can't pollute the frozen
+// regular-season standings/leaderboards. To let a captain enter a full box
+// score for tonight's playoff game, we resolve their decided matchups out of
+// that bracket doc into synthetic MY_GAMES rows (id "po__<key>_<g>"), reuse the
+// normal box-score UI, and on submit write the box score + push the final back
+// into the bracket (which advances it) instead of touching /games.
+const PO_BRACKET_DOC_ID = '__playoff_brackets';
+const PO_PREFIX = 'po__';
+let PO_BRACKET_DOC = null;   // raw teams/__playoff_brackets doc (gold/silver JSON)
+
+function _poTeamByName(name) {
+  if (!name) return null;
+  const n = String(name).trim().toLowerCase();
+  return ALL_TEAMS.find(t =>
+    (t.name  || '').toLowerCase() === n ||
+    (t.short || '').toLowerCase() === n ||
+    (t.id    || '').toLowerCase() === n) || null;
+}
+
+// Append the captain's decided playoff matchups to MY_GAMES. Only games where
+// BOTH sides resolve to real teams and one of them is the captain's team are
+// included; a "Winner G5 vs Winner G6" placeholder is skipped until it fills in.
+function _injectMyPlayoffGames() {
+  if (!PO_BRACKET_DOC || !window.DVSLBracket || !captainData) return;
+  const B = window.DVSLBracket;
+  const myId = captainData.team_id;
+  [['gold','Gold'],['silver','Silver']].forEach(([key, label]) => {
+    let t;
+    try { t = JSON.parse(PO_BRACKET_DOC[key] || 'null'); } catch(_) { t = null; }
+    if (!t || !Array.isArray(t.games)) return;
+    t.games.forEach(g => {
+      const A = B.sideDisplay(t, g.away), H = B.sideDisplay(t, g.home);
+      if (A.tbd || H.tbd || A.bye || H.bye) return;      // both sides must be real
+      const aT = _poTeamByName(A.name), hT = _poTeamByName(H.name);
+      if (!aT || !hT) return;                            // can't map to a team
+      if (aT.id !== myId && hT.id !== myId) return;      // only my team's games
+      const played = B.isPlayed(g);
+      const iso = /^\d{4}-\d{2}-\d{2}$/.test(g.date || '') ? g.date : '';
+      const d = iso ? new Date(iso + 'T12:00:00') : null;
+      const time24 = /^(\d{1,2}):(\d{2})$/.test(g.time || '') ? g.time : '';
+      const time12 = (() => { const m = /^(\d{1,2}):(\d{2})$/.exec(g.time || ''); if (!m) return g.time || '';
+        let h = +m[1]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return `${h}:${m[2]} ${ap}`; })();
+      MY_GAMES.push({
+        id: PO_PREFIX + key + '_' + g.g,
+        playoff: true, bracket: key, bracket_game: g.g, po_label: `${label} G${g.g}`,
+        away: aT.id, home: hT.id,
+        wk: 'PL',
+        date: d ? d.toLocaleDateString('en-US', { month:'short', day:'numeric' }) : iso,
+        date_iso: iso,
+        day: d ? d.toLocaleDateString('en-US', { weekday:'short' }) : '',
+        time: time12, time_24: time24,
+        field: g.field || '',
+        done: played,
+        away_score: played ? g.as : undefined,
+        home_score: played ? g.hs : undefined,
+      });
+    });
+  });
+}
+
+// Push a playoff game's final into the bracket doc so the public bracket
+// advances. away/home map to the bracket game's away/home orientation because
+// the synthetic MY_GAMES row was built with away=bracket-away, home=bracket-home.
+async function applyPlayoffBracketScore(g, awayScore, homeScore) {
+  if (!g || !g.playoff) return;
+  const ref = doc(db, 'teams', PO_BRACKET_DOC_ID);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+  const data = snap.data() || {};
+  let t;
+  try { t = JSON.parse(data[g.bracket] || 'null'); } catch(_) { t = null; }
+  if (!t || !Array.isArray(t.games)) return;
+  const game = t.games.find(x => x.g === g.bracket_game);
+  if (!game) return;
+  game.as = awayScore;
+  game.hs = homeScore;
+  await updateDoc(ref, { [g.bracket]: JSON.stringify(t) });
+  if (PO_BRACKET_DOC) PO_BRACKET_DOC[g.bracket] = JSON.stringify(t);   // keep local copy in sync
+}
+
+// Persist a finalized game result. Regular games get their /games doc updated;
+// playoff games have no /games doc, so we advance the bracket instead — but only
+// when this submission carries a fresh final. A conflicting late entry leaves
+// gameUpdate without scores and is handled by the discrepancy path, so the
+// bracket keeps whatever was entered first (admin can reconcile).
+async function persistGameResult(g, gameId, gameUpdate) {
+  if (g && g.playoff) {
+    if (typeof gameUpdate.away_score === 'number' && typeof gameUpdate.home_score === 'number') {
+      await applyPlayoffBracketScore(g, gameUpdate.away_score, gameUpdate.home_score);
+    }
+    return;
+  }
+  await updateDoc(doc(db, 'games', gameId), gameUpdate);
+}
+
 let MY_TEAM = null;
 let ALL_TEAMS = [];
 let MY_GAMES = [];
@@ -1542,8 +1648,12 @@ async function _captRecalcStatsFromBoxScores(awayLineup, homeLineup, awayTeam, h
     // captain submissions. Mirrors admin.html's logic exactly.
     const byGame = {};
     bsSnap.docs.forEach(d => {
+      const gid = d.data().game_id || d.id;
+      // Playoff box scores (po__*) are captured + viewable per game but kept
+      // OUT of season batting/pitching totals so the frozen regular season
+      // doesn't move. Skip them here.
+      if (String(gid).startsWith('po__') || String(d.id).startsWith('po__')) return;
       const x = d.data();
-      const gid = x.game_id || d.id;
       const hasTeam = !!x.team_id;
       if (!byGame[gid] || (!hasTeam && byGame[gid]._hasTeam)) {
         byGame[gid] = { ...x, _hasTeam: hasTeam };
@@ -2777,6 +2887,9 @@ async function loadAllData() {
     ]);
 
     ALL_TEAMS = teams.filter(t => t.active !== false).sort((a,b) => (b.pct||0) - (a.pct||0));
+    // The bracket doc rides in the teams collection (active:false) so it's
+    // filtered out of ALL_TEAMS above — grab it from the raw list first.
+    PO_BRACKET_DOC = teams.find(t => t.id === PO_BRACKET_DOC_ID) || null;
     const allGames = games.sort((a,b) => (a.wk||0) - (b.wk||0) || (a.time||'').localeCompare(b.time||''));
 
     // Find my team
@@ -2785,6 +2898,9 @@ async function loadAllData() {
     // Filter to my team's data only
     const myId = captainData.team_id;
     MY_GAMES = allGames.filter(g => g.away === myId || g.home === myId);
+    // Fold in this captain's decided playoff matchups (from the bracket doc)
+    // so they can enter a full box score for their playoff games too.
+    try { _injectMyPlayoffGames(); } catch(e) { console.warn('[playoffs] inject failed:', e); }
     ALL_PLAYERS = players;
     MY_PLAYERS = players.filter(p => p.team === myId).sort((a,b) => (a.num||99) - (b.num||99));
     MY_SUBMISSIONS = submissions.filter(s => s.team_id === captainData.team_id).sort((a,b) => {
@@ -3292,15 +3408,17 @@ function renderSchedule() {
             <span class="vs">${homeAway}</span>
             <strong>${esc(getTeamName(opponent))}</strong>
           </div>
-          <div class="meta" style="margin-top:4px">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}<br>${esc(g.field || '')}</div>
+          <div class="meta" style="margin-top:4px">${g.playoff
+            ? `<span style="display:inline-block;background:#C9A227;color:#002D72;font-weight:800;font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-right:6px">Playoffs · ${esc(g.po_label || '')}</span>${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}<br>${esc(g.field || '')}`
+            : `Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}<br>${esc(g.field || '')}`}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           ${done
             ? `<div class="score-display">${g.away_score ?? '-'} &ndash; ${g.home_score ?? '-'}</div><span class="badge badge-done">Final</span>${g.has_discrepancy ? `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700;padding:4px 10px" onclick="showDiscrepancy('${g.id}')">${g.discrepancy_partial ? '⚠ Stats partial' : '⚠ Stats differ'}</button>` : (g.discrepancy_resolved ? `<button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #166534;font-weight:700;padding:4px 10px" onclick="showDiscrepancy('${g.id}')">✓ Stats resolved</button>` : '')}`
             : (isPpd ? ppdBadge : `<span class="badge badge-pending">Upcoming</span>`)
           }
-          ${canEdit ? `<button class="btn btn-outline btn-sm" onclick="toggleEditGame('${g.id}')">✏️ Edit</button>` : ''}
-          ${(!done) ? `<button class="btn btn-outline btn-sm" style="color:#92400e;border-color:#d97706" onclick="captTogglePpd('${g.id}')">${isPpd ? '↺ Un-mark PPD' : '🌧 Mark PPD'}</button>` : ''}
+          ${(canEdit && !g.playoff) ? `<button class="btn btn-outline btn-sm" onclick="toggleEditGame('${g.id}')">✏️ Edit</button>` : ''}
+          ${(!done && !g.playoff) ? `<button class="btn btn-outline btn-sm" style="color:#92400e;border-color:#d97706" onclick="captTogglePpd('${g.id}')">${isPpd ? '↺ Un-mark PPD' : '🌧 Mark PPD'}</button>` : ''}
         </div>
       </div>
       ${canEdit ? `<div id="sched-edit-${g.id}" style="display:none"></div>` : ''}
@@ -4028,7 +4146,9 @@ function renderPendingGames() {
             <span class="vs">${homeAway}</span>
             <strong>${esc(getTeamName(opponent))}</strong>
           </div>
-          <div class="meta" style="margin-top:4px">Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}</div>
+          <div class="meta" style="margin-top:4px">${g.playoff
+            ? `<span style="display:inline-block;background:#C9A227;color:#002D72;font-weight:800;font-size:10px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;border-radius:4px;margin-right:6px">Playoffs · ${esc(g.po_label || '')}</span>${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}`
+            : `Wk ${g.wk || '?'} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}`}</div>
         </div>
         ${hasConflict ? `<span class="badge" style="background:var(--yellow-bg);color:var(--yellow)">⚠ Conflict</span>` : ''}
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
@@ -4036,15 +4156,15 @@ function renderPendingGames() {
             ? `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706" title="You submitted score-only — tap 📊 Box Score to add player batting stats. The score stays the same.">📝 Score-only · Add Stats</span>`
             : `<span class="badge badge-pending" title="You already submitted full stats — adding more will UPDATE your submission">✓ Submitted · Edit</span>`
           ) : ''}
-          <button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&team=${captainData.team_id}&from=captain','_blank')">⚡ Score Live</button>
+          ${g.playoff ? '' : `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${g.id}&team=${captainData.team_id}&from=captain','_blank')">⚡ Score Live</button>`}
           <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="showUploadZone('${g.id}')">📄 Upload</button>
           <button class="btn btn-outline btn-sm" onclick="showScoreOnlyEntry('${g.id}')">📝 Score Only</button>
           <button class="btn btn-outline btn-sm" onclick="showBoxScoreEntry('${g.id}')">📊 Box Score</button>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px;padding-left:2px">
+      ${g.playoff ? '' : `<div style="font-size:11px;color:var(--muted);margin-top:6px;padding-left:2px">
         Never used <strong>⚡ Score Live</strong> before? <a href="scorer.html#practice" target="_blank" rel="noopener" style="color:var(--navy);font-weight:700;text-decoration:underline">Try Practice Mode →</a> first (no real data is saved).
-      </div>
+      </div>`}
       ${otherTeamInfo}
       ${conflictInfo}
       ${hasConflict ? '' : `
@@ -4895,7 +5015,7 @@ window.submitScoreOnly = async function(gameId) {
         gameUpdate.has_discrepancy = true;
       }
     }
-    await updateDoc(doc(db,'games',gameId), gameUpdate);
+    await persistGameResult(g, gameId, gameUpdate);   // playoff games advance the bracket instead of writing /games
     const gObj = MY_GAMES.find(x=>x.id===gameId);
     if (gObj) Object.assign(gObj, gameUpdate);
     // Notifications: if this submission newly finalizes the game, send
@@ -4907,7 +5027,7 @@ window.submitScoreOnly = async function(gameId) {
     } else if (!gameUpdate.done) {
       sendScoreSubmittedPush(g, awayFinal, homeFinal, captainData.team_name);
     }
-    if (gameUpdate.done) await recalcStandingsFromAllGames();
+    if (gameUpdate.done && !g.playoff) await recalcStandingsFromAllGames();
     document.getElementById('boxscore-entry-'+gameId).style.display='none';
     const msg = !_wasDone
       ? 'Score submitted — game is now final! (Admin can edit later if needed.)'
@@ -5705,7 +5825,7 @@ window.submitBoxScore = async function(gameId) {
 
   try {
     await submitBoxScoreUnified(gameId, boxScoreData, myRole);
-    await updateDoc(doc(db, 'games', gameId), gameUpdate);
+    await persistGameResult(g, gameId, gameUpdate);   // playoff games advance the bracket instead of writing /games
     Object.assign(g, gameUpdate);
     // Fire final-score push on the transition to done, otherwise fire
     // the "score submitted / awaiting confirmation" push so every
@@ -5721,11 +5841,13 @@ window.submitBoxScore = async function(gameId) {
         captainData.team_name
       );
     }
-    if (gameUpdate.done) await recalcStandingsFromAllGames();
+    if (gameUpdate.done && !g.playoff) await recalcStandingsFromAllGames();
     // Refresh batting stats for the players in this lineup so the public
     // stats page picks up the change immediately — no need for an admin
-    // to load admin.html to trigger the recalc.
-    await _captRecalcStatsFromBoxScores(awayBatters, homeBatters, g.away, g.home);
+    // to load admin.html to trigger the recalc. Skipped for playoff games:
+    // their box scores are excluded from season totals (kept frozen), so a
+    // recompute here would just rewrite the same numbers.
+    if (!g.playoff) await _captRecalcStatsFromBoxScores(awayBatters, homeBatters, g.away, g.home);
     const subId = `${gameId}_${myRole}`;
     const subData = {
       game_id: gameId, away: g.away, home: g.home,
@@ -6231,7 +6353,7 @@ window.submitScore = async function(gameId) {
   };
 
   try {
-    await updateDoc(doc(db, 'games', gameId), gameUpdate);
+    await persistGameResult(g, gameId, gameUpdate);   // playoff games advance the bracket instead of writing /games
     // Update local state
     Object.assign(g, gameUpdate);
     // Also write a box_scores doc so the public box-score modal has
@@ -6291,7 +6413,7 @@ window.submitScore = async function(gameId) {
         captainData.team_name
       );
     }
-    if (gameUpdate.done) await recalcStandingsFromAllGames();
+    if (gameUpdate.done && !g.playoff) await recalcStandingsFromAllGames();
     const subId = `${gameId}_${myRole}`;
     subData.role = myRole;
     await setDoc(doc(db, 'score_submissions', subId), subData);

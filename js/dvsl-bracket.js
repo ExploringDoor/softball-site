@@ -213,11 +213,17 @@
       side(A, g.as, aWin) + side(H, g.hs, hWin) +
       '<div class="bk-mfoot"><div class="bk-when">' + esc(when || 'TBD') + '</div>' +
       '<div class="bk-frow"><span class="bk-field">' + fieldHTML + '</span>' +
-      // Click cue. Only an upcoming matchup with both sides decided gets one:
-      // it opens the game preview. Played playoff games are score-only (no box
-      // score is ever entered for them), so a "Recap" link would just open an
-      // empty modal — we show the final on the card instead and skip the cue.
-      ((!A.tbd && !H.tbd && !played) ? '<span class="gm-cue preview">Preview &rsaquo;</span>' : '') +
+      // Click cue. Upcoming matchup with both sides decided -> "Preview". A
+      // played game gets a "Recap" cue ONLY when a box score actually exists
+      // for it (HOOKS.hasRecap) — captains can now enter playoff box scores, so
+      // some played games have one and some don't; a score-only game shows the
+      // final on the card and no cue (no empty modal).
+      ((!A.tbd && !H.tbd)
+        ? (played
+            ? ((typeof HOOKS.hasRecap === 'function' && HOOKS.hasRecap(t.key, g.g))
+                ? '<span class="gm-cue recap">Recap &rsaquo;</span>' : '')
+            : '<span class="gm-cue preview">Preview &rsaquo;</span>')
+        : '') +
       '</div></div></div>';
   }
 
