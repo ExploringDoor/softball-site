@@ -4261,10 +4261,9 @@ async function loadAllData() {
       const h = bs.home_lineup || bs.homeLineup || bs.homeBatters;
       return (Array.isArray(a) && a.length > 0) || (Array.isArray(h) && h.length > 0);
     };
-    // Playoff box scores (po__*) are captured + viewable per game, but kept out
-    // of the season leaderboards so the frozen regular-season stats don't move.
-    const _isPoBs = (bs) => String(bs.id || bs.game_id || '').startsWith('po__');
-    const finalBS = boxScores.filter(bs => (bs.status === 'final' || _hasAnyLineup(bs)) && !_isPoBs(bs));
+    // Playoff box scores (po__*) count toward season leaderboards + team stats,
+    // same as regular-season box scores (Adam 2026-07-22).
+    const finalBS = boxScores.filter(bs => bs.status === 'final' || _hasAnyLineup(bs));
     // Expose for recap-card POTG fallback (buildRecaps reads window.FINAL_BOX_SCORES)
     window.FINAL_BOX_SCORES = finalBS;
     if (finalBS.length > 0) {
@@ -4683,8 +4682,7 @@ async function refreshVolatileData() {
       const h = bs.home_lineup || bs.homeLineup || bs.homeBatters;
       return (Array.isArray(a) && a.length > 0) || (Array.isArray(h) && h.length > 0);
     };
-    // Playoff box scores (po__*) stay out of the season leaderboards.
-    const finalBS = freshBS.filter(bs => (bs.status === 'final' || _hasAnyLineup2(bs)) && !String(bs.id || bs.game_id || '').startsWith('po__'));
+    const finalBS = freshBS.filter(bs => bs.status === 'final' || _hasAnyLineup2(bs));
     if (finalBS.length > 0) {
       const batMap = {};
       const pitMap = {};
