@@ -5349,25 +5349,6 @@ function _defaultBrackets() {
   };
 }
 
-// Ids of playoff box scores that exist (po__<key>_<g>). Captains can enter box
-// scores for playoff games; only those games get a "Recap" cue on the bracket.
-let _poBoxScoreIds = new Set();
-async function _loadPoBoxScoreIds() {
-  try {
-    const db = await getDb();
-    const m = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
-    // Range scan the box_scores collection for ids in the "po__" namespace.
-    const q = m.query(m.collection(db, 'box_scores'), m.orderBy(m.documentId()),
-                      m.startAt('po__'), m.endAt('po__'));
-    const snap = await m.getDocs(q);
-    const set = new Set();
-    snap.forEach(d => set.add(d.id));
-    _poBoxScoreIds = set;
-  } catch (e) {
-    console.warn('[playoffs] playoff box-score id scan failed (recap cues off):', e);
-  }
-}
-
 async function _loadPlayoffBrackets() {
   const fallback = _defaultBrackets();
   try {
@@ -5419,8 +5400,14 @@ function _bkCardClick(tkey, gnum) {
     let h = +m[1]; const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
     return `${h}:${m[2]} ${ap}`;
   };
-  if (B.isPlayed(g)) openBox(aShort, hShort, g.as, g.hs, g.field || '', g.date || '', '');
-  else openGameday(aShort, hShort, g.field || '', pretty(g.time));
+  if (B.isPlayed(g)) {
+    // Pass the playoff game_id so openBox finds this game's box score (if a
+    // captain entered one); a friendly date feeds the auto-recap.
+    const _pd = /^\d{4}-\d{2}-\d{2}$/.test(g.date || '')
+      ? new Date(g.date + 'T12:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric' })
+      : (g.date || '');
+    openBox(aShort, hShort, g.as, g.hs, g.field || '', _pd, PO_GAME_PREFIX + tkey + '_' + gnum);
+  } else openGameday(aShort, hShort, g.field || '', pretty(g.time));
 }
 
 async function _initLiveBrackets() {
@@ -5428,15 +5415,11 @@ async function _initLiveBrackets() {
   const silverEl = document.getElementById('bk-silver');
   if (!goldEl || !silverEl || !window.DVSLBracket) return;
 
-  // Which playoff games have a box score (captain-entered) → those get a
-  // "Recap" cue that opens the box-score modal. Score-only games get none.
-  await _loadPoBoxScoreIds();
   window.DVSLBracket.setHooks({
     logo: (name) => {
       const t = _bkTeamByName(name);
       return t ? teamLogoEl(t.id, t.short || name) : '';
     },
-    hasRecap: (key, g) => _poBoxScoreIds.has('po__' + key + '_' + g),
   });
   // Open the game preview only from the "Preview" cue. Taps anywhere else on a
   // card (a team name/logo) are left for the engine's path-trace to handle, so
@@ -8833,8 +8816,11 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       const snap = await gd2(q2(col2(db2,'box_scores'), wh2('game_id','==',gameId)));
       if (!snap.empty) boxScore = { id: snap.docs[0].id, ...snap.docs[0].data() };
     }
-    // Fallback: match by away + home teams
-    if (!boxScore) {
+    // Fallback: match by away + home teams. Skipped for playoff games (gameId
+    // "po__*"), whose box score is only ever keyed by that game_id — an
+    // away/home match would wrongly pull a regular-season game between the
+    // same two teams.
+    if (!boxScore && !String(gameId || '').startsWith('po__')) {
       const snap2 = await gd2(q2(col2(db2,'box_scores'), wh2('away','==',away), wh2('home','==',home), lim2(1)));
       if (!snap2.empty) boxScore = { id: snap2.docs[0].id, ...snap2.docs[0].data() };
     }
@@ -9217,11 +9203,20 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     }
 
   } else {
-    // ── No box score saved yet ──
-    bodyHtml += `<div style="text-align:center;padding:32px 16px">
-      <div style="font-size:15px;font-weight:700;color:#555;margin-bottom:6px">No stats have been entered</div>
-      <div style="font-size:13px;color:#999">Player and pitching stats haven't been submitted for this game yet.</div>
-    </div>`;
+    // ── No box score saved yet — still show a short recap generated from the
+    // final score so the game has a writeup (e.g. a playoff game entered
+    // score-only), plus a note that full player/pitching stats aren't in. ──
+    const _hasFinal = (as !== '' && as != null && hs !== '' && hs != null);
+    const _autoRecap = _hasFinal ? generateAutoRecap(away, home, as, hs, date, field, atm, htm, [], [], '', '') : '';
+    bodyHtml += _autoRecap
+      ? `<div style="padding:8px 4px">
+           <div class="pop-recap">${_autoRecap}</div>
+           <div style="text-align:center;font-size:12px;color:#aaa;margin-top:16px">Full player &amp; pitching stats haven't been entered for this game yet.</div>
+         </div>`
+      : `<div style="text-align:center;padding:32px 16px">
+           <div style="font-size:15px;font-weight:700;color:#555;margin-bottom:6px">No stats have been entered</div>
+           <div style="font-size:13px;color:#999">Player and pitching stats haven't been submitted for this game yet.</div>
+         </div>`;
   }
 
   if (showTabs) {
