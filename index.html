@@ -5369,12 +5369,15 @@ async function _initLiveBrackets() {
       return t ? teamLogoEl(t.id, t.short || name) : '';
     }
   });
-  // delegate card clicks once per container
+  // Open the game preview only from the "Preview" cue. Taps anywhere else on a
+  // card (a team name/logo) are left for the engine's path-trace to handle, so
+  // tapping a team lights up its path instead of opening a modal.
   [goldEl, silverEl].forEach(el => {
     if (el.dataset.bkWired) return;
     el.dataset.bkWired = '1';
     el.addEventListener('click', ev => {
       if (ev.target.closest('a')) return;            // let venue map links through
+      if (!ev.target.closest('.gm-cue')) return;     // team taps -> path-trace
       const card = ev.target.closest('.bk-match');
       if (card) _bkCardClick(card.dataset.tkey, card.dataset.g);
     });

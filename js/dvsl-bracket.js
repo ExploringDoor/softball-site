@@ -213,10 +213,11 @@
       side(A, g.as, aWin) + side(H, g.hs, hWin) +
       '<div class="bk-mfoot"><div class="bk-when">' + esc(when || 'TBD') + '</div>' +
       '<div class="bk-frow"><span class="bk-field">' + fieldHTML + '</span>' +
-      // Click cue. The host wires the actual handler by delegating off the
-      // card's data-tkey / data-g attributes; only shown once both sides
-      // are real teams, since there's nothing to open for a TBD matchup.
-      ((!A.tbd && !H.tbd) ? '<span class="gm-cue ' + (played ? 'recap' : 'preview') + '">' + (played ? 'Recap' : 'Preview') + ' &rsaquo;</span>' : '') +
+      // Click cue. Only an upcoming matchup with both sides decided gets one:
+      // it opens the game preview. Played playoff games are score-only (no box
+      // score is ever entered for them), so a "Recap" link would just open an
+      // empty modal — we show the final on the card instead and skip the cue.
+      ((!A.tbd && !H.tbd && !played) ? '<span class="gm-cue preview">Preview &rsaquo;</span>' : '') +
       '</div></div></div>';
   }
 
@@ -459,35 +460,56 @@
       '<div class="bk-head-s">' + esc(t.sub || ('Double elimination · ' + t.games.length + ' games')) +
       ' · <strong>' + played + '</strong> of ' + t.games.length + ' played</div></div>';
     container.innerHTML = head + champ + teamsPanelHTML(t) + combinedCanvas(t, cls, visible);
-    wireHoverPath(container);
+    container._bkLock = null; // a fresh render clears any tapped-team highlight
+    wirePathTrace(container);
   }
 
-  // Hover a team anywhere in the bracket -> light up every card it appears in,
-  // so you can trace how far it has advanced and where it can still go. The
-  // listener sits on the container (delegated) and is bound once, so it keeps
-  // working across re-renders that replace innerHTML.
-  function wireHoverPath(container) {
-    if (!container || container._bkHoverWired) return;
-    container._bkHoverWired = true;
-    var cur = null;
-    var clear = function () {
+  // Trace a team through the whole bracket. On desktop, HOVER a team and every
+  // card it appears in lights up, so you can see how far it's advanced and
+  // where it can still go. On touch (no hover), TAP a team to lock that
+  // highlight on, tap it again to clear. The listeners sit on the container
+  // (delegated) and are bound once, so they survive the innerHTML re-renders
+  // that happen when scores are entered.
+  function wirePathTrace(container) {
+    if (!container || container._bkPathWired) return;
+    container._bkPathWired = true;
+    container._bkLock = null; // team name whose path is pinned by a tap, or null
+    var hover = null;         // team currently under the cursor (transient)
+    function clear() {
       var hi = container.querySelectorAll('.bk-side.path-hi');
       for (var i = 0; i < hi.length; i++) hi[i].classList.remove('path-hi');
-    };
+    }
+    function apply(team) {
+      clear();
+      if (!team) return;
+      var sides = container.querySelectorAll('.bk-side[data-team]');
+      for (var i = 0; i < sides.length; i++) {
+        if (sides[i].getAttribute('data-team') === team) sides[i].classList.add('path-hi');
+      }
+    }
     container.addEventListener('mouseover', function (e) {
+      if (container._bkLock) return; // a tapped lock wins over hover
       var side = e.target && e.target.closest ? e.target.closest('.bk-side[data-team]') : null;
       var team = side ? side.getAttribute('data-team') : null;
-      if (team === cur) return;
-      cur = team;
-      clear();
-      if (team) {
-        var sides = container.querySelectorAll('.bk-side[data-team]');
-        for (var i = 0; i < sides.length; i++) {
-          if (sides[i].getAttribute('data-team') === team) sides[i].classList.add('path-hi');
-        }
-      }
+      if (team === hover) return;
+      hover = team;
+      apply(team);
     });
-    container.addEventListener('mouseleave', function () { cur = null; clear(); });
+    container.addEventListener('mouseleave', function () {
+      if (container._bkLock) return;
+      hover = null;
+      apply(null);
+    });
+    // Tap a team to pin its path (toggle). The preview cue is handled by the
+    // host's own listener, and venue links must pass through untouched.
+    container.addEventListener('click', function (e) {
+      if (e.target.closest('a') || e.target.closest('.gm-cue')) return;
+      var side = e.target.closest ? e.target.closest('.bk-side[data-team]') : null;
+      if (!side) return;
+      var team = side.getAttribute('data-team');
+      if (container._bkLock === team) { container._bkLock = null; apply(null); }
+      else { container._bkLock = team; hover = null; apply(team); }
+    });
   }
 
   // zoom helpers operate on a wrapper element the page supplies
