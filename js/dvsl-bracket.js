@@ -187,7 +187,9 @@
         : '<span class="bk-logo bk-logo-empty"></span>';
       var sd = (!s.tbd && !s.bye) ? seedOf(s.name) : null;
       var seedEl = '<span class="bk-seed">' + (sd != null ? sd : '') + '</span>';
-      return '<div class="bk-side' + (win ? ' win' : '') + (s.tbd ? ' tbd' : '') + (s.bye ? ' bye' : '') + '">' +
+      // data-team on resolved sides powers the hover-to-trace-path highlight.
+      var teamAttr = (!s.tbd && !s.bye) ? ' data-team="' + esc(s.name) + '"' : '';
+      return '<div class="bk-side' + (win ? ' win' : '') + (s.tbd ? ' tbd' : '') + (s.bye ? ' bye' : '') + '"' + teamAttr + '>' +
         seedEl + crest +
         '<span class="nm">' + esc(s.name) + (s.via ? '<span class="via">via ' + esc(s.via) + '</span>' : '') + '</span>' +
         '<span class="sc">' + (sc != null && sc !== '' ? esc(sc) : '') + '</span></div>';
@@ -457,6 +459,35 @@
       '<div class="bk-head-s">' + esc(t.sub || ('Double elimination · ' + t.games.length + ' games')) +
       ' · <strong>' + played + '</strong> of ' + t.games.length + ' played</div></div>';
     container.innerHTML = head + champ + teamsPanelHTML(t) + combinedCanvas(t, cls, visible);
+    wireHoverPath(container);
+  }
+
+  // Hover a team anywhere in the bracket -> light up every card it appears in,
+  // so you can trace how far it has advanced and where it can still go. The
+  // listener sits on the container (delegated) and is bound once, so it keeps
+  // working across re-renders that replace innerHTML.
+  function wireHoverPath(container) {
+    if (!container || container._bkHoverWired) return;
+    container._bkHoverWired = true;
+    var cur = null;
+    var clear = function () {
+      var hi = container.querySelectorAll('.bk-side.path-hi');
+      for (var i = 0; i < hi.length; i++) hi[i].classList.remove('path-hi');
+    };
+    container.addEventListener('mouseover', function (e) {
+      var side = e.target && e.target.closest ? e.target.closest('.bk-side[data-team]') : null;
+      var team = side ? side.getAttribute('data-team') : null;
+      if (team === cur) return;
+      cur = team;
+      clear();
+      if (team) {
+        var sides = container.querySelectorAll('.bk-side[data-team]');
+        for (var i = 0; i < sides.length; i++) {
+          if (sides[i].getAttribute('data-team') === team) sides[i].classList.add('path-hi');
+        }
+      }
+    });
+    container.addEventListener('mouseleave', function () { cur = null; clear(); });
   }
 
   // zoom helpers operate on a wrapper element the page supplies
