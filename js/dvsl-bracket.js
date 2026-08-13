@@ -462,7 +462,7 @@
     var champLogo = (outcome.champion && typeof HOOKS.logo === 'function') ? HOOKS.logo(outcome.champion) : '';
     var champ = outcome.champion
       ? '<div class="bk-champ" data-champ="' + esc(outcome.champion) + '">'
-        + '<img class="bk-champ-trophy" src="/assets/trophy.svg" alt="Champion trophy">'
+        + '<img class="bk-champ-trophy" src="/assets/trophy.png" alt="Champion trophy">'
         + '<div class="bk-champ-ct">'
         + '<div class="bk-champ-tourn">' + esc(t.name || 'Bracket') + '</div>'
         + '<div class="bk-champ-lbl">★ Champion ★</div>'

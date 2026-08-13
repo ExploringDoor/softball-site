@@ -1184,6 +1184,12 @@ body.dark .stats-table tbody tr.rank-1{background:transparent!important}
 .share-btn:hover{border-color:rgba(0,45,114,.35);color:var(--gold);background:rgba(0,45,114,.05)}
 .share-btn.copied{border-color:var(--green);color:var(--green)}
 
+.recap-champ{display:flex;align-items:center;gap:18px;background:linear-gradient(120deg,#C9A227,#EBCB5E 45%,#C9A227);color:#002D72;border-radius:14px;padding:18px 24px;margin-bottom:18px;box-shadow:0 10px 30px rgba(201,162,39,.35);cursor:pointer}
+.recap-champ-trophy{height:96px;width:auto;flex:none;filter:drop-shadow(0 3px 8px rgba(0,45,114,.35))}
+.recap-champ-txt{min-width:0}
+.recap-champ-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.13em;text-transform:uppercase;opacity:.9}
+.recap-champ-team{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(28px,5vw,44px);line-height:1;text-transform:uppercase;margin:2px 0 4px}
+.recap-champ-sub{font-family:'Inter',sans-serif;font-size:13px;font-weight:600;opacity:.85}
 .recap-card{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;transition:border-color .2s}
 .recap-card:hover{border-color:rgba(0,45,114,.15)}
 .recap-top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:20px 26px;border-bottom:1px solid var(--border)}
@@ -1503,6 +1509,13 @@ html{background:#002D72;}
   cursor:pointer;transition:background .15s;flex-shrink:0;
 }
 .st-game:hover{background:rgba(255,255,255,.1)}
+/* champion callout in the ticker */
+.st-champ{display:flex;align-items:center;gap:9px;height:100%;padding:0 20px;cursor:pointer;flex-shrink:0;background:linear-gradient(90deg,rgba(201,162,39,.28),rgba(201,162,39,.08));border-right:1px solid rgba(255,255,255,.15)}
+.st-champ:hover{background:linear-gradient(90deg,rgba(201,162,39,.42),rgba(201,162,39,.14))}
+.st-champ-trophy{font-size:24px;line-height:1;flex-shrink:0}
+.st-champ-inner{display:flex;flex-direction:column;justify-content:center;gap:1px}
+.st-champ-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:#F5C842;line-height:1.1}
+.st-champ-team{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;letter-spacing:.02em;text-transform:uppercase;color:#fff;line-height:1}
 .st-game-inner{display:flex;flex-direction:column;justify-content:center;gap:3px}
 .st-datetime{font-family:'Inter',sans-serif;font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.8);line-height:1;margin-bottom:2px}
 .st-row{display:flex;align-items:center;gap:5px;line-height:1}
@@ -5418,6 +5431,22 @@ function _bkCardClick(tkey, gnum) {
 const CHAMP_PHOTOS = {
   "goldstein's": { src: "/goldsteins-champ-2026.jpg", cap: "2026 DVSL Gold Bracket Champions — Goldstein's" },
 };
+// Completed brackets' champions, from the live bracket data. Used by the top
+// ticker + the recaps page to announce winners. Returns [{team, bracket}].
+function _getBracketChampions(){
+  const out = [];
+  if (!PLAYOFF_DATA || !window.DVSLBracket) return out;
+  const B = window.DVSLBracket;
+  [['gold','Gold'],['silver','Silver']].forEach(([key,label]) => {
+    const t = PLAYOFF_DATA[key];
+    if (!t) return;
+    try {
+      const oc = B.championOutcome(t, B.classify(t));
+      if (oc && oc.champion) out.push({ team: oc.champion, bracket: label });
+    } catch(_){}
+  });
+  return out;
+}
 function _openChampLightbox(url){
   const lb = document.createElement('div');
   lb.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(6,10,20,.93);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out';
@@ -6142,8 +6171,9 @@ function buildHomeRecentScores(){
   const todayKey = today.getFullYear()*10000 + (today.getMonth()+1)*100 + today.getDate();
   const done = SCHEDULE_PREVIEW
     .filter(g => g.done)
-    // Only games that actually happened on or before today.
-    .filter(g => { const k = toDayKey(g.rawDate || g.date); return k == null || k <= todayKey; })
+    // NOTE: no "on or before today" filter here — a done game already happened,
+    // so it should always show. Filtering by date wrongly hid playoff finals
+    // whose scheduled date is ahead of the device clock (Adam 2026-08).
     .sort((a,b) => {
       const ka = toDayKey(a.rawDate || a.date) || 0;
       const kb = toDayKey(b.rawDate || b.date) || 0;
@@ -6309,6 +6339,10 @@ function _ensurePlayoffData(){
     // before playoff games existed in SCHEDULE_PREVIEW, so playoff finals were
     // missing from it until now.
     try { buildHomeRecentScores(); } catch(_) {}
+    // Ticker + recaps read PLAYOFF_DATA for the champion callouts, so rebuild
+    // them now that the bracket data has arrived.
+    try { if (typeof buildTicker2 === 'function') buildTicker2(); } catch(_) {}
+    try { if (typeof buildRecaps === 'function') buildRecaps(); } catch(_) {}
   }).catch(() => {});
 }
 
@@ -7370,7 +7404,17 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
 
 // ════════════════════════════ RECAPS ═════════════════════════════════════
 function buildRecaps(){
-  document.getElementById('recap-list').innerHTML=RECAPS.map(r=>{
+  // Lead the recaps with a champion announcement for any completed bracket.
+  const _champCards = _getBracketChampions().map(c =>
+    '<div class="recap-champ" onclick="goPage(\'playoffs\')">'
+    + '<img src="/assets/trophy.png" alt="Champion trophy" class="recap-champ-trophy">'
+    + '<div class="recap-champ-txt">'
+    + '<div class="recap-champ-lbl">🏆 2026 ' + c.bracket + ' Bracket Champions</div>'
+    + '<div class="recap-champ-team">' + c.team + '</div>'
+    + '<div class="recap-champ-sub">Congratulations to ' + c.team + ' on winning the 2026 DVSL ' + c.bracket + ' bracket!</div>'
+    + '</div></div>'
+  ).join('');
+  document.getElementById('recap-list').innerHTML = _champCards + RECAPS.map(r=>{
     const at=getTeamByShort(r.away), ht=getTeamByShort(r.home);
     // POTG: prefer admin-set value; else auto-pick best batter from this game's box score
     let _potgName = r.potg_name || '';
@@ -7892,7 +7936,16 @@ function buildTicker2(){
       +'</div>'
       +'</div>';
   };
-  track.innerHTML = tickerGames.map(makeGame).join('');
+  // Lead the ticker with any crowned bracket champions.
+  const champItems = _getBracketChampions().map(c =>
+    '<div class="st-champ" onclick="goPage(\'playoffs\')">'
+    + '<span class="st-champ-trophy">🏆</span>'
+    + '<div class="st-champ-inner">'
+    + '<div class="st-champ-lbl">2026 ' + c.bracket + ' Champions</div>'
+    + '<div class="st-champ-team">' + c.team + '</div>'
+    + '</div></div>'
+  ).join('');
+  track.innerHTML = champItems + tickerGames.map(makeGame).join('');
 }
 
 // Ticker hides on scroll, nav ALWAYS stays fixed
