@@ -455,16 +455,21 @@
     var cls = classify(t);
     var outcome = championOutcome(t, cls);
     var visible = t.games.filter(function (g) { return !outcome.hide.has(g.g); });
-    // Big champion banner: crest + "<Bracket> Champions" + team name. data-champ
-    // lets the host attach the champions photo below it (see _attachChampPhotos).
+    // Champion banner (D27/STS style): a gold pill with a trophy on one side,
+    // the tournament + "★ Champion ★" + team name in the middle, and the team
+    // logo on the other. data-champ lets the host attach the champions photo
+    // below it (see _attachChampPhotos).
     var champLogo = (outcome.champion && typeof HOOKS.logo === 'function') ? HOOKS.logo(outcome.champion) : '';
     var champ = outcome.champion
       ? '<div class="bk-champ" data-champ="' + esc(outcome.champion) + '">'
+        + '<img class="bk-champ-trophy" src="/assets/trophy.svg" alt="Champion trophy">'
+        + '<div class="bk-champ-ct">'
+        + '<div class="bk-champ-tourn">' + esc(t.name || 'Bracket') + '</div>'
+        + '<div class="bk-champ-lbl">★ Champion ★</div>'
+        + '<div class="bk-champ-team">' + esc(outcome.champion) + '</div>'
+        + '</div>'
         + (champLogo ? '<span class="bk-champ-logo">' + champLogo + '</span>' : '')
-        + '<div class="bk-champ-txt">'
-        + '<div class="bk-champ-eyebrow">🏆 ' + esc(t.name || 'Bracket') + ' Champions</div>'
-        + '<div class="bk-champ-name">' + esc(outcome.champion) + '</div>'
-        + '</div></div>'
+        + '</div>'
       : '';
     var played = t.games.filter(isPlayed).length;
     var head = '<div class="bk-head"><div class="bk-head-t">' + esc(t.name || 'Bracket') + '</div>' +
