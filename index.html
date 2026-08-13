@@ -5412,6 +5412,37 @@ function _bkCardClick(tkey, gnum) {
   } else openGameday(aShort, hShort, g.field || '', pretty(g.time));
 }
 
+// Champion photos, keyed by lowercased champion team name. When a bracket has
+// a champion with a photo here, a big photo is shown under the champion banner
+// (click to enlarge). Add a new season's winner here to light it up.
+const CHAMP_PHOTOS = {
+  "goldstein's": { src: "/goldsteins-champ-2026.jpg", cap: "2026 DVSL Gold Bracket Champions — Goldstein's" },
+};
+function _openChampLightbox(url){
+  const lb = document.createElement('div');
+  lb.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(6,10,20,.93);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out';
+  lb.innerHTML = '<img src="'+url+'" alt="Champions" style="max-width:96vw;max-height:92vh;border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.6)">';
+  const onKey = e => { if(e.key==='Escape'){ lb.remove(); document.removeEventListener('keydown', onKey); } };
+  lb.addEventListener('click', () => { lb.remove(); document.removeEventListener('keydown', onKey); });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(lb);
+}
+function _attachChampPhotos(container){
+  if(!container) return;
+  const ban = container.querySelector('.bk-champ[data-champ]');
+  if(!ban) return;
+  // don't double-insert on re-render
+  if(ban.nextElementSibling && ban.nextElementSibling.classList && ban.nextElementSibling.classList.contains('bk-champ-photo-wrap')) return;
+  const photo = CHAMP_PHOTOS[(ban.getAttribute('data-champ')||'').trim().toLowerCase()];
+  if(!photo) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'bk-champ-photo-wrap';
+  wrap.innerHTML = '<img src="'+photo.src+'" alt="'+(photo.cap||'Champions')+'" class="bk-champ-photo-img">'
+    + (photo.cap ? '<div class="bk-champ-photo-cap">'+photo.cap+' · tap to enlarge</div>' : '');
+  ban.after(wrap);
+  wrap.querySelector('img').addEventListener('click', () => _openChampLightbox(photo.src));
+}
+
 async function _initLiveBrackets() {
   const goldEl = document.getElementById('bk-gold');
   const silverEl = document.getElementById('bk-silver');
@@ -5440,6 +5471,8 @@ async function _initLiveBrackets() {
   PLAYOFF_DATA = await _loadPlayoffBrackets();
   window.DVSLBracket.render(goldEl, PLAYOFF_DATA.gold);
   window.DVSLBracket.render(silverEl, PLAYOFF_DATA.silver);
+  _attachChampPhotos(goldEl);
+  _attachChampPhotos(silverEl);
   // Deliberately NOT auto-fitting: a 15-game double-elim canvas is ~1400px
   // wide, so fit-on-load lands around 30% and is unreadable. Start at 100%
   // (the canvas scrolls horizontally) and let Fit be an explicit choice.
@@ -10457,6 +10490,41 @@ function initStandings(){
     // Show after a short delay so it doesn't block first-paint
     setTimeout(() => { banner.style.display = 'flex'; }, 2500);
   } catch(_) {}
+})();
+</script>
+
+<!-- ═══ 2026 GOLD CHAMPIONS TAKEOVER ═══
+     One-time full-screen celebration on load. Modeled on the old playoff promo:
+     never touches body.overflow (the overlay scrolls itself), shows only after
+     load, dismissible five ways, and remembers dismissal per browser. -->
+<div id="champ-popup" role="dialog" aria-modal="true" aria-label="2026 Gold Bracket Champions"
+     style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(6,10,20,.93);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:22px;overflow-y:auto">
+  <div style="position:relative;max-width:min(94vw,720px);width:100%;text-align:center;margin:auto">
+    <button onclick="dismissChampPopup()" aria-label="Close" style="position:absolute;top:-14px;right:-6px;z-index:2;background:#C9A227;color:#1a1a1a;border:none;width:40px;height:40px;border-radius:50%;font-size:24px;line-height:1;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.55);font-weight:700">&times;</button>
+    <img src="/goldsteins-champ-2026.jpg" alt="2026 DVSL Gold Bracket Champions — Goldstein's"
+         style="width:100%;height:auto;border-radius:14px;box-shadow:0 26px 74px rgba(0,0,0,.6);border:3px solid #C9A227;display:block">
+    <button onclick="dismissChampPopup()"
+      style="margin-top:18px;background:linear-gradient(90deg,#C9A227,#E2B53C);color:#1a1a1a;border:none;border-radius:12px;padding:15px 36px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:19px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;box-shadow:0 8px 24px rgba(201,162,39,.42)">Enter Site &rsaquo;</button>
+  </div>
+</div>
+<script>
+(function(){
+  var KEY = 'dvsl_champ_gold_2026';
+  window.dismissChampPopup = function(){
+    try { localStorage.setItem(KEY, '1'); } catch(_){}
+    var el = document.getElementById('champ-popup'); if (el) el.style.display = 'none';
+  };
+  try { if (localStorage.getItem(KEY) === '1') return; } catch(_){}
+  var shown = false;
+  function show(){
+    if (shown) return; shown = true;
+    var el = document.getElementById('champ-popup'); if (!el) return;
+    el.style.display = 'flex';
+    el.addEventListener('click', function(ev){ if (ev.target === el) window.dismissChampPopup(); });
+    document.addEventListener('keydown', function(ev){ if (ev.key === 'Escape') window.dismissChampPopup(); });
+  }
+  if (document.readyState === 'complete') setTimeout(show, 350);
+  else window.addEventListener('load', function(){ setTimeout(show, 350); });
 })();
 </script>
 
