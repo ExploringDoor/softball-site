@@ -826,7 +826,7 @@ body{display:flex;flex-direction:column}
   <div class="pick-header">
     <div>
       <div class="pick-title">⚡ DVSL Live Scorer</div>
-      <div class="pick-sub">Select a game to score</div>
+      <div class="pick-sub">Off-season</div>
     </div>
     <a href="#" class="admin-link" id="back-link">← Admin</a>
     <script>
@@ -843,7 +843,15 @@ body{display:flex;flex-direction:column}
     </script>
   </div>
   <div class="pick-body" id="pick-body">
-    <div class="loading-pick"><div class="spinner dark"></div> Loading games...</div>
+    <!-- OFF-SEASON: live scoring is intentionally paused. The working scorer
+         is fully intact below; loadData() is commented out at the bottom of
+         the module so nothing loads over this message. To bring scoring back,
+         restore that call and revert this block to the "Loading games" spinner. -->
+    <div class="empty-pick">
+      <div class="ep-icon">🌙</div>
+      <div class="ep-text">Live scoring is paused for the off-season</div>
+      <div class="ep-sub">Game day scoring will be back when the next season starts. Final scores, standings, and stats are all live on the main site.</div>
+    </div>
   </div>
 </div>
 
@@ -1775,12 +1783,12 @@ window.startGame = function() {
   syncToFirebase();
 };
 
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
-  const el = document.getElementById(id);
-  if (el) el.style.display = 'flex';
-}
-
+// NOTE: showScreen(id) is already defined earlier in this module. A second,
+// byte-identical declaration here was a merge artifact and, being a duplicate
+// function declaration in the same module scope, threw "Identifier 'showScreen'
+// has already been declared" — a SyntaxError that stopped the ENTIRE scoring
+// module from running (games never loaded). Removed; the earlier definition
+// serves both call sites.
 window.goBack = function() {
   showScreen('screen-pick');
   renderPickScreen();
@@ -3086,7 +3094,11 @@ window.recordPitch = function(type) {
 // ═══════════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════════
-loadData();
+// OFF-SEASON: live scoring paused. loadData() is intentionally NOT called,
+// so the pick screen keeps its static "paused for the off-season" message
+// and the scorer never loads games or auto-resumes. Restore this one line
+// to turn live scoring back on for the next season.
+// loadData();
 </script>
 </body>
 </html>
