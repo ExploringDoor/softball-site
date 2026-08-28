@@ -5971,10 +5971,15 @@ function buildLeadersPage(statKey, dir){
   // sample averages skew rankings and a 1-for-1 player tops the list.
   // Adam ask 2026-06-09: apply the same 10-AB filter to Individual
   // Leaders + show a matching disclaimer banner.
-  const active = PLAYERS.filter(p => (parseInt(p.ab)||0) >= PLAYER_HITTING_MIN_AB);
+  // PLAYER_HITTING_MIN_AB is declared in a later <script> block, so on the
+  // first Individual Leaders render this function can run before that block
+  // initializes it. Read it defensively (same guard the Stats page uses) so
+  // it never throws a ReferenceError and leaves the table blank.
+  const MIN_AB = (typeof PLAYER_HITTING_MIN_AB !== 'undefined') ? PLAYER_HITTING_MIN_AB : 10;
+  const active = PLAYERS.filter(p => (parseInt(p.ab)||0) >= MIN_AB);
   if(active.length === 0){
     document.getElementById('lp-thead').innerHTML = '';
-    document.getElementById('lp-tbody').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:60px 20px;font-size:16px;color:var(--muted)">No qualified hitters yet — need at least ${PLAYER_HITTING_MIN_AB} at-bats to appear here.</td></tr>`;
+    document.getElementById('lp-tbody').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:60px 20px;font-size:16px;color:var(--muted)">No qualified hitters yet — need at least ${MIN_AB} at-bats to appear here.</td></tr>`;
     return;
   }
 
@@ -7704,6 +7709,7 @@ window._dataPromise.then(() => {
   try{ buildTicker2(); }catch(e){}
   try{ populateTeamsDropdown(); }catch(e){}
   try{ buildStandings(); }catch(e){}
+  try{ buildStand2026(); }catch(e){}   // full 2026 standings page — must rebuild once Firebase TEAMS land
   try{ buildHomeSidebar(); }catch(e){}
   try{ buildHomeRecentScores(); }catch(e){}
   try{ buildSchedule(); }catch(e){}
