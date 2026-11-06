@@ -13,7 +13,7 @@ I was on the Capital District Girls Basketball League pages on teampages.com thi
 
 I run Mainline Web Design, a small shop that builds league websites with schedules, standings, team pages and registration with card payments, and I help coach basketball at Lower Merion High School. Here is a basketball site I built that you can click around: https://www.nationalexposurebball.com
 
-If the league has thought about moving off TeamPages, I would be glad to show you an option. A 15 minute call or a reply works.
+If the league has thought about moving off TeamPages, I would be glad to show you an option. A 15 minute call or reply works.
 
 Adam Miller
 Mainline Web Design

@@ -13,7 +13,7 @@ The NYC MSBL address on LeagueLineup now redirects to the Stack Sports home page
 
 I run Mainline Web Design, a small shop that builds league websites with schedules, standings, rosters, news and online registration with card payments, and I help coach basketball at Lower Merion High School. Here is a basketball site I built that you can click around: https://www.nationalexposurebball.com
 
-If you are deciding where the league lives next, I would be glad to show you how I would set it up. A 15 minute call or a reply works.
+If you are deciding where the league lives next, I would be glad to show you how I would set it up. A 15 minute call or reply works.
 
 Adam Miller
 Mainline Web Design
