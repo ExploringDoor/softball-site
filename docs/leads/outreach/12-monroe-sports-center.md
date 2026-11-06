@@ -11,7 +11,7 @@ Hi Monroe Sports Center team,
 
 The banner on monroesportscenter.com says the business is now MultiSports Kingdom and points visitors to the new site, but every league schedule, tournament date and registration link still lives on the old one. With five tournaments from Fall Brawl through New Year Tipoff plus the MJBL and the adult league, that split will confuse coaches all winter.
 
-I run Mainline Web Design, a small shop that builds league and tournament websites with schedules, standings, brackets and registration with card payments, and I coach basketball at Lower Merion High School. Here is a basketball site I built that you can click around: https://www.nationalexposurebball.com
+I run Mainline Web Design, a small shop that builds league and tournament websites with schedules, standings, brackets and registration with card payments, and I help coach basketball at Lower Merion High School. Here is a basketball site I built that you can click around: https://www.nationalexposurebball.com
 
 If finishing the move is on the list, I would be glad to show you an option. A 15 minute call or a reply works.
 
