@@ -1,15 +1,43 @@
 // Vercel Serverless Function — /api/parse-schedule.js
 // Receives CSV text (any format), sends to Claude API, returns structured games array
 
+// --- Request guard (2026-11 security pass) ---
+// Paid endpoint (Anthropic). See parse-boxscore.js for the rationale: Origin
+// allow-list + size cap + soft per-instance rate limit to stop drive-by
+// bill abuse; forge-proof auth lands with the Firestore lockdown.
+const _ALLOWED_ORIGINS = [
+  'https://dvsl.vercel.app',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+const _rlHits = new Map();
+function _rateLimited(req, max, windowMs) {
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+  const now = Date.now();
+  const arr = (_rlHits.get(ip) || []).filter(t => now - t < windowMs);
+  arr.push(now);
+  _rlHits.set(ip, arr);
+  if (_rlHits.size > 5000) _rlHits.clear();
+  return arr.length > max;
+}
+
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin || '';
+  const allowOrigin = _ALLOWED_ORIGINS.includes(origin) ? origin : '';
+  res.setHeader('Access-Control-Allow-Origin', allowOrigin || 'https://dvsl.vercel.app');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!allowOrigin) return res.status(403).json({ error: 'Forbidden' });
+  if (_rateLimited(req, 15, 60000)) return res.status(429).json({ error: 'Too many requests, please wait a minute.' });
 
   const { csvText, teams } = req.body;
   if (!csvText) return res.status(400).json({ error: 'No CSV content provided' });
+  if (typeof csvText === 'string' && csvText.length > 500000) {
+    return res.status(413).json({ error: 'Schedule file too large.' });
+  }
 
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) return res.status(500).json({ error: 'API key not configured' });

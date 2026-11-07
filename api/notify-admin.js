@@ -9,12 +9,36 @@
 // If either env var is missing, the endpoint returns 200 with skipped=true
 // so the captain-side call never breaks the user flow.
 
+// --- Request guard (2026-11 security pass) ---
+// This endpoint sends email to the admin inbox, so an open POST is a spam
+// vector. Gate on Origin + a tight per-instance rate limit.
+const _ALLOWED_ORIGINS = [
+  'https://dvsl.vercel.app',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+];
+const _rlHits = new Map();
+function _rateLimited(req, max, windowMs) {
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
+  const now = Date.now();
+  const arr = (_rlHits.get(ip) || []).filter(t => now - t < windowMs);
+  arr.push(now);
+  _rlHits.set(ip, arr);
+  if (_rlHits.size > 5000) _rlHits.clear();
+  return arr.length > max;
+}
+
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin || '';
+  const allowOrigin = _ALLOWED_ORIGINS.includes(origin) ? origin : '';
+  res.setHeader('Access-Control-Allow-Origin', allowOrigin || 'https://dvsl.vercel.app');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Vary', 'Origin');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (!allowOrigin) return res.status(403).json({ error: 'Forbidden' });
+  if (_rateLimited(req, 5, 60000)) return res.status(429).json({ error: 'Too many requests.' });
 
   const API_KEY = process.env.RESEND_API_KEY;
   const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
