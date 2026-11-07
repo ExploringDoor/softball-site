@@ -9338,17 +9338,17 @@ window.deletePayment = async function(paymentId) {
 // ═══════════════════════════════════════════════════════════════════
 // MAILERLITE EMAIL BLAST
 // ═══════════════════════════════════════════════════════════════════
-const ML_API_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI0IiwianRpIjoiMzgzYzc0NGFlYzJkYWFjOTA3NDgzY2YzOGFhNzQ1ZDIxNzlkMWIzZDY0YmIwNmM1ZjM1ZGU1YmNlYjc5ODY4OTI3NjEwNmE2YWMxMzYxMTIiLCJpYXQiOjE3NzU2MTA5NzUuMTM2MDAxLCJuYmYiOjE3NzU2MTA5NzUuMTM2MDAzLCJleHAiOjQ5MzEyODQ1NzUuMTI5MTQ3LCJzdWIiOiIyMjcyMTc5Iiwic2NvcGVzIjpbXX0.ai_zNxrFdGYWYrZOI8k6nEPPGzukERNWtMpXvDmv9fARDTR9rw66mSPZ0TJYUCmDQB-wJinj4f57UvsZa8rhwLSyQKsoIDo_nxewyL416-2XLLf36BwBbp0cJptLGnM9_yLIU_dtj8OJixL9rPBEn4QZJKXMDwGXSTQcfNDU1w6RsZ6U-sYEnCLOUMSdiNRGvOiMUwmGwIKxCn_nDAttf3spTENteSNtL6tSz04AnIrJ15T4UPcDgSeGq68okIpGFw6tWOJ4E3UXOlpp8fUBDLRkIB-Dlhy9S9WUiV1CwooG0FnZquhhXbLsdyKZDwuvY12RlIS2yQm1JBfplGeP6rwQd4llSvKhZbuPyIpwCVMH6gnK8gmno4Y36A1yaRfzoVpNl_JKxSkTfoPS_vodxtQHsXkOfVL7ttqDl1f2LZLtMEvm1-h3N7Kr2rX2lMQ7x-cdUjOaMmjVxqOKr-vKQvsTtZjVedX4VGJIlWPpadwR_AEXQ3Q5aoyT4-yprMFFouJRBzvlkuHjbSPAdkUi7OOn1gy3qaMHRneX_YgTd_YgKe3TVLEaarzfhfLIamHhv63OZihq2jcs-EucpZWwqSwWFKgeekl6tqvCde5PfAwwnGhhmKbEFJcKWdrR2LGlxQduPLTFZ7vcHFnL5YaV5iFEuDuOLWadLTblWlCgmsQ';
-const ML_GROUP_ID = '184141516725290868';
-const ML_HEADERS = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${ML_API_KEY}` };
+// MailerLite is proxied server-side (api/mailerlite-admin) so the API token
+// no longer ships in this public page. Server reads MAILERLITE_TOKEN (Vercel env).
+const ML_ENDPOINT = '/api/mailerlite-admin';
 
 async function loadMailerLiteStats() {
   const el = document.getElementById('ml-subscriber-count');
   if (!el) return;
   try {
-    const res = await fetch(`https://connect.mailerlite.com/api/groups/${ML_GROUP_ID}`, { headers: ML_HEADERS });
+    const res = await fetch(ML_ENDPOINT, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'stats' }) });
     const data = await res.json();
-    const count = data?.data?.active_count ?? '—';
+    const count = (data && data.active_count != null) ? data.active_count : '—';
     el.innerHTML = `📬 <strong>${count}</strong> active subscribers in the DVSL Players list`;
   } catch(e) {
     el.textContent = 'Could not load subscriber count.';
@@ -9366,9 +9366,9 @@ window.toggleSubscriberList = async function() {
     if (!_mlSubsLoaded) {
       list.innerHTML = '<div style="color:var(--muted2)">Loading subscribers…</div>';
       try {
-        const res = await fetch(`https://connect.mailerlite.com/api/subscribers?filter[group]=${ML_GROUP_ID}&filter[status]=active&limit=100`, { headers: ML_HEADERS });
+        const res = await fetch(ML_ENDPOINT, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'subscribers' }) });
         const data = await res.json();
-        const subs = data?.data || [];
+        const subs = data?.subscribers || [];
         if (!subs.length) {
           list.innerHTML = '<div style="color:var(--muted2)">No active subscribers found.</div>';
         } else {
@@ -9376,8 +9376,8 @@ window.toggleSubscriberList = async function() {
             // Build name: prefer first + last; fall back to whichever is set.
             // Some legacy records have full name stuffed into `name` and team
             // in `last_name` — for those, just show the `name` field.
-            const first = (s.fields?.name || '').trim();
-            const last  = (s.fields?.last_name || '').trim();
+            const first = (s.name || '').trim();
+            const last  = (s.last_name || '').trim();
             // If `name` already contains a space (looks like a full name) and
             // last_name doesn't appear in it, just use `name` to avoid the
             // "Brian Gelfand Gelfand" duplication.
@@ -9387,7 +9387,7 @@ window.toggleSubscriberList = async function() {
             } else {
               display = first || last || '';
             }
-            const team = (s.fields?.team || '').trim();
+            const team = (s.team || '').trim();
             const email = s.email || '(no email)';
             const teamBadge = team
               ? ` <span style="background:var(--blue-bg);color:var(--blue);font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px">${team}</span>`
@@ -9418,40 +9418,12 @@ window.sendEmailBlast = async function() {
   btn.textContent = '⏳ Sending…';
   status.style.display = 'none';
   try {
-    // 1. Create campaign
-    const createRes = await fetch('https://connect.mailerlite.com/api/campaigns', {
-      method: 'POST', headers: ML_HEADERS,
-      body: JSON.stringify({
-        name: subject,
-        type: 'regular',
-        emails: [{
-          subject,
-          from_name: 'DVSL Softball',
-          from: 'toddharris1222@gmail.com',
-          content: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
-            <div style="background:#002D72;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0;font-family:Arial,sans-serif">
-              <strong style="font-size:20px;letter-spacing:.05em">⚾ DVSL SOFTBALL</strong>
-            </div>
-            <div style="background:#fff;border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 8px 8px;line-height:1.6;color:#1a1a1a">
-              ${body.replace(/\n/g, '<br>')}
-            </div>
-            <div style="text-align:center;padding:16px;font-size:11px;color:#9ca3af">
-              DVSL — Delaware Valley Synagogue League
-            </div>
-          </div>`
-        }],
-        groups: [ML_GROUP_ID]
-      })
+    const res = await fetch(ML_ENDPOINT, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'send', subject, body })
     });
-    const campaign = await createRes.json();
-    if (!campaign?.data?.id) throw new Error(campaign?.message || 'Failed to create campaign');
-    const campaignId = campaign.data.id;
-
-    // 2. Send immediately
-    await fetch(`https://connect.mailerlite.com/api/campaigns/${campaignId}/schedule`, {
-      method: 'POST', headers: ML_HEADERS,
-      body: JSON.stringify({ delivery: 'instant' })
-    });
+    const out = await res.json();
+    if (!res.ok || !out.ok) throw new Error(out.error || 'Failed to send');
 
     status.style.display = 'block';
     status.style.color = 'var(--green)';
