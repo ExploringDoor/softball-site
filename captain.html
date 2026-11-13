@@ -5947,9 +5947,10 @@ window.handleCaptainScoreUpload = async function(gameId, file) {
       payload.imageType = file.type;
     }
 
+    // The endpoint only answers signed-in users: send this session's Firebase ID token.
     const resp = await fetch('/api/parse-boxscore', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (auth.currentUser ? await auth.currentUser.getIdToken() : '') },
       body: JSON.stringify(payload)
     });
     barEl.style.width = '85%';

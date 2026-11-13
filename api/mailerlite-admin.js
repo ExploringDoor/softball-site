@@ -9,11 +9,10 @@
 //                          the subscribe proxy uses, so one rotation covers both.
 //   MAILERLITE_GROUP_ID  — (optional) the DVSL Players group; defaults below.
 //
-// NOTE: This is Origin-gated + rate-limited, which stops off-site abuse. It
-// does NOT yet verify the caller is a DVSL admin — that (a verified Firebase
-// ID token) rides with the Firestore lockdown. Until then the blast is only
-// as protected as access to admin.html itself, which is already far better
-// than a full-access token sitting in public page source.
+// NOTE: This is Origin-gated + rate-limited, and every action (stats, the
+// subscriber list, send) needs a verified Firebase ID token. See the TODO at
+// _verifyIdToken below: the token proves a signed-in DVSL account, not yet
+// that the caller is an admin.
 
 const _ALLOWED_ORIGINS = [
   'https://dvsl.vercel.app',
@@ -31,6 +30,30 @@ function _rateLimited(req, max, windowMs) {
   return arr.length > max;
 }
 
+// --- Signed-in callers only (2026-11 endpoint abuse pass) ---
+// The only caller (the admin.html Email Blast tab) is signed in with Firebase
+// Auth, so require their ID token and verify it with Identity Toolkit. This only
+// proves "a real DVSL Firebase account", NOT "an admin" or "a captain": sign-up
+// is open and the admin flag is still client-writable.
+// TODO(firestore-rules-lockdown): add a real role check here once the Firestore
+// rules are locked down and the admin flag can no longer be written by clients.
+const _FB_WEB_KEY = 'AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg'; // public web key, same as config.js
+// Returns the user record, null if the token is missing or bad; throws if Google is unreachable.
+async function _verifyIdToken(req) {
+  const idToken = (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1];
+  if (!idToken) return null;
+  const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + _FB_WEB_KEY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(5000),
+    body: JSON.stringify({ idToken })
+  });
+  if (r.status >= 500) throw new Error('lookup ' + r.status);
+  if (!r.ok) return null;
+  const u = ((await r.json()).users || [])[0];
+  return u && u.localId && u.email && !u.disabled ? u : null;
+}
+
 const ML_BASE = 'https://connect.mailerlite.com/api';
 
 export default async function handler(req, res) {
@@ -38,12 +61,18 @@ export default async function handler(req, res) {
   const allowOrigin = _ALLOWED_ORIGINS.includes(origin) ? origin : '';
   res.setHeader('Access-Control-Allow-Origin', allowOrigin || 'https://dvsl.vercel.app');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Vary', 'Origin');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   if (!allowOrigin) return res.status(403).json({ error: 'Forbidden' });
   if (_rateLimited(req, 20, 60000)) return res.status(429).json({ error: 'Too many requests.' });
+
+  // No token, no MailerLite: this covers the blast and the subscriber list.
+  let _user;
+  try { _user = await _verifyIdToken(req); }
+  catch (e) { return res.status(503).json({ error: 'Could not check your sign in. Please try again.' }); }
+  if (!_user) return res.status(401).json({ error: 'Please sign in again.' });
 
   const TOKEN = process.env.MAILERLITE_TOKEN;
   if (!TOKEN) return res.status(503).json({ error: 'MailerLite not configured', detail: 'Set MAILERLITE_TOKEN env var in Vercel.' });

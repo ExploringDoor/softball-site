@@ -4450,9 +4450,10 @@ window.handleCaptainUpload = async function(file) {
     }
 
     // ── Call API ──
+    // The endpoint only answers signed-in users: send this session's Firebase ID token.
     const resp = await fetch('/api/parse-boxscore', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (auth.currentUser ? await auth.currentUser.getIdToken() : '') },
       body: JSON.stringify(payload)
     });
     procBar.style.width = '85%';
@@ -7076,7 +7077,7 @@ window.csvHandleFileDrop = async function(file) {
     const teamList = TEAMS.map(t => ({ id: t.id, name: t.name }));
     const resp = await fetch('/api/parse-schedule', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (auth.currentUser ? await auth.currentUser.getIdToken() : '') },
       body: JSON.stringify({ csvText: text, teams: teamList })
     });
     if (!resp.ok) throw new Error('API error ' + resp.status);
@@ -9341,12 +9342,14 @@ window.deletePayment = async function(paymentId) {
 // MailerLite is proxied server-side (api/mailerlite-admin) so the API token
 // no longer ships in this public page. Server reads MAILERLITE_TOKEN (Vercel env).
 const ML_ENDPOINT = '/api/mailerlite-admin';
+// The proxy only answers signed-in users: every call carries this session's Firebase ID token.
+const mlHeaders = async () => ({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (auth.currentUser ? await auth.currentUser.getIdToken() : '') });
 
 async function loadMailerLiteStats() {
   const el = document.getElementById('ml-subscriber-count');
   if (!el) return;
   try {
-    const res = await fetch(ML_ENDPOINT, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'stats' }) });
+    const res = await fetch(ML_ENDPOINT, { method:'POST', headers: await mlHeaders(), body: JSON.stringify({ action:'stats' }) });
     const data = await res.json();
     const count = (data && data.active_count != null) ? data.active_count : '—';
     el.innerHTML = `📬 <strong>${count}</strong> active subscribers in the DVSL Players list`;
@@ -9366,7 +9369,7 @@ window.toggleSubscriberList = async function() {
     if (!_mlSubsLoaded) {
       list.innerHTML = '<div style="color:var(--muted2)">Loading subscribers…</div>';
       try {
-        const res = await fetch(ML_ENDPOINT, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'subscribers' }) });
+        const res = await fetch(ML_ENDPOINT, { method:'POST', headers: await mlHeaders(), body: JSON.stringify({ action:'subscribers' }) });
         const data = await res.json();
         const subs = data?.subscribers || [];
         if (!subs.length) {
@@ -9419,7 +9422,7 @@ window.sendEmailBlast = async function() {
   status.style.display = 'none';
   try {
     const res = await fetch(ML_ENDPOINT, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST', headers: await mlHeaders(),
       body: JSON.stringify({ action: 'send', subject, body })
     });
     const out = await res.json();
