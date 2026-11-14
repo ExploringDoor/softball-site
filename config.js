@@ -37,7 +37,7 @@
     // ── Images ───────────────────────────────────────────────────────────
     images: {
       hero: 'bannersoftball.jpg',
-      fieldBg: 'logos/field-bg.png'
+      fieldBg: 'logos/field-bg.jpg'
     },
 
     // ── Contact ──────────────────────────────────────────────────────────
