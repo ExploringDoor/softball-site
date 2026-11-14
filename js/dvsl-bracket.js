@@ -31,10 +31,13 @@
   var HOOKS = {};
   function setHooks(h) { HOOKS = h || {}; }
 
+  // Every bracket value (team names, game numbers, seeds, scores, dates)
+  // comes from the admin-edited bracket JSON, so all of it goes through esc()
+  // before it touches innerHTML or an attribute.
   function esc(s) {
     if (s == null) return '';
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    return String(s).replace(/[&<>"'`]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' }[c];
     });
   }
 
@@ -186,7 +189,7 @@
         ? '<span class="bk-logo">' + HOOKS.logo(s.name) + '</span>'
         : '<span class="bk-logo bk-logo-empty"></span>';
       var sd = (!s.tbd && !s.bye) ? seedOf(s.name) : null;
-      var seedEl = '<span class="bk-seed">' + (sd != null ? sd : '') + '</span>';
+      var seedEl = '<span class="bk-seed">' + (sd != null ? esc(sd) : '') + '</span>';
       // data-team on resolved sides powers the hover-to-trace-path highlight.
       var teamAttr = (!s.tbd && !s.bye) ? ' data-team="' + esc(s.name) + '"' : '';
       return '<div class="bk-side' + (win ? ' win' : '') + (s.tbd ? ' tbd' : '') + (s.bye ? ' bye' : '') + '"' + teamAttr + '>' +
@@ -207,9 +210,9 @@
     var fieldHTML = field
       ? '📍 ' + (typeof window.fieldLink === 'function' ? window.fieldLink(field) : esc(field))
       : '';
-    return '<div class="bk-match acc-' + cls + '" data-tkey="' + esc(t.key) + '" data-g="' + g.g + '"' +
+    return '<div class="bk-match acc-' + cls + '" data-tkey="' + esc(t.key) + '" data-g="' + esc(g.g) + '"' +
       ' style="left:' + x + 'px;top:' + y + 'px">' +
-      '<div class="bk-mtop"><span class="g">Game ' + g.g + '</span>' + tag + '</div>' +
+      '<div class="bk-mtop"><span class="g">Game ' + esc(g.g) + '</span>' + tag + '</div>' +
       side(A, g.as, aWin) + side(H, g.hs, hWin) +
       '<div class="bk-mfoot"><div class="bk-when">' + esc(when || 'TBD') + '</div>' +
       '<div class="bk-frow"><span class="bk-field">' + fieldHTML + '</span>' +
@@ -437,7 +440,7 @@
     var teams = (t.teams || []).slice().sort(function (a, b) { return (a.n || 0) - (b.n || 0); });
     if (!teams.length) return '';
     var rows = teams.map(function (tm) {
-      return '<tr><td class="ts">' + (tm.n || '') + '</td><td class="tn">' + esc(tm.name || '') +
+      return '<tr><td class="ts">' + esc(tm.n || '') + '</td><td class="tn">' + esc(tm.name || '') +
         '</td><td class="tac"><span class="ta">' + esc(tm.abbr || '') + '</span></td></tr>';
     }).join('');
     return '<details class="bk-teams"><summary><span class="chev">▸</span> Teams &amp; Seeds ' +

@@ -1,118 +1,90 @@
-// Vercel Serverless Function — /api/delete-by-source.js
+// Vercel Serverless Function — /api/delete-by-source
 //
-// Deletes every pending_nav doc whose `source_id` field matches the one
-// passed in. Used for cascade-deletes: when a user deletes a chat message
-// they sent by mistake, the matching notifications should disappear from
-// every subscriber's bell panel — not just the sender's.
+// Deletes a chat message and/or every pending_nav (inbox) item its push
+// created, league-wide. Clients cannot delete either directly any more for
+// single messages; this endpoint checks who is asking with the service
+// account.
 //
-// Protected with ADMIN_SEND_SECRET because this deletes docs for OTHER
-// people's tokens (there's no token-hash check — we're intentionally
-// clearing a push league-wide). The team-chat / captains-chat pages
-// already hold the admin secret to call /api/send-notification, so
-// reusing it here is fine.
-//
-// Request body:
-//   { sourceId: string }  — stable id of the originating object
-//                            (e.g. the chat message's Firestore doc id)
+// Auth: `Authorization: Bearer <Firebase ID token>`.
+// Body, one of:
+//   { collection: 'team_messages'|'captain_chat', id }  delete the message
+//       AND its inbox items. Allowed: the admin; the message's sender_uid
+//       (team_messages) / author_uid (captain_chat); for team_messages also a
+//       captain of its team_id. If the message is already gone, the
+//       {sourceId} rules below apply to the inbox cascade.
+//   { sourceId }  inbox cascade only. If a team_messages / captain_chat doc
+//       with that id still exists, the same message rules apply; if it no
+//       longer exists: the admin, any captain, or the user who sent the push
+//       (every pending_nav item carries sender_uid == caller).
 
-import crypto from 'crypto';
+import { cors, rateLimited, requireUser, getRoles, fsGet, fsQuery, fsCommit, fsDelete, body as readBody } from './_lib/dvsl.js';
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Secret');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+const fail = (res, status, error, message) => res.status(status).json({ error, message });
+const ID_RE = /^[A-Za-z0-9_\-]{1,200}$/;
+const COLLECTIONS = { team_messages: 'team', captain_chat: 'captain' };
 
-  const PROJECT_ID = process.env.FCM_PROJECT_ID;
-  const SVC_JSON   = process.env.FCM_SERVICE_ACCOUNT_JSON;
-  const SECRET     = process.env.ADMIN_SEND_SECRET;
-  if (!PROJECT_ID || !SVC_JSON) return res.status(503).json({ error: 'Not configured' });
-  // Fail CLOSED — see update-firebase.js. (Audit C3, 2026-07.)
-  if (!SECRET) return res.status(503).json({ error: 'Not configured', detail: 'Set ADMIN_SEND_SECRET env var.' });
-  if (req.headers['x-admin-secret'] !== SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
+// Pure permission check. msg = { kind:'team'|'captain', doc } or null; items = pending_nav rows.
+// Mirrors the Firestore delete rules: team_messages admin | captain of its
+// team | own sender_uid; captain_chat admin | own author_uid.
+export function mayCascade(uid, roles, msg, items) {
+  if (roles.admin) return true;
+  if (msg) {
+    const d = msg.doc || {};
+    if (msg.kind === 'team') return (!!d.sender_uid && d.sender_uid === uid) || (!!d.team_id && roles.captain_teams.includes(d.team_id));
+    return !!d.author_uid && d.author_uid === uid;
   }
-
-  const { sourceId } = req.body || {};
-  if (!sourceId || typeof sourceId !== 'string') {
-    return res.status(400).json({ error: 'sourceId required' });
-  }
-
-  let svc;
-  try { svc = JSON.parse(SVC_JSON); }
-  catch { return res.status(500).json({ error: 'Bad service account' }); }
-
-  let accessToken;
-  try { accessToken = await getAccessToken(svc); }
-  catch { return res.status(500).json({ error: 'Auth failed' }); }
-
-  // Query every pending_nav doc with this source_id. Not filtering by
-  // token_hash — the whole point is clearing the push for everyone.
-  const queryUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents:runQuery`;
-  const query = {
-    structuredQuery: {
-      from: [{ collectionId: 'pending_nav' }],
-      where: {
-        fieldFilter: {
-          field: { fieldPath: 'source_id' },
-          op: 'EQUAL',
-          value: { stringValue: String(sourceId) },
-        },
-      },
-      limit: 500,
-    },
-  };
-  let paths = [];
-  try {
-    const resp = await fetch(queryUrl, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(query),
-    });
-    const rows = await resp.json();
-    paths = (rows || [])
-      .filter(r => r.document && r.document.name)
-      .map(r => r.document.name);
-  } catch {
-    return res.status(500).json({ error: 'query failed' });
-  }
-
-  // Fire deletes in parallel; best-effort.
-  await Promise.all(paths.map(p =>
-    fetch(`https://firestore.googleapis.com/v1/${p}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }).catch(() => {})
-  ));
-  return res.status(200).json({ ok: true, deleted: paths.length });
+  if (roles.captain_teams.length) return true;
+  return items.length > 0 && items.every(r => r.sender_uid === uid);
 }
 
-// ── helpers ─────────────────────────────────────────────────────────────
+async function deleteItems(items) {
+  for (let i = 0; i < items.length; i += 400) {
+    await fsCommit(items.slice(i, i + 400).map(r => ({ delete: `pending_nav/${r.id}` })));
+  }
+}
 
-async function getAccessToken(svc) {
-  const now = Math.floor(Date.now() / 1000);
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const claim = {
-    iss: svc.client_email,
-    scope: 'https://www.googleapis.com/auth/datastore',
-    aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
-  };
-  const enc = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
-  const unsigned = `${enc(header)}.${enc(claim)}`;
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(unsigned);
-  const signature = signer.sign(svc.private_key).toString('base64url');
-  const jwt = `${unsigned}.${signature}`;
+export default async function handler(req, res) {
+  if (cors(req, res)) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  if (rateLimited('dbs:' + user.uid, 30, 60000)) return fail(res, 429, 'rate-limited', 'Too many requests. Please wait a minute.');
 
-  const resp = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `grant_type=${encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer')}&assertion=${jwt}`,
-  });
-  const data = await resp.json();
-  if (!data.access_token) throw new Error(data.error_description || JSON.stringify(data));
-  return data.access_token;
+  const b = readBody(req);
+  const msgMode = b.collection !== undefined;
+  let sourceId, collection = null;
+  if (msgMode) {
+    if (!Object.prototype.hasOwnProperty.call(COLLECTIONS, b.collection)) return fail(res, 400, 'bad-request', 'collection must be team_messages or captain_chat');
+    if (typeof b.id !== 'string' || !ID_RE.test(b.id)) return fail(res, 400, 'bad-request', 'id required');
+    collection = b.collection;
+    sourceId = b.id;
+  } else {
+    sourceId = b.sourceId;
+    if (typeof sourceId !== 'string' || !ID_RE.test(sourceId)) return fail(res, 400, 'bad-request', 'sourceId required');
+  }
+
+  try {
+    const [roles, tm, cc, items] = await Promise.all([
+      getRoles(user.uid),
+      collection === 'captain_chat' ? null : fsGet(`team_messages/${sourceId}`),
+      collection === 'team_messages' ? null : fsGet(`captain_chat/${sourceId}`),
+      fsQuery('pending_nav', [['source_id', '==', sourceId]], { limit: 500 }),
+    ]);
+    const msg = tm ? { kind: 'team', doc: tm, path: `team_messages/${sourceId}` }
+      : (cc ? { kind: 'captain', doc: cc, path: `captain_chat/${sourceId}` } : null);
+
+    if (!msg && !items.length) return res.status(200).json({ ok: true, deleted: 0, messageDeleted: false });
+    if (!mayCascade(user.uid, roles, msg, items)) {
+      return fail(res, 403, 'forbidden', msgMode ? 'You can only delete your own messages.' : 'You can only clear notifications for your own messages.');
+    }
+    let messageDeleted = false;
+    if (msgMode && msg) {
+      await fsDelete(msg.path);
+      messageDeleted = true;
+    }
+    await deleteItems(items);
+    return res.status(200).json({ ok: true, deleted: items.length, messageDeleted });
+  } catch (e) {
+    console.error('delete-by-source failed:', e.message);
+    return fail(res, 503, 'unavailable', 'Could not delete that. Please try again.');
+  }
 }

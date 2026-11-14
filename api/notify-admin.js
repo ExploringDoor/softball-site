@@ -1,125 +1,62 @@
-// Vercel Serverless Function — /api/notify-admin.js
-// Sends an email to the admin when a captain edits a game.
-// Called from captain.html saveEditGame() after the Firestore write.
+// Vercel Serverless Function — /api/notify-admin
+// Emails the commissioner (Resend) about a captain action, e.g. a game edit
+// or a game added from the captain portal. The email core is
+// api/_lib/notify.js notifyAdminEmail(); claim / sign-up alerts are sent
+// in-process by api/account.js and api/register.js, not through here.
 //
-// Env vars (set in Vercel project settings):
-//   RESEND_API_KEY  — from https://resend.com (free tier)
-//   ADMIN_EMAIL     — your email (e.g. adam.miller.22@gmail.com)
+// Auth: `Authorization: Bearer <Firebase ID token>`; the caller must be the
+// admin or an approved captain (roles/{uid}). The sender shown in the email
+// is the caller's verified account email, never a name from the request.
+// Limits: 10/min per uid; 100/day across captains (admin calls not counted).
 //
-// If either env var is missing, the endpoint returns 200 with skipped=true
-// so the captain-side call never breaks the user flow.
+// Body: { kind: 'game_edit'|'game_add'|'captain_claim'|'signup'|'self_add',
+//         gameId?, teamsLabel?, summary?, diff?, subject? }
+// If RESEND_API_KEY / ADMIN_EMAIL are missing → 200 { ok:true, sent:false, skipped }.
 
-// --- Request guard (2026-11 security pass) ---
-// This endpoint sends email to the admin inbox, so an open POST is a spam
-// vector. Gate on Origin + a tight per-instance rate limit.
-const _ALLOWED_ORIGINS = [
-  'https://dvsl.vercel.app',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000'
-];
-const _rlHits = new Map();
-function _rateLimited(req, max, windowMs) {
-  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
-  const now = Date.now();
-  const arr = (_rlHits.get(ip) || []).filter(t => now - t < windowMs);
-  arr.push(now);
-  _rlHits.set(ip, arr);
-  if (_rlHits.size > 5000) _rlHits.clear();
-  return arr.length > max;
+import { cors, rateLimited, requireUser, getRoles, dailyCount, body as readBody } from './_lib/dvsl.js';
+import { notifyAdminEmail, oneLine } from './_lib/notify.js';
+
+const fail = (res, status, error, message) => res.status(status).json({ error, message });
+const ALLOWED_KINDS = ['game_edit', 'game_add', 'captain_claim', 'signup', 'self_add'];
+const str = (v, max) => (typeof v === 'string' ? v : (typeof v === 'number' ? String(v) : '')).slice(0, max);
+
+export function buildLines(user, roles, b) {
+  const who = roles.admin ? 'commissioner' : `captain of ${roles.captain_teams.join(', ')}`;
+  const lines = [`Sent by: ${user.email} (${who})`];
+  const teamsLabel = oneLine(str(b.teamsLabel, 200), 200);
+  const summary = str(b.summary, 2000).trim();
+  const diff = str(b.diff, 4000).trim();
+  const gameId = oneLine(str(b.gameId, 200), 200);
+  if (teamsLabel) lines.push(`Game: ${teamsLabel}`);
+  if (summary) lines.push(`Summary: ${summary}`);
+  if (diff && diff !== summary) lines.push('', 'Changes:', diff);
+  if (gameId) lines.push('', `Game ID: ${gameId}`);
+  return lines;
 }
 
 export default async function handler(req, res) {
-  const origin = req.headers.origin || '';
-  const allowOrigin = _ALLOWED_ORIGINS.includes(origin) ? origin : '';
-  res.setHeader('Access-Control-Allow-Origin', allowOrigin || 'https://dvsl.vercel.app');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Vary', 'Origin');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!allowOrigin) return res.status(403).json({ error: 'Forbidden' });
-  if (_rateLimited(req, 5, 60000)) return res.status(429).json({ error: 'Too many requests.' });
+  if (cors(req, res)) return;
+  const user = await requireUser(req, res);
+  if (!user) return;
+  if (rateLimited('notify:' + user.uid, 10, 60000)) return fail(res, 429, 'rate-limited', 'Too many requests. Please wait a minute.');
 
-  const API_KEY = process.env.RESEND_API_KEY;
-  const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+  let roles;
+  try { roles = await getRoles(user.uid); }
+  catch (e) { return fail(res, 503, 'unavailable', 'Could not check your account. Please try again.'); }
+  if (!roles.admin && !roles.captain_teams.length) return fail(res, 403, 'forbidden', 'Only captains can notify the commissioner.');
 
-  // Silently skip if not configured — don't break captain edits over missing config
-  if (!API_KEY || !ADMIN_EMAIL) {
-    return res.status(200).json({ skipped: true, reason: 'Email not configured' });
+  const b = readBody(req);
+  let kind = b.kind;
+  if (kind === undefined || kind === null || kind === '') kind = b.gameId ? 'game_edit' : 'game_add';
+  if (!ALLOWED_KINDS.includes(kind)) return fail(res, 400, 'bad-kind', 'Unknown notification kind.');
+
+  if (!roles.admin && await dailyCount('notify') > 100) {
+    return fail(res, 429, 'daily-limit', 'The daily limit for commissioner emails was reached.');
   }
 
-  const {
-    gameId = '',
-    teamsLabel = '',
-    editedBy = '',
-    editedByEmail = '',
-    summary = '',
-    diff = '',
-  } = req.body || {};
-
-  const subject = `DVSL: ${editedBy || 'Captain'} edited ${teamsLabel || 'a game'}`;
-
-  const plain =
-`A captain just edited a game in the DVSL captain portal.
-
-Game: ${teamsLabel}
-Edited by: ${editedBy}${editedByEmail ? ' (' + editedByEmail + ')' : ''}
-Summary: ${summary || '(no summary)'}
-
-Changes:
-${diff || '(none)'}
-
-You can push this to Google Calendar from the admin dashboard:
-https://dvsl.vercel.app/admin.html
-
-Game ID: ${gameId}
-`;
-
-  const html = `
-    <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:20px;background:#f8fafc">
-      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px">
-        <div style="font-size:12px;color:#64748b;letter-spacing:.08em;text-transform:uppercase;font-weight:700">DVSL Captain Edit</div>
-        <div style="font-size:18px;font-weight:700;color:#0f172a;margin:6px 0 16px">${escapeHtml(teamsLabel)}</div>
-        <div style="font-size:14px;color:#334155;line-height:1.6">
-          <div><strong>Edited by:</strong> ${escapeHtml(editedBy)}${editedByEmail ? ' &lt;' + escapeHtml(editedByEmail) + '&gt;' : ''}</div>
-          <div><strong>Summary:</strong> ${escapeHtml(summary || '(no summary)')}</div>
-          ${diff ? `<div style="margin-top:12px;padding:12px;background:#f1f5f9;border-radius:6px;font-family:monospace;font-size:13px;white-space:pre-wrap">${escapeHtml(diff)}</div>` : ''}
-        </div>
-        <div style="margin-top:20px">
-          <a href="https://dvsl.vercel.app/admin.html" style="display:inline-block;background:#002D72;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:700">Open Admin Dashboard</a>
-        </div>
-        <div style="margin-top:16px;font-size:11px;color:#94a3b8">Game ID: ${escapeHtml(gameId)}</div>
-      </div>
-    </div>
-  `;
-
-  try {
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'DVSL <onboarding@resend.dev>', // Resend's sandbox sender — works without domain verification
-        to: [ADMIN_EMAIL],
-        subject,
-        text: plain,
-        html,
-      }),
-    });
-    const data = await r.json();
-    if (!r.ok) {
-      console.error('Resend error:', data);
-      return res.status(500).json({ error: data.message || 'Resend failed' });
-    }
-    return res.status(200).json({ ok: true, id: data.id });
-  } catch (e) {
-    console.error('notify-admin exception:', e);
-    return res.status(500).json({ error: String(e.message || e) });
-  }
-}
-
-function escapeHtml(s) {
-  return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const subject = oneLine(str(b.subject, 200), 120) || oneLine(str(b.teamsLabel, 200), 120);
+  const r = await notifyAdminEmail({ kind, subject, lines: buildLines(user, roles, b) });
+  if (r.sent) return res.status(200).json({ ok: true, sent: true });
+  if (r.skipped === 'not-configured') return res.status(200).json({ ok: true, sent: false, skipped: 'not-configured' });
+  return fail(res, 502, 'send-failed', 'Could not email the commissioner.');
 }

@@ -6,76 +6,36 @@
 //
 // Env vars (set in Vercel project settings):
 //   MAILERLITE_TOKEN     — the API bearer token (starts with eyJ...). Same var
-//                          the subscribe proxy uses, so one rotation covers both.
+//                          api/account.js uses to subscribe approved players.
 //   MAILERLITE_GROUP_ID  — (optional) the DVSL Players group; defaults below.
+//   MAILERLITE_FROM      — (optional) campaign sender address; defaults below.
 //
-// NOTE: This is Origin-gated + rate-limited, and every action (stats, the
-// subscriber list, send) needs a verified Firebase ID token. See the TODO at
-// _verifyIdToken below: the token proves a signed-in DVSL account, not yet
-// that the caller is an admin.
+// Access: our Origin, a per-IP burst limit, a verified Firebase ID token,
+// and roles/{uid}.admin === true (2026-11 lockdown). Everyone else gets 403.
+// 'send' also has a tighter burst limit and a durable daily cap.
 
-const _ALLOWED_ORIGINS = [
-  'https://dvsl.vercel.app',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000'
-];
-const _rlHits = new Map();
-function _rateLimited(req, max, windowMs) {
-  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
-  const now = Date.now();
-  const arr = (_rlHits.get(ip) || []).filter(t => now - t < windowMs);
-  arr.push(now);
-  _rlHits.set(ip, arr);
-  if (_rlHits.size > 5000) _rlHits.clear();
-  return arr.length > max;
-}
-
-// --- Signed-in callers only (2026-11 endpoint abuse pass) ---
-// The only caller (the admin.html Email Blast tab) is signed in with Firebase
-// Auth, so require their ID token and verify it with Identity Toolkit. This only
-// proves "a real DVSL Firebase account", NOT "an admin" or "a captain": sign-up
-// is open and the admin flag is still client-writable.
-// TODO(firestore-rules-lockdown): add a real role check here once the Firestore
-// rules are locked down and the admin flag can no longer be written by clients.
-const _FB_WEB_KEY = 'AIzaSyDXuC-R0aPEX4F7lN5AKq48UC3r5whYzdg'; // public web key, same as config.js
-// Returns the user record, null if the token is missing or bad; throws if Google is unreachable.
-async function _verifyIdToken(req) {
-  const idToken = (/^Bearer (.+)$/.exec(req.headers.authorization || '') || [])[1];
-  if (!idToken) return null;
-  const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + _FB_WEB_KEY, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    signal: AbortSignal.timeout(5000),
-    body: JSON.stringify({ idToken })
-  });
-  if (r.status >= 500) throw new Error('lookup ' + r.status);
-  if (!r.ok) return null;
-  const u = ((await r.json()).users || [])[0];
-  return u && u.localId && u.email && !u.disabled ? u : null;
-}
+import { cors, rejectForeignOrigin, rateLimited, clientIp, requireUser, getRoles, dailyCount } from './_lib/dvsl.js';
 
 const ML_BASE = 'https://connect.mailerlite.com/api';
+const SEND_DAILY_MAX = 10; // blasts go to the whole league; a few a season is normal
+const fail = (res, status, error, message) => res.status(status).json({ error, message });
 
 export default async function handler(req, res) {
-  const origin = req.headers.origin || '';
-  const allowOrigin = _ALLOWED_ORIGINS.includes(origin) ? origin : '';
-  res.setHeader('Access-Control-Allow-Origin', allowOrigin || 'https://dvsl.vercel.app');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Vary', 'Origin');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!allowOrigin) return res.status(403).json({ error: 'Forbidden' });
-  if (_rateLimited(req, 20, 60000)) return res.status(429).json({ error: 'Too many requests.' });
+  if (cors(req, res)) return;
+  if (rejectForeignOrigin(req, res)) return;
+  if (rateLimited('ml:' + clientIp(req), 20, 60000)) return fail(res, 429, 'rate-limited', 'Too many requests.');
 
-  // No token, no MailerLite: this covers the blast and the subscriber list.
-  let _user;
-  try { _user = await _verifyIdToken(req); }
-  catch (e) { return res.status(503).json({ error: 'Could not check your sign in. Please try again.' }); }
-  if (!_user) return res.status(401).json({ error: 'Please sign in again.' });
+  // No admin, no MailerLite: this covers the blast and the subscriber list.
+  const _user = await requireUser(req, res);
+  if (!_user) return;
+  let _roles;
+  try { _roles = await getRoles(_user.uid); }
+  catch (e) { return fail(res, 503, 'unavailable', 'Could not check your account. Please try again.'); }
+  if (!_roles.admin) return fail(res, 403, 'forbidden', 'Only the commissioner can use Email Blast.');
 
   const TOKEN = process.env.MAILERLITE_TOKEN;
-  if (!TOKEN) return res.status(503).json({ error: 'MailerLite not configured', detail: 'Set MAILERLITE_TOKEN env var in Vercel.' });
+  if (!TOKEN) return fail(res, 503, 'not-configured', 'MailerLite is not set up. Set MAILERLITE_TOKEN in Vercel.');
+  const FROM = process.env.MAILERLITE_FROM || 'toddharris1222@gmail.com';
   const GROUP_ID = process.env.MAILERLITE_GROUP_ID || '184141516725290868';
   const H = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
 
@@ -85,7 +45,7 @@ export default async function handler(req, res) {
     if (action === 'stats') {
       const r = await fetch(`${ML_BASE}/groups/${GROUP_ID}`, { headers: H });
       const d = await r.json();
-      return res.status(200).json({ active_count: d?.data?.active_count ?? null });
+      return res.status(200).json({ ok: true, active_count: d?.data?.active_count ?? null });
     }
 
     if (action === 'subscribers') {
@@ -97,15 +57,17 @@ export default async function handler(req, res) {
         last_name: s.fields?.last_name || '',
         team: s.fields?.team || ''
       }));
-      return res.status(200).json({ subscribers });
+      return res.status(200).json({ ok: true, subscribers });
     }
 
     if (action === 'send') {
       const subject = String(req.body.subject || '').trim();
       const body = String(req.body.body || '').trim();
-      if (!subject || !body) return res.status(400).json({ error: 'Subject and body are required.' });
-      // Extra-tight limit on the operation that actually emails ~300 people.
-      if (_rateLimited(req, 3, 60000)) return res.status(429).json({ error: 'Too many sends, please wait a minute.' });
+      if (!subject || !body) return fail(res, 400, 'bad-request', 'Subject and body are required.');
+      if (subject.length > 200 || body.length > 50000) return fail(res, 413, 'too-long', 'That email is too long.');
+      // Extra-tight limits on the operation that actually emails ~300 people.
+      if (rateLimited('mlsend:' + _user.uid, 3, 60000)) return fail(res, 429, 'rate-limited', 'Too many sends, please wait a minute.');
+      if (await dailyCount('mailerlite-send') > SEND_DAILY_MAX) return fail(res, 429, 'daily-limit', 'Daily email blast limit reached. Please try again tomorrow.');
 
       const content = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px">
             <div style="background:#002D72;color:#fff;padding:16px 24px;border-radius:8px 8px 0 0;font-family:Arial,sans-serif">
@@ -124,12 +86,12 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           name: subject,
           type: 'regular',
-          emails: [{ subject, from_name: 'DVSL Softball', from: 'toddharris1222@gmail.com', content }],
+          emails: [{ subject, from_name: 'DVSL Softball', from: FROM, content }],
           groups: [GROUP_ID]
         })
       });
       const campaign = await createRes.json();
-      if (!campaign?.data?.id) return res.status(502).json({ error: campaign?.message || 'Failed to create campaign' });
+      if (!campaign?.data?.id) return fail(res, 502, 'create-failed', campaign?.message || 'Failed to create campaign');
       const campaignId = campaign.data.id;
 
       const schedRes = await fetch(`${ML_BASE}/campaigns/${campaignId}/schedule`, {
@@ -138,14 +100,14 @@ export default async function handler(req, res) {
       });
       if (!schedRes.ok) {
         const e = await schedRes.json().catch(() => ({}));
-        return res.status(502).json({ error: e?.message || 'Campaign created but failed to send', campaignId });
+        return res.status(502).json({ error: 'send-failed', message: e?.message || 'Campaign created but failed to send', campaignId });
       }
       return res.status(200).json({ ok: true, campaignId });
     }
 
-    return res.status(400).json({ error: 'Unknown action' });
+    return fail(res, 400, 'bad-action', 'Unknown action');
   } catch (e) {
     console.error('mailerlite-admin error:', e);
-    return res.status(500).json({ error: e.message });
+    return fail(res, 502, 'mailerlite-failed', 'MailerLite request failed. Please try again.');
   }
 }

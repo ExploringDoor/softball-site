@@ -1,0 +1,460 @@
+rules_version = '2';
+
+// DVSL Firestore security rules (2026-11 lockdown).
+//
+// The rules trust exactly one thing about a person: roles/{uid}, which only
+// the server (service account, api/_lib/dvsl.js) or an admin can write.
+// Being signed in proves nothing on its own, because public sign-up is open.
+//
+// Public league data (teams, games, box scores, rosters/stats, history) stays
+// readable by anyone; the public site reads it signed out. Personal data lives
+// in collections only the right roles can read.
+//
+// Anything a non-admin can write is validated here (types, sizes, no < or >
+// in short strings, auto ids for client-created docs) because pages render it.
+//
+// Rules are not filters: a list query is rejected unless the rule holds for
+// EVERY possible result, proven from the query's own equality filters. Pages
+// query private collections with where('team_id', '==', T).
+//
+// Deploy:   firebase deploy --only firestore:rules --project dvsl-292dd
+// Rollback: the pre-lockdown ruleset is saved with the lockdown notes.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ───────────────────────── who is calling ─────────────────────────
+    function signedIn() { return request.auth != null; }
+    function rolesPath() { return /databases/$(database)/documents/roles/$(request.auth.uid); }
+    function hasRoles() { return signedIn() && exists(rolesPath()); }
+    function roleData() { return get(rolesPath()).data; }
+    function isAdmin() { return hasRoles() && roleData().get('admin', false) == true; }
+    function captainTeams() { return roleData().get('captain_teams', []); }
+    function isCaptainOf(t) { return hasRoles() && t in captainTeams(); }
+    function isCaptainOfAny(ts) { return hasRoles() && captainTeams().hasAny(ts); }
+    function isAnyCaptain() { return hasRoles() && captainTeams().size() > 0; }
+    function isMemberOf(t) {
+      return hasRoles() && (t in roleData().get('member_teams', []) || t in captainTeams());
+    }
+
+    // ───────────────────────── games and sides ─────────────────────────
+    function teamPath(t) { return /databases/$(database)/documents/teams/$(t); }
+    function gamePath(gid) { return /databases/$(database)/documents/games/$(gid); }
+    function pgPath(gid) { return /databases/$(database)/documents/playoff_games/$(gid); }
+    function isPlayoffId(gid) { return gid.matches('^po__(gold|silver)_[0-9]+$'); }
+    // Team id on one side of a regular game or a playoff game ('' if unknown).
+    // Playoff sides come from the server-maintained playoff_games docs, never
+    // from data a client writes.
+    function sideTeam(gid, side) {
+      return isPlayoffId(gid)
+        ? (exists(pgPath(gid)) ? get(pgPath(gid)).data.get(side, '') : '')
+        : (exists(gamePath(gid)) ? get(gamePath(gid)).data.get(side, '') : '');
+    }
+    function isCaptainOfGame(gid) {
+      return isCaptainOfAny([sideTeam(gid, 'away'), sideTeam(gid, 'home')]);
+    }
+
+    function playerPath(pid) { return /databases/$(database)/documents/players/$(pid); }
+    function ownsPlayer(pid) {
+      return signedIn() && exists(playerPath(pid))
+        && get(playerPath(pid)).data.get('auth_uid', '') == request.auth.uid;
+    }
+
+    // ───────────────────────── validators ─────────────────────────
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function ch(k) { return changed().hasAny([k]); }
+    function isAutoId(id) { return id.matches('^[A-Za-z0-9]{20}$'); }
+    function noTags(v) { return !v.matches('(?s).*[<>].*'); }
+    function shortStr(v) { return v is string && v.size() <= 80 && noTags(v); }
+    function medStr(v) { return v is string && v.size() <= 200 && noTags(v); }
+    function textOk(v) { return v is string && v.size() > 0 && v.size() <= 2000; }
+    function intIn(v, lo, hi) { return v is int && v >= lo && v <= hi; }
+    function numIn(v, lo, hi) { return (v is int || v is float) && v >= lo && v <= hi; }
+    function scoreOk(v) { return v == null || intIn(v, 0, 99) || (v is string && v.matches('^[0-9]{1,2}$')); }
+    function whenOk(v) { return v == null || v is timestamp || medStr(v); }
+    // Each check below only looks at keys this write changes, so an odd value
+    // already sitting in an untouched field never blocks a legitimate write.
+    function strIfCh(k) { return !ch(k) || request.resource.data[k] == null || medStr(request.resource.data[k]); }
+
+    // ─────────── separate pickleball apps sharing this project ───────────
+    // Unchanged (they never sign in; PickleBoard's daily demo reset writes
+    // with the public key). Their own security is a separate decision.
+    match /pickleball/{id} { allow read, write: if true; }
+    match /pickleball_history/{id} { allow read, write: if true; }
+    match /pickleball_history_test/{id} { allow read, write: if true; }
+    match /pb_boards/{id} { allow read, write: if true; }
+    match /pb_clubs/{id} { allow read, write: if true; }
+    match /pb_leads/{id} { allow read, write: if true; }
+
+    // ───────────────────────── roles ─────────────────────────
+    match /roles/{u} {
+      allow get: if signedIn() && (request.auth.uid == u || isAdmin());
+      allow list, write: if isAdmin();
+    }
+
+    // ───────────────────── public league data ─────────────────────
+    match /teams/{id} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      // Any approved captain may rewrite the standings columns of every team
+      // (score entry recalculates the whole table) and nothing else, never on
+      // the bracket doc (that goes through /api/account playoff-score).
+      allow update: if isAdmin()
+        || (id != '__playoff_brackets' && isAnyCaptain()
+            && changed().hasOnly(['w', 'l', 'ti', 'pct', 'rs', 'ra', 'gb', 'streak'])
+            && standingsValid());
+    }
+    function standingsValid() {
+      let d = request.resource.data;
+      return (!ch('w') || intIn(d.w, 0, 9999)) && (!ch('l') || intIn(d.l, 0, 9999)) && (!ch('ti') || intIn(d.ti, 0, 9999))
+        && (!ch('rs') || intIn(d.rs, 0, 99999)) && (!ch('ra') || intIn(d.ra, 0, 99999))
+        && (!ch('pct') || numIn(d.pct, 0, 1))
+        && (!ch('gb') || numIn(d.gb, 0, 999) || (d.gb is string && d.gb.matches('^(-|—|[0-9]{1,3}(\\.[05])?)$')))
+        && (!ch('streak') || (d.streak is string && d.streak.matches('^(—|-|[WLT][0-9]{1,3})?$')));
+    }
+
+    match /hist_teams/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /league_history/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /team_calendars/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /recaps/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /site_config/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /site_content/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /team_media/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /playoff_games/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /alert_history/{id} { allow read, write: if isAdmin(); }
+    match /score_uploads/{id} { allow read, write: if isAdmin(); }
+
+    // Rosters and stats (contact details live in player_private).
+    // auth_uid, is_admin, team moves, active and pending status change only
+    // through the server (/api/account) or an admin.
+    match /players/{pid} {
+      allow read: if true;
+      allow create: if isAdmin() || captainCreatesPlayer(pid);
+      allow update: if isAdmin()
+        // stat recalcs touch both teams' players after any final
+        || (isAnyCaptain() && changed().hasOnly(['gp', 'ab', 'r', 'h', 's', 'd', 't', 'hr', 'rbi', 'bb', 'so',
+                                                 'avg', 'obp', 'slg', 'ops', 'stats_updated_at'])
+            && statsValid())
+        // roster details on the captain's own team
+        || (isCaptainOf(resource.data.get('team', ''))
+            && changed().hasOnly(['name', 'first_name', 'last_name', 'num', 'pos', 'captain',
+                                  'approved_by', 'approved_at', 'updated_at',
+                                  'gp', 'ab', 'r', 'h', 's', 'd', 't', 'hr', 'rbi', 'bb', 'so',
+                                  'avg', 'obp', 'slg', 'ops', 'stats_updated_at'])
+            && rosterValid() && statsValid());
+      allow delete: if isAdmin();
+    }
+    function statsValid() {
+      let d = request.resource.data;
+      return (!ch('gp') || intIn(d.gp, 0, 9999)) && (!ch('ab') || intIn(d.ab, 0, 9999)) && (!ch('r') || intIn(d.r, 0, 9999))
+        && (!ch('h') || intIn(d.h, 0, 9999)) && (!ch('s') || intIn(d.s, 0, 9999)) && (!ch('d') || intIn(d.d, 0, 9999))
+        && (!ch('t') || intIn(d.t, 0, 9999)) && (!ch('hr') || intIn(d.hr, 0, 9999)) && (!ch('rbi') || intIn(d.rbi, 0, 9999))
+        && (!ch('bb') || intIn(d.bb, 0, 9999)) && (!ch('so') || intIn(d.so, 0, 9999))
+        && (!ch('avg') || numIn(d.avg, 0, 10)) && (!ch('obp') || numIn(d.obp, 0, 10))
+        && (!ch('slg') || numIn(d.slg, 0, 10)) && (!ch('ops') || numIn(d.ops, 0, 20))
+        && (!ch('stats_updated_at') || whenOk(d.stats_updated_at));
+    }
+    function numOk(v) { return v == null || intIn(v, 0, 99) || (v is string && v.matches('^[0-9]{0,2}$')); }
+    function rosterValid() {
+      let d = request.resource.data;
+      return (!ch('name') || shortStr(d.name)) && (!ch('first_name') || shortStr(d.first_name))
+        && (!ch('last_name') || shortStr(d.last_name)) && (!ch('num') || numOk(d.num))
+        && (!ch('pos') || d.pos == null || shortStr(d.pos)) && (!ch('captain') || d.captain is bool)
+        && strIfCh('approved_by') && (!ch('approved_at') || whenOk(d.approved_at))
+        && (!ch('updated_at') || whenOk(d.updated_at));
+    }
+    function captainCreatesPlayer(pid) {
+      let d = request.resource.data;
+      return isAutoId(pid)
+        && isCaptainOf(d.get('team', ''))
+        && d.keys().hasOnly(['name', 'first_name', 'last_name', 'num', 'pos', 'team', 'active', 'captain',
+                             'added_at', 'added_by', 'gp', 'ab', 'r', 'h', 's', 'd', 't', 'hr', 'rbi', 'bb', 'so',
+                             'avg', 'obp', 'slg', 'ops'])
+        && shortStr(d.get('name', '')) && d.get('name', '').size() > 0
+        && (!('first_name' in d) || shortStr(d.first_name)) && (!('last_name' in d) || shortStr(d.last_name))
+        && numOk(d.get('num', null)) && (d.get('pos', null) == null || shortStr(d.pos))
+        && d.get('active', true) == true && d.get('captain', false) is bool
+        && (!('added_by' in d) || medStr(d.added_by)) && (!('added_at' in d) || whenOk(d.added_at));
+    }
+
+    // Contact details split out of players. Readable by admins, the player
+    // themself, and captains of that player's team.
+    match /player_private/{pid} {
+      allow get: if isAdmin() || ownsPlayer(pid) || isCaptainOf(resource.data.get('team_id', ''));
+      allow list: if isAdmin() || isCaptainOf(resource.data.get('team_id', ''));
+      allow create: if isAdmin() || captainWritesPrivate(pid);
+      allow update: if isAdmin()
+        || (captainWritesPrivate(pid) && request.resource.data.get('team_id', '') == resource.data.get('team_id', ''));
+      allow delete: if isAdmin();
+    }
+    function captainWritesPrivate(pid) {
+      let d = request.resource.data;
+      return isCaptainOf(d.get('team_id', ''))
+        && exists(playerPath(pid)) && get(playerPath(pid)).data.get('team', '') == d.team_id
+        && d.keys().hasOnly(['team_id', 'email', 'phone', 'updated_at', 'updated_by'])
+        && (d.get('email', null) == null || (d.email is string && d.email.size() <= 254 && noTags(d.email)))
+        && (d.get('phone', null) == null || (d.phone is string && d.phone.size() <= 40 && noTags(d.phone)))
+        && (!('updated_by' in d) || medStr(d.updated_by)) && (!('updated_at' in d) || whenOk(d.updated_at));
+    }
+
+    match /captains/{id} {
+      allow read: if isAdmin() || isAnyCaptain();
+      allow write: if isAdmin();
+    }
+
+    // Captain access {teamId}__{uid}: created, approved and revoked only by the
+    // server or an admin. The claimant may only bump last_seen.
+    match /captain_claims/{cid} {
+      allow get: if isAdmin() || (signedIn() && cid.split('__')[1] == request.auth.uid);
+      allow list: if isAdmin() || (signedIn() && resource.data.get('auth_uid', '') == request.auth.uid);
+      allow update: if isAdmin()
+        || (signedIn() && cid.split('__')[1] == request.auth.uid && changed().hasOnly(['last_seen']));
+      allow create, delete: if isAdmin();
+    }
+
+    // ───────────────────────── games ─────────────────────────
+    match /games/{gid} {
+      allow read: if true;
+      allow create: if isAdmin() || captainCreatesGame(gid);
+      allow update: if isAdmin() || captainUpdatesGame();
+      allow delete: if isAdmin();
+    }
+    function captainCreatesGame(gid) {
+      let d = request.resource.data;
+      return isAutoId(gid)
+        && d.keys().hasOnly(['wk', 'date', 'day', 'time', 'date_iso', 'time_24', 'away', 'home', 'field', 'addr',
+                             'done', 'away_score', 'home_score', 'added_by', 'added_by_id', 'added_at', 'source'])
+        && d.get('away', '') is string && d.get('home', '') is string
+        && d.get('away', '') != d.get('home', '')
+        && d.get('away', '') != '__playoff_brackets' && d.get('home', '') != '__playoff_brackets'
+        && exists(teamPath(d.get('away', 'x'))) && exists(teamPath(d.get('home', 'x')))
+        && isCaptainOfAny([d.get('away', ''), d.get('home', '')])
+        && d.get('done', false) == false
+        && d.get('away_score', null) == null && d.get('home_score', null) == null
+        && (!('wk' in d) || d.wk == null || shortStr(d.wk) || intIn(d.wk, 0, 99))
+        && (!('date' in d) || d.date == null || shortStr(d.date)) && (!('day' in d) || d.day == null || shortStr(d.day))
+        && (!('time' in d) || d.time == null || shortStr(d.time)) && (!('date_iso' in d) || d.date_iso == null || shortStr(d.date_iso))
+        && (!('time_24' in d) || d.time_24 == null || shortStr(d.time_24))
+        && (!('field' in d) || d.field == null || medStr(d.field)) && (!('addr' in d) || d.addr == null || medStr(d.addr))
+        && (!('added_by' in d) || medStr(d.added_by)) && (!('added_by_id' in d) || shortStr(d.added_by_id))
+        && (!('source' in d) || shortStr(d.source)) && (!('added_at' in d) || whenOk(d.added_at));
+    }
+    // A captain of one side may: report its own side's score lane; finalize
+    // the game while it isn't final (or correct its own report while the other
+    // side hasn't reported); edit schedule details; toggle PPD and live state.
+    // Once both sides have reported, only an admin changes the final.
+    function captainUpdatesGame() {
+      let r = resource.data;
+      let d = request.resource.data;
+      let mineAway = isCaptainOf(r.get('away', ''));
+      let mineHome = isCaptainOf(r.get('home', ''));
+      return (mineAway || mineHome)
+        && isCaptainOfAny([d.get('away', ''), d.get('home', '')])
+        && d.get('away', '') != d.get('home', '')
+        && changed().hasOnly([
+             'away', 'home', 'away_score', 'home_score', 'done',
+             'live', 'liveAt', 'live_owner', 'live_owner_started_at', 'inning', 'half',
+             'has_discrepancy', 'score_pending', 'score_conflict', 'score_confirmed', 'discrepancy_partial',
+             'score_submitted_away', 'score_submitted_home', 'score_submitted_away_at', 'score_submitted_home_at',
+             'score_submitted_away_away', 'score_submitted_away_home', 'score_submitted_away_by',
+             'score_submitted_home_away', 'score_submitted_home_home', 'score_submitted_home_by',
+             'ppd', 'ppd_at', 'ppd_by', 'rained_out', 'ppd_rescheduled_to',
+             'date', 'date_iso', 'day', 'time', 'time_24', 'field', 'addr', 'moved_note', 'wk',
+             'last_edited_at', 'last_edited_by'])
+        // only your own side's report
+        && (mineAway || !changed().hasAny(['score_submitted_away', 'score_submitted_away_at', 'score_submitted_away_away',
+                                           'score_submitted_away_home', 'score_submitted_away_by']))
+        && (mineHome || !changed().hasAny(['score_submitted_home', 'score_submitted_home_at', 'score_submitted_home_away',
+                                           'score_submitted_home_home', 'score_submitted_home_by']))
+        // the final
+        && (!changed().hasAny(['away_score', 'home_score', 'done', 'score_confirmed'])
+            || r.get('done', false) != true
+            || (mineAway && ('score_submitted_away_away' in r) && !('score_submitted_home_away' in r))
+            || (mineHome && ('score_submitted_home_away' in r) && !('score_submitted_away_away' in r)))
+        // who plays whom is fixed once a result exists
+        && (!changed().hasAny(['away', 'home'])
+            || (r.get('done', false) != true && !('score_submitted_away_away' in r) && !('score_submitted_home_away' in r)
+                && exists(teamPath(d.get('away', 'x'))) && exists(teamPath(d.get('home', 'x')))
+                && d.get('away', '') != '__playoff_brackets' && d.get('home', '') != '__playoff_brackets'))
+        && gameValuesValid();
+    }
+    function gameValuesValid() {
+      let d = request.resource.data;
+      return (!ch('away_score') || scoreOk(d.away_score)) && (!ch('home_score') || scoreOk(d.home_score))
+        && (!ch('score_submitted_away_away') || scoreOk(d.score_submitted_away_away))
+        && (!ch('score_submitted_away_home') || scoreOk(d.score_submitted_away_home))
+        && (!ch('score_submitted_home_away') || scoreOk(d.score_submitted_home_away))
+        && (!ch('score_submitted_home_home') || scoreOk(d.score_submitted_home_home))
+        && (!ch('done') || d.done is bool) && (!ch('live') || d.live is bool)
+        && (!ch('ppd') || d.ppd is bool) && (!ch('rained_out') || d.rained_out is bool)
+        && (!ch('inning') || d.inning == null || intIn(d.inning, 0, 30))
+        && strIfCh('half') && strIfCh('live_owner') && strIfCh('date') && strIfCh('date_iso') && strIfCh('day')
+        && strIfCh('time') && strIfCh('time_24') && strIfCh('field') && strIfCh('addr') && strIfCh('moved_note')
+        && strIfCh('ppd_by') && strIfCh('ppd_rescheduled_to') && strIfCh('last_edited_by')
+        && strIfCh('score_submitted_away_by') && strIfCh('score_submitted_home_by')
+        && (!ch('wk') || d.wk == null || shortStr(d.wk) || intIn(d.wk, 0, 99));
+    }
+
+    // Public box scores. A captain writes the canonical doc only for a game
+    // its team plays, and the doc's away/home must be that game's teams.
+    match /box_scores/{bid} {
+      allow read: if true;
+      allow create, update: if isAdmin()
+        || (isCaptainOfGame(bid)
+            && request.resource.data.get('away', '') == sideTeam(bid, 'away')
+            && request.resource.data.get('home', '') == sideTeam(bid, 'home'));
+      allow delete: if isAdmin();
+    }
+
+    // Score lanes {gid}_away / {gid}_home (captains) and {gid}_admin (admin).
+    // Reads are decided from the doc id alone, because the scorer reads the
+    // other captain's lane before it exists.
+    match /score_submissions/{sid} {
+      allow get: if isAdmin() || captainMayReadLane(sid);
+      allow list: if isAdmin() || isCaptainOf(resource.data.get('team_id', ''));
+      allow create, update: if isAdmin() || captainOwnLane(sid);
+      allow delete: if isAdmin();
+    }
+    function laneGame(sid) { return sid.replace('_(away|home|admin)$', ''); }
+    function captainMayReadLane(sid) {
+      return sid.matches('.*_(away|home|admin)$') && isCaptainOfGame(laneGame(sid));
+    }
+    function captainOwnLane(sid) {
+      let d = request.resource.data;
+      let gid = d.get('game_id', '');
+      return gid is string && gid != ''
+        && ((sid == gid + '_away' && isCaptainOf(sideTeam(gid, 'away')) && d.get('team_id', '') == sideTeam(gid, 'away'))
+            || (sid == gid + '_home' && isCaptainOf(sideTeam(gid, 'home')) && d.get('team_id', '') == sideTeam(gid, 'home')));
+    }
+
+    // Live scorer state. Public read (watch.html). A captain writes only its
+    // own side lane; the bare {gid} doc is the admin lane.
+    match /game_states/{sid} {
+      allow read: if true;
+      allow write: if isAdmin()
+        || (sid.matches('.*_away$') && isCaptainOf(sideTeam(sid.replace('_away$', ''), 'away')))
+        || (sid.matches('.*_home$') && isCaptainOf(sideTeam(sid.replace('_home$', ''), 'home')));
+    }
+
+    // RSVPs {team}_{gid}_{pid}. Team members read; an active, approved player
+    // writes their own; a captain writes anyone on their team.
+    match /availability/{aid} {
+      allow read: if isAdmin() || isMemberOf(resource.data.get('team_id', ''));
+      allow create, update: if isAdmin() || availabilityWrite(aid);
+      allow delete: if isAdmin() || resource == null
+        || isCaptainOf(resource.data.get('team_id', ''))
+        || ownsPlayer(resource.data.get('player_id', ''));
+    }
+    function availabilityWrite(aid) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['player_id', 'player_name', 'game_id', 'team_id', 'status', 'updated_at'])
+        && d.get('status', '') in ['yes', 'maybe', 'no']
+        && d.get('player_id', '') is string && d.get('game_id', '') is string && d.get('team_id', '') is string
+        && aid == d.team_id + '_' + d.game_id + '_' + d.player_id
+        && (!('player_name' in d) || shortStr(d.player_name)) && (!('updated_at' in d) || whenOk(d.updated_at))
+        && (isCaptainOf(d.team_id)
+            || (isMemberOf(d.team_id) && ownsPlayer(d.player_id)
+                && get(playerPath(d.player_id)).data.get('team', '') == d.team_id
+                && get(playerPath(d.player_id)).data.get('active', true) != false
+                && get(playerPath(d.player_id)).data.get('pending_approval', false) != true));
+    }
+
+    // Team chat: members of that team only. Identity is bound to the poster.
+    match /team_messages/{mid} {
+      allow read: if isAdmin() || isMemberOf(resource.data.get('team_id', ''));
+      allow create: if isAutoId(mid) && teamMessageShape()
+        && (isAdmin()
+            || (isMemberOf(request.resource.data.team_id)
+                && ((request.resource.data.get('is_captain', false) == true
+                     && isCaptainOf(request.resource.data.team_id)
+                     && request.resource.data.get('sender_id', '') == request.resource.data.team_id)
+                    || (request.resource.data.get('is_captain', false) != true
+                        && request.resource.data.get('sender_id', '') in roleData().get('player_ids', [])))));
+      allow update: if false;
+      allow delete: if isAdmin()
+        || isCaptainOf(resource.data.get('team_id', ''))
+        || (signedIn() && resource.data.get('sender_uid', '') == request.auth.uid);
+    }
+    function teamMessageShape() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['team_id', 'text', 'sender_uid', 'sender_id', 'sender_name', 'is_captain', 'timestamp'])
+        && d.get('team_id', '') is string && d.get('sender_uid', '') == request.auth.uid
+        && d.get('timestamp', null) == request.time && textOk(d.get('text', ''))
+        && (!('sender_name' in d) || shortStr(d.sender_name)) && d.get('is_captain', false) is bool;
+    }
+
+    // League-wide captains room.
+    match /captain_chat/{mid} {
+      allow read: if isAdmin() || isAnyCaptain();
+      allow create: if isAutoId(mid)
+        && request.resource.data.keys().hasOnly(['text', 'author_uid', 'team_id', 'timestamp'])
+        && request.resource.data.get('author_uid', '') == request.auth.uid
+        && request.resource.data.get('timestamp', null) == request.time
+        && textOk(request.resource.data.get('text', ''))
+        && (isAdmin() || isCaptainOf(request.resource.data.get('team_id', '')));
+      allow update: if false;
+      allow delete: if isAdmin()
+        || (signedIn() && resource.data.get('author_uid', '') == request.auth.uid);
+    }
+
+    match /payments/{id} {
+      allow read: if isAdmin() || isCaptainOf(resource.data.get('team_id', ''));
+      allow create: if isAdmin() || (isAutoId(id) && isCaptainOf(request.resource.data.get('team_id', '')) && paymentValid());
+      allow update: if isAdmin()
+        || (isCaptainOf(resource.data.get('team_id', ''))
+            && request.resource.data.get('team_id', '') == resource.data.get('team_id', '')
+            && paymentValid());
+      allow delete: if isAdmin() || isCaptainOf(resource.data.get('team_id', ''));
+    }
+    function paymentValid() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['team_id', 'player_id', 'player_name', 'paid', 'amount_owed', 'amount_paid',
+                               'notes', 'updated_at', 'updated_by'])
+        && (!('player_name' in d) || shortStr(d.player_name)) && (!('player_id' in d) || shortStr(d.player_id))
+        && (!('notes' in d) || d.notes == null || (d.notes is string && d.notes.size() <= 500 && noTags(d.notes)))
+        && (!('paid' in d) || d.paid is bool)
+        && (!('amount_owed' in d) || d.amount_owed == null || numIn(d.amount_owed, 0, 100000) || shortStr(d.amount_owed))
+        && (!('amount_paid' in d) || d.amount_paid == null || numIn(d.amount_paid, 0, 100000) || shortStr(d.amount_paid))
+        && (!('updated_by' in d) || medStr(d.updated_by)) && (!('updated_at' in d) || whenOk(d.updated_at));
+    }
+
+    match /activity_log/{id} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isAutoId(id) && (isAdmin() || isAnyCaptain())
+        && request.resource.data.keys().hasOnly(['action', 'details', 'user', 'timestamp'])
+        && shortStr(request.resource.data.get('action', ''))
+        && request.resource.data.get('details', '') is string && request.resource.data.details.size() <= 2000
+        && noTags(request.resource.data.details)
+        && request.resource.data.get('user', '') == request.auth.token.email
+        && whenOk(request.resource.data.get('timestamp', null));
+    }
+
+    match /pending_gcal_syncs/{gid} {
+      allow read, delete: if isAdmin();
+      allow create, update: if isAdmin()
+        || (isCaptainOfGame(gid) && request.resource.data.get('game_id', '') == gid
+            && request.resource.data.keys().hasOnly(['game_id', 'status', 'summary', 'teams_label', 'edited_by',
+                                                     'edited_by_id', 'edited_by_email', 'source', 'timestamp'])
+            && (!('edited_by_email' in request.resource.data) || medStr(request.resource.data.edited_by_email))
+            && (!('summary' in request.resource.data) || (request.resource.data.summary is string
+                && request.resource.data.summary.size() <= 500 && noTags(request.resource.data.summary)))
+            && (!('teams_label' in request.resource.data) || medStr(request.resource.data.teams_label))
+            && (!('edited_by' in request.resource.data) || medStr(request.resource.data.edited_by))
+            && (!('edited_by_id' in request.resource.data) || shortStr(request.resource.data.edited_by_id))
+            && (!('source' in request.resource.data) || shortStr(request.resource.data.source))
+            && (!('status' in request.resource.data) || shortStr(request.resource.data.status)));
+    }
+
+    match /inbox_archive/{u} {
+      allow read, write: if signedIn() && request.auth.uid == u;
+    }
+
+    // Server-only (service account). Admins may look at tokens and the push log.
+    match /notification_tokens/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /push_log/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /pending_nav/{id} { allow read, write: if false; }
+    match /api_usage/{id} { allow read, write: if false; }
+
+    // Everything else is denied by default.
+  }
+}

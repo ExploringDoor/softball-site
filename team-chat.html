@@ -447,7 +447,8 @@
           if (!resp.ok) return;
           const data = await resp.json();
           const items = Array.isArray(data && data.items) ? data.items : [];
-          _dvslSetBadge(items.length);
+          // count is returned even when item contents need a sign-in.
+          _dvslSetBadge(typeof (data && data.count) === 'number' ? data.count : items.length);
         } catch(_) {}
       }
       function _dvslSetBadge(count) {
@@ -592,7 +593,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line
     <div class="me admin-actions">
       <div id="me-name">—</div>
       <div>
-        <a onclick="changeIdentity()">Change</a>
+        <a id="switch-link" class="hidden" onclick="switchIdentity()">Switch</a>
         <a id="reset-link" class="reset-link hidden" onclick="resetChat()" style="margin-left:8px">Reset chat</a>
       </div>
     </div>
@@ -602,55 +603,115 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line
     <div class="loading">Loading messages…</div>
   </div>
 
-  <div class="input-row">
+  <div class="input-row" id="input-row">
     <input id="msg-input" type="text" placeholder="Message your team…" maxlength="500" autocomplete="off"
       onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}">
     <button onclick="sendMessage()" id="send-btn">Send</button>
   </div>
 </div>
 
-<!-- Identity modal -->
-<div id="identity-modal" class="modal-bg hidden">
-  <div class="modal">
-    <h2 id="identity-title">Who are you?</h2>
-    <p>Pick your name so your teammates know who's talking.</p>
-    <div id="roster-list" class="roster-list">
-      <div class="loading" style="padding:20px">Loading roster…</div>
-    </div>
-    <div class="custom-name">
-      <label for="custom-name-input">Not on the roster? Type a name:</label>
-      <input id="custom-name-input" type="text" placeholder="e.g. Adam M." maxlength="40">
-      <button onclick="saveCustomIdentity()">Continue</button>
-    </div>
-  </div>
-</div>
-
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, query, where, orderBy, limit, onSnapshot, addDoc, getDocs, doc, deleteDoc, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, query, where, orderBy, limit, onSnapshot, addDoc, getDocs, getDoc, doc, deleteDoc, writeBatch, serverTimestamp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
-const PUSH_SECRET = window.LEAGUE_CONFIG.push.adminSecret;
 
 const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
+const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch(()=>{});
 
 // ── URL & state ──────────────────────────────────────────────────────
+// Access is decided by the signed-in account's roles/{uid} doc (written
+// only by the server): admins, captains of the team, and approved players
+// on the team. The old ?admin=1 flag, team password and "Who are you?"
+// picker are gone; people post as themselves.
 const params = new URLSearchParams(location.search);
 const teamId = params.get('team') || '';
-// Admin mode — enables "Reset chat" button + delete-any-message on taps.
-// Gated via ?admin=1 URL param AND a localStorage key set once on first use;
-// matches the same pattern used in notifications.html. Not a hard security
-// boundary (Firestore rules are), just a UI reveal.
-const IS_ADMIN = params.get('admin') === '1' || localStorage.getItem('dvsl-is-admin') === '1';
-if (params.get('admin') === '1') localStorage.setItem('dvsl-is-admin', '1');
+
+// Clean up flags + picks left in localStorage by older builds.
+try {
+  localStorage.removeItem('dvsl-is-admin');
+  Object.keys(localStorage).forEach(k => {
+    if (k.indexOf('dvsl-chat-pw-') === 0 || k.indexOf('dvsl-chat-identity-') === 0) localStorage.removeItem(k);
+  });
+} catch(_) {}
+
 let TEAM = null;
 let ROSTER = [];
-let IDENTITY = null; // { name, email, is_captain }
+let ROSTER_BY_ID = {};
+let ROLES = null;
+let ME = null;            // Firebase user
+let IDENTITIES = [];      // who this user may post as in this chat
+let IDENTITY = null;      // { sender_id, name, is_captain }
+let CAN_MODERATE = false; // captain of this team or admin
 let unsub = null;
 let MSG_CACHE = {}; // id → message doc (for delete lookup)
 
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc = (s) => String(s ?? '').replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
+
+// First auth state (persistence restores the session asynchronously).
+const AUTH_READY = new Promise(resolve => {
+  let settled = false;
+  onAuthStateChanged(auth, user => {
+    if (settled) {
+      // Signed in/out in another tab: re-run the access check.
+      if ((user && user.uid) !== (ME && ME.uid) && teamId) location.reload();
+      return;
+    }
+    settled = true;
+    resolve(user || null);
+  });
+});
+
+// POST to one of our /api endpoints with the user's ID token.
+async function api(name, payload) {
+  const headers = { 'Content-Type': 'application/json' };
+  const u = auth.currentUser;
+  if (u) headers.Authorization = 'Bearer ' + await u.getIdToken();
+  const resp = await fetch('/api/' + name, { method: 'POST', headers, body: JSON.stringify(payload || {}) });
+  let data = {};
+  try { data = await resp.json(); } catch(_) {}
+  if (!resp.ok || (data && data.error)) {
+    const err = new Error((data && data.message) || ('Request failed (' + resp.status + ')'));
+    err.code = data && data.error;
+    err.status = resp.status;
+    throw err;
+  }
+  return data || {};
+}
+
+// Link this device's push token to the signed-in account so team-chat
+// pushes (delivered by auth_uid membership) reach it. Fire-and-forget,
+// once per account per tab session; never blocks chat rendering.
+function attachPushToken(user) {
+  let token = null;
+  try { token = localStorage.getItem('dvsl-notif-token'); } catch(_) {}
+  if (!token || !user) return;
+  const key = 'dvsl-notif-attached:' + user.uid;
+  try { if (sessionStorage.getItem(key) === token) return; } catch(_) {}
+  api('push-token', { action: 'attach', token })
+    .then(() => { try { sessionStorage.setItem(key, token); } catch(_) {} })
+    .catch(e => console.warn('token attach failed', e));
+}
+
+// Recompute roles on the server (self-heal), then read roles/{uid}.
+async function loadRoles(user) {
+  let fromServer = null;
+  try {
+    const d = await api('account', { action: 'refresh-roles' });
+    fromServer = d && d.roles ? d.roles : null;
+  } catch(e) { console.warn('refresh-roles failed:', e); }
+  try {
+    const snap = await getDoc(doc(db, 'roles', user.uid));
+    if (snap.exists()) return snap.data() || {};
+  } catch(e) { console.warn('roles read failed:', e); }
+  return fromServer || {};
+}
+
+const arr = (v) => Array.isArray(v) ? v : [];
+const teamLabel = () => TEAM?.short || TEAM?.name || teamId;
 
 // ── Boot ─────────────────────────────────────────────────────────────
 if (!teamId) {
@@ -664,7 +725,7 @@ async function showTeamPicker() {
   let teams = [];
   try {
     const snap = await getDocs(collection(db, 'teams'));
-    teams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    teams = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.id !== '__playoff_brackets');
   } catch(e) {
     document.getElementById('team-picker-grid').innerHTML =
       '<div class="loading">Could not load teams. Check your connection.</div>';
@@ -678,20 +739,63 @@ async function showTeamPicker() {
     </a>`).join('');
 }
 
+function setInputEnabled(on, placeholder) {
+  const input = document.getElementById('msg-input');
+  const btn = document.getElementById('send-btn');
+  const row = document.getElementById('input-row');
+  if (row) row.classList.toggle('hidden', !on && !placeholder);
+  input.disabled = !on;
+  btn.disabled = !on;
+  input.placeholder = on ? 'Message your team…' : (placeholder || '');
+}
+
+// Shown when the visitor can't read this team's chat.
+function showGate(kind, extra) {
+  setInputEnabled(false);
+  document.getElementById('me-name').textContent = '';
+  const name = esc(TEAM?.name || teamId);
+  let title, msg;
+  if (kind === 'signin') {
+    title = 'Sign In to Join the Chat';
+    msg = `Team chat is for <strong>${name}</strong>'s players and captains. Sign in to your player profile or the captain portal, then come back here.`;
+  } else if (kind === 'pending') {
+    title = 'Waiting for Approval';
+    msg = `Your captain still needs to approve you on <strong>${name}</strong>. You'll get team chat once you're approved.`;
+  } else {
+    title = 'Team Members Only';
+    msg = `This chat is for <strong>${name}</strong>'s players and captains. If you play for ${name}, link your account on your player profile. Captains sign in on the captain portal.`;
+  }
+  const who = extra && extra.email ? `<div style="font-size:12px;color:var(--muted2);margin-top:10px">Signed in as ${esc(extra.email)}</div>` : '';
+  const btn = 'display:block;width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:12px;font-family:\'Barlow Condensed\',sans-serif;font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;text-decoration:none;margin-bottom:8px';
+  document.getElementById('chat-wrap').innerHTML = `
+    <div style="max-width:380px;margin:40px auto;padding:28px 24px;background:var(--card);border:1px solid var(--border);border-radius:14px;text-align:center">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;color:var(--navy);margin-bottom:6px">${title}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5">${msg}</div>
+      ${kind === 'pending' ? '' : `<a href="/profile.html" style="${btn}">Player sign in</a>
+      <a href="/captain.html" style="${btn};background:#fff;color:var(--navy);border:1px solid var(--navy)">Captain portal</a>`}
+      ${who}
+      <div style="margin-top:14px">
+        <a href="team-chat.html" style="color:var(--muted);font-size:12px;text-decoration:none">← Pick a different team</a>
+      </div>
+    </div>`;
+}
+
 async function loadTeamAndChat(tid) {
   document.getElementById('chat-view').classList.remove('hidden');
+  setInputEnabled(false, 'Loading…');
 
-  // Load team meta
+  // Load team meta (public)
   try {
-    const snap = await getDocs(collection(db, 'teams'));
-    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    TEAM = all.find(t => t.id === tid);
+    const snap = tid === '__playoff_brackets' ? null : await getDoc(doc(db, 'teams', tid));
+    TEAM = snap && snap.exists() ? { id: snap.id, ...snap.data() } : null;
     if (!TEAM) {
+      setInputEnabled(false);
       document.getElementById('chat-wrap').innerHTML =
         `<div class="empty">Team "${esc(tid)}" not found. <a href="team-chat.html" style="color:var(--navy)">Pick another team</a>.</div>`;
       return;
     }
   } catch(e) {
+    setInputEnabled(false);
     document.getElementById('chat-wrap').innerHTML =
       '<div class="empty">Could not load team data. Check your connection.</div>';
     return;
@@ -708,148 +812,76 @@ async function loadTeamAndChat(tid) {
     document.getElementById('team-logo').innerHTML = `<img src="${esc(TEAM.logo)}" alt="">`;
   }
 
-  // Load roster for identity picker. Note: players collection uses `team`
-  // (not team_id) and `num` (not jersey) — field names from the registration
-  // flow.
+  // Roster (public). Used to label messages with roster names. Note: the
+  // players collection uses `team` (not team_id) and `num` (not jersey).
   try {
     const q = query(collection(db, 'players'), where('team', '==', tid));
     const snap = await getDocs(q);
     ROSTER = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    ROSTER.sort((a,b) => {
-      const ja = parseInt(a.num ?? 999), jb = parseInt(b.num ?? 999);
-      if (ja !== jb) return ja - jb;
-      return (a.name || '').localeCompare(b.name || '');
-    });
   } catch(e) { ROSTER = []; }
+  ROSTER_BY_ID = {};
+  ROSTER.forEach(p => { ROSTER_BY_ID[p.id] = p; });
 
-  // Restore identity if we've been here before for this team
-  try {
-    const saved = localStorage.getItem('dvsl-chat-identity-' + tid);
-    if (saved) IDENTITY = JSON.parse(saved);
-  } catch(e) {}
-
-  if (IS_ADMIN) {
-    document.getElementById('reset-link').classList.remove('hidden');
-  }
-
-  // Password gate — uses the team's player_password (same one as the Player
-  // Portal). Admin mode bypasses. A successful unlock persists in
-  // localStorage so players don't have to re-enter every visit. Without this
-  // gate, anyone with ?team=XXX could read a private team's chat.
-  if (!passwordAccepted(tid)) {
-    showPasswordGate(tid);
+  // Who is this?
+  ME = await AUTH_READY;
+  if (!ME) { showGate('signin'); return; }
+  ROLES = await loadRoles(ME);
+  attachPushToken(ME);
+  const isAdmin = ROLES.admin === true;
+  const isCaptain = arr(ROLES.captain_teams).includes(tid);
+  const isMember = arr(ROLES.member_teams).includes(tid);
+  if (!isAdmin && !isCaptain && !isMember) {
+    const pendingHere = ROSTER.some(p => p.auth_uid === ME.uid && p.pending_approval === true && p.active !== false);
+    showGate(pendingHere ? 'pending' : 'member', { email: ME.email });
     return;
   }
+  CAN_MODERATE = isAdmin || isCaptain;
 
-  if (!IDENTITY) {
-    showIdentityModal();
-  } else {
-    document.getElementById('me-name').textContent = IDENTITY.name;
-    subscribeToMessages();
+  // Identities this account may post as here: the team (as captain) and
+  // any approved, active roster row it owns on this team.
+  IDENTITIES = [];
+  if (isCaptain) {
+    IDENTITIES.push({ sender_id: tid, name: teamLabel() + ' Captain', is_captain: true });
   }
-}
-
-function passwordAccepted(tid) {
-  if (IS_ADMIN) return true;
-  const stored = (TEAM?.player_password || TEAM?.password || '').trim();
-  if (!stored) return true; // no password set on team = open access (legacy)
-  return localStorage.getItem('dvsl-chat-pw-' + tid) === '1';
-}
-
-function showPasswordGate(tid) {
-  const wrap = document.getElementById('chat-wrap');
-  wrap.innerHTML = `
-    <div style="max-width:380px;margin:40px auto;padding:28px 24px;background:var(--card);border:1px solid var(--border);border-radius:14px;text-align:center">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;color:var(--navy);margin-bottom:6px">
-        Team Password Required
-      </div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:18px;line-height:1.5">
-        Ask your captain for the team password to join <strong>${esc(TEAM?.name || tid)}</strong>'s chat.
-      </div>
-      <input id="chat-pw-input" type="password" placeholder="Team password" autocomplete="off"
-        style="width:100%;padding:11px 14px;border:1px solid var(--border);border-radius:8px;font-size:16px;margin-bottom:10px;text-align:center">
-      <div id="chat-pw-error" style="display:none;color:var(--red);font-size:13px;margin-bottom:10px">Wrong password. Try again.</div>
-      <button id="chat-pw-btn"
-        style="width:100%;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer">
-        Unlock Chat
-      </button>
-      <div style="margin-top:14px">
-        <a href="team-chat.html" style="color:var(--muted);font-size:12px;text-decoration:none">← Pick a different team</a>
-      </div>
-    </div>`;
-  const input = document.getElementById('chat-pw-input');
-  const btn = document.getElementById('chat-pw-btn');
-  const err = document.getElementById('chat-pw-error');
-  const attempt = () => {
-    const entered = (input.value || '').trim().toLowerCase();
-    const stored = (TEAM?.player_password || TEAM?.password || '').trim().toLowerCase();
-    if (entered && entered === stored) {
-      localStorage.setItem('dvsl-chat-pw-' + tid, '1');
-      // Restart the flow now that we've unlocked.
-      location.reload();
-    } else {
-      err.style.display = 'block';
-      input.value = '';
-      input.focus();
-    }
-  };
-  btn.addEventListener('click', attempt);
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') attempt(); });
-  setTimeout(() => input.focus(), 60);
-}
-
-function showIdentityModal() {
-  const modal = document.getElementById('identity-modal');
-  const list = document.getElementById('roster-list');
-  document.getElementById('identity-title').textContent =
-    `Who are you? — ${TEAM?.name || TEAM?.id || 'Team'}`;
-
-  if (!ROSTER.length) {
-    list.innerHTML = '<div class="loading" style="padding:20px">No roster loaded. Type your name below.</div>';
-  } else {
-    list.innerHTML = ROSTER.map(p => `
-      <div class="roster-item" data-pid="${esc(p.id)}">
-        <span><span class="jersey">#${esc(p.num ?? '—')}</span> ${esc(p.name || p.id)}</span>
-        <span style="color:var(--muted2);font-size:12px">›</span>
-      </div>`).join('');
-    list.querySelectorAll('.roster-item').forEach(row => {
-      row.addEventListener('click', () => {
-        const p = ROSTER.find(x => x.id === row.dataset.pid);
-        if (p) savePlayerIdentity(p);
-      });
-    });
+  if (isMember) {
+    const mine = arr(ROLES.player_ids);
+    ROSTER.filter(p => (mine.includes(p.id) || p.auth_uid === ME.uid)
+                       && p.active !== false && p.pending_approval !== true)
+      .forEach(p => IDENTITIES.push({ sender_id: p.id, name: p.name || 'Player', is_captain: false }));
   }
-  modal.classList.remove('hidden');
-}
+  let pick = null;
+  try {
+    const savedAs = localStorage.getItem('dvsl-chat-as-' + tid);
+    pick = IDENTITIES.find(i => i.sender_id === savedAs) || null;
+  } catch(_) {}
+  IDENTITY = pick || IDENTITIES[0] || null;
 
-function savePlayerIdentity(player) {
-  IDENTITY = {
-    name: player.name || player.id,
-    email: player.email || null,
-    // Player docs seeded via firebase-add-rosters.html have a `captain:true`
-    // flag on the captain's row. Honor it so pushes show the captain's name
-    // alone instead of "TBI — Mark Schwartz".
-    is_captain: !!player.captain,
-    player_id: player.id,
-  };
-  localStorage.setItem('dvsl-chat-identity-' + teamId, JSON.stringify(IDENTITY));
-  document.getElementById('identity-modal').classList.add('hidden');
-  document.getElementById('me-name').textContent = IDENTITY.name;
+  if (CAN_MODERATE) document.getElementById('reset-link').classList.remove('hidden');
+  document.getElementById('switch-link').classList.toggle('hidden', IDENTITIES.length < 2);
+  renderIdentity();
   subscribeToMessages();
 }
 
-window.saveCustomIdentity = function() {
-  const val = document.getElementById('custom-name-input').value.trim();
-  if (!val) return;
-  IDENTITY = { name: val, email: null, is_captain: false };
-  localStorage.setItem('dvsl-chat-identity-' + teamId, JSON.stringify(IDENTITY));
-  document.getElementById('identity-modal').classList.add('hidden');
-  document.getElementById('me-name').textContent = IDENTITY.name;
-  subscribeToMessages();
-};
+function renderIdentity() {
+  const el = document.getElementById('me-name');
+  if (IDENTITY) {
+    el.textContent = 'Posting as ' + IDENTITY.name;
+    setInputEnabled(true);
+  } else {
+    // Admin viewing another team's chat: read + moderate only.
+    el.textContent = 'Commissioner view';
+    setInputEnabled(false, 'Only this team\'s players and captains can post here');
+  }
+}
 
-window.changeIdentity = function() {
-  document.getElementById('identity-modal').classList.remove('hidden');
+// Captains who are also on the roster can switch between posting as the
+// team captain and as themselves.
+window.switchIdentity = function() {
+  if (IDENTITIES.length < 2) return;
+  const i = IDENTITIES.indexOf(IDENTITY);
+  IDENTITY = IDENTITIES[(i + 1) % IDENTITIES.length];
+  try { localStorage.setItem('dvsl-chat-as-' + teamId, IDENTITY.sender_id); } catch(_) {}
+  renderIdentity();
 };
 
 // ── Messages ─────────────────────────────────────────────────────────
@@ -872,6 +904,21 @@ function subscribeToMessages() {
   });
 }
 
+// Display name for a message, always from league data (roster name or the
+// team name for captain posts), never the free-text name a client sent.
+function whoLabelFor(m) {
+  if (m.is_captain && (!m.sender_id || m.sender_id === teamId)) return teamLabel() + ' Captain';
+  if (m.sender_id) {
+    const p = ROSTER_BY_ID[m.sender_id];
+    return p ? (p.name || 'Player') : 'Former player';
+  }
+  // Legacy messages (before sign-in was required) only carry a typed name.
+  // Show it only when it matches a roster name exactly.
+  const legacy = String(m.author_name || '').replace(/\s*\(captain\)\s*$/i, '').trim().toLowerCase();
+  const hit = legacy && ROSTER.find(p => String(p.name || '').trim().toLowerCase() === legacy);
+  return hit ? hit.name : 'Teammate';
+}
+
 function renderMessages(msgs) {
   const el = document.getElementById('chat-wrap');
   if (!msgs.length) {
@@ -881,33 +928,19 @@ function renderMessages(msgs) {
   }
   MSG_CACHE = {};
   msgs.forEach(m => { MSG_CACHE[m.id] = m; });
-  const myKey = IDENTITY?.email || IDENTITY?.name;
+  const myUid = ME?.uid || '';
   el.innerHTML = msgs.map(m => {
-    const authorKey = m.author_email || m.author_name || '';
-    const mine = (IDENTITY?.email && m.author_email === IDENTITY.email) ||
-                 (!IDENTITY?.email && m.author_name === IDENTITY?.name);
+    const mine = !!myUid && m.sender_uid === myUid;
     const isCap = !!m.is_captain;
-    // Prefer the sender's real first+last name. Legacy captain messages
-    // (pre-v41) stored author_name as "Team Name (Captain)" -- if we
-    // detect that pattern, strip the suffix and the team name to fall
-    // back to the captain-name lookup path below. Eventually those old
-    // messages age out; new captain messages write their real name.
-    let whoLabel = m.author_name || '';
-    if (/\(captain\)\s*$/i.test(whoLabel)) {
-      // We don't have a captains lookup on this page -- best-effort is to
-      // just drop the "(Captain)" tag and keep whatever was before it.
-      // Not perfect for legacy messages, but clears from v41 onward.
-      whoLabel = whoLabel.replace(/\s*\(captain\)\s*$/i, '').trim();
-    }
-    if (!whoLabel) whoLabel = m.team_name || m.author_email || 'Unknown';
+    const whoLabel = whoLabelFor(m);
     const time = m.timestamp?.toDate ? fmtTime(m.timestamp.toDate()) : '';
-    // Show delete button on own messages always, or on any message in admin mode
-    const canDelete = mine || IS_ADMIN;
+    // Delete: your own messages, or any message for captains/admin.
+    const canDelete = mine || CAN_MODERATE;
     const cls = [
       'msg',
       mine ? 'mine' : 'theirs',
       isCap && !mine ? 'captain' : '',
-      !mine && IS_ADMIN ? 'can-delete' : '',
+      !mine && CAN_MODERATE ? 'can-delete' : '',
     ].filter(Boolean).join(' ');
     const whoClass = isCap ? 'who captain' : 'who';
     const delBtn = canDelete
@@ -916,7 +949,7 @@ function renderMessages(msgs) {
     return `<div class="${cls}">
       ${!mine ? `<div class="${whoClass}">${esc(whoLabel)}</div>` : ''}
       <div class="bubble">${esc(m.text)}${delBtn}</div>
-      <div class="time">${time}</div>
+      <div class="time">${esc(time)}</div>
     </div>`;
   }).join('');
   // Wire delete buttons (event delegation is simpler here since re-rendered every snapshot)
@@ -941,21 +974,18 @@ async function deleteMessage(mid) {
     // every recipient's bell panel too. Fire-and-forget — the message is
     // already gone from chat; worst case the push row lingers until the
     // 24h stale sweep runs.
-    fetch('/api/delete-by-source', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
-      body: JSON.stringify({ sourceId: mid }),
-    }).catch(() => {});
+    api('delete-by-source', { sourceId: mid }).catch(e => console.warn('delete-by-source failed:', e));
     // Snapshot listener will re-render automatically
   } catch(e) {
     alert('Could not delete: ' + e.message);
   }
 }
 
-// Admin-only: nuke every message in this team's chat. Batched in chunks of
-// 400 to stay under Firestore's 500-ops batch limit, with a headroom margin.
+// Captains/admin: delete every message in this team's chat. Batched in
+// chunks of 10: each rule-checked delete reads roles/{uid}, and Firestore
+// caps document-access calls per request, so big batches fail outright.
 window.resetChat = async function() {
-  if (!IS_ADMIN) return;
+  if (!CAN_MODERATE) return;
   if (!confirm(`Reset the entire chat for ${TEAM?.name || teamId}?\n\nThis deletes ALL messages permanently. This cannot be undone.`)) return;
   if (!confirm('Are you absolutely sure? Last chance to back out.')) return;
   try {
@@ -964,7 +994,7 @@ window.resetChat = async function() {
     if (!snap.docs.length) { alert('Chat is already empty.'); return; }
     let remaining = snap.docs.slice();
     while (remaining.length) {
-      const chunk = remaining.splice(0, 400);
+      const chunk = remaining.splice(0, 10);
       const batch = writeBatch(db);
       chunk.forEach(d => batch.delete(d.ref));
       await batch.commit();
@@ -987,10 +1017,10 @@ function fmtTime(d) {
 
 // ── Send ─────────────────────────────────────────────────────────────
 window.sendMessage = async function() {
-  if (!IDENTITY) { showIdentityModal(); return; }
+  if (!IDENTITY || !ME) return;
   const input = document.getElementById('msg-input');
   const btn = document.getElementById('send-btn');
-  const text = input.value.trim();
+  const text = input.value.trim().slice(0, 2000);
   if (!text) return;
   input.value = '';
   input.disabled = true;
@@ -998,39 +1028,31 @@ window.sendMessage = async function() {
 
   try {
     const msgRef = await addDoc(collection(db, 'team_messages'), {
-      text,
-      author_email: IDENTITY.email || null,
-      author_name: IDENTITY.name,
-      is_captain: !!IDENTITY.is_captain,
       team_id: teamId,
-      team_name: TEAM?.name || teamId,
-      team_color: TEAM?.color || '#002D72',
+      text,
+      sender_uid: ME.uid,
+      sender_id: IDENTITY.sender_id,
+      sender_name: IDENTITY.name,
+      is_captain: !!IDENTITY.is_captain,
       timestamp: serverTimestamp(),
     });
 
-    // Fire push to opted-in team members (excluding this device).
-    // Title format:
-    //   Captain sending   → "Mark Schwartz"
-    //   Player sending    → "TBI — Joe Smith"  (short team code, never full name)
+    // Push to this team's subscribers (excluding this device). The server
+    // checks the sender's roles and may rewrite the title.
     // sourceId = the new message's doc id; lets deleteMessage later clear the
     // matching bell-panel rows for everyone who received this push.
     try {
-      const shortCode = TEAM?.short || teamId;
       const pushTitle = IDENTITY.is_captain
-        ? IDENTITY.name
-        : `${shortCode} — ${IDENTITY.name}`;
-      await fetch('/api/send-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': PUSH_SECRET },
-        body: JSON.stringify({
-          title: pushTitle,
-          body: text.length > 120 ? text.slice(0, 120) + '…' : text,
-          category: 'team_chat',
-          team: teamId,
-          url: `/team-chat.html?team=${encodeURIComponent(teamId)}`,
-          sourceId: msgRef.id,
-          excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
-        }),
+        ? `${teamLabel()} Captain`
+        : `${teamLabel()} — ${IDENTITY.name}`;
+      await api('send-notification', {
+        title: pushTitle,
+        body: text.length > 120 ? text.slice(0, 120) + '…' : text,
+        category: 'team_chat',
+        teams: [teamId],
+        url: `/team-chat.html?team=${encodeURIComponent(teamId)}`,
+        sourceId: msgRef.id,
+        excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
       });
     } catch(e) { console.warn('Push failed (message still delivered in-app):', e); }
   } catch(e) {

@@ -66,13 +66,10 @@
 
     // ── Push / FCM ───────────────────────────────────────────────────────
     // VAPID public key — browser uses this to subscribe to FCM pushes.
-    // adminSecret — shared secret the admin sends with push-send requests
-    // so the /api/send-notification endpoint accepts them. Must match the
-    // ADMIN_SEND_SECRET env var on the Vercel deployment. Client-visible
-    // (embedded in admin.html bundle) — same posture as before.
+    // Push sends are authorized server-side from the caller's Firebase ID
+    // token (Authorization: Bearer) and roles/{uid}; no shared secret.
     push: {
-      vapidKey: 'BDTRzR0TDskGZ72K5Y_arFf_HaRdmNINcfDk41atLfeqNS-5HgMgK_Dv-plrR_o4jKk9dS2DJv7NIOvY6hIM9Q0',
-      adminSecret: 'dvsl-push-2026-rkj3849f'
+      vapidKey: 'BDTRzR0TDskGZ72K5Y_arFf_HaRdmNINcfDk41atLfeqNS-5HgMgK_Dv-plrR_o4jKk9dS2DJv7NIOvY6hIM9Q0'
     },
 
     // ── League-specific data ─────────────────────────────────────────────

@@ -56,8 +56,10 @@ window.saveClientId = function() {
 };
 </script>
 
+<div id="admin-gate" style="background:#eff6ff;border:1px solid #93c5fd;color:#1e3a8a;border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:14px;line-height:1.5">Checking your admin sign-in…</div>
+
 <div style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap">
-  <button onclick="loadGames()" style="background:#002D72;color:#fff;border:none;border-radius:6px;padding:12px 24px;font-weight:700;font-size:14px;cursor:pointer">1. Load Games from Firebase</button>
+  <button onclick="loadGames()" id="loadBtn" disabled style="opacity:.5;background:#002D72;color:#fff;border:none;border-radius:6px;padding:12px 24px;font-weight:700;font-size:14px;cursor:pointer">1. Load Games from Firebase</button>
   <button onclick="authAndSync()" id="syncBtn" disabled style="background:#22c55e;color:#fff;border:none;border-radius:6px;padding:12px 24px;font-weight:700;font-size:14px;cursor:pointer;opacity:.5">2. Sign In & Create Team Calendars</button>
 </div>
 
@@ -75,7 +77,7 @@ window.saveClientId = function() {
 <div style="margin-top:16px;padding:16px;background:#fffbeb;border:1px solid #fbbf24;border-radius:8px">
   <strong style="font-size:13px">One-time: Save April 2026 calendar links to Firebase</strong><br>
   <span style="font-size:12px;color:rgba(0,0,0,.5)">Run this once to make the "Add to Calendar" buttons live on all team pages.</span><br><br>
-  <button onclick="seedFirebase()" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer">Save Links to Firebase Now</button>
+  <button onclick="seedFirebase()" id="seedBtn" disabled style="opacity:.5;background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer">Save Links to Firebase Now</button>
   <span id="seed-status" style="margin-left:12px;font-size:13px"></span>
 </div>
 
@@ -86,10 +88,71 @@ window.saveClientId = function() {
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
-import { getFirestore, collection, getDocs, query, orderBy, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, getDoc, query, orderBy, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const app = initializeApp(window.LEAGUE_CONFIG.firebase);
 const db = getFirestore(app);
+const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch(()=>{});
+
+// Escape every Firestore-sourced value before it goes into innerHTML.
+const esc = (s) => String(s ?? '').replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
+
+// ── Admin gate ────────────────────────────────────────────────────────
+// This page reads the private edit queue (pending_gcal_syncs) and writes
+// team_calendars, which the rules allow only for admins. It uses the same
+// Firebase sign-in as admin.html (same origin, persisted session) and
+// trusts only roles/{uid}.admin, written by the server.
+let IS_ADMIN = false;
+function _setGate(html, ok) {
+  const g = document.getElementById('admin-gate');
+  g.innerHTML = html;
+  g.style.background = ok ? '#ecfdf5' : '#fef2f2';
+  g.style.borderColor = ok ? '#10b981' : '#fca5a5';
+  g.style.color = ok ? '#065f46' : '#991b1b';
+  ['loadBtn', 'seedBtn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) { b.disabled = !ok; b.style.opacity = ok ? '1' : '.5'; }
+  });
+}
+async function _loadRoles(user) {
+  let fromServer = null;
+  try {
+    const resp = await fetch('/api/account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await user.getIdToken() },
+      body: JSON.stringify({ action: 'refresh-roles' }),
+    });
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok && data && data.roles) fromServer = data.roles;
+  } catch (e) { console.warn('refresh-roles failed:', e); }
+  try {
+    const snap = await getDoc(doc(db, 'roles', user.uid));
+    if (snap.exists()) return snap.data() || {};
+  } catch (e) { console.warn('roles read failed:', e); }
+  return fromServer || {};
+}
+onAuthStateChanged(auth, async (user) => {
+  IS_ADMIN = false;
+  if (!user) {
+    _setGate('Sign in as the commissioner first: open <a href="/admin.html" style="color:inherit;font-weight:700">the admin page</a>, sign in, then reload this page.', false);
+    return;
+  }
+  _setGate('Checking admin access for ' + esc(user.email || 'this account') + '…', false);
+  const roles = await _loadRoles(user);
+  IS_ADMIN = roles && roles.admin === true;
+  if (IS_ADMIN) {
+    _setGate('Signed in as ' + esc(user.email || 'admin') + '. Ready.', true);
+  } else {
+    _setGate('This account (' + esc(user.email || 'signed in') + ') isn\'t an admin, so it can\'t run the calendar sync. <a href="/admin.html" style="color:inherit;font-weight:700">Switch accounts on the admin page</a>.', false);
+  }
+});
+function _requireAdmin() {
+  if (IS_ADMIN) return true;
+  out('❌ Admin sign-in required. Sign in on /admin.html, then reload this page.');
+  return false;
+}
 
 const logEl = document.getElementById('log');
 function out(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
@@ -150,6 +213,7 @@ async function clearFirestorePending(syncedIds) {
 }
 
 window.loadGames = async function() {
+  if (!_requireAdmin()) return;
   logEl.textContent = '';
   out('Loading teams and games from Firebase...\n');
   try {
@@ -225,8 +289,8 @@ window.loadGames = async function() {
     const cbWrap = document.getElementById('team-checkboxes');
     cbWrap.innerHTML = TEAM_LIST.map(t => `
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 10px;border:1px solid rgba(0,0,0,.1);border-radius:6px;cursor:pointer">
-        <input type="checkbox" value="${t.short}" checked style="width:14px;height:14px">
-        <span><strong>${t.short}</strong> — ${t.name}</span>
+        <input type="checkbox" value="${esc(t.short)}" checked style="width:14px;height:14px">
+        <span><strong>${esc(t.short)}</strong> — ${esc(t.name)}</span>
       </label>`).join('');
     document.getElementById('team-list').style.display = 'block';
 
@@ -276,7 +340,7 @@ function renderTargetedUi(games) {
   const wrap = document.getElementById('team-list');
   wrap.innerHTML = `
     <div style="background:#ecfdf5;border:1px solid #10b981;border-radius:8px;padding:16px">
-      <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;margin-bottom:12px;color:#065f46">🎯 Targeted Sync — ${games.length} edited game${games.length===1?'':'s'}</h3>
+      <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;text-transform:uppercase;margin-bottom:12px;color:#065f46">🎯 Targeted Sync — ${esc(games.length)} edited game${games.length===1?'':'s'}</h3>
       <p style="font-size:12px;color:#065f46;margin-bottom:12px">Only the games listed below will be updated. Each game's event on both the home and away team calendars will be replaced with the new details — no other games touched.</p>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${games.map(g => {
@@ -297,12 +361,12 @@ function renderTargetedUi(games) {
           const metaLine = (who || when || summaryUseful) ? `
             <div style="font-size:11px;color:rgba(0,0,0,.55);margin-top:4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
               ${sourceTag}
-              ${who ? `<span>by <strong>${who}</strong></span>` : ''}
-              ${when ? `<span>· ${when}</span>` : ''}
-              ${summaryUseful ? `<span style="background:#f3f4f6;border-radius:3px;padding:1px 6px;font-family:ui-monospace,monospace;font-size:10px">${meta.summary}</span>` : ''}
+              ${who ? `<span>by <strong>${esc(who)}</strong></span>` : ''}
+              ${when ? `<span>· ${esc(when)}</span>` : ''}
+              ${summaryUseful ? `<span style="background:#f3f4f6;border-radius:3px;padding:1px 6px;font-family:ui-monospace,monospace;font-size:10px">${esc(meta.summary)}</span>` : ''}
             </div>` : '';
           return `<div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:6px;padding:8px 12px;font-size:13px">
-            <div><strong>Wk${g.wk} ${awayShort} @ ${homeShort}</strong> — ${g.date} ${g.time} @ ${g.field||'TBD'}</div>
+            <div><strong>Wk${esc(g.wk)} ${esc(awayShort)} @ ${esc(homeShort)}</strong> — ${esc(g.date)} ${esc(g.time)} @ ${esc(g.field||'TBD')}</div>
             ${metaLine}
           </div>`;
         }).join('')}
@@ -319,6 +383,7 @@ function renderTargetedUi(games) {
 
 // One-time seed of the 15 calendars created April 2026
 window.seedFirebase = async function() {
+  if (!_requireAdmin()) return;
   const status = document.getElementById('seed-status');
   status.textContent = 'Saving...';
   const links = [
@@ -354,6 +419,7 @@ window.selectAll = function(val) {
 };
 
 window.authAndSync = async function() {
+  if (!_requireAdmin()) return;
   const clientId = document.getElementById('clientId').value.trim();
   if (!clientId) { out('❌ Please enter your Google OAuth Client ID'); return; }
   out('\nOpening Google Sign-In...');
@@ -733,9 +799,9 @@ async function syncTeamCalendars(token) {
         <tbody>
           ${links.map(l => `
           <tr>
-            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08);font-weight:600">${l.name}<br><span style="font-size:11px;color:rgba(0,0,0,.4)">${l.short}</span></td>
-            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08);text-align:center">${l.added}</td>
-            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08)"><a href="${l.link}" target="_blank" style="color:#002D72;word-break:break-all">${l.link}</a></td>
+            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08);font-weight:600">${esc(l.name)}<br><span style="font-size:11px;color:rgba(0,0,0,.4)">${esc(l.short)}</span></td>
+            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08);text-align:center">${esc(l.added)}</td>
+            <td style="padding:10px 14px;border:1px solid rgba(0,0,0,.08)"><a href="${esc(l.link)}" target="_blank" rel="noopener" style="color:#002D72;word-break:break-all">${esc(l.link)}</a></td>
           </tr>`).join('')}
         </tbody>
       </table>

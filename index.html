@@ -526,7 +526,10 @@
             if (!resp.ok) return;
             const data = await resp.json();
             const items = Array.isArray(data && data.items) ? data.items : [];
-            _dvslSetBadge(items.length);
+            // The server always returns `count`; item contents are withheld
+            // for tokens attached to an account unless the request carries
+            // that account's ID token (this page never signs in).
+            _dvslSetBadge(data && typeof data.count === 'number' ? data.count : items.length);
           } catch(_) {}
         }
         function _dvslSetBadge(count) {
@@ -3153,7 +3156,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <div class="po-cta-txt">
         <div class="po-cta-eyebrow" id="po-cta-eyebrow">DVSL 2026 Postseason</div>
         <div class="po-cta-title">Playoff Brackets</div>
-        <div class="po-cta-sub" id="po-cta-sub">Gold &amp; Silver brackets are live. Tap a team to trace its path as the field advances.</div>
+        <div class="po-cta-sub" id="po-cta-sub">Gold &amp; Silver brackets. Tap a team to trace its path.</div>
       </div>
       <span class="po-cta-btn">View Brackets →</span>
     </div>
@@ -3872,8 +3875,55 @@ thead th.sorted-col .sarrow{opacity:1}
 // for every visitor opening the box-score modal.
 function esc(s) {
   if (s == null) return '';
-  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  return String(s).replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'})[c]);
 }
+// A value placed inside a single-quoted JS string literal in an inline on*
+// handler (onclick="fn('...')"): JS-escape it first, then esc() it for the
+// attribute. The browser HTML-decodes the attribute before running it, so
+// esc() alone would turn &#39; back into a bare quote. Used for ids / team
+// shorts / numbers only; free text goes in data-* attributes instead.
+function jsArg(s) {
+  if (s == null) return '';
+  return esc(String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"')
+    .replace(/\r?\n|\u2028|\u2029/g, ' ').replace(/</g, '\\x3c'));
+}
+// Rendered rows that open a box score / gameday preview carry the game's
+// values in esc()d data-* attributes and a fixed handler reads them back
+// (onclick="openBoxEl(this)"), so no Firestore text is spliced into JS source.
+function _bxNum(v) { return (v === undefined || v === '' || v === 'undefined' || v === 'null') ? undefined : (isNaN(+v) ? v : +v); }
+function boxDataAttrs(away, home, as, hs, field, date, id) {
+  return 'data-bx-away="' + esc(away) + '" data-bx-home="' + esc(home) + '" data-bx-as="' + esc(as) +
+    '" data-bx-hs="' + esc(hs) + '" data-bx-field="' + esc(field || '') + '" data-bx-date="' + esc(date || '') +
+    '" data-bx-id="' + esc(id || '') + '"';
+}
+function openBoxEl(el, tab) {
+  const d = (el && el.dataset) || {};
+  return openBox(d.bxAway, d.bxHome, _bxNum(d.bxAs), _bxNum(d.bxHs), d.bxField || '', d.bxDate || '', d.bxId || '', tab);
+}
+function gamedayDataAttrs(away, home, field, time) {
+  return 'data-gd-away="' + esc(away) + '" data-gd-home="' + esc(home) + '" data-gd-field="' + esc(field || '') +
+    '" data-gd-time="' + esc(time || '') + '"';
+}
+function openGamedayEl(el) {
+  const d = (el && el.dataset) || {};
+  return openGameday(d.gdAway, d.gdHome, d.gdField || '', d.gdTime || '');
+}
+// Only http(s), same-site paths and inline images may become a link/src or be
+// window.open()ed; anything else (javascript:, data:text/html, ...) => ''.
+function safeUrl(u) {
+  const s = String(u == null ? '' : u).trim();
+  return /^(https?:\/\/|\/|data:image\/|blob:)/i.test(s) ? s : '';
+}
+
+// Older admin/captain/profile builds saved sign-in passwords in
+// localStorage. Nothing saves them any more; purge leftovers on every visit.
+try {
+  localStorage.removeItem('dvsl-admin-creds');
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (k && k.indexOf('dvsl-creds:') === 0) localStorage.removeItem(k);
+  }
+} catch (_) {}
 
 // Audit H3 (2026-07): player + position names are free text from the PUBLIC
 // registration form (anyone can register on a team, no auth). They're then
@@ -3885,7 +3935,7 @@ function esc(s) {
 // naturally. Applied to PLAYERS + box-score lineup names.
 function safeName(s) {
   if (s == null) return '';
-  return String(s).replace(/[<>"]/g, '').trim();
+  return String(s).replace(/[<>"`]/g, '').trim();
 }
 
 // ═══════════════════════════════════════ FIREBASE CONFIG ════════════════════
@@ -4746,7 +4796,7 @@ async function refreshVolatileData() {
     const freshGames = gamesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     SCHEDULE_PREVIEW = freshGames.map(g => ({
       id: g.id,
-      wk: g.wk, date: normGameDate(g.date), rawDate: g.date||'', day: g.day, time: g.time,
+      wk: g.wk, date: normGameDate(g.date), rawDate: g.date||'', date_iso: g.date_iso||'', day: g.day, time: g.time,
       field: g.field, addr: g.addr||'',
       away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
       home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
@@ -4758,7 +4808,11 @@ async function refreshVolatileData() {
         const ts = g.liveAt.toDate ? g.liveAt.toDate() : new Date(g.liveAt);
         return (Date.now() - ts.getTime()) < 60 * 60 * 1000;
       })()
-    })).sort((a,b) => a.wk - b.wk || (a.time||'').localeCompare(b.time||''));
+    })).sort((a,b) => a.wk - b.wk || (a.rawDate||'').localeCompare(b.rawDate||'') || (a.time||'').localeCompare(b.time||''));
+    // Playoff rows live in the bracket doc, not /games. The rebuild above
+    // dropped them, so fold them back in (once the bracket has loaded) before
+    // the schedule, ticker and recent-scores views re-render.
+    if (PLAYOFF_DATA) { try { _injectPlayoffGamesIntoSchedule(); } catch(_) {} }
 
     // Re-aggregate stats from box_scores
     const freshBS = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -4901,7 +4955,6 @@ async function refreshVolatileData() {
     // Rebuild UI components that depend on volatile data
     try { buildTicker(); } catch(e) {}
     try { buildTicker2(); } catch(e) {}
-    try { buildStandings(); } catch(e) {}
     try { buildHomeSidebar(); } catch(e) {}        // home-page standings
     try { buildStand2026(); } catch(e) {}          // full standings page
     try { buildSchedule(); } catch(e) {}
@@ -5122,13 +5175,13 @@ async function _loadPlayerPhotos() {
       return;
     }
     if (meta) meta.textContent = items.length + ' photo' + (items.length !== 1 ? 's' : '') + ' shared by teammates';
-    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    const _esc = esc;
     function extractYtId(url){ const m=(url||'').match(/[?&]v=([^&#]+)/)||url.match(/youtu\.be\/([^?&/]+)/)||url.match(/embed\/([^?&]+)/); return m?m[1]:''; }
     grid.innerHTML = '<div class="photo-grid">' + items.map(item => {
       const caption = item.caption || '';
       const by = item.player_name ? 'by ' + item.player_name + (item.team_name ? ' · ' + item.team_name : '') : (item.team_name || '');
-      const lbUrl = _esc(item.url || '').replace(/"/g, '&quot;');
-      const lbCap = _esc(caption + (by ? ' — ' + by : '')).replace(/"/g, '&quot;');
+      const lbUrl = _esc(item.url || '');
+      const lbCap = _esc(caption + (by ? ' — ' + by : ''));
       if (item.type === 'image') {
         return `<div class="photo-card" data-lb-url="${lbUrl}" data-lb-cap="${lbCap}" onclick="openLb(this.dataset.lbUrl, this.dataset.lbCap)">
           <img src="${_esc(item.url)}" alt="${_esc(caption||'Player photo')}" loading="lazy">
@@ -5140,8 +5193,8 @@ async function _loadPlayerPhotos() {
         </div>`;
       } else if (item.type === 'youtube') {
         const ytId = item.youtube_id || extractYtId(item.url || '');
-        const thumb = ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '';
-        return `<div class="photo-card" data-yt-url="${lbUrl}" onclick="window.open(this.dataset.ytUrl,'_blank')">
+        const thumb = ytId ? `https://img.youtube.com/vi/${_esc(encodeURIComponent(ytId))}/mqdefault.jpg` : '';
+        return `<div class="photo-card" data-yt-url="${_esc(safeUrl(item.url))}" onclick="if(this.dataset.ytUrl)window.open(this.dataset.ytUrl,'_blank','noopener')">
           ${thumb ? `<img src="${thumb}" alt="video" loading="lazy">` : '<div style="width:100%;height:100%;background:#111;display:flex;align-items:center;justify-content:center"><span style="color:#fff;font-size:32px">▶</span></div>'}
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
             <div style="width:44px;height:44px;background:rgba(255,0,0,.88);border-radius:10px;display:flex;align-items:center;justify-content:center">
@@ -5158,7 +5211,7 @@ async function _loadPlayerPhotos() {
       return '';
     }).join('') + '</div>';
   } catch (e) {
-    grid.innerHTML = `<div style="padding:40px 0;text-align:center;color:#dc2626;font-size:13px">Could not load photos: ${e.message}</div>`;
+    grid.innerHTML = `<div style="padding:40px 0;text-align:center;color:#dc2626;font-size:13px">Could not load photos: ${esc(e && e.message)}</div>`;
   }
 }
 
@@ -5209,7 +5262,7 @@ async function _lazyLoadRegistration() {
   }
 }
 
-const _REG_SEASON = '2026';
+const _REG_SEASON = String((window.LEAGUE_CONFIG && window.LEAGUE_CONFIG.season && window.LEAGUE_CONFIG.season.year) || 2026);
 async function _initRegistrationPage() {
   // Populate teams dropdown from Firestore
   const sel = document.querySelector('#pg-registration #f-team');
@@ -5221,7 +5274,7 @@ async function _initRegistrationPage() {
       const snap = await _gd(_q(_c(db, 'teams'), _ob('name')));
       const teams = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
       sel.innerHTML = '<option value="">— Select your team —</option>' +
-        teams.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        teams.filter(t => t.id !== '__playoff_brackets').map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
     } catch (e) {
       sel.innerHTML = '<option value="">Could not load teams</option>';
     }
@@ -5310,6 +5363,8 @@ window.submitRegistration = async () => {
   const $ = sel => document.querySelector('#pg-registration ' + sel);
   const btn   = $('#submit-btn');
   const errEl = $('#error-box-submit');
+  const resetBtn = () => { btn.disabled = false; btn.textContent = '✍ Sign & Complete Registration'; };
+  const showErr = (msg) => { errEl.textContent = msg; errEl.className = 'error-box show'; resetBtn(); };
   errEl.className = 'error-box';
   btn.disabled = true;
   btn.textContent = 'Registering...';
@@ -5322,81 +5377,63 @@ window.submitRegistration = async () => {
   const pos      = $('#f-pos').value;
   const email    = $('#f-email').value.trim();
   const phone    = $('#f-phone').value.trim();
-  try {
-    const db = await getDb();
-    const { collection: _c, getDocs: _gd, query: _q, where: _w, addDoc: _ad, setDoc: _sd, doc: _doc, Timestamp: _Ts } =
-      await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
-    const now = _Ts.now();
-    // Duplicate-signup guard
-    if (email) {
-      try {
-        const dupSnap = await _gd(_q(_c(db, 'players'), _w('team', '==', teamId), _w('email', '==', email)));
-        const active = dupSnap.docs.find(d => (d.data()||{}).active !== false);
-        if (active) {
-          btn.disabled = false; btn.textContent = 'Register';
-          errEl.className = 'error-box show';
-          errEl.textContent = `You're already registered on ${teamName} under ${email}. If you meant to update your info, contact your captain or the commissioner.`;
-          return;
-        }
-      } catch (_) { /* fall through */ }
+  let num = null;
+  if (numVal) {
+    num = Number(numVal);
+    if (!Number.isInteger(num) || num < 0 || num > 99) {
+      showErr('Jersey number must be a whole number from 0 to 99 (or leave it blank).');
+      return;
     }
-    const playerRecord = {
-      first_name: first, last_name: last, name,
-      num: numVal ? parseInt(numVal, 10) : 0,
-      pos: pos || '', team: teamId,
-      email: email || null, phone: phone || null,
-      season: _REG_SEASON,
-      waiver_signed: true, waiver_signed_at: now, added_at: now,
-    };
-    if (email) {
-      const emailSlug = email.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 64);
-      const regKey = `reg__${teamId}__${emailSlug}__${_REG_SEASON}`;
-      await _sd(_doc(db, 'players', regKey), playerRecord, { merge: true });
-    } else {
-      await _ad(_c(db, 'players'), playerRecord);
-    }
-    // Admin notification (best-effort)
-    try {
-      await fetch('/api/send-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': window.LEAGUE_CONFIG.push.adminSecret },
-        body: JSON.stringify({
-          title: `🔔 New signup: ${name}`,
-          body: `${teamName} · #${numVal || '?'} ${pos || ''} · ${email || 'no email'}`.trim(),
-          category: 'admin', adminOnly: true, url: '/admin.html',
-        }),
-      });
-    } catch (_) {}
-    // MailerLite sync (best-effort)
-    if (email) {
-      try {
-        await fetch('/api/mailerlite-subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, name, last, phone: phone || '', team: teamName || '' }),
-        });
-      } catch (_) {}
-    }
-    // Show success
-    $('#step-3').style.display = 'none';
-    $('#step-bar').style.display = 'none';
-    const sb = $('#success-box');
-    sb.className = 'success-box show';
-    $('#success-detail').innerHTML = `
-      <div class="success-detail-row"><span>Name</span><span>${name}</span></div>
-      <div class="success-detail-row"><span>Team</span><span>${teamName}</span></div>
-      ${numVal ? `<div class="success-detail-row"><span>Jersey #</span><span>${numVal}</span></div>` : ''}
-      ${pos     ? `<div class="success-detail-row"><span>Position</span><span>${pos}</span></div>` : ''}
-      <div class="success-detail-row"><span>Season</span><span>${_REG_SEASON}</span></div>
-      <div class="success-detail-row"><span>Waiver Signed</span><span style="color:var(--green);font-weight:700">✓ ${window._regToday || ''}</span></div>
-    `;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } catch (e) {
-    errEl.textContent = 'Something went wrong. Please try again.';
-    errEl.className = 'error-box show';
-    btn.disabled = false;
-    btn.textContent = '✍ Sign & Complete Registration';
   }
+  // Registration is written server-side by /api/register (validation,
+  // duplicate check, contact info kept private, admin alert). The page
+  // never writes Firestore directly.
+  let res, data = {};
+  try {
+    res = await fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        first_name: first, last_name: last,
+        num, pos: pos || '', team: teamId,
+        email: email || '', phone: phone || '',
+        waiver_signed: true, season: _REG_SEASON,
+      }),
+    });
+    try { data = await res.json(); } catch (_) { data = {}; }
+  } catch (e) {
+    showErr('Could not reach the server. Check your connection and try again.');
+    return;
+  }
+  if (!res.ok || !data || data.ok !== true) {
+    let msg = (data && typeof data.message === 'string' && data.message) || '';
+    if (!msg) {
+      if (res.status === 409) msg = `You're already registered on ${teamName}. If you meant to update your info, contact your captain or the commissioner.`;
+      else if (res.status === 429) msg = 'Too many registrations right now. Please wait a few minutes and try again.';
+      else if (res.status === 400) msg = 'Please check your info and try again.';
+      else msg = 'Something went wrong. Please try again.';
+    }
+    showErr(msg);
+    return;
+  }
+  // Show success
+  $('#step-3').style.display = 'none';
+  $('#step-bar').style.display = 'none';
+  const sb = $('#success-box');
+  sb.className = 'success-box show';
+  const sTitle = sb.querySelector('.success-title');
+  const sText  = sb.querySelector('.success-text');
+  if (sTitle) sTitle.textContent = "Thanks! You're registered.";
+  if (sText)  sText.textContent  = 'Your captain will approve you shortly.';
+  $('#success-detail').innerHTML = `
+      <div class="success-detail-row"><span>Name</span><span>${esc(name)}</span></div>
+      <div class="success-detail-row"><span>Team</span><span>${esc(teamName)}</span></div>
+      ${num != null ? `<div class="success-detail-row"><span>Jersey #</span><span>${esc(num)}</span></div>` : ''}
+      ${pos     ? `<div class="success-detail-row"><span>Position</span><span>${esc(pos)}</span></div>` : ''}
+      <div class="success-detail-row"><span>Season</span><span>${esc(_REG_SEASON)}</span></div>
+      <div class="success-detail-row"><span>Waiver Signed</span><span style="color:var(--green);font-weight:700">✓ ${esc(window._regToday || '')}</span></div>
+    `;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 // ─── pg-playoffs ──────────────────────────────────────────────────────
@@ -5523,7 +5560,7 @@ function _getBracketChampions(){
 function _openChampLightbox(url){
   const lb = document.createElement('div');
   lb.style.cssText = 'position:fixed;inset:0;z-index:10001;background:rgba(6,10,20,.93);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out';
-  lb.innerHTML = '<img src="'+url+'" alt="Champions" style="max-width:96vw;max-height:92vh;border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.6)">';
+  lb.innerHTML = '<img src="'+esc(url)+'" alt="Champions" style="max-width:96vw;max-height:92vh;border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.6)">';
   const onKey = e => { if(e.key==='Escape'){ lb.remove(); document.removeEventListener('keydown', onKey); } };
   lb.addEventListener('click', () => { lb.remove(); document.removeEventListener('keydown', onKey); });
   document.addEventListener('keydown', onKey);
@@ -5875,18 +5912,18 @@ function filterPlayerSearch(query){
     : (teamFilter === 'all' ? PLAYERS : PLAYERS.filter(p=>p.team===teamFilter));
   const grid = document.getElementById('pgrid');
   if(players.length === 0){
-    grid.innerHTML = '<div class="no-results">No players found for "' + query + '"</div>';
+    grid.innerHTML = '<div class="no-results">No players found for "' + esc(query) + '"</div>';
     return;
   }
   grid.innerHTML = players.map(p => {
     const t = getTeam(p.team);
-    return `<div class="pcard" onclick="openModal('${p.id}')">
-      <div class="pcard-team"><div class="pcard-dot" style="background:${t?.color||'var(--gold)'}"></div>${t?.displayName||t?.name||''}</div>
-      <div class="pcard-name">${p.name}</div>
+    return `<div class="pcard" onclick="openModal('${jsArg(p.id)}')">
+      <div class="pcard-team"><div class="pcard-dot" style="background:${esc(t?.color||'var(--gold)')}"></div>${esc(t?.displayName||t?.name||'')}</div>
+      <div class="pcard-name">${esc(p.name)}</div>
       <div class="pcard-stats">
         <div class="pstat"><div class="pstat-val">${avg(p.avg)}</div><div class="pstat-lbl">AVG</div></div>
-        <div class="pstat"><div class="pstat-val">${p.hr}</div><div class="pstat-lbl">HR</div></div>
-        <div class="pstat"><div class="pstat-val">${p.rbi}</div><div class="pstat-lbl">RBI</div></div>
+        <div class="pstat"><div class="pstat-val">${esc(p.hr)}</div><div class="pstat-lbl">HR</div></div>
+        <div class="pstat"><div class="pstat-val">${esc(p.rbi)}</div><div class="pstat-lbl">RBI</div></div>
       </div>
     </div>`;
   }).join('');
@@ -6011,17 +6048,17 @@ function buildLeadersPage(statKey, dir){
     const pidx = pidxMap[p.id] || 0;
     const barPct = maxVal > 0 ? Math.round((p[statKey]/maxVal)*100) : 0;
     const barColor = rank===1?'#002D72':rank===2?'rgba(200,200,200,.7)':rank===3?'rgba(205,127,50,.8)':'rgba(0,45,114,.35)';
-    return `<tr class="${rowCls}" onclick="openModal('${p.id}')">
+    return `<tr class="${rowCls}" onclick="openModal('${jsArg(p.id)}')">
       <td class="lt-rank ${rankCls}">${rank}</td>
       <td class="lt-player">
         <div class="lt-info">
-          <div class="lt-name">${p.name}</div>
-          <div class="lt-team">${t?.displayName||t?.name||''}</div>
+          <div class="lt-name">${esc(p.name)}</div>
+          <div class="lt-team">${esc(t?.displayName||t?.name||'')}</div>
         </div>
       </td>
-      <td class="lt-val highlight">${cat.fmt(p)}</td>
-      <td class="lt-stat">${p.hr}</td>
-      <td class="lt-stat">${p.rbi}</td>
+      <td class="lt-val highlight">${esc(cat.fmt(p))}</td>
+      <td class="lt-stat">${esc(p.hr)}</td>
+      <td class="lt-stat">${esc(p.rbi)}</td>
       <td class="lt-stat">${(p.avg||0).toFixed(3).replace(/^0/,'')}</td>
       <td class="lt-stat">${(p.obp||0).toFixed(3).replace(/^0/,'')}</td>
       <td class="lt-stat">${(p.ops||0).toFixed(3).replace(/^0/,'')}</td>
@@ -6037,8 +6074,8 @@ function openRecap(gameIdx){
   const g = SCHEDULE_PREVIEW[gameIdx] || {};
   const atTeam = getTeamByShort(g.away||'');
   const htTeam = getTeamByShort(g.home||'');
-  const ac = atTeam?.color||'var(--gold)';
-  const hc = htTeam?.color||'var(--gold)';
+  const ac = esc(atTeam?.color||'var(--gold)');
+  const hc = esc(htTeam?.color||'var(--gold)');
   const recap = RECAPS.find(r=>{
     if(typeof r.gameIdx!=='undefined' && r.gameIdx===gameIdx) return true;
     if(r.away===g.away && r.home===g.home) return true;
@@ -6047,24 +6084,24 @@ function openRecap(gameIdx){
   const starsHtml = recap && recap.stars
     ? `<div style="margin-top:18px;border-top:1px solid rgba(0,0,0,.1);padding-top:14px">
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:rgba(0,0,0,.4);margin-bottom:10px">Stars of the Game</div>
-        ${recap.stars.map(s=>'<div style="font-size:13px;color:rgba(0,0,0,.6);padding:4px 0;display:flex;align-items:center;gap:8px"><span style="color:var(--gold)">★</span>'+s+'</div>').join('')}
+        ${recap.stars.map(s=>'<div style="font-size:13px;color:rgba(0,0,0,.6);padding:4px 0;display:flex;align-items:center;gap:8px"><span style="color:var(--gold)">★</span>'+esc(s)+'</div>').join('')}
       </div>` : '';
   document.getElementById('bsmContent').innerHTML =
     '<div class="bsm-header">' +
     '<div class="bsm-teams">' +
-    '<div class="bsm-team"><div class="bsm-abbr" style="color:'+ac+'">'+(g.away||'—')+'</div><div class="bsm-label">Away</div></div>' +
+    '<div class="bsm-team"><div class="bsm-abbr" style="color:'+ac+'">'+esc(g.away||'—')+'</div><div class="bsm-label">Away</div></div>' +
     '<div class="bsm-score-center">' +
-    '<div class="bsm-score"><span style="color:'+((g.as||0)>=(g.hs||0)?ac:'rgba(239,239,239,.35)')+'">'+((g.as!=null)?g.as:'—')+'</span>' +
+    '<div class="bsm-score"><span style="color:'+((g.as||0)>=(g.hs||0)?ac:'rgba(239,239,239,.35)')+'">'+esc((g.as!=null)?g.as:'—')+'</span>' +
     '<span class="bsm-dash">–</span>' +
-    '<span style="color:'+((g.hs||0)>(g.as||0)?hc:'rgba(239,239,239,.35)')+'">'+((g.hs!=null)?g.hs:'—')+'</span></div>' +
+    '<span style="color:'+((g.hs||0)>(g.as||0)?hc:'rgba(239,239,239,.35)')+'">'+esc((g.hs!=null)?g.hs:'—')+'</span></div>' +
     '<span class="bsm-badge badge-w">Final</span></div>' +
-    '<div class="bsm-team"><div class="bsm-abbr" style="color:'+hc+'">'+(g.home||'—')+'</div><div class="bsm-label">Home</div></div>' +
+    '<div class="bsm-team"><div class="bsm-abbr" style="color:'+hc+'">'+esc(g.home||'—')+'</div><div class="bsm-label">Home</div></div>' +
     '</div>' +
-    '<div class="bsm-meta"><span>📅 '+(recap&&recap.date?recap.date:g.date||'')+'</span><span>📍 '+fieldLink(recap&&recap.field?recap.field:g.field||'')+'</span></div>' +
+    '<div class="bsm-meta"><span>📅 '+esc(recap&&recap.date?recap.date:g.date||'')+'</span><span>📍 '+fieldLink(recap&&recap.field?recap.field:g.field||'')+'</span></div>' +
     '</div>' +
     '<div class="bsm-section">' +
     '<div class="bsm-section-title">Game Recap</div>' +
-    '<div style="font-size:14px;line-height:1.8;color:rgba(0,0,0,.72)">'+(recap&&recap.text?recap.text:'Recap coming soon — check back after the game.')+'</div>' +
+    '<div style="font-size:14px;line-height:1.8;color:rgba(0,0,0,.72)">'+(recap&&recap.text?esc(recap.text):'Recap coming soon — check back after the game.')+'</div>' +
     starsHtml +
     '</div>';
   document.getElementById('bsmOverlay').classList.add('open');
@@ -6077,8 +6114,8 @@ function openBsm(gameIdx){
   if(!g) return;
   const atTeam = getTeamByShort(g.away);
   const htTeam = getTeamByShort(g.home);
-  const atColor = atTeam?.color || 'var(--white)';
-  const htColor = htTeam?.color || 'var(--white)';
+  const atColor = esc(atTeam?.color || 'var(--white)');
+  const htColor = esc(htTeam?.color || 'var(--white)');
   let html = '';
   if(g.done){
     // Done games route to the real openBox modal so we render the actual
@@ -6096,26 +6133,26 @@ function openBsm(gameIdx){
       <div class="bsm-header">
         <div class="bsm-teams">
           <div class="bsm-team">
-            <div class="bsm-abbr" style="color:${atColor}">${g.away}</div>
-            <div class="bsm-name">${atTeam?.displayName||atTeam?.name||g.away}</div>
+            <div class="bsm-abbr" style="color:${atColor}">${esc(g.away)}</div>
+            <div class="bsm-name">${esc(atTeam?.displayName||atTeam?.name||g.away)}</div>
             <div class="bsm-label">Away</div>
           </div>
           <div class="bsm-score-center">
             <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;color:var(--muted)">VS</div>
           </div>
           <div class="bsm-team">
-            <div class="bsm-abbr" style="color:${htColor}">${g.home}</div>
-            <div class="bsm-name">${htTeam?.displayName||htTeam?.name||g.home}</div>
+            <div class="bsm-abbr" style="color:${htColor}">${esc(g.home)}</div>
+            <div class="bsm-name">${esc(htTeam?.displayName||htTeam?.name||g.home)}</div>
             <div class="bsm-label">Home</div>
           </div>
         </div>
         <div class="bsm-meta">
-          <span>📅 ${g.date}</span><span>📍 ${fieldLink(g.field, g.addr)}</span><span>⏰ ${g.time}</span>
+          <span>📅 ${esc(g.date)}</span><span>📍 ${fieldLink(g.field, g.addr)}</span><span>⏰ ${esc(g.time)}</span>
         </div>
       </div>
       <div class="bsm-upcoming">
-        <div class="bsm-date-big">${g.day}, ${g.date}</div>
-        <div>Game time: <strong>${g.time}</strong></div>
+        <div class="bsm-date-big">${esc(g.day)}, ${esc(g.date)}</div>
+        <div>Game time: <strong>${esc(g.time)}</strong></div>
         <div style="margin-top:6px">📍 ${fieldLink(g.field, g.addr)}${g.addr?` · ${esc(g.addr)}`:''}</div>
         <div style="margin-top:16px;font-size:12px;color:var(--muted2)">Box score available after the game</div>
       </div>`;
@@ -6133,9 +6170,9 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') closeBsm(); });
 
 function buildTicker(){
   const items=[
-    ...PLAYERS.sort((a,b)=>b.avg-a.avg).slice(0,5).map(p=>`<span class="ticker-item"><span style="color:var(--gold)">AVG #${PLAYERS.sort((a,b)=>b.avg-a.avg).indexOf(p)+1}</span>${p.name} ${avg(p.avg)}</span><span class="ticker-item ticker-sep">·</span>`),
-    ...HISTORY.slice(0,3).map(h=>`<span class="ticker-item"><span style="color:var(--gold)">${h.yr} CHAMPS</span>${h.champ}</span><span class="ticker-item ticker-sep">·</span>`),
-    ...TEAMS.filter(t=>t.streak.startsWith('W')).map(t=>`<span class="ticker-item"><span style="color:${t.color}">${t.short}</span>On a ${t.streak} streak</span><span class="ticker-item ticker-sep">·</span>`),
+    ...PLAYERS.sort((a,b)=>b.avg-a.avg).slice(0,5).map(p=>`<span class="ticker-item"><span style="color:var(--gold)">AVG #${PLAYERS.sort((a,b)=>b.avg-a.avg).indexOf(p)+1}</span>${esc(p.name)} ${avg(p.avg)}</span><span class="ticker-item ticker-sep">·</span>`),
+    ...HISTORY.slice(0,3).map(h=>`<span class="ticker-item"><span style="color:var(--gold)">${esc(h.yr)} CHAMPS</span>${esc(h.champ)}</span><span class="ticker-item ticker-sep">·</span>`),
+    ...TEAMS.filter(t=>String(t.streak).startsWith('W')).map(t=>`<span class="ticker-item"><span style="color:${esc(t.color)}">${esc(t.short)}</span>On a ${esc(t.streak)} streak</span><span class="ticker-item ticker-sep">·</span>`),
   ];
   const track=document.getElementById('ticker');
   if(!track) return;
@@ -6144,30 +6181,6 @@ function buildTicker(){
 }
 
 // ════════════════════════════ STANDINGS ══════════════════════════════════
-function buildStandings(){
-  const wrap=document.getElementById('standings-wrap');
-  if(!wrap) return;
-  const allTeams=[...TEAMS,...HIST_TEAMS];
-  const sorted=[...allTeams].sort((a,b)=>b.pct-a.pct);
-  const isActive=t=>TEAMS.find(x=>x.id===t.id);
-  wrap.innerHTML=`<div class="div-card" style="grid-column:1/-1">
-    <div class="div-card-head"><div style="width:8px;height:8px;border-radius:50%;background:var(--gold)"></div><div class="div-card-label">2026 Standings — All Teams</div></div>
-    <table class="s-tbl"><thead><tr><th>#</th><th>Team</th><th>PCT</th><th>GB</th><th>Str</th></tr></thead><tbody>
-    ${sorted.map((t,i)=>{
-      const active=isActive(t);
-      const streak=t.streak&&t.streak!=='—'?'<span class="'+(t.streak[0]==='W'?'badge-w':'badge-l')+'">'+t.streak+'</span>':'<span style="color:var(--muted)">—</span>';
-      const record='<div style="font-size:12px;font-weight:700;color:var(--muted);margin-top:2px;font-family:\'Barlow Condensed\',sans-serif;letter-spacing:.04em">'+t.w+'-'+t.l+(t.ti?'-'+t.ti:'')+'</div>';
-      return '<tr class="'+(i===0?'leader':'')+'" style="'+(active?'cursor:pointer':'opacity:.55')+'" onclick="'+(active?'goPage(\'team\',\''+t.id+'\')':'')+'">'
-        +'<td style="color:var(--muted);font-size:12px;width:32px">'+(i+1)+'</td>'
-        +'<td style="padding-left:4px"><span style="display:inline-flex;align-items:center;gap:12px">'+(LOGO_TEAMS.has(t.id)?'<img src="logos/'+t.id+'.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0" loading="lazy">':'<span style="width:10px;height:10px;border-radius:50%;background:'+t.color+';flex-shrink:0;display:inline-block"></span>')+'<span style="display:flex;flex-direction:column;justify-content:center"><span class="tname" style="color:#1a1a1a;font-weight:600'+(active?';cursor:pointer':'')+'" onclick="'+(active?'event.stopPropagation();goPage(\'team\',\''+t.id+'\')':'')+'">'+(active?'<span style="text-decoration:underline dotted;text-underline-offset:3px"><span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span></span>':'<span class="stand-name-full">'+t.name+'</span><span class="stand-name-abbr">'+t.short+'</span>')+'</span>'+record+'</span></span>'+(!active?'<span style="font-size:10px;color:var(--muted);margin-left:6px">inactive</span>':'')+'</td>'
-        +'<td style="font-weight:600">'+t.pct.toFixed(3).replace(/^0\./,'.')+'</td>'
-        +'<td>'+(t.gb==='—'?'<span style="color:var(--muted)">—</span>':'<span style="color:#1a1a1a;font-weight:600">'+t.gb+'</span>')+'</td>'
-        +'<td>'+streak+'</td>'
-        +'</tr>';
-    }).join('')}</tbody></table>
-  </div>`;
-}
-
 // Home-page section ordering: Adam's rule is that on **game days +
 // recovery window** people care more about what's coming up, but the
 // rest of the week they care more about what just happened.
@@ -6248,7 +6261,7 @@ function buildHomeRecentScores(){
   };
   const todayKey = today.getFullYear()*10000 + (today.getMonth()+1)*100 + today.getDate();
   const done = SCHEDULE_PREVIEW
-    .filter(g => g.done)
+    .filter(g => g.done && !g.ppd)
     // NOTE: no "on or before today" filter here — a done game already happened,
     // so it should always show. Filtering by date wrongly hid playoff finals
     // whose scheduled date is ahead of the device clock (Adam 2026-08).
@@ -6278,11 +6291,11 @@ function buildHomeSidebar(){
   const sorted = window.DVSLStandings
     ? DVSLStandings.rank(_active, SCHEDULE_PREVIEW)
     : _active.sort((a,b)=>((b.w||0)*3+(b.ti||0)*2+(b.l||0))-((a.w||0)*3+(a.ti||0)*2+(a.l||0)));
-  el.innerHTML=sorted.map((t,i)=>`<div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:10px" onclick="goPage('team','${t.id}')">
+  el.innerHTML=sorted.map((t,i)=>`<div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:10px" onclick="goPage('team','${jsArg(t.id)}')">
     <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;color:rgba(0,0,0,.35);width:18px">${i+1}</span>
-    ${LOGO_TEAMS.has(t.id)?`<img src="logos/${t.id}.png" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" loading="lazy">`:`<span style="width:8px;height:8px;border-radius:50%;background:${t.color};flex-shrink:0"></span>`}
-    <span style="font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:#1a1a1a;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.short||t.name}</span>
-    <span style="font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;color:rgba(0,0,0,.5)">${t.w}-${t.l}${t.ti?'-'+t.ti:''}</span>
+    ${LOGO_TEAMS.has(t.id)?`<img src="logos/${esc(t.id)}.png" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" loading="lazy">`:`<span style="width:8px;height:8px;border-radius:50%;background:${esc(t.color)};flex-shrink:0"></span>`}
+    <span style="font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:#1a1a1a;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.short||t.name)}</span>
+    <span style="font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;color:rgba(0,0,0,.5)">${esc(t.w)}-${esc(t.l)}${t.ti?'-'+esc(t.ti):''}</span>
   </div>`).join('');
 }
 
@@ -6343,6 +6356,15 @@ function buildSchedule(){
   if(!currentWk){
     const po = _upcomingPlayoffGames();
     if (po.length) { _renderUpcomingCards(wrap, po, 'Playoffs'); return; }
+    // Season complete: once BOTH brackets have a champion, name them instead
+    // of pointing fans at a bracket with nothing left to play.
+    let _by = {};
+    try { _getBracketChampions().forEach(c => { _by[c.bracket] = c.team; }); } catch(_) { _by = {}; }
+    if (_by.Gold && _by.Silver) {
+      wrap.innerHTML = `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:rgba(0,0,0,.4);margin-bottom:6px">Season Complete</div>` +
+        `<div style="padding:18px 2px;color:rgba(0,0,0,.6);font-size:14px">${esc(_by.Gold)} won the Gold bracket and ${esc(_by.Silver)} won Silver. Relive every game in the <span style="color:#002D72;font-weight:700;cursor:pointer" onclick="goPage('playoffs')">playoff brackets</span>.</div>`;
+      return;
+    }
     // Nothing upcoming anywhere — say so rather than resurrect old games.
     wrap.innerHTML = `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:rgba(0,0,0,.4);margin-bottom:6px">Upcoming</div>` +
       `<div style="padding:18px 2px;color:rgba(0,0,0,.45);font-size:14px">No games scheduled right now. Check the <span style="color:#002D72;font-weight:700;cursor:pointer" onclick="goPage('playoffs')">playoff brackets</span> for what's next.</div>`;
@@ -6374,23 +6396,23 @@ function buildSchedule(){
 function _renderUpcomingCards(wrap, games, label){
   const cards=games.map(g=>{
     const atm=getTeamByShort(g.away), htm=getTeamByShort(g.home);
-    const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
-    const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
+    const aRec=(atm&&atm.w!=null)?`(${esc(atm.w)}-${esc(atm.l)})`:'';
+    const hRec=(htm&&htm.w!=null)?`(${esc(htm.w)}-${esc(htm.l)})`:'';
     return `<div class="preview-card">
-      <div class="preview-time">${g.day?g.day.slice(0,3).toUpperCase()+' ':''}${g.date||''}${g.date?' · ':''}${g.time||'TBD'}${g.field?` · ${fieldLink(g.field, g.addr)}`:''}${g.poTag?` · <span style="color:#C9A227;font-weight:800">${esc(g.poTag)}</span>`:''}</div>
-      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${g.ppdResched}`:' · Reschedule TBD'}</div>`:''}
+      <div class="preview-time">${g.day?esc(String(g.day).slice(0,3).toUpperCase())+' ':''}${esc(g.date||'')}${g.date?' · ':''}${esc(g.time||'TBD')}${g.field?` · ${fieldLink(g.field, g.addr)}`:''}${g.poTag?` · <span style="color:#C9A227;font-weight:800">${esc(g.poTag)}</span>`:''}</div>
+      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${esc(g.ppdResched)}`:' · Reschedule TBD'}</div>`:''}
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,atm?.short||g.away)}</div>
-          <div style="display:flex;align-items:center;min-width:0"><span class="preview-name" onclick="goPage('team','${atm?.id||g.away}')">${atm?.displayName||atm?.name||g.away}</span><span class="preview-name-mob" onclick="goPage('team','${atm?.id||g.away}')" style="line-height:1.1">${getMobileAbbr(g.away)}</span><span class="preview-rec">${aRec}</span></div>
+          <div style="display:flex;align-items:center;min-width:0"><span class="preview-name" onclick="goPage('team','${jsArg(atm?.id||g.away)}')">${esc(atm?.displayName||atm?.name||g.away)}</span><span class="preview-name-mob" onclick="goPage('team','${jsArg(atm?.id||g.away)}')" style="line-height:1.1">${esc(getMobileAbbr(g.away))}</span><span class="preview-rec">${aRec}</span></div>
         </div>
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(htm?.id,htm?.short||g.home)}</div>
-          <div style="display:flex;align-items:center;min-width:0"><span class="preview-name" onclick="goPage('team','${htm?.id||g.home}')">${htm?.displayName||htm?.name||g.home}</span><span class="preview-name-mob" onclick="goPage('team','${htm?.id||g.home}')" style="line-height:1.1">${getMobileAbbr(g.home)}</span><span class="preview-rec">${hRec}</span></div>
+          <div style="display:flex;align-items:center;min-width:0"><span class="preview-name" onclick="goPage('team','${jsArg(htm?.id||g.home)}')">${esc(htm?.displayName||htm?.name||g.home)}</span><span class="preview-name-mob" onclick="goPage('team','${jsArg(htm?.id||g.home)}')" style="line-height:1.1">${esc(getMobileAbbr(g.home))}</span><span class="preview-rec">${hRec}</span></div>
         </div>
       </div>
-      <span class="preview-link" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${g.time||'TBD'}')">Preview</span>
-      ${g.done?`<span class="preview-link" style="margin-top:4px" onclick="event.stopPropagation();shareGame('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}')">Share</span>`:''}
+      <span class="preview-link" data-away="${esc(g.away)}" data-home="${esc(g.home)}" data-field="${esc(g.field||'')}" data-time="${esc(g.time||'TBD')}" onclick="openGameday(this.dataset.away,this.dataset.home,this.dataset.field,this.dataset.time)">Preview</span>
+      ${g.done?`<span class="preview-link" style="margin-top:4px" data-away="${esc(g.away)}" data-home="${esc(g.home)}" data-as="${esc(g.as)}" data-hs="${esc(g.hs)}" data-field="${esc(g.field||'')}" data-date="${esc(g.date||'')}" onclick="event.stopPropagation();shareGame(this.dataset.away,this.dataset.home,+this.dataset.as,+this.dataset.hs,this.dataset.field,this.dataset.date)">Share</span>`:''}
     </div>`;
   }).join('');
   wrap.innerHTML =
@@ -6565,19 +6587,19 @@ function buildLeaderboard(){
     const eligible=[...activePlayers].filter(cat.min).sort((a,b)=>b[cat.key]-a[cat.key]);
     if(!eligible.length) return '';
     const top=eligible[0]; const t=getTeam(top.team);
-    return `<div class="ldr-card ${ci===0?'gold':''}" onclick="openModal('${top.id}')">
-      <div class="ldr-cat">${cat.label}</div>
+    return `<div class="ldr-card ${ci===0?'gold':''}" onclick="openModal('${jsArg(top.id)}')">
+      <div class="ldr-cat">${esc(cat.label)}</div>
       <div class="ldr-ghost">#1</div>
       <div class="ldr-headshot-wrap">
-        <div class="ldr-headshot" style="display:flex;align-items:center;justify-content:center;background:${t?.color||'#1a1a2e'};color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:28px;border-radius:50%">${top.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+        <div class="ldr-headshot" style="display:flex;align-items:center;justify-content:center;background:${esc(t?.color||'#1a1a2e')};color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:28px;border-radius:50%">${esc(top.name.split(' ').map(n=>n[0]).join('').slice(0,2))}</div>
         <div class="ldr-headshot-info">
-          <div class="ldr-val" style="font-size:42px;line-height:1">${cat.fmt(top)}</div>
-          <div class="ldr-name" style="font-size:15px">${top.name}</div>
-          <div class="ldr-team">${t?.name||''}</div>
+          <div class="ldr-val" style="font-size:42px;line-height:1">${esc(cat.fmt(top))}</div>
+          <div class="ldr-name" style="font-size:15px">${esc(top.name)}</div>
+          <div class="ldr-team">${esc(t?.name||'')}</div>
         </div>
       </div>
       <div class="ldr-runners">${eligible.slice(1,6).map((p,j)=>{
-        return `<div class="rrow"><span class="rpos">${j+2}</span><span class="rname" onclick="event.stopPropagation();openModal('${p.id}')">${p.name.split(' ').pop()}</span><span class="rval">${cat.fmt(p)}</span></div>`;
+        return `<div class="rrow"><span class="rpos">${j+2}</span><span class="rname" onclick="event.stopPropagation();openModal('${jsArg(p.id)}')">${esc(p.name.split(' ').pop())}</span><span class="rval">${esc(cat.fmt(p))}</span></div>`;
       }).join('')}</div>
     </div>`;
   }).filter(Boolean).join('');
@@ -6597,14 +6619,14 @@ function buildTeamsBigCards(){
     return `<div class="teams-list-item">
       <div class="teams-list-logo" style="background:transparent;color:#fff;border-color:transparent">${teamLogoEl(t.id,t.short)}</div>
       <div class="teams-list-info">
-        <div class="teams-list-name" onclick="goPage('team','${t.id}')">${t.name}</div>
+        <div class="teams-list-name" onclick="goPage('team','${jsArg(t.id)}')">${esc(t.name)}</div>
         <div class="teams-list-links">
-          <span onclick="goPage('team','${t.id}');setTimeout(()=>renderTeamTab('stats'),80)">Stats</span>
+          <span onclick="goPage('team','${jsArg(t.id)}');setTimeout(()=>renderTeamTab('stats'),80)">Stats</span>
           <span class="sep">|</span>
-          <span onclick="goPage('team','${t.id}');setTimeout(()=>renderTeamTab('schedule'),80)">Schedule</span>
+          <span onclick="goPage('team','${jsArg(t.id)}');setTimeout(()=>renderTeamTab('schedule'),80)">Schedule</span>
           <span class="sep">|</span>
-          <span onclick="goPage('team','${t.id}');setTimeout(()=>renderTeamTab('roster'),80)">Roster</span>
-          ${CAREER_SEASONS_BY_TEAM[t.id]?`<span class="sep">|</span><span onclick="goPage('team','${t.id}');setTimeout(()=>renderTeamTab('career'),80)">Career Stats</span>`:''}
+          <span onclick="goPage('team','${jsArg(t.id)}');setTimeout(()=>renderTeamTab('roster'),80)">Roster</span>
+          ${CAREER_SEASONS_BY_TEAM[t.id]?`<span class="sep">|</span><span onclick="goPage('team','${jsArg(t.id)}');setTimeout(()=>renderTeamTab('career'),80)">Career Stats</span>`:''}
         </div>
       </div>
     </div>`;
@@ -6717,8 +6739,8 @@ function loadTeam(teamId){
   const t=getTeam(teamId)||(typeof ALL_TEAMS!=='undefined'&&ALL_TEAMS.find(x=>x.id===teamId));
   if(!t){ console.warn('loadTeam: team not found:',teamId); return; }
   document.getElementById('team-div-label').textContent=`2026 Season`;
-  document.getElementById('team-big-name').innerHTML=`${t.name}`;
-  document.getElementById('team-rec').innerHTML=`<strong>${t.w}–${t.l}</strong>&nbsp;·&nbsp;${t.pct.toFixed(3).replace(/^0\./,'.')}&nbsp;PCT&nbsp;·&nbsp;${t.rs} RS&nbsp;·&nbsp;${t.ra} RA&nbsp;·&nbsp;<span class="${t.streak[0]==='W'?'badge-w':'badge-l'}">${t.streak}</span>`;
+  document.getElementById('team-big-name').innerHTML=esc(t.name);
+  document.getElementById('team-rec').innerHTML=`<strong>${esc(t.w)}–${esc(t.l)}</strong>&nbsp;·&nbsp;${t.pct.toFixed(3).replace(/^0\./,'.')}&nbsp;PCT&nbsp;·&nbsp;${esc(t.rs)} RS&nbsp;·&nbsp;${esc(t.ra)} RA&nbsp;·&nbsp;<span class="${String(t.streak)[0]==='W'?'badge-w':'badge-l'}">${esc(t.streak)}</span>`;
   document.getElementById('team-blob').style.background=`linear-gradient(135deg,${t.color},transparent 60%)`;
   // Set team hero logo
   const heroLogo=document.getElementById('team-hero-logo');
@@ -6744,7 +6766,8 @@ function loadTeam(teamId){
   // matches their phone.
   const calBtn = document.getElementById('team-cal-btn');
   if(calBtn){
-    const calUrl = TEAM_CALENDARS_DB[t.id] || null;
+    // calendar_url is admin data; only an https feed URL is ever linked.
+    const calUrl = /^https:\/\//i.test(String(TEAM_CALENDARS_DB[t.id] || '')) ? String(TEAM_CALENDARS_DB[t.id]) : null;
     if(calUrl){
       const webcalUrl = calUrl.replace('https://', 'webcal://');
       const googleCalUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(calUrl)}`;
@@ -6753,13 +6776,13 @@ function loadTeam(teamId){
       calBtn.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
           <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-            <a href="${webcalUrl}" style="${baseBtnStyle};background:#000" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+            <a href="${esc(webcalUrl)}" style="${baseBtnStyle};background:#000" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                ${calIcon}<span> Apple Calendar</span>
             </a>
-            <a href="${googleCalUrl}" target="_blank" rel="noopener" style="${baseBtnStyle};background:#1A73E8" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+            <a href="${esc(googleCalUrl)}" target="_blank" rel="noopener" style="${baseBtnStyle};background:#1A73E8" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                ${calIcon}<span> Google Calendar</span>
             </a>
-            <button onclick="dvslShowCalLink('${calUrl.replace(/'/g,'&#39;')}','${(t.short||t.name||'').replace(/'/g,'&#39;')}')" style="${baseBtnStyle};background:#374151;border:none;cursor:pointer" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+            <button data-cal-url="${esc(calUrl)}" data-cal-label="${esc(t.short||t.name||'')}" onclick="dvslShowCalLink(this.dataset.calUrl,this.dataset.calLabel)" style="${baseBtnStyle};background:#374151;border:none;cursor:pointer" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
                ${calIcon}<span> Copy Link</span>
             </button>
           </div>
@@ -6798,12 +6821,12 @@ window.dvslShowCalLink = function(url, teamLabel) {
   modal.onclick = e => { if (e.target === modal) modal.remove(); };
   modal.innerHTML = `
     <div style="background:#fff;max-width:480px;width:100%;border-radius:14px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.3);font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.04em;text-transform:uppercase;color:#002D72;margin-bottom:6px">${teamLabel || 'Team'} Calendar Link</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;letter-spacing:.04em;text-transform:uppercase;color:#002D72;margin-bottom:6px">${esc(teamLabel || 'Team')} Calendar Link</div>
       <div style="font-size:13px;color:#555;margin-bottom:14px;line-height:1.5">
         For Android / Google Calendar app users — the auto-subscribe button doesn't always work. Copy this link and paste it into Google Calendar's "From URL" field.
       </div>
       <div style="display:flex;gap:6px;margin-bottom:14px">
-        <input id="dvsl-cal-link-inp" type="text" readonly value="${url.replace(/"/g,'&quot;')}" style="flex:1;font-size:12px;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-family:'SF Mono',Menlo,Consolas,monospace;background:#f9fafb;color:#111;min-width:0">
+        <input id="dvsl-cal-link-inp" type="text" readonly value="${esc(url)}" style="flex:1;font-size:12px;padding:10px;border:1px solid #d1d5db;border-radius:8px;font-family:'SF Mono',Menlo,Consolas,monospace;background:#f9fafb;color:#111;min-width:0">
         <button onclick="(async()=>{try{await navigator.clipboard.writeText(document.getElementById('dvsl-cal-link-inp').value);this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1500);}catch(_){const i=document.getElementById('dvsl-cal-link-inp');i.select();document.execCommand('copy');this.textContent='✓ Copied';setTimeout(()=>this.textContent='Copy',1500);}})()" style="background:#002D72;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;letter-spacing:.06em;cursor:pointer;flex-shrink:0">Copy</button>
       </div>
       <div style="background:#f0f9ff;border-left:4px solid #002D72;padding:12px 14px;border-radius:6px;font-size:13px;line-height:1.55;margin-bottom:14px">
@@ -6886,26 +6909,26 @@ function buildSchedRows(t, tgames){
     const won=g.done&&myS>oppS;
     const tied=g.done&&myS===oppS;
     const oppTeam=getTeamByShort(opp);
-    const oppColor=oppTeam?.color||'#9ca3af';
+    const oppColor=esc(oppTeam?.color||'#9ca3af');
     const logo=oppTeam?.id&&LOGO_TEAMS.has(oppTeam.id)
-      ?`<img src="logos/${oppTeam.id}.png" style="width:46px;height:46px;object-fit:contain" loading="lazy">`
-      :`<div style="width:46px;height:46px;border-radius:50%;background:${oppColor};display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;color:#fff;flex-shrink:0">${(oppTeam?.short||opp).slice(0,3).toUpperCase()}</div>`;
+      ?`<img src="logos/${esc(oppTeam.id)}.png" style="width:46px;height:46px;object-fit:contain" loading="lazy">`
+      :`<div style="width:46px;height:46px;border-radius:50%;background:${oppColor};display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;color:#fff;flex-shrink:0">${esc(String(oppTeam?.short||opp||'').slice(0,3).toUpperCase())}</div>`;
     const badge=isH
       ?`<span style="display:inline-block;padding:3px 9px;background:#002D72;color:#fff;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">HOME</span>`
       :`<span style="display:inline-block;padding:3px 9px;background:#fff;color:#666;border:1.5px solid #d1d5db;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">AWAY</span>`;
-    const oppLabel=`${isH?'VS':'@'} ${oppTeam?.short||opp}`.toUpperCase();
+    const oppLabel=esc(`${isH?'VS':'@'} ${oppTeam?.short||opp}`.toUpperCase());
     const scoreCol=g.ppd
-      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;line-height:1;color:#92400e">PPD</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#92400e;margin-top:2px">🌧 ${g.ppdResched||'TBD'}</div></div>`
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;line-height:1;color:#92400e">PPD</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#92400e;margin-top:2px">🌧 ${esc(g.ppdResched||'TBD')}</div></div>`
       :g.done
-      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${myS}–${oppS}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(tied?'#6b7280':(won?'#22c55e':'#ef4444'))};margin-top:2px">${g.conflict?'⚠ UNDER REVIEW':(tied?'TIE':(won?'WIN':'LOSS'))}</div></div>`
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${esc(myS)}–${esc(oppS)}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(tied?'#6b7280':(won?'#22c55e':'#ef4444'))};margin-top:2px">${g.conflict?'⚠ UNDER REVIEW':(tied?'TIE':(won?'WIN':'LOSS'))}</div></div>`
       :'';
-    const rowClick=g.done?`onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}')"`:'' ;
+    const rowClick=(g.done&&!g.ppd)?`${boxDataAttrs(g.away,g.home,g.as,g.hs,g.field,g.date,g.id)} onclick="openBoxEl(this)"`:'' ;
     const rowBg=i%2===0?'#fff':'#fafafa';
     const borderB=i<tgames.length-1?'border-bottom:1px solid rgba(0,0,0,.07);':'';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:${rowBg};${borderB}cursor:${g.done?'pointer':'default'}" ${rowClick}>
+    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 14px;background:${rowBg};${borderB}cursor:${(g.done&&!g.ppd)?'pointer':'default'}" ${rowClick}>
       <div style="width:54px;flex-shrink:0">
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;line-height:1.2;white-space:nowrap">${g.date||''}</div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap">${g.time||''}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;line-height:1.2;white-space:nowrap">${esc(g.date||'')}</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap">${esc(g.time||'')}</div>
       </div>
       <div style="width:50px;flex-shrink:0;text-align:center">${badge}</div>
       <div style="flex-shrink:0">${logo}</div>
@@ -6965,10 +6988,10 @@ function renderTeamTab(tab){
       return `<th style="${base} ${borderC};${color}" onclick="doRosterSort('${key}')">${label}${arr}</th>`;
     };
     body.innerHTML=`<div style="margin-bottom:22px"><div style="display:flex;gap:12px;flex-wrap:wrap">
-      <div class="tsg-cell"><div class="tsg-v">${t.w}</div><div class="tsg-l">Wins</div></div>
-      <div class="tsg-cell"><div class="tsg-v">${t.l}</div><div class="tsg-l">Losses</div></div>
-      <div class="tsg-cell"><div class="tsg-v">${t.rs}</div><div class="tsg-l">RS</div></div>
-      <div class="tsg-cell"><div class="tsg-v">${t.ra}</div><div class="tsg-l">RA</div></div>
+      <div class="tsg-cell"><div class="tsg-v">${esc(t.w)}</div><div class="tsg-l">Wins</div></div>
+      <div class="tsg-cell"><div class="tsg-v">${esc(t.l)}</div><div class="tsg-l">Losses</div></div>
+      <div class="tsg-cell"><div class="tsg-v">${esc(t.rs)}</div><div class="tsg-l">RS</div></div>
+      <div class="tsg-cell"><div class="tsg-v">${esc(t.ra)}</div><div class="tsg-l">RA</div></div>
     </div></div>
     <div style="overflow-x:auto;margin:0 -4px">
     <table style="width:100%;border-collapse:collapse;min-width:680px">
@@ -6981,17 +7004,17 @@ function renderTeamTab(tab){
         const obp=fmtO(p);
         const slg=fmtStat(p.slg);
         const ops=fmtStat(p.ops);
-        return `<tr onclick="openModal('${p.id}')" style="border-bottom:1px solid rgba(0,0,0,.05);cursor:pointer" onmouseenter="this.style.background='rgba(0,45,114,.04)'" onmouseleave="this.style.background=''">
-        <td style="padding:10px 8px 10px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:var(--muted);white-space:nowrap">#${p.num||'—'}</td>
-        <td style="padding:10px 8px 10px 0;font-size:15px;font-weight:700;white-space:nowrap;color:#1a1a1a">${p.name}${p.pos?`<span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:5px">${p.pos}</span>`:''}</td>
-        <td style="${tdS}">${p.ab||0}</td>
-        <td style="${tdS}">${p.r||0}</td>
-        <td style="${tdS}">${p.h||0}</td>
-        <td style="${tdS}">${p.d||0}</td>
-        <td style="${tdS}">${p.t||0}</td>
-        <td style="${tdS}">${p.hr||0}</td>
-        <td style="${tdS}">${p.rbi||0}</td>
-        <td style="${tdS}">${p.bb||0}</td>
+        return `<tr onclick="openModal('${jsArg(p.id)}')" style="border-bottom:1px solid rgba(0,0,0,.05);cursor:pointer" onmouseenter="this.style.background='rgba(0,45,114,.04)'" onmouseleave="this.style.background=''">
+        <td style="padding:10px 8px 10px 0;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;color:var(--muted);white-space:nowrap">#${esc(p.num||'—')}</td>
+        <td style="padding:10px 8px 10px 0;font-size:15px;font-weight:700;white-space:nowrap;color:#1a1a1a">${esc(p.name)}${p.pos?`<span style="font-size:10px;font-weight:400;color:var(--muted);margin-left:5px">${esc(p.pos)}</span>`:''}</td>
+        <td style="${tdS}">${esc(p.ab||0)}</td>
+        <td style="${tdS}">${esc(p.r||0)}</td>
+        <td style="${tdS}">${esc(p.h||0)}</td>
+        <td style="${tdS}">${esc(p.d||0)}</td>
+        <td style="${tdS}">${esc(p.t||0)}</td>
+        <td style="${tdS}">${esc(p.hr||0)}</td>
+        <td style="${tdS}">${esc(p.rbi||0)}</td>
+        <td style="${tdS}">${esc(p.bb||0)}</td>
         <td style="${tdS};font-weight:700">${avg(p.avg)}</td>
         <td style="${tdS}">${obp}</td>
         <td style="${tdS}">${slg}</td>
@@ -7000,8 +7023,8 @@ function renderTeamTab(tab){
     </table></div>`;
     // ── Desktop split: append schedule panel on the right ──
     const _sg=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short).slice().sort(_teamSchedSort);
-    const _sw=_sg.filter(g=>g.done&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
-    const _sl=_sg.filter(g=>g.done&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
+    const _sw=_sg.filter(g=>g.done&&!g.ppd&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
+    const _sl=_sg.filter(g=>g.done&&!g.ppd&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
     body.innerHTML=`<div class="team-roster-split"><div class="trs-left">${body.innerHTML}</div><div class="trs-right">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">2026 Schedule</div>
@@ -7011,9 +7034,9 @@ function renderTeamTab(tab){
     </div></div>`;
   } else if(tab==='schedule'){
     const tgames=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short).slice().sort(_teamSchedSort);
-    const wins=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
-    const losses=tgames.filter(g=>g.done&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
-    const ties=tgames.filter(g=>g.done&&g.hs===g.as).length;
+    const wins=tgames.filter(g=>g.done&&!g.ppd&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
+    const losses=tgames.filter(g=>g.done&&!g.ppd&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
+    const ties=tgames.filter(g=>g.done&&!g.ppd&&g.hs===g.as).length;
     body.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">2026 Schedule</div>
@@ -7023,7 +7046,7 @@ function renderTeamTab(tab){
     ${buildSchedRows(t,tgames)}</div>`;
 
   } else if(tab==='gamelog'){
-    const tgames=SCHEDULE_PREVIEW.filter(g=>(g.away===t.short||g.home===t.short)&&g.done).slice().sort(_teamSchedSort);
+    const tgames=SCHEDULE_PREVIEW.filter(g=>(g.away===t.short||g.home===t.short)&&g.done&&!g.ppd).slice().sort(_teamSchedSort);
     let w=0,l=0;
     let ti = 0;
     const rows=tgames.map((g,i)=>{
@@ -7035,19 +7058,19 @@ function renderTeamTab(tab){
       if(tied) ti++; else if(won) w++; else l++;
       const oppTeam=getTeamByShort(opp);
       const logo=oppTeam?.id&&LOGO_TEAMS.has(oppTeam.id)
-        ?`<img src="logos/${oppTeam.id}.png" style="width:28px;height:28px;object-fit:contain;vertical-align:middle;margin-right:6px" loading="lazy">`
-        :`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${oppTeam?.color||'#9ca3af'};margin-right:6px;vertical-align:middle;flex-shrink:0"></span>`;
+        ?`<img src="logos/${esc(oppTeam.id)}.png" style="width:28px;height:28px;object-fit:contain;vertical-align:middle;margin-right:6px" loading="lazy">`
+        :`<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(oppTeam?.color||'#9ca3af')};margin-right:6px;vertical-align:middle;flex-shrink:0"></span>`;
       const haLabel=isH
         ?`<span style="display:inline-block;padding:2px 7px;background:#002D72;color:#fff;border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.07em">HOME</span>`
         :`<span style="display:inline-block;padding:2px 7px;background:#fff;color:#666;border:1.5px solid #d1d5db;border-radius:4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:10px;letter-spacing:.07em">AWAY</span>`;
       const bg=i%2===0?'#fff':'#fafafa';
       const border=i<tgames.length-1?'border-bottom:1px solid rgba(0,0,0,.06)':'';
-      return `<tr style="background:${bg};${border};cursor:pointer" onclick="openBox('${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}')" onmouseenter="this.style.background='rgba(0,45,114,.04)'" onmouseleave="this.style.background='${bg}'">
-        <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;white-space:nowrap">${g.date||''}</td>
+      return `<tr style="background:${bg};${border};cursor:pointer" ${boxDataAttrs(g.away,g.home,g.as,g.hs,g.field,g.date,g.id)} onclick="openBoxEl(this)" onmouseenter="this.style.background='rgba(0,45,114,.04)'" onmouseleave="this.style.background='${bg}'">
+        <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;white-space:nowrap">${esc(g.date||'')}</td>
         <td style="padding:10px 8px">${haLabel}</td>
-        <td style="padding:10px 8px;white-space:nowrap">${logo}<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;text-transform:uppercase">${oppTeam?.short||opp}</span></td>
+        <td style="padding:10px 8px;white-space:nowrap">${logo}<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;text-transform:uppercase">${esc(oppTeam?.short||opp)}</span></td>
         <td style="padding:10px 12px;text-align:center"><span style="display:inline-block;padding:3px 10px;border-radius:5px;background:${tied?'rgba(107,114,128,.12)':(won?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)')};color:${tied?'#6b7280':(won?'#16a34a':'#dc2626')};font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.06em">${tied?'T':(won?'W':'L')}</span></td>
-        <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#1a1a1a;white-space:nowrap">${myS}–${oppS}</td>
+        <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#1a1a1a;white-space:nowrap">${esc(myS)}–${esc(oppS)}</td>
         <td style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap">${w}-${l}${ti?'-'+ti:''}</td>
         <td style="padding:10px 12px;font-size:11px;color:var(--muted);white-space:nowrap">${g.field?fieldLink(g.field, g.addr):''}</td>
       </tr>`;
@@ -7118,7 +7141,7 @@ function renderCareerTab(sortKey, sortDir){
   careerList.forEach(p=>{tot.gp+=p.gp;tot.ab+=p.ab;tot.h+=p.h;tot.s+=p.s;tot.d+=p.d;tot.t+=p.t;tot.hr+=p.hr;tot.rbi+=p.rbi;tot.r+=p.r;tot.bb+=p.bb;});
   const tr=calcR(tot);
   body.innerHTML=`
-    <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:6px;color:${t.color}">Career Batting Stats</h3>
+    <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:6px;color:${esc(t.color)}">Career Batting Stats</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:12px">${careerList.length} players · ${Object.keys(SEASONS_FOR_TEAM).length} seasons (${Object.keys(SEASONS_FOR_TEAM).sort()[0]}–${Object.keys(SEASONS_FOR_TEAM).sort().pop()}) · Click column to sort</p>
     <div class="career-wrap"><table class="career-tbl">
       <thead><tr>${cols.map(c=>{
@@ -7130,9 +7153,9 @@ function renderCareerTab(sortKey, sortDir){
       }).join('')}</tr></thead>
       <tbody>${careerList.map(p=>{
         const pid=findPid(p.first,p.last);
-        const click=pid?`onclick="openModal('${pid}')" style="cursor:pointer"`:'';
+        const click=pid?`onclick="openModal('${jsArg(pid)}')" style="cursor:pointer"`:'';
         return `<tr ${click}>
-          <td style="text-align:left;font-weight:600">${p.first} ${p.last}</td>
+          <td style="text-align:left;font-weight:600">${esc(p.first)} ${esc(p.last)}</td>
           <td>${p.seasons.length}</td><td>${p.gp}</td><td>${p.ab}</td><td>${p.h}</td><td>${p.d}</td><td>${p.t}</td><td>${p.hr}</td><td>${p.rbi}</td><td>${p.r}</td><td>${p.bb}</td>
           <td>${fmtR(p._avg)}</td><td>${fmtR(p._obp)}</td><td>${fmtR(p._slg)}</td><td>${fmtR(p._ops)}</td>
         </tr>`;
@@ -7151,14 +7174,14 @@ let _teamStatSort = {key:'avg', dir:'desc'};
 function renderTeamStats(t, players, sortKey, sortDir){
   _teamStatSort = {key:sortKey||'avg', dir:sortDir||'desc'};
   const cols = [
-    {key:'name', label:'Player',  fmt:p=>`<span style="font-weight:600">${p.name}</span> <span style="font-size:10px;color:var(--muted)">${p.pos}</span>`, align:'left'},
-    {key:'ab',   label:'AB',      fmt:p=>p.ab},
-    {key:'h',    label:'H',       fmt:p=>p.h},
+    {key:'name', label:'Player',  fmt:p=>`<span style="font-weight:600">${esc(p.name)}</span> <span style="font-size:10px;color:var(--muted)">${esc(p.pos)}</span>`, align:'left'},
+    {key:'ab',   label:'AB',      fmt:p=>esc(p.ab)},
+    {key:'h',    label:'H',       fmt:p=>esc(p.h)},
     {key:'avg',  label:'AVG',     fmt:p=>`<strong>${avg(p.avg)}</strong>`},
-    {key:'hr',   label:'HR',      fmt:p=>p.hr},
-    {key:'rbi',  label:'RBI',     fmt:p=>p.rbi},
-    {key:'r',    label:'R',       fmt:p=>p.r},
-    {key:'bb',   label:'BB',      fmt:p=>p.bb},
+    {key:'hr',   label:'HR',      fmt:p=>esc(p.hr)},
+    {key:'rbi',  label:'RBI',     fmt:p=>esc(p.rbi)},
+    {key:'r',    label:'R',       fmt:p=>esc(p.r)},
+    {key:'bb',   label:'BB',      fmt:p=>esc(p.bb)},
     {key:'slg',  label:'SLG',     fmt:p=>slg(p.slg)},
     {key:'ops',  label:'OPS',     fmt:p=>(p.ops||0).toFixed(3).replace(/^0\./,'.')},
   ];
@@ -7170,7 +7193,7 @@ function renderTeamStats(t, players, sortKey, sortDir){
   });
   const body = document.getElementById('team-body');
   body.innerHTML = `
-    <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:18px;color:${t.color}">Team Stats</h3>
+    <h3 style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;margin-bottom:18px;color:${esc(t.color)}">Team Stats</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Click any column header to sort</p>
     <div style="overflow-x:auto"><table class="big-table" id="team-stat-tbl"><thead><tr>
       ${cols.map(c=>{
@@ -7178,11 +7201,11 @@ function renderTeamStats(t, players, sortKey, sortDir){
         const nextDir=isSort&&sortDir==='desc'?'asc':'desc';
         const arrow=isSort?(sortDir==='desc'?' ↓':' ↑'):'';
         return `<th class="${isSort?'col-pinned':''}" style="${c.align==='left'?'text-align:left':''}"
-          onclick="renderTeamStats(getTeam('${t.id}'),PLAYERS.filter(p=>p.team==='${t.id}'),'${c.key}','${nextDir}')">
+          onclick="renderTeamStats(getTeam('${jsArg(t.id)}'),PLAYERS.filter(p=>p.team==='${jsArg(t.id)}'),'${c.key}','${nextDir}')">
           ${c.label}${arrow}</th>`;
       }).join('')}
     </tr></thead><tbody>
-    ${sorted.map(p=>`<tr onclick="openModal('${p.id}')">
+    ${sorted.map(p=>`<tr onclick="openModal('${jsArg(p.id)}')">
       ${cols.map(c=>{
         const isSort=c.key===sortKey;
         return `<td class="${isSort?'col-pinned':''}" style="${c.align==='left'?'text-align:left':''}">${c.fmt(p)}</td>`;
@@ -7319,28 +7342,28 @@ function openModal(playerId){
 
   inner.innerHTML=`
     <div class="modal-hero">
-      <div class="modal-av" style="border-color:${t?.color||'#ddd'};background:${t?.id&&LOGO_TEAMS.has(t.id)?'#f8f8f8':'#f0f0f0'};color:${t?.color||'#888'}">${t?.id&&LOGO_TEAMS.has(t.id)?`<img src="logos/${t.id}.png" style="width:100%;height:100%;object-fit:contain;position:absolute;inset:0">`:p.name.split(' ').map(w=>w[0]).join('').slice(0,2)}</div>
+      <div class="modal-av" style="border-color:${esc(t?.color||'#ddd')};background:${t?.id&&LOGO_TEAMS.has(t.id)?'#f8f8f8':'#f0f0f0'};color:${esc(t?.color||'#888')}">${t?.id&&LOGO_TEAMS.has(t.id)?`<img src="logos/${esc(t.id)}.png" style="width:100%;height:100%;object-fit:contain;position:absolute;inset:0">`:esc(p.name.split(' ').map(w=>w[0]).join('').slice(0,2))}</div>
       <div>
-        <div class="modal-pname">${p.name}</div>
+        <div class="modal-pname">${esc(p.name)}</div>
         <div class="modal-pmeta">
-          <span>#${p.num}</span>
+          <span>#${esc(p.num)}</span>
           <span style="color:var(--muted)">·</span>
-          <span>${p.pos}</span>
+          <span>${esc(p.pos)}</span>
           <span style="color:var(--muted)">·</span>
-          <span style="cursor:pointer;color:${t?.color}" onclick="closeModal();goPage('team','${t?.id}')">${t?.short||t?.name||''}</span>
+          <span style="cursor:pointer;color:${esc(t?.color)}" onclick="closeModal();goPage('team','${jsArg(t?.id)}')">${esc(t?.short||t?.name||'')}</span>
         </div>
         <div style="margin-top:8px">
-          <span class="tag" style="background:${t?.color||'var(--gold)'}18;color:${t?.color||'var(--gold)'};font-size:10px">${t?.short||''}${t?.div?` · Division ${t.div}`:''}</span>
+          <span class="tag" style="background:${esc(t?.color||'var(--gold)')}18;color:${esc(t?.color||'var(--gold)')};font-size:10px">${esc(t?.short||'')}${t?.div?` · Division ${esc(t.div)}`:''}</span>
           <span class="tag" style="background:rgba(34,197,94,.12);color:var(--green);margin-left:6px;font-size:10px">2026 Season</span>
         </div>
         <div class="modal-stat-pill">
-          <div class="msp-item"><div class="msp-val">${rates.avg}</div><div class="msp-lbl">AVG</div></div>
+          <div class="msp-item"><div class="msp-val">${esc(rates.avg)}</div><div class="msp-lbl">AVG</div></div>
           <div class="msp-sep"></div>
-          <div class="msp-item"><div class="msp-val">${p.hr}</div><div class="msp-lbl">HR</div></div>
+          <div class="msp-item"><div class="msp-val">${esc(p.hr)}</div><div class="msp-lbl">HR</div></div>
           <div class="msp-sep"></div>
-          <div class="msp-item"><div class="msp-val">${p.rbi}</div><div class="msp-lbl">RBI</div></div>
+          <div class="msp-item"><div class="msp-val">${esc(p.rbi)}</div><div class="msp-lbl">RBI</div></div>
           <div class="msp-sep"></div>
-          <div class="msp-item"><div class="msp-val">${rates.ops}</div><div class="msp-lbl">OPS</div></div>
+          <div class="msp-item"><div class="msp-val">${esc(rates.ops)}</div><div class="msp-lbl">OPS</div></div>
         </div>
       </div>
     </div>`;
@@ -7370,10 +7393,10 @@ function openModal(playerId){
   }:null;
   if(_proj) _proj.rates=_calcR(_proj);
   const _tRow=(row,cls='')=>`<tr class="${cls}">
-    <td>${row.year}${row.teamName?`<span style="font-weight:400;color:var(--muted);font-size:11px;margin-left:6px">${row.teamName}</span>`:''}</td>
-    <td>${row.gp||0}</td><td>${row.ab}</td><td>${row.r}</td><td>${row.h}</td>
-    <td>${row.d||0}</td><td>${row.t||0}</td><td>${row.hr}</td><td>${row.rbi}</td><td>${row.bb}</td>
-    <td>${row.rates.avg}</td><td>${row.rates.obp}</td><td>${row.rates.slg}</td><td>${row.rates.ops}</td>
+    <td>${esc(row.year)}${row.teamName?`<span style="font-weight:400;color:var(--muted);font-size:11px;margin-left:6px">${esc(row.teamName)}</span>`:''}</td>
+    <td>${esc(row.gp||0)}</td><td>${esc(row.ab)}</td><td>${esc(row.r)}</td><td>${esc(row.h)}</td>
+    <td>${esc(row.d||0)}</td><td>${esc(row.t||0)}</td><td>${esc(row.hr)}</td><td>${esc(row.rbi)}</td><td>${esc(row.bb)}</td>
+    <td>${esc(row.rates.avg)}</td><td>${esc(row.rates.obp)}</td><td>${esc(row.rates.slg)}</td><td>${esc(row.rates.ops)}</td>
   </tr>`;
   // Cap visible seasons at 5, See All to expand
   const INIT_ROWS=5;
@@ -7382,11 +7405,11 @@ function openModal(playerId){
   inner.innerHTML+=`
   <div class="modal-batting-hdr">
     <div class="modal-batting-title">2026 Batting</div>
-    ${!showAll?`<button class="modal-see-all" onclick="expandModalStats('${playerId}')">See All</button>`:''}
+    ${!showAll?`<button class="modal-see-all" onclick="expandModalStats('${jsArg(playerId)}')">See All</button>`:''}
   </div>
-  <div class="bat-tbl-wrap" id="bat-tbl-wrap-${playerId}"><table class="bat-tbl">
+  <div class="bat-tbl-wrap" id="bat-tbl-wrap-${esc(playerId)}"><table class="bat-tbl">
     <thead><tr><th>Season</th><th>GP</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead>
-    <tbody id="bat-tbl-body-${playerId}">
+    <tbody id="bat-tbl-body-${esc(playerId)}">
     ${visibleSeasons.map(r=>_tRow(r)).join('')}
     ${_proj?_tRow(_proj,'proj-row'):''}
     ${_nSeas>1?_tRow({..._tot,year:'Career',teamName:''},'career-row'):''}
@@ -7404,18 +7427,18 @@ function openModal(playerId){
   const showAllGames=_log.length<=INIT_GAMES;
   const visibleGames=_log.slice(-INIT_GAMES);
   const logRows=(games)=>games.length?games.map(g=>`<tr>
-    <td style="font-weight:500">${g.opp||'—'}</td>
-    <td>${g.ab}</td><td>${g.h}</td><td>${g.d||0}</td><td>${g.t||0}</td><td>${g.hr||0}</td><td>${g.rbi}</td><td>${g.r}</td><td>${g.bb||0}</td>
-    <td><span class="${g.res&&g.res[0]==='W'?'badge-w':'badge-l'}">${g.res||'—'}</span></td>
+    <td style="font-weight:500">${esc(g.opp||'—')}</td>
+    <td>${esc(g.ab)}</td><td>${esc(g.h)}</td><td>${esc(g.d||0)}</td><td>${esc(g.t||0)}</td><td>${esc(g.hr||0)}</td><td>${esc(g.rbi)}</td><td>${esc(g.r)}</td><td>${esc(g.bb||0)}</td>
+    <td><span class="${g.res&&g.res[0]==='W'?'badge-w':'badge-l'}">${esc(g.res||'—')}</span></td>
   </tr>`).join(''):`<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted);font-size:13px">No games played yet — check back once the season starts.</td></tr>`;
   inner.innerHTML+=`
   <div class="modal-batting-hdr" style="margin-top:4px">
     <div class="modal-batting-title">Recent Games</div>
-    ${!showAllGames?`<button class="modal-see-all" onclick="expandModalGames('${playerId}')">See All</button>`:''}
+    ${!showAllGames?`<button class="modal-see-all" onclick="expandModalGames('${jsArg(playerId)}')">See All</button>`:''}
   </div>
   <div class="bat-tbl-wrap"><table class="bat-tbl">
     <thead><tr><th style="text-align:left">Opponent</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>Result</th></tr></thead>
-    <tbody id="glog-body-${playerId}">${logRows(visibleGames)}</tbody>
+    <tbody id="glog-body-${esc(playerId)}">${logRows(visibleGames)}</tbody>
     </table></div>`;
     window._modalLog=p.log;
     window._modalLogRows=logRows;
@@ -7467,7 +7490,7 @@ function expandModalStats(playerId){
   body.innerHTML=window._modalAllSeasons.map(r=>_tRow(r)).join('')
     +(_proj?_tRow(_proj,'proj-row'):'')
     +(_nSeas>1?_tRow({..._tot,year:'Career',teamName:''},'career-row'):'');
-  const btn=document.querySelector(`[onclick="expandModalStats('${playerId}')"]`);
+  const btn=document.querySelector('.modal-see-all[onclick^="expandModalStats("]');
   if(btn)btn.style.display='none';
 }
 
@@ -7475,7 +7498,7 @@ function expandModalGames(playerId){
   const body=document.getElementById('glog-body-'+playerId);
   if(!body||!window._modalLog)return;
   body.innerHTML=window._modalLogRows(window._modalLog);
-  const btn=document.querySelector(`[onclick="expandModalGames('${playerId}')"]`);
+  const btn=document.querySelector('.modal-see-all[onclick^="expandModalGames("]');
   if(btn)btn.style.display='none';
 }
 function closeModal(e){
@@ -7510,9 +7533,9 @@ function buildRecaps(){
     '<div class="recap-champ" onclick="goPage(\'playoffs\')">'
     + '<img src="/assets/trophy.png" alt="Champion trophy" class="recap-champ-trophy">'
     + '<div class="recap-champ-txt">'
-    + '<div class="recap-champ-lbl">🏆 2026 ' + c.bracket + ' Bracket Champions</div>'
-    + '<div class="recap-champ-team">' + c.team + '</div>'
-    + '<div class="recap-champ-sub">Congratulations to ' + c.team + ' on winning the 2026 DVSL ' + c.bracket + ' bracket!</div>'
+    + '<div class="recap-champ-lbl">🏆 2026 ' + esc(c.bracket) + ' Bracket Champions</div>'
+    + '<div class="recap-champ-team">' + esc(c.team) + '</div>'
+    + '<div class="recap-champ-sub">Congratulations to ' + esc(c.team) + ' on winning the 2026 DVSL ' + esc(c.bracket) + ' bracket!</div>'
     + '</div></div>'
   ).join('');
   document.getElementById('recap-list').innerHTML = _champCards + RECAPS.map(r=>{
@@ -7544,15 +7567,15 @@ function buildRecaps(){
       <div style="background:linear-gradient(135deg,#fde047,#f5c842);border:2px solid #ca8a04;border-radius:12px;padding:14px 16px;margin-bottom:14px;text-align:center;box-shadow:0 3px 10px rgba(245,200,66,.35)">
         <div style="font-size:28px;line-height:1;margin-bottom:2px">⭐</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#78350f;margin-bottom:4px">Player of the Game</div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#1a1a1a;line-height:1.1;text-transform:uppercase;letter-spacing:.01em;cursor:${potgPlayer?'pointer':'default'}" ${potgPlayer?`onclick="openModal('${esc(potgPlayer.id)}')"`:''}>${esc(_potgName)}${potgTeamObj?` <span style="font-weight:600;font-size:13px;color:#78350f;letter-spacing:.02em">· ${esc(potgTeamObj.short||potgTeamObj.name)}</span>`:''}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#1a1a1a;line-height:1.1;text-transform:uppercase;letter-spacing:.01em;cursor:${potgPlayer?'pointer':'default'}" ${potgPlayer?`onclick="openModal('${jsArg(potgPlayer.id)}')"`:''}>${esc(_potgName)}${potgTeamObj?` <span style="font-weight:600;font-size:13px;color:#78350f;letter-spacing:.02em">· ${esc(potgTeamObj.short||potgTeamObj.name)}</span>`:''}</div>
       </div>` : '';
     return `<div class="recap-card">
       <div class="recap-top">
         <div>
           <div class="recap-match">
-            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${esc(at?.id)}')">${esc(r.away)}</span>
+            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${jsArg(at?.id)}')">${esc(r.away)}</span>
             <span style="color:var(--muted);font-size:18px;margin:0 10px">vs</span>
-            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${esc(ht?.id)}')">${esc(r.home)}</span>
+            <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${jsArg(ht?.id)}')">${esc(r.home)}</span>
           </div>
           <div class="recap-meta">📅 ${esc(r.date)} · 📍 ${fieldLink(r.field)} · Week ${r.wk|0}</div>
         </div>
@@ -7565,7 +7588,7 @@ function buildRecaps(){
           const pname=s.split('·')[0].trim().replace(/^[⭐★\s]+/,'');
           const stats=s.split('·').slice(1).join('·').trim();
           const player=PLAYERS.find(p=>p.name.split(' ').pop()===pname.split(' ').pop()||p.name===pname);
-          return `<div class="star-chip" ${player?`onclick="openModal('${esc(player.id)}')" title="Click to view profile"`:''}><span>⭐</span><strong>${esc(pname)}</strong><span style="color:var(--muted)">·</span><span>${esc(stats)}</span></div>`;
+          return `<div class="star-chip" ${player?`onclick="openModal('${jsArg(player.id)}')" title="Click to view profile"`:''}><span>⭐</span><strong>${esc(pname)}</strong><span style="color:var(--muted)">·</span><span>${esc(stats)}</span></div>`;
         }).join('')}</div>
       </div>
     </div>`;
@@ -7584,8 +7607,9 @@ function buildAwards(){
   const qualified = PLAYERS.filter(p => n(p.ab) >= (typeof PLAYER_HITTING_MIN_AB !== 'undefined' ? PLAYER_HITTING_MIN_AB : 10));
   const tb = p => n(p.s) + 2*n(p.d) + 3*n(p.t) + 4*n(p.hr);
   const mvpScore = p => tb(p) + n(p.rbi) + n(p.r) + n(p.bb);
-  const teamName = id => { const t = (TEAMS || []).find(x => x.id === id); return t ? (t.name || t.short || '') : ''; };
-  const pname = p => (p.name || ((p.first||'') + ' ' + (p.last||''))).trim();
+  // Both only feed the innerHTML cards below, so they return esc()d text.
+  const teamName = id => { const t = (TEAMS || []).find(x => x.id === id); return esc(t ? (t.name || t.short || '') : ''); };
+  const pname = p => esc((p.name || ((p.first||'') + ' ' + (p.last||''))).trim());
   const top = (pool, scoreFn) => pool.slice().filter(p => scoreFn(p) > 0).sort((a,b) => scoreFn(b) - scoreFn(a))[0] || null;
   const cards = [];
   const mvp = top(qualified.length ? qualified : PLAYERS, mvpScore);
@@ -7621,19 +7645,19 @@ function buildHistory(){
   const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   document.getElementById('history-champ-count').innerHTML=sorted.map(([name,cnt])=>`
     <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 18px;display:flex;align-items:center;gap:10px">
-      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;color:var(--gold)">${cnt}×</span>
-      <div><div style="font-weight:600;font-size:13px">${name}</div><div style="font-size:10px;color:var(--muted)">championships</div></div>
+      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;color:var(--gold)">${esc(cnt)}×</span>
+      <div><div style="font-weight:600;font-size:13px">${esc(name)}</div><div style="font-size:10px;color:var(--muted)">championships</div></div>
     </div>`).join('');
 
   document.getElementById('history-grid').innerHTML=HISTORY.map(h=>`
-    <div class="hist-row" onclick="${h.champ_team?`goPage('team','${h.champ_team}')`:''}" style="${h.champ_team?'':'cursor:default'}">
-      <div class="hist-yr">${h.yr}</div>
+    <div class="hist-row" onclick="${h.champ_team?`goPage('team','${jsArg(h.champ_team)}')`:''}" style="${h.champ_team?'':'cursor:default'}">
+      <div class="hist-yr">${esc(h.yr)}</div>
       <div>
-        <div class="hist-champ">${h.yr===2024?'🥇 ':h.yr===2019?'🏆 ':''}<span style="color:var(--gold)">${h.champ}</span></div>
-        <div class="hist-runner">Runner-up: <strong>${h.runner}</strong> · MVP: <span style="color:var(--gold)">${h.mvp}</span></div>
+        <div class="hist-champ">${h.yr===2024?'🥇 ':h.yr===2019?'🏆 ':''}<span style="color:var(--gold)">${esc(h.champ)}</span></div>
+        <div class="hist-runner">Runner-up: <strong>${esc(h.runner)}</strong> · MVP: <span style="color:var(--gold)">${esc(h.mvp)}</span></div>
       </div>
-      <div class="hist-mvp" style="font-size:12px;color:var(--muted2)">${h.mvp}</div>
-      <div><div class="hist-rec">${h.rec}</div><div class="hist-pct">${h.pct} PCT</div></div>
+      <div class="hist-mvp" style="font-size:12px;color:var(--muted2)">${esc(h.mvp)}</div>
+      <div><div class="hist-rec">${esc(h.rec)}</div><div class="hist-pct">${esc(h.pct)} PCT</div></div>
     </div>`).join('');
 }
 
@@ -7700,9 +7724,9 @@ function populateTeamsDropdown(){
   if (!list || !TEAMS.length) return;
   const sorted = [...TEAMS].filter(t=>t.active!==false).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   list.innerHTML = sorted.map(t=>`
-    <div class="nav-team-item" onclick="goPage('team','${t.id}');(function(){const w=document.getElementById('nl-players');w.style.pointerEvents='none';setTimeout(()=>{w.style.pointerEvents='';},400);})()">
+    <div class="nav-team-item" onclick="goPage('team','${jsArg(t.id)}');(function(){const w=document.getElementById('nl-players');w.style.pointerEvents='none';setTimeout(()=>{w.style.pointerEvents='';},400);})()">
       <div class="nav-team-dot">${teamLogoEl(t.id,t.short)}</div>
-      <span class="nav-team-name">${t.short||t.name}</span>
+      <span class="nav-team-name">${esc(t.short||t.name)}</span>
     </div>`).join('');
 }
 
@@ -7732,7 +7756,6 @@ window._dataPromise.then(() => {
   try{ buildTicker(); }catch(e){}
   try{ buildTicker2(); }catch(e){}
   try{ populateTeamsDropdown(); }catch(e){}
-  try{ buildStandings(); }catch(e){}
   try{ buildStand2026(); }catch(e){}   // full 2026 standings page — must rebuild once Firebase TEAMS land
   try{ buildHomeSidebar(); }catch(e){}
   try{ buildHomeRecentScores(); }catch(e){}
@@ -7896,17 +7919,22 @@ function getTickerGames(){
   if(!SCHEDULE_PREVIEW.length) return [];
   // Parse whatever format rawDate comes in ("2026-04-22" OR "April 22")
   // into a sortable epoch. Falls back to 0 so unknown dates sort first.
+  // date_iso (YYYY-MM-DD) wins when present; bare "Apr 22" dates belong to
+  // the configured season year, not the device clock's year (after New Year
+  // the old fallback pushed every 2026 game into the "future").
+  const _seasonYr_T = (window.LEAGUE_CONFIG?.season?.year) || new Date().getFullYear();
   const dateKey = g => {
-    const raw = g.rawDate || g.date || '';
+    const iso = g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso) ? g.date_iso : '';
+    const raw = iso || g.rawDate || g.date || '';
     // ISO "2026-04-22"
     let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
     if (m) return new Date(+m[1], +m[2]-1, +m[3]).getTime();
-    // "April 22" / "Apr 22" — assume current/next year based on game
+    // "April 22" / "Apr 22" — the season year
     m = /^([A-Za-z]{3,})\s+(\d{1,2})$/.exec(raw);
     if (m) {
       const months = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
       const mi = months.indexOf(m[1].slice(0,3).toLowerCase());
-      if (mi >= 0) return new Date(new Date().getFullYear(), mi, +m[2]).getTime();
+      if (mi >= 0) return new Date(_seasonYr_T, mi, +m[2]).getTime();
     }
     return 0;
   };
@@ -7945,7 +7973,9 @@ function getTickerGames(){
     return k >= _todayMid_T.getTime();
   };
   const curWk=allWks.find(w=>wkMap[w].some(_isFutureNotDone_T));
-  if(!curWk) return SCHEDULE_PREVIEW.slice().sort(sortByDateTime).slice(-10); // all done, show last 10
+  // Nothing upcoming: show the last 10 FINALS only (never a ppd row or an
+  // unplayed/moot game dressed up as recent).
+  if(!curWk) return SCHEDULE_PREVIEW.filter(g => g.done && !g.ppd).sort(sortByDateTime).slice(-10);
   // Show current week + next week
   const curIdx=allWks.indexOf(curWk);
   const wksToShow=allWks.slice(curIdx, curIdx+2);
@@ -8042,40 +8072,40 @@ function buildTicker2(){
   const makeGame = g => {
     const at = getTeamByShort(g.away);
     const ht = getTeamByShort(g.home);
-    const aRec = at ? '('+at.w+'-'+at.l+')' : '';
-    const hRec = ht ? '('+ht.w+'-'+ht.l+')' : '';
+    const aRec = at ? '('+esc(at.w)+'-'+esc(at.l)+')' : '';
+    const hRec = ht ? '('+esc(ht.w)+'-'+esc(ht.l)+')' : '';
     const done = g.done && g.as !== null && g.hs !== null;
     const aWin = done && g.as > g.hs;
     const hWin = done && g.hs > g.as;
     // PPD takes precedence over Final/LIVE/datetime so postponed games are
     // immediately obvious (red PPD badge + reschedule target if known).
     const status = g.ppd
-      ? '<span style="color:#ff4d4d;font-weight:900;letter-spacing:.05em">PPD'+(g.ppdResched?' · → '+g.ppdResched:'')+'</span>'
-      : (done ? 'Final' : (g.live ? '<span class="live-badge">🔴 LIVE</span>' : (g.date+' · '+g.time)));
+      ? '<span style="color:#ff4d4d;font-weight:900;letter-spacing:.05em">PPD'+(g.ppdResched?' · → '+esc(g.ppdResched):'')+'</span>'
+      : (done ? 'Final' : (g.live ? '<span class="live-badge">🔴 LIVE</span>' : (esc(g.date)+' · '+esc(g.time))));
     const field = g.field||'';
     const timeStr = g.time||'TBD';
-    const awayLabel = isMob ? getMobileAbbr(g.away) : g.away;
-    const homeLabel = isMob ? getMobileAbbr(g.home) : g.home;
+    const awayLabel = esc(isMob ? getMobileAbbr(g.away) : g.away);
+    const homeLabel = esc(isMob ? getMobileAbbr(g.home) : g.home);
     // Click opens gameday popup for upcoming, or BOX SCORE for completed.
     // Adam ask 4/27/26: ticker used to call openRecap2 which dropped the
     // user on the Recap tab — but everywhere else (game cards, schedule
     // rows, scores tab) opens the Box Score tab by default. Use openBox
     // for consistency. Pass g.id if present so the modal can pull stats.
-    const onclick = done
-      ? "openBox('"+g.away+"','"+g.home+"',"+g.as+","+g.hs+",'"+field+"','"+g.date+"','"+(g.id||'')+"')"
-      : "openGameday('"+g.away+"','"+g.home+"','"+field+"','"+timeStr+"')";
-    return '<div class="st-game" onclick="'+onclick+'">'
+    const clickAttrs = done
+      ? boxDataAttrs(g.away, g.home, g.as, g.hs, field, g.date, g.id) + ' onclick="openBoxEl(this)"'
+      : gamedayDataAttrs(g.away, g.home, field, timeStr) + ' onclick="openGamedayEl(this)"';
+    return '<div class="st-game" '+clickAttrs+'>'
       +'<div class="st-game-inner">'
       +'<div class="st-datetime">'+status+'</div>'
       +'<div class="st-row">'
         +'<span class="st-abbr'+(aWin?' winner':done?' loser':'')+'" style="color:#fff">'+awayLabel+'</span>'
         +'<span class="st-rec">'+aRec+'</span>'
-        +(done?'<span class="st-score'+(aWin?' winner':' loser')+'">'+g.as+'</span>':'')
+        +(done?'<span class="st-score'+(aWin?' winner':' loser')+'">'+esc(g.as)+'</span>':'')
       +'</div>'
       +'<div class="st-row">'
         +'<span class="st-abbr'+(hWin?' winner':done?' loser':'')+'" style="color:#fff">'+homeLabel+'</span>'
         +'<span class="st-rec">'+hRec+'</span>'
-        +(done?'<span class="st-score'+(hWin?' winner':' loser')+'">'+g.hs+'</span>':'')
+        +(done?'<span class="st-score'+(hWin?' winner':' loser')+'">'+esc(g.hs)+'</span>':'')
       +'</div>'
       +'</div>'
       +'</div>';
@@ -8085,8 +8115,8 @@ function buildTicker2(){
     '<div class="st-champ" onclick="goPage(\'playoffs\')">'
     + '<span class="st-champ-trophy">🏆</span>'
     + '<div class="st-champ-inner">'
-    + '<div class="st-champ-lbl">2026 ' + c.bracket + ' Champions</div>'
-    + '<div class="st-champ-team">' + c.team + '</div>'
+    + '<div class="st-champ-lbl">2026 ' + esc(c.bracket) + ' Champions</div>'
+    + '<div class="st-champ-team">' + esc(c.team) + '</div>'
     + '</div></div>'
   ).join('');
   track.innerHTML = champItems + tickerGames.map(makeGame).join('');
@@ -8284,9 +8314,9 @@ function getLogoId(name,id){
 }
 function teamLogoEl(teamId, fallbackShort, extraStyle){
   if(teamId && LOGO_TEAMS.has(teamId.toLowerCase())){
-    return `<img src="logos/${teamId.toLowerCase()}.png" style="width:100%;height:100%;object-fit:contain;display:block${extraStyle?';'+extraStyle:''}" draggable="false" loading="lazy">`;
+    return `<img src="logos/${esc(teamId.toLowerCase())}.png" style="width:100%;height:100%;object-fit:contain;display:block${extraStyle?';'+extraStyle:''}" draggable="false" loading="lazy">`;
   }
-  return `<span style="font-size:8px;font-weight:900;line-height:1">${fallbackShort||teamId||''}</span>`;
+  return `<span style="font-size:8px;font-weight:900;line-height:1">${esc(fallbackShort||teamId||'')}</span>`;
 }
 // get teamId from short name (for game blocks that only have short)
 function shortToId(short){
@@ -8526,8 +8556,8 @@ function buildScoresNav(){
     const dr=w.dateRange||w.date||'';
     const isRange=dr.includes('–');
     return`<div class="dn-slot${i===off?' active':''}" data-idx="${i}" role="button" tabindex="0" style="${isRange?'min-width:90px':''}">
-      <div class="wk-label">${label}</div>
-      <div class="wk-date" style="${isRange?'font-size:13px;letter-spacing:0':''}">${dr}</div>
+      <div class="wk-label">${esc(label)}</div>
+      <div class="wk-date" style="${isRange?'font-size:13px;letter-spacing:0':''}">${esc(dr)}</div>
     </div>`;
   }).join('');
   // Wire a single delegated click handler on the container. Inline
@@ -8618,6 +8648,9 @@ const DAY_FULL={mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday'};
 // games. Superseded by scheduleBlock(). Kept only to avoid a risky bulk
 // delete in this live file; never call it. (Audit 2026-07.)
 function gameBlock(g,wkIdx,gi,isPast,isNext){
+  // Dead and unescaped: refuse to render so it can never become an XSS sink
+  // if someone wires it back in. Use scheduleBlock().
+  return '';
   const ac=tc(g.away),hc=tc(g.home);
   const field=cleanField(g.field), time=parseTime(g);
   const addr=g.addr||'Philadelphia Area';
@@ -8686,16 +8719,17 @@ function gameBlock(g,wkIdx,gi,isPast,isNext){
 function scheduleBlock(g, isNext){
   const atm=TEAMS.find(t=>t.id===g.away||t.short===g.away||t.short===g.away?.toUpperCase())||HIST_TEAMS.find(t=>t.id===g.away||t.short===g.away);
   const htm=TEAMS.find(t=>t.id===g.home||t.short===g.home||t.short===g.home?.toUpperCase())||HIST_TEAMS.find(t=>t.id===g.home||t.short===g.home);
-  const ac=atm?.color||'#9ca3af', hc=htm?.color||'#9ca3af';
-  const aRec=(atm&&atm.w!=null)?`(${atm.w}-${atm.l})`:'';
-  const hRec=(htm&&htm.w!=null)?`(${htm.w}-${htm.l})`:'';
+  const ac=esc(atm?.color||'#9ca3af'), hc=esc(htm?.color||'#9ca3af');
+  const aRec=(atm&&atm.w!=null)?`(${esc(atm.w)}-${esc(atm.l)})`:'';
+  const hRec=(htm&&htm.w!=null)?`(${esc(htm.w)}-${esc(htm.l)})`:'';
   const aShort=atm?.short||g.away;
   const hShort=htm?.short||g.home;
 
-  if(g.done){
+  if(g.done && !g.ppd){
     const aw=g.as>g.hs;
-    const _bsArgs=`'${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}','${g.id||''}'`;
-    const _rcArgs=`'${g.away}','${g.home}',${g.as},${g.hs},'${g.field||''}','${g.date||''}'`;
+    // The card and its buttons each carry the game in data-* attributes;
+    // openBoxEl(this) reads them back (no Firestore text inside the handler).
+    const _bsData=boxDataAttrs(g.away,g.home,g.as,g.hs,g.field,g.date,g.id);
     // Notable play headline — pull from recap if available
     const recap=RECAPS.find(r=>r.away===g.away&&r.home===g.home);
     const headline=recap?.headline||(()=>{
@@ -8706,56 +8740,56 @@ function scheduleBlock(g, isNext){
              diff<=1?`${winner} edges out ${diff===0?'tie':`close one`}`:
              `${winner} ${g.as>g.hs?g.as:g.hs}–${g.as>g.hs?g.hs:g.as}`;
     })();
-    const aLogo=atm?.id&&LOGO_TEAMS.has(atm.id)?`<img src="logos/${atm.id}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${ac}"></span>`;
-    const hLogo=htm?.id&&LOGO_TEAMS.has(htm.id)?`<img src="logos/${htm.id}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${hc}"></span>`;
-    return `<div class="gc-card" onclick="openBox(${_bsArgs})">
+    const aLogo=atm?.id&&LOGO_TEAMS.has(atm.id)?`<img src="logos/${esc(atm.id)}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${ac}"></span>`;
+    const hLogo=htm?.id&&LOGO_TEAMS.has(htm.id)?`<img src="logos/${esc(htm.id)}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${hc}"></span>`;
+    return `<div class="gc-card" ${_bsData} onclick="openBoxEl(this)">
       <div class="gc-card-hdr">
         <span class="gc-card-status">${g.live?'<span class="live-badge">🔴 LIVE</span>':(g.conflict?'<span style="color:#92400e;font-weight:700">⚠ UNDER REVIEW</span>':'FINAL')}</span>
-        <span class="gc-card-date">${g.date||''}</span>
-        ${headline?`<span class="gc-card-headline">${headline.toUpperCase()}</span>`:''}
+        <span class="gc-card-date">${esc(g.date||'')}</span>
+        ${headline?`<span class="gc-card-headline">${esc(String(headline).toUpperCase())}</span>`:''}
       </div>
       <div class="gc-card-body">
         <div class="gc-team-row">
           <div class="gc-logo-wrap">${aLogo}</div>
           <div class="gc-team-info">
-            <span class="gc-team-name${aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${atm?.id||g.away}')">${aShort}</span>
+            <span class="gc-team-name${aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${jsArg(atm?.id||g.away)}')">${esc(aShort)}</span>
             ${aRec?`<span class="gc-record">${aRec}</span>`:''}
           </div>
-          <div class="gc-score${aw?' gc-score-win':' gc-score-lose'}"> ${g.as}</div>
+          <div class="gc-score${aw?' gc-score-win':' gc-score-lose'}"> ${esc(g.as)}</div>
         </div>
         <div class="gc-team-row">
           <div class="gc-logo-wrap">${hLogo}</div>
           <div class="gc-team-info">
-            <span class="gc-team-name${!aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${htm?.id||g.home}')">${hShort}</span>
+            <span class="gc-team-name${!aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${jsArg(htm?.id||g.home)}')">${esc(hShort)}</span>
             ${hRec?`<span class="gc-record">${hRec}</span>`:''}
           </div>
-          <div class="gc-score${!aw?' gc-score-win':' gc-score-lose'}"> ${g.hs}</div>
+          <div class="gc-score${!aw?' gc-score-win':' gc-score-lose'}"> ${esc(g.hs)}</div>
         </div>
       </div>
       <div class="gc-card-footer">
-        <button class="gc-btn" onclick="event.stopPropagation();openBox(${_bsArgs},'recap')">Recap</button>
-        <button class="gc-btn gc-btn-primary gc-btn-share" onclick="event.stopPropagation();openBox(${_bsArgs})">Box Score</button>
+        <button class="gc-btn" ${_bsData} onclick="event.stopPropagation();openBoxEl(this,'recap')">Recap</button>
+        <button class="gc-btn gc-btn-primary gc-btn-share" ${_bsData} onclick="event.stopPropagation();openBoxEl(this)">Box Score</button>
       </div>
     </div>`;
   } else {
     const timeStr=g.time||'TBD';
-    const dayPrefix=g.day?g.day.slice(0,3).toUpperCase()+' ':'';
-    const datePart=g.date?`${dayPrefix}${g.date} · `:'';
-    const timeField=datePart+timeStr+(g.field?` · ${fieldLink(g.field, g.addr)}`:'');
+    const dayPrefix=g.day?esc(String(g.day).slice(0,3).toUpperCase())+' ':'';
+    const datePart=g.date?`${dayPrefix}${esc(g.date)} · `:'';
+    const timeField=datePart+esc(timeStr)+(g.field?` · ${fieldLink(g.field, g.addr)}`:'');
     return `<div class="preview-card${isNext?' next':''}">
       <div class="preview-time">${timeField}${g.live?' <span class="live-badge">🔴 LIVE</span>':''}</div>
-      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${g.ppdResched}`:' · Reschedule TBD'}</div>`:''}
+      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${esc(g.ppdResched)}`:' · Reschedule TBD'}</div>`:''}
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,aShort)}</div>
-          <div><span class="preview-name" onclick="goTeam('${atm?.id||g.away}')">${aShort}</span><span class="preview-name-mob" onclick="goTeam('${atm?.id||g.away}')">${getMobileAbbr(g.away)}</span><span class="preview-rec">${aRec}</span></div>
+          <div><span class="preview-name" onclick="goTeam('${jsArg(atm?.id||g.away)}')">${esc(aShort)}</span><span class="preview-name-mob" onclick="goTeam('${jsArg(atm?.id||g.away)}')">${esc(getMobileAbbr(g.away))}</span><span class="preview-rec">${aRec}</span></div>
         </div>
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(htm?.id,hShort)}</div>
-          <div><span class="preview-name" onclick="goTeam('${htm?.id||g.home}')">${hShort}</span><span class="preview-name-mob" onclick="goTeam('${htm?.id||g.home}')">${getMobileAbbr(g.home)}</span><span class="preview-rec">${hRec}</span></div>
+          <div><span class="preview-name" onclick="goTeam('${jsArg(htm?.id||g.home)}')">${esc(hShort)}</span><span class="preview-name-mob" onclick="goTeam('${jsArg(htm?.id||g.home)}')">${esc(getMobileAbbr(g.home))}</span><span class="preview-rec">${hRec}</span></div>
         </div>
       </div>
-      <a class="preview-link" onclick="openGameday('${g.away}','${g.home}','${g.field||''}','${timeStr}')">Preview</a>
+      <a class="preview-link" ${gamedayDataAttrs(g.away,g.home,g.field,timeStr)} onclick="openGamedayEl(this)">Preview</a>
     </div>`;
   }
 }
@@ -8821,7 +8855,7 @@ function renderScores(){
     const w=doneWks[off];
     const doneGames=w.games.filter(g=>g.done);
     const _wkHead = String(w.wk).startsWith('PL') ? 'Playoffs' : ('Week ' + w.wk);
-    wrap.innerHTML=`<div class="sb-week-head">${_wkHead} · ${w.date} <span style="font-size:13px;color:var(--muted);font-weight:400">${doneGames.length} game${doneGames.length!==1?'s':''}</span></div>`
+    wrap.innerHTML=`<div class="sb-week-head">${esc(_wkHead)} · ${esc(w.date)} <span style="font-size:13px;color:var(--muted);font-weight:400">${doneGames.length} game${doneGames.length!==1?'s':''}</span></div>`
       +`<div class="gc-cards-grid">`
       +doneGames.map(g=>scheduleBlock(g,false)).join('')
       +`</div>`;
@@ -8872,12 +8906,12 @@ function renderScores(){
     const dayPicker=multiDay
       ? uniqueDays.map(d=>{
           const active=d===selectedDay;
-          return `<button onclick="selectedDay='${d}';renderScores()" style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;padding:6px 18px;border-radius:20px;border:2px solid ${active?'var(--gold)':'var(--border)'};background:${active?'var(--gold)':'transparent'};color:${active?'#fff':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${d}</button>`;
+          return `<button data-day="${esc(d)}" onclick="selectedDay=this.dataset.day;renderScores()" style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;padding:6px 18px;border-radius:20px;border:2px solid ${active?'var(--gold)':'var(--border)'};background:${active?'var(--gold)':'transparent'};color:${active?'#fff':'var(--muted)'};cursor:pointer;transition:all .15s;white-space:nowrap">${esc(d)}</button>`;
         }).join('')
       : '';
 
     wrap.innerHTML=`<div style="display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px">`
-      +`<div class="sb-week-head" style="margin-bottom:0">${wkLabel} <span style="font-size:13px;color:var(--muted);font-weight:400">${shownGames.length} game${shownGames.length!==1?'s':''}</span></div>${dayPicker}</div>`
+      +`<div class="sb-week-head" style="margin-bottom:0">${esc(wkLabel)} <span style="font-size:13px;color:var(--muted);font-weight:400">${shownGames.length} game${shownGames.length!==1?'s':''}</span></div>${dayPicker}</div>`
       +`<div class="preview-grid">`
       +shownGames.map(g=>scheduleBlock(g,g._gi===nextGi)).join('')
       +`</div>`;
@@ -8886,21 +8920,21 @@ function renderScores(){
 
 // ── POPUPS ──────────────────────────────────────────────────────────────────
 async function openRecap(away,home,as,hs,field,date){
-  const ac=tc(away),hc=tc(home),aW=as>hs;
+  const ac=esc(tc(away)),hc=esc(tc(home)),aW=as>hs;
   const recap=RECAPS.find(r=>r.away===away&&r.home===home);
   const starsHtml=recap&&recap.stars
-    ?`<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:var(--gold)">★</span>${s}</div>`).join('')}</div>`:'';
+    ?`<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:var(--gold)">★</span>${esc(s)}</div>`).join('')}</div>`:'';
   const hdrHtml=`
     <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${away}')"><div class="pop-abbr" style="color:${ac}">${away}</div><div class="pop-role-lbl">Away</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${jsArg(away)}')"><div class="pop-abbr" style="color:${ac}">${esc(away)}</div><div class="pop-role-lbl">Away</div></div>
         <div class="pop-sc-mid">
-          <div class="pop-sc"><span style="color:${aW?'#1a1a1a':'rgba(0,0,0,.28)'}">${as}</span><span class="pop-dash">–</span><span style="color:${!aW?'#1a1a1a':'rgba(0,0,0,.28)'}">${hs}</span></div>
+          <div class="pop-sc"><span style="color:${aW?'#1a1a1a':'rgba(0,0,0,.28)'}">${esc(as)}</span><span class="pop-dash">–</span><span style="color:${!aW?'#1a1a1a':'rgba(0,0,0,.28)'}">${esc(hs)}</span></div>
           <div class="pop-badge">Final</div>
         </div>
-        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${home}')"><div class="pop-abbr" style="color:${hc}">${home}</div><div class="pop-role-lbl">Home</div></div>
+        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${jsArg(home)}')"><div class="pop-abbr" style="color:${hc}">${esc(home)}</div><div class="pop-role-lbl">Home</div></div>
       </div>
-      <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${fieldLink(field)}</span></div>
+      <div class="pop-meta"><span>📅 ${esc(date)}</span><span>📍 ${fieldLink(field)}</span></div>
     </div>`;
   document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999"><div style="font-size:20px;margin-bottom:8px">⏳</div>Loading…</div>`;
   openScPop();
@@ -8928,7 +8962,7 @@ async function openRecap(away,home,as,hs,field,date){
     potgHtml=`<div style="background:linear-gradient(135deg,#fde047,#f5c842);border:3px solid #ca8a04;border-radius:14px;padding:22px 20px;margin-bottom:20px;text-align:center;box-shadow:0 4px 14px rgba(245,200,66,.4)">
       <div style="font-size:40px;line-height:1;margin-bottom:6px">⭐</div>
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.28em;text-transform:uppercase;color:#78350f;margin-bottom:6px">Player of the Game</div>
-      <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;color:#1a1a1a;line-height:1.05;text-transform:uppercase;letter-spacing:.01em">${recap.potg_name}</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;color:#1a1a1a;line-height:1.05;text-transform:uppercase;letter-spacing:.01em">${esc(recap.potg_name)}</div>
     </div>`;
   } else if(boxScore){
     const aLineup=(boxScore.away_lineup||boxScore.awayBatters||[]).map(p=>({...p,name:safeName(p.name)}));
@@ -8986,9 +9020,9 @@ async function openRecap(away,home,as,hs,field,date){
       potgHtml=`<div style="background:linear-gradient(135deg,#fde047,#f5c842);border:3px solid #ca8a04;border-radius:14px;padding:22px 20px;margin-bottom:20px;text-align:center;box-shadow:0 4px 14px rgba(245,200,66,.4)">
         <div style="font-size:40px;line-height:1;margin-bottom:6px">⭐</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.28em;text-transform:uppercase;color:#78350f;margin-bottom:6px">Player of the Game</div>
-        <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;color:#1a1a1a;line-height:1.05;text-transform:uppercase;letter-spacing:.01em">${potgEntry.name}</div>
-        <div style="font-size:13px;color:#78350f;margin-top:8px;font-weight:700">${potgTeamName||''}${potgStatLine?`${potgTeamName?' · ':''}${potgStatLine}`:''}</div>
-        <div style="font-size:13px;color:#1a1a1a;margin-top:10px;line-height:1.45;font-style:italic;max-width:420px;margin-left:auto;margin-right:auto">${_narrative}</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;color:#1a1a1a;line-height:1.05;text-transform:uppercase;letter-spacing:.01em">${esc(potgEntry.name)}</div>
+        <div style="font-size:13px;color:#78350f;margin-top:8px;font-weight:700">${esc(potgTeamName||'')}${potgStatLine?`${potgTeamName?' · ':''}${esc(potgStatLine)}`:''}</div>
+        <div style="font-size:13px;color:#1a1a1a;margin-top:10px;line-height:1.45;font-style:italic;max-width:420px;margin-left:auto;margin-right:auto">${esc(_narrative)}</div>
       </div>`;
     }
   }
@@ -9003,14 +9037,14 @@ async function openRecap(away,home,as,hs,field,date){
 }
 
 async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
-  const ac=tc(away),hc=tc(home),aW=as>hs;
+  const ac=esc(tc(away)),hc=esc(tc(home)),aW=as>hs;
   const atm=TEAMS.find(t=>t.short===away)||HIST_TEAMS.find(t=>t.short===away);
   const htm=TEAMS.find(t=>t.short===home)||HIST_TEAMS.find(t=>t.short===home);
 
   // Team logo helper for box score header
   const mkHdrLogo=(tm,short)=>{
-    if(tm&&LOGO_TEAMS.has(tm.id)) return `<img src="logos/${tm.id}.png" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.15))">`;
-    const col=tm?.color||'#9ca3af';
+    if(tm&&LOGO_TEAMS.has(tm.id)) return `<img src="logos/${esc(tm.id)}.png" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 1px 4px rgba(0,0,0,.15))">`;
+    const col=esc(tm?.color||'#9ca3af');
     return `<span style="display:inline-block;width:40px;height:40px;border-radius:50%;background:${col};margin-bottom:4px"></span>`;
   };
 
@@ -9018,24 +9052,24 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
   const hdrHtml=`
     <div class="pop-hd" style="background:#fff">
       <div class="pop-matchup">
-        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${away}')">
+        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${jsArg(away)}')">
           ${mkHdrLogo(atm,away)}
-          <div class="pop-abbr" style="color:${ac};font-size:18px;margin-top:2px">${away}</div>
+          <div class="pop-abbr" style="color:${ac};font-size:18px;margin-top:2px">${esc(away)}</div>
           <div class="pop-role-lbl">Away</div>
         </div>
         <div class="pop-sc-mid">
           <div class="pop-sc">
-            <span style="color:#1a1a1a">${as}</span><span class="pop-dash" style="color:#ccc">–</span><span style="color:#1a1a1a">${hs}</span>
+            <span style="color:#1a1a1a">${esc(as)}</span><span class="pop-dash" style="color:#ccc">–</span><span style="color:#1a1a1a">${esc(hs)}</span>
           </div>
           <div class="pop-badge">Final</div>
         </div>
-        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${home}')">
+        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${jsArg(home)}')">
           ${mkHdrLogo(htm,home)}
-          <div class="pop-abbr" style="color:${hc};font-size:18px;margin-top:2px">${home}</div>
+          <div class="pop-abbr" style="color:${hc};font-size:18px;margin-top:2px">${esc(home)}</div>
           <div class="pop-role-lbl">Home</div>
         </div>
       </div>
-      <div class="pop-meta"><span>📅 ${date}</span><span>📍 ${fieldLink(field)}</span></div>
+      <div class="pop-meta"><span>📅 ${esc(date)}</span><span>📍 ${fieldLink(field)}</span></div>
     </div>`;
 
   document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999"><div style="font-size:20px;margin-bottom:8px">⏳</div>Loading…</div>`;
@@ -9136,8 +9170,8 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
         <table class="ptbl">
           <thead><tr><th style="text-align:left">Team</th>${innNums.map(n=>`<th>${n}</th>`).join('')}<th>R</th><th>H</th><th>E</th></tr></thead>
           <tbody>
-            <tr><td style="color:${ac};font-weight:700;white-space:nowrap;text-align:left">${away}</td>${innNums.map((_,i)=>`<td>${aHide?'–':(aInnings[i]??'–')}</td>`).join('')}<td style="font-weight:700">${as}</td><td>${aH}</td><td>${aE}</td></tr>
-            <tr><td style="color:${hc};font-weight:700;white-space:nowrap;text-align:left">${home}</td>${innNums.map((_,i)=>`<td>${hHide?'–':(hInnings[i]??'–')}</td>`).join('')}<td style="font-weight:700">${hs}</td><td>${hH}</td><td>${hE}</td></tr>
+            <tr><td style="color:${ac};font-weight:700;white-space:nowrap;text-align:left">${esc(away)}</td>${innNums.map((_,i)=>`<td>${esc(aHide?'–':(aInnings[i]??'–'))}</td>`).join('')}<td style="font-weight:700">${esc(as)}</td><td>${esc(aH)}</td><td>${esc(aE)}</td></tr>
+            <tr><td style="color:${hc};font-weight:700;white-space:nowrap;text-align:left">${esc(home)}</td>${innNums.map((_,i)=>`<td>${esc(hHide?'–':(hInnings[i]??'–'))}</td>`).join('')}<td style="font-weight:700">${esc(hs)}</td><td>${esc(hH)}</td><td>${esc(hE)}</td></tr>
           </tbody>
         </table>
       </div>`;
@@ -9166,9 +9200,9 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const batNameCell=(p,teamShort)=>{
       const player=resolveBatter(p,teamShort);
       const nameEl=player
-        ? `<span onclick="openModal('${player.id}')" style="font-weight:600;color:#002D72;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${p.name||''}</span>`
-        : `<span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>`;
-      return `${nameEl}${p.pos?` <span style="font-size:9px;color:#999">${p.pos}</span>`:''}${p.num?` <span style="font-size:9px;color:#bbb">#${p.num}</span>`:''}`;
+        ? `<span onclick="openModal('${jsArg(player.id)}')" style="font-weight:600;color:#002D72;cursor:pointer;text-decoration:underline;text-underline-offset:2px">${esc(p.name||'')}</span>`
+        : `<span style="font-weight:600;color:#1a1a1a">${esc(p.name||'')}</span>`;
+      return `${nameEl}${p.pos?` <span style="font-size:9px;color:#999">${esc(p.pos)}</span>`:''}${p.num?` <span style="font-size:9px;color:#bbb">#${esc(p.num)}</span>`:''}`;
     };
 
     // Basic batting table (default view): Player / AB / H / R / RBI / AVG
@@ -9179,7 +9213,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
         const avg=(p.ab>0)?(h/p.ab).toFixed(3).replace(/^0/,''):'.000';
         return `<tr>
           <td style="text-align:left">${batNameCell(p,teamShort)}</td>
-          <td>${p.ab||0}</td><td>${h}</td><td>${p.r||0}</td><td>${p.rbi||0}</td><td>${avg}</td>
+          <td>${esc(p.ab||0)}</td><td>${esc(h)}</td><td>${esc(p.r||0)}</td><td>${esc(p.rbi||0)}</td><td>${esc(avg)}</td>
         </tr>`;}).join('');
       const tAB=lineup.reduce((s,p)=>s+(p.ab||0),0);
       const tH=lineup.reduce((s,p)=>s+(p.h||((p.s||0)+(p.d||0)+(p.t||0)+(p.hr||0))),0);
@@ -9187,7 +9221,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       const tRBI=lineup.reduce((s,p)=>s+(p.rbi||0),0);
       const totalsRow=`<tr style="border-top:2px solid #e5e7eb;font-weight:700;background:#f9fafb">
         <td style="text-align:left;font-size:11px;letter-spacing:.05em;color:#374151">TOTALS</td>
-        <td>${tAB}</td><td>${tH}</td><td>${tR}</td><td>${tRBI}</td><td></td>
+        <td>${esc(tAB)}</td><td>${esc(tH)}</td><td>${esc(tR)}</td><td>${esc(tRBI)}</td><td></td>
       </tr>`;
       return rows+totalsRow;
     };
@@ -9211,10 +9245,10 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
         const ops=ab>0?opsVal.toFixed(3).replace(/^0/,''):'.000';
         return `<tr>
           <td style="text-align:left">${batNameCell(p,teamShort)}</td>
-          <td>${ab}</td><td>${r}</td><td>${h}</td>
-          <td>${d}</td><td>${t}</td><td>${hr}</td>
-          <td>${rbi}</td><td>${bb}</td><td>${so}</td>
-          <td>${avg}</td><td>${obp}</td><td>${slg}</td><td>${ops}</td>
+          <td>${esc(ab)}</td><td>${esc(r)}</td><td>${esc(h)}</td>
+          <td>${esc(d)}</td><td>${esc(t)}</td><td>${esc(hr)}</td>
+          <td>${esc(rbi)}</td><td>${esc(bb)}</td><td>${esc(so)}</td>
+          <td>${esc(avg)}</td><td>${esc(obp)}</td><td>${esc(slg)}</td><td>${esc(ops)}</td>
         </tr>`;}).join('');
       const sum=(k)=>lineup.reduce((a,p)=>a+(parseInt(p[k])||0),0);
       const tS=lineup.reduce((a,p)=>a+(p.s!=null?(p.s||0):Math.max(0,(p.h||0)-(p.d||0)-(p.t||0)-(p.hr||0))),0);
@@ -9229,10 +9263,10 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       const tOps=tAB>0?(((tH+tBB)/(tAB+tBB||1))+tTB/tAB).toFixed(3).replace(/^0/,''):'.000';
       const totalsRow=`<tr style="border-top:2px solid #e5e7eb;font-weight:700;background:#f9fafb">
         <td style="text-align:left;font-size:11px;letter-spacing:.05em;color:#374151">TOTALS</td>
-        <td>${tAB}</td><td>${tR}</td><td>${tH}</td>
-        <td>${tD}</td><td>${tT}</td><td>${tHR}</td>
-        <td>${tRBI}</td><td>${tBB}</td><td>${tSO}</td>
-        <td>${tAvg}</td><td>${tObp}</td><td>${tSlg}</td><td>${tOps}</td>
+        <td>${esc(tAB)}</td><td>${esc(tR)}</td><td>${esc(tH)}</td>
+        <td>${esc(tD)}</td><td>${esc(tT)}</td><td>${esc(tHR)}</td>
+        <td>${esc(tRBI)}</td><td>${esc(tBB)}</td><td>${esc(tSO)}</td>
+        <td>${esc(tAvg)}</td><td>${esc(tObp)}</td><td>${esc(tSlg)}</td><td>${esc(tOps)}</td>
       </tr>`;
       return rows+totalsRow;
     };
@@ -9242,10 +9276,10 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       const notes=[];
       // 2B
       const dbls=lineup.filter(p=>(p.d||0)>0);
-      if(dbls.length) notes.push(`<b>2B</b> — ${dbls.map(p=>p.d>1?`${p.name} ${p.d}`:`${p.name}`).join(', ')}`);
+      if(dbls.length) notes.push(`<b>2B</b> — ${dbls.map(p=>esc(p.d>1?`${p.name} ${p.d}`:`${p.name}`)).join(', ')}`);
       // 3B
       const trps=lineup.filter(p=>(p.t||0)>0);
-      if(trps.length) notes.push(`<b>3B</b> — ${trps.map(p=>p.t>1?`${p.name} ${p.t}`:`${p.name}`).join(', ')}`);
+      if(trps.length) notes.push(`<b>3B</b> — ${trps.map(p=>esc(p.t>1?`${p.name} ${p.t}`:`${p.name}`)).join(', ')}`);
       // HR — use hr_log if available, else fall back to lineup hr counts
       const hrLog=(boxScore.hr_log||[]).filter(h=>h.team===teamKey);
       if(hrLog.length){
@@ -9257,30 +9291,30 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
           const outsStr=h.outs!=null?`${h.outs} Out`:'';
           const rbi=h.rbi>1?` (${h.rbi} RBI)`:'';
           const details=[inn,off,ron,outsStr].filter(Boolean).join(', ');
-          return `${safeName(h.name)}${rbi}${details?` (${details})`:''}`;
+          return esc(`${safeName(h.name)}${rbi}${details?` (${details})`:''}`);
         });
         notes.push(`<b>HR</b> — ${hrStrs.join('; ')}`);
       } else {
         // Fallback: count HRs from lineup
         const hrPlayers=lineup.filter(p=>(p.hr||0)>0);
-        if(hrPlayers.length) notes.push(`<b>HR</b> — ${hrPlayers.map(p=>p.hr>1?`${p.name} (${p.hr})`:`${p.name}`).join(', ')}`);
+        if(hrPlayers.length) notes.push(`<b>HR</b> — ${hrPlayers.map(p=>esc(p.hr>1?`${p.name} (${p.hr})`:`${p.name}`)).join(', ')}`);
       }
       // RBI
       const rbiPlayers=lineup.filter(p=>(p.rbi||0)>0);
-      if(rbiPlayers.length) notes.push(`<b>RBI</b> — ${rbiPlayers.map(p=>`${p.name} (${p.rbi})`).join(', ')}`);
+      if(rbiPlayers.length) notes.push(`<b>RBI</b> — ${rbiPlayers.map(p=>esc(`${p.name} (${p.rbi})`)).join(', ')}`);
       // 2-out RBI
       const twoOut=(boxScore.two_out_rbi_log||[]).filter(x=>x.team===teamKey);
       if(twoOut.length){
         const agg={};
         twoOut.forEach(x=>{agg[x.name]=(agg[x.name]||0)+x.rbi;});
-        notes.push(`<b>2-Out RBI</b> — ${Object.entries(agg).map(([n,r])=>`${n} (${r})`).join(', ')}`);
+        notes.push(`<b>2-Out RBI</b> — ${Object.entries(agg).map(([n,r])=>esc(`${n} (${r})`)).join(', ')}`);
       }
       // Team LOB
       const lobVal=boxScore.lob?.[teamKey];
-      if(lobVal) notes.push(`<b>Team LOB</b> — ${lobVal}`);
+      if(lobVal) notes.push(`<b>Team LOB</b> — ${esc(lobVal)}`);
       // Team RISP
       const risp=boxScore.risp?.[teamKey];
-      if(risp&&risp.ab>0) notes.push(`<b>RISP</b> — ${risp.h}-for-${risp.ab}`);
+      if(risp&&risp.ab>0) notes.push(`<b>RISP</b> — ${esc(risp.h)}-for-${esc(risp.ab)}`);
       if(!notes.length) return '';
       return `<div class="bs-notes-block">${notes.map(n=>`<div class="bs-note-row">${n}</div>`).join('')}</div>`;
     };
@@ -9292,19 +9326,19 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       const psNotes=pitchers.filter(p=>(p.balls||0)+(p.strikes||0)>0||p.pitches>0).map(p=>{
         const total=p.pitches||(p.balls||0)+(p.strikes||0);
         const k=p.strikes||0;
-        return `${p.name} ${total}-${k}`;
+        return esc(`${p.name} ${total}-${k}`);
       });
       if(psNotes.length) notes.push(`<b>P-S</b> — ${psNotes.join(', ')}`);
       // BF
       const bfNotes=pitchers.map(p=>{
         const outs=(p.outs||0); const h=(p.h||0); const bb=(p.bb||0);
         const bf=outs+h+bb; // outs + hits + walks = BF (approximate)
-        return bf>0?`${p.name} ${bf}`:null;
+        return bf>0?esc(`${p.name} ${bf}`):null;
       }).filter(Boolean);
       if(bfNotes.length) notes.push(`<b>BF</b> — ${bfNotes.join(', ')}`);
       // Errors
       const errVal=teamKey==='away'?aE:hE;
-      if(errVal>0) notes.push(`<b>E</b> — ${errVal}`);
+      if(errVal>0) notes.push(`<b>E</b> — ${esc(errVal)}`);
       if(!notes.length) return '';
       return `<div class="bs-notes-block">${notes.map(n=>`<div class="bs-note-row">${n}</div>`).join('')}</div>`;
     };
@@ -9315,23 +9349,23 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       </div>
       <div id="bs-bat-basic" class="pop-grid2">
         <div>
-          <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away}</div>
+          <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${jsArg(away)}')">${esc(away)}</div>
           ${aScoreOnly ? scoreOnlyMsg(away, ac) : `<table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(aLineup,away)}</tbody></table>${mkBatNotes(aLineup,'away')}`}
         </div>
         <div>
-          <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home}</div>
+          <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${jsArg(home)}')">${esc(home)}</div>
           ${hScoreOnly ? scoreOnlyMsg(home, hc) : `<table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>H</th><th>R</th><th>RBI</th><th>AVG</th></tr></thead><tbody>${mkBatRows(hLineup,home)}</tbody></table>${mkBatNotes(hLineup,'home')}`}
         </div>
       </div>
       <div id="bs-bat-adv" class="pop-grid2" style="display:none">
         <div style="grid-column:1/-1">
-          <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${away}')">${away}</div>
+          <div class="pop-team-lbl" style="color:${ac};cursor:pointer" onclick="closeScPop();goTeam('${jsArg(away)}')">${esc(away)}</div>
           ${aScoreOnly ? scoreOnlyMsg(away, ac) : `<div class="adv-bs-hint">← swipe to see all columns →</div>
           <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(aLineup,away)}</tbody></table></div>
           ${mkBatNotes(aLineup,'away')}`}
         </div>
         <div style="grid-column:1/-1;margin-top:16px">
-          <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${home}')">${home}</div>
+          <div class="pop-team-lbl" style="color:${hc};cursor:pointer" onclick="closeScPop();goTeam('${jsArg(home)}')">${esc(home)}</div>
           ${hScoreOnly ? scoreOnlyMsg(home, hc) : `<div class="adv-bs-hint">← swipe to see all columns →</div>
           <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left">Player</th><th>AB</th><th>R</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>OBP</th><th>SLG</th><th>OPS</th></tr></thead><tbody>${mkBatRowsAdv(hLineup,home)}</tbody></table></div>
           ${mkBatNotes(hLineup,'home')}`}
@@ -9351,7 +9385,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
             const outs = p.outs != null ? p.outs : (p.ip ? (Math.floor(parseFloat(p.ip))*3 + Math.round((parseFloat(p.ip)%1)*10)) : 0);
             const ip=p.ip!=null?p.ip:(Math.floor((p.outs||0)/3)+'.'+(p.outs||0)%3);
             const dec = p.decision;
-            const decBadge = dec ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;background:${dec==='W'?'#dcfce7':dec==='L'?'#fee2e2':'#f3f4f6'};color:${dec==='W'?'#166534':dec==='L'?'#991b1b':'#374151'}">${dec}</span>` : '';
+            const decBadge = dec ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;background:${dec==='W'?'#dcfce7':dec==='L'?'#fee2e2':'#f3f4f6'};color:${dec==='W'?'#166534':dec==='L'?'#991b1b':'#374151'}">${esc(dec)}</span>` : '';
             const kVal = p.k || p.so || 0;
             const pitches = p.pitches || 0;
             const strikesP = p.strikes || 0;
@@ -9360,12 +9394,12 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
             const kBad = outs > 0 && kVal > outs;
             const pcBad = pitches > 0 && strikesP > 0 && strikesP > pitches;
             const kCell = kBad
-              ? `<span style="${warnStyle}" title="Impossible: K (${kVal}) exceeds outs recorded (${outs}). A strikeout is always an out, so this line has bad data.">${kVal} ⚠</span>`
-              : kVal;
+              ? `<span style="${warnStyle}" title="Impossible: K (${esc(kVal)}) exceeds outs recorded (${esc(outs)}). A strikeout is always an out, so this line has bad data.">${esc(kVal)} ⚠</span>`
+              : esc(kVal);
             const pc=pitches||(p.balls||0)+strikesP||null;
             const pcCell = pcBad
-              ? `<span style="${warnStyle}" title="Impossible: strike-pitches (${strikesP}) exceed total pitches (${pitches}).">${pc} ⚠</span>`
-              : (pc||'—');
+              ? `<span style="${warnStyle}" title="Impossible: strike-pitches (${esc(strikesP)}) exceed total pitches (${esc(pitches)}).">${esc(pc)} ⚠</span>`
+              : esc(pc||'—');
             // WHIP = (BB + H) / IP. Compute from outs to avoid .1/.2 string
             // rounding weirdness — 3 outs = 1.0 IP exactly. Show "—" if the
             // pitcher recorded zero outs (WHIP is undefined then).
@@ -9378,8 +9412,8 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
             // for the pitching "BF" notes row in basic mode.
             const bfCell = p.bf != null ? p.bf : (outs + hVal + bbVal);
             return `<tr>
-              <td style="text-align:left;width:1%;white-space:nowrap;padding-right:4px"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${decBadge}</td>
-              <td>${ip}</td><td>${hVal}</td><td>${p.r||0}</td><td>${p.er||p.r||0}</td><td>${bbVal}</td><td>${kCell}</td><td>${whipCell}</td><td>${bfCell}</td><td>${pcCell}</td>
+              <td style="text-align:left;width:1%;white-space:nowrap;padding-right:4px"><span style="font-weight:600;color:#1a1a1a">${esc(p.name||'')}</span>${decBadge}</td>
+              <td>${esc(ip)}</td><td>${esc(hVal)}</td><td>${esc(p.r||0)}</td><td>${esc(p.er||p.r||0)}</td><td>${esc(bbVal)}</td><td>${kCell}</td><td>${esc(whipCell)}</td><td>${esc(bfCell)}</td><td>${pcCell}</td>
             </tr>`;}).join('')
         : `<tr><td colspan="10" style="text-align:center;padding:10px;color:#999">—</td></tr>`;
 
@@ -9392,16 +9426,16 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
             const outs = p.outs != null ? p.outs : (p.ip ? (Math.floor(parseFloat(p.ip))*3 + Math.round((parseFloat(p.ip)%1)*10)) : 0);
             const ip=p.ip!=null?p.ip:(Math.floor((p.outs||0)/3)+'.'+(p.outs||0)%3);
             const dec = p.decision;
-            const decBadge = dec ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;background:${dec==='W'?'#dcfce7':dec==='L'?'#fee2e2':'#f3f4f6'};color:${dec==='W'?'#166534':dec==='L'?'#991b1b':'#374151'}">${dec}</span>` : '';
+            const decBadge = dec ? `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:5px;background:${dec==='W'?'#dcfce7':dec==='L'?'#fee2e2':'#f3f4f6'};color:${dec==='W'?'#166534':dec==='L'?'#991b1b':'#374151'}">${esc(dec)}</span>` : '';
             const kVal = p.k || p.so || 0;
             const hVal = p.h || 0;
             const kBad = outs > 0 && kVal > outs;
             const kCell = kBad
-              ? `<span style="${warnStyle}" title="Impossible: K (${kVal}) exceeds outs recorded (${outs}). A strikeout is always an out, so this line has bad data.">${kVal} ⚠</span>`
-              : kVal;
+              ? `<span style="${warnStyle}" title="Impossible: K (${esc(kVal)}) exceeds outs recorded (${esc(outs)}). A strikeout is always an out, so this line has bad data.">${esc(kVal)} ⚠</span>`
+              : esc(kVal);
             return `<tr>
-              <td style="text-align:left;width:1%;white-space:nowrap;padding-right:4px"><span style="font-weight:600;color:#1a1a1a">${p.name||''}</span>${decBadge}</td>
-              <td>${ip}</td><td>${hVal}</td><td>${p.r||0}</td><td>${p.er||p.r||0}</td><td>${kCell}</td>
+              <td style="text-align:left;width:1%;white-space:nowrap;padding-right:4px"><span style="font-weight:600;color:#1a1a1a">${esc(p.name||'')}</span>${decBadge}</td>
+              <td>${esc(ip)}</td><td>${esc(hVal)}</td><td>${esc(p.r||0)}</td><td>${esc(p.er||p.r||0)}</td><td>${kCell}</td>
             </tr>`;}).join('')
         : `<tr><td colspan="6" style="text-align:center;padding:10px;color:#999">—</td></tr>`;
 
@@ -9413,23 +9447,23 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
       bodyHtml += `<div class="pop-sec-title" style="margin-top:18px">Pitching</div>
         <div id="bs-pitch-basic" class="pop-grid2">
           <div>
-            <div class="pop-team-lbl" style="color:${ac}">${away}</div>
+            <div class="pop-team-lbl" style="color:${ac}">${esc(away)}</div>
             ${aScoreOnly ? scoreOnlyMsg(away, ac) : `<table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>K</th></tr></thead><tbody>${mkPitchRowsBasic(aPitch)}</tbody></table>${mkPitchNotes(aPitch,'away')}`}
           </div>
           <div>
-            <div class="pop-team-lbl" style="color:${hc}">${home}</div>
+            <div class="pop-team-lbl" style="color:${hc}">${esc(home)}</div>
             ${hScoreOnly ? scoreOnlyMsg(home, hc) : `<table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>K</th></tr></thead><tbody>${mkPitchRowsBasic(hPitch)}</tbody></table>${mkPitchNotes(hPitch,'home')}`}
           </div>
         </div>
         <div id="bs-pitch-adv" class="pop-grid2" style="display:none">
           <div style="grid-column:1/-1">
-            <div class="pop-team-lbl" style="color:${ac}">${away}</div>
+            <div class="pop-team-lbl" style="color:${ac}">${esc(away)}</div>
             ${aScoreOnly ? scoreOnlyMsg(away, ac) : `<div class="adv-bs-hint">← swipe to see all columns →</div>
             <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th title="Walks+Hits per Inning Pitched">WHIP</th><th title="Batters Faced">BF</th><th title="Pitch Count">PC</th></tr></thead><tbody>${mkPitchRows(aPitch)}</tbody></table></div>
             ${mkPitchNotes(aPitch,'away')}`}
           </div>
           <div style="grid-column:1/-1;margin-top:16px">
-            <div class="pop-team-lbl" style="color:${hc}">${home}</div>
+            <div class="pop-team-lbl" style="color:${hc}">${esc(home)}</div>
             ${hScoreOnly ? scoreOnlyMsg(home, hc) : `<div class="adv-bs-hint">← swipe to see all columns →</div>
             <div class="adv-bs-scroll"><table class="ptbl"><thead><tr><th style="text-align:left;width:1%;white-space:nowrap">Pitcher</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th title="Walks+Hits per Inning Pitched">WHIP</th><th title="Batters Faced">BF</th><th title="Pitch Count">PC</th></tr></thead><tbody>${mkPitchRows(hPitch)}</tbody></table></div>
             ${mkPitchNotes(hPitch,'home')}`}
@@ -9458,9 +9492,9 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     // Close box score tab pane, open recap tab pane
     bodyHtml += `</div><div id="bstab-recap" style="display:none;padding-top:4px">`;
     if (recapText) {
-      bodyHtml += `<div class="pop-recap">${recapText}</div>`;
+      bodyHtml += `<div class="pop-recap">${esc(recapText)}</div>`;
       if (recap?.stars?.length) {
-        bodyHtml += `<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:#e8a014">★</span> ${s}</div>`).join('')}</div>`;
+        bodyHtml += `<div class="pop-stars"><div class="pop-stars-lbl">Stars of the Game</div>${recap.stars.map(s=>`<div class="pop-star"><span style="color:#e8a014">★</span> ${esc(s)}</div>`).join('')}</div>`;
       }
     } else {
       // Auto-generate recap from box score stats
@@ -9506,7 +9540,10 @@ function generateGamePreview(atm,htm,g){
   const parts=[];
 
   // ── Sentence 1: lede — travel, field, records ──
-  const fieldStr=field?` to ${fieldLink(field, g.addr)}`:'';
+  // Sentences are plain text built from team/game data: esc() the whole
+  // paragraph at the end and splice the field link HTML in afterwards.
+  const _FL='\u0001FIELD\u0001';
+  const fieldStr=field?` to ${_FL}`:'';
   if(hasRecs){
     const aR=`${atm.w}-${atm.l}`, hR=`${htm.w}-${htm.l}`;
     if(aRank===1&&hRank===1){
@@ -9523,7 +9560,7 @@ function generateGamePreview(atm,htm,g){
       parts.push(`${aShort} (${aR}) travels${fieldStr} to square off against ${hShort} (${hR}) in a pivotal mid-season matchup.`);
     }
   } else {
-    parts.push(`${aShort} heads${fieldStr} to take on ${hShort}${field?' at '+fieldLink(field, g.addr):''} in what should be a great game.`);
+    parts.push(`${aShort} heads${fieldStr} to take on ${hShort}${field?' at '+_FL:''} in what should be a great game.`);
   }
 
   // ── Sentence 2: streaks for both teams ──
@@ -9567,7 +9604,7 @@ function generateGamePreview(atm,htm,g){
   const closeIdx=(aShort.charCodeAt(0)+hShort.charCodeAt(0))%closers.length;
   if(parts.length>=2) parts.push(closers[closeIdx]);
 
-  return parts.join(' ');
+  return esc(parts.join(' ')).split(_FL).join(field ? fieldLink(field, g.addr) : '');
 }
 
 function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup,potgName,potgTeam){
@@ -9606,7 +9643,9 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup,po
   const parts=[];
 
   // S1: Result — "FIELD — WinTeam verb LoseTeam score on date."
-  const fieldPfx=field?`${fieldLink(field, null, {label: field.toUpperCase()})} — `:'';
+  // Plain text paragraph: esc() it at the end, then splice in the field link.
+  const _FL='\u0001FIELD\u0001';
+  const fieldPfx=field?`${_FL} — `:'';
   const dt=date?` on ${date}`:'';
   if(tied){
     parts.push(`${fieldPfx}${awayAbbr} and ${homeAbbr} played to a ${as}–${hs} tie${dt}.`);
@@ -9669,7 +9708,7 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup,po
     }
   }
 
-  return parts.join(' ');
+  return esc(parts.join(' ')).split(_FL).join(field ? fieldLink(field, null, {label: String(field).toUpperCase()}) : '');
 }
 
 function switchBoxTab(tab){
@@ -9722,25 +9761,25 @@ function openGameday(away,home,field,time){
     if(!roster.length) return '<tr><td colspan="2" style="color:var(--muted);font-style:italic;padding:12px">No roster available</td></tr>';
     return roster.map(p=>{
       const avgStr=p.avg>0?('.'+String(Math.round(p.avg*1000)).padStart(3,'0')):'—';
-      return `<tr style="cursor:pointer" onclick="openModal('${p.id}')"><td><span style="color:var(--white);font-weight:600">${p.name}</span>${p.num?' <span style="font-size:10px;color:var(--muted2)">#'+p.num+'</span>':''}</td><td style="color:var(--muted2)">${avgStr}</td></tr>`;
+      return `<tr style="cursor:pointer" onclick="openModal('${jsArg(p.id)}')"><td><span style="color:var(--white);font-weight:600">${esc(p.name)}</span>${p.num?' <span style="font-size:10px;color:var(--muted2)">#'+esc(p.num)+'</span>':''}</td><td style="color:var(--muted2)">${esc(avgStr)}</td></tr>`;
     }).join('');
   };
   document.getElementById('scPopContent').innerHTML=`
     <div class="pop-hd">
       <div class="pop-matchup">
-        <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goTeam('${away}')">
-          ${at&&LOGO_TEAMS.has(at.id)?`<img src="logos/${at.id}.png" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,.2))">`:`<div class="pop-abbr" style="color:#1a1a1a">${away}</div>`}
-          <div class="pop-role-lbl">${at?.name||away} · Away</div>
-          ${at && at.w != null ? `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:rgba(0,0,0,.55);letter-spacing:.04em;margin-top:2px">${at.w}-${at.l}${at.ti?'-'+at.ti:''}</div>` : ''}
+        <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goTeam('${jsArg(away)}')">
+          ${at&&LOGO_TEAMS.has(at.id)?`<img src="logos/${esc(at.id)}.png" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,.2))">`:`<div class="pop-abbr" style="color:#1a1a1a">${esc(away)}</div>`}
+          <div class="pop-role-lbl">${esc(at?.name||away)} · Away</div>
+          ${at && at.w != null ? `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:rgba(0,0,0,.55);letter-spacing:.04em;margin-top:2px">${esc(at.w)}-${esc(at.l)}${at.ti?'-'+esc(at.ti):''}</div>` : ''}
         </div>
         <div class="pop-sc-mid">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:#1a1a1a;letter-spacing:.04em;text-align:center">${time}</div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:32px;color:#1a1a1a;letter-spacing:.04em;text-align:center">${esc(time)}</div>
           <div class="pop-badge next">Upcoming</div>
         </div>
-        <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goTeam('${home}')">
-          ${ht&&LOGO_TEAMS.has(ht.id)?`<img src="logos/${ht.id}.png" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,.2))">`:`<div class="pop-abbr" style="color:#1a1a1a">${home}</div>`}
-          <div class="pop-role-lbl">${ht?.name||home} · Home</div>
-          ${ht && ht.w != null ? `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:rgba(0,0,0,.55);letter-spacing:.04em;margin-top:2px">${ht.w}-${ht.l}${ht.ti?'-'+ht.ti:''}</div>` : ''}
+        <div class="pop-team" style="cursor:pointer" onclick="closeScPop();goTeam('${jsArg(home)}')">
+          ${ht&&LOGO_TEAMS.has(ht.id)?`<img src="logos/${esc(ht.id)}.png" style="width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 2px 8px rgba(0,0,0,.2))">`:`<div class="pop-abbr" style="color:#1a1a1a">${esc(home)}</div>`}
+          <div class="pop-role-lbl">${esc(ht?.name||home)} · Home</div>
+          ${ht && ht.w != null ? `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:rgba(0,0,0,.55);letter-spacing:.04em;margin-top:2px">${esc(ht.w)}-${esc(ht.l)}${ht.ti?'-'+esc(ht.ti):''}</div>` : ''}
         </div>
       </div>
       <div class="pop-meta"><span>📍 ${fieldLink(field)}</span></div>
@@ -9749,8 +9788,8 @@ function openGameday(away,home,field,time){
       ${prevText?`<div style="font-size:13px;line-height:1.6;color:rgba(0,0,0,.6);padding:14px 24px 0;border-bottom:1px solid rgba(0,0,0,.07);padding-bottom:14px;margin-bottom:4px">${prevText}</div>`:''}
       <div class="pop-sec-title">Rosters</div>
       <div class="pop-grid2">
-        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${away}')">${at?.name||away}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th></tr></thead><tbody>${mkRows(awayRoster)}</tbody></table></div>
-        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${home}')">${ht?.name||home}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th></tr></thead><tbody>${mkRows(homeRoster)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${jsArg(away)}')">${esc(at?.name||away)}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th></tr></thead><tbody>${mkRows(awayRoster)}</tbody></table></div>
+        <div><div class="pop-team-lbl" style="color:#1a1a1a;cursor:pointer" onclick="closeScPop();goTeam('${jsArg(home)}')">${esc(ht?.name||home)}</div><table class="ptbl"><thead><tr><th>Player</th><th>AVG</th></tr></thead><tbody>${mkRows(homeRoster)}</tbody></table></div>
       </div>
     </div>`;
   openScPop();
@@ -10149,13 +10188,13 @@ function renderStats(){
       // background:rgba(230,172,0,.05) }).
       const isSorted = c.key === sk;
       if(c.key==='_rank') return `<td class="col-rank ${i===0?'r1':i===1?'r2':i===2?'r3':''}">${medal(i)}</td>`;
-      if(c.key==='name')  return `<td class="col-player ${isSorted?'col-pinned':''}" style="cursor:pointer" onclick="goPlayer('${row.id||''}')" title="View ${row.name} stats">${row.name}${row.pos?`<span class="p-pos">${row.pos}</span>`:''}</td>`;
-      if(c.key==='_team') return `<td class="col-team ${isSorted?'col-pinned':''}" style="cursor:pointer" onclick="goTeamPage('${t?.id||''}')"><span class="col-team-dot" style="background:${t?.color||'#888'}"></span><span class="team-name-full">${t?.name||''}</span><span class="team-name-abbr">${t?.short||t?.name||''}</span></td>`;
-      if(c.key==='_w')    return `<td class="${c.cls||''} ${isSorted?'col-pinned':''}" style="color:var(--muted);font-size:12px">${row._w||0}–${row._l||0}</td>`;
+      if(c.key==='name')  return `<td class="col-player ${isSorted?'col-pinned':''}" style="cursor:pointer" onclick="goPlayer('${jsArg(row.id||'')}')" title="View ${esc(row.name)} stats">${esc(row.name)}${row.pos?`<span class="p-pos">${esc(row.pos)}</span>`:''}</td>`;
+      if(c.key==='_team') return `<td class="col-team ${isSorted?'col-pinned':''}" style="cursor:pointer" onclick="goTeamPage('${jsArg(t?.id||'')}')"><span class="col-team-dot" style="background:${esc(t?.color||'#888')}"></span><span class="team-name-full">${esc(t?.name||'')}</span><span class="team-name-abbr">${esc(t?.short||t?.name||'')}</span></td>`;
+      if(c.key==='_w')    return `<td class="${c.cls||''} ${isSorted?'col-pinned':''}" style="color:var(--muted);font-size:12px">${esc(row._w||0)}–${esc(row._l||0)}</td>`;
       const val = row[c.key];
       const isHighlit = c.key===sk && i<3;
       const disp = c.fmt?c.fmt(val??0):(val??'-');
-      return `<td class="${isHighlit?'stat-highlight':''} ${isSorted?'col-pinned':''}">${disp}</td>`;
+      return `<td class="${isHighlit?'stat-highlight':''} ${isSorted?'col-pinned':''}">${esc(disp)}</td>`;
     }).join('')}</tr>`;
   }).join('');
 
@@ -10174,7 +10213,7 @@ function renderStats(){
       histLabelFoot = histTeamsThisYear.map(tid => CAREER_TEAM_META[tid]?.short || tid.toUpperCase()).join(' + ');
     }
   }
-  document.getElementById('statsFoot').innerHTML = `<tr><td colspan="${cols.length}">Sorted by ${col?.label||sk} · ${rows.length} players · ${isHist?`${year} ${histLabelFoot} Season`:(split==='all'?'2026 Year to Date':SPLITS.find(s=>s.val===split)?.label||split)}</td></tr>`;
+  document.getElementById('statsFoot').innerHTML = `<tr><td colspan="${cols.length}">Sorted by ${esc(col?.label||sk)} · ${rows.length} players · ${esc(isHist?`${year} ${histLabelFoot} Season`:(split==='all'?'2026 Year to Date':SPLITS.find(s=>s.val===split)?.label||split))}</td></tr>`;
 
   // Pitching stats: historical years don't have archived pitching
   // data. Previously we hid the Pitching button on historical years
@@ -10189,10 +10228,10 @@ function renderStats(){
   if (isHist && type === 'pitching') {
     const cols = getCols();
     document.getElementById('statsBody').innerHTML = `<tr><td colspan="${cols.length}" style="padding:40px 16px;text-align:center;color:#666">
-      <div style="font-weight:700;font-size:15px;color:#333;margin-bottom:6px">No ${year} pitching stats archived</div>
-      <div style="font-size:13px;line-height:1.5">Pitcher-level stats (IP, WHIP, K, etc.) have only been kept since 2026.<br>Historical ${year} batting stats are still available — tap <b>Hitting</b> above.</div>
+      <div style="font-weight:700;font-size:15px;color:#333;margin-bottom:6px">No ${esc(year)} pitching stats archived</div>
+      <div style="font-size:13px;line-height:1.5">Pitcher-level stats (IP, WHIP, K, etc.) have only been kept since 2026.<br>Historical ${esc(year)} batting stats are still available — tap <b>Hitting</b> above.</div>
     </td></tr>`;
-    document.getElementById('statsFoot').innerHTML = `<tr><td colspan="${cols.length}">Pitching history not available for ${year}</td></tr>`;
+    document.getElementById('statsFoot').innerHTML = `<tr><td colspan="${cols.length}">Pitching history not available for ${esc(year)}</td></tr>`;
   }
 
   // Column-hover highlight: when the user hovers a header, light up every
@@ -10242,23 +10281,23 @@ function buildFilters(){
   }
   fr.innerHTML = `
     <select class="filter-select" id="sel-year" onchange="year=this.value;team='all';renderStats()">
-      ${YEARS.filter(y=>y==='2026'||histYears.includes(y)).map(y=>`<option value="${y}" ${y===year?'selected':''}>${y}</option>`).join('')}
+      ${YEARS.filter(y=>y==='2026'||histYears.includes(y)).map(y=>`<option value="${esc(y)}" ${y===year?'selected':''}>${esc(y)}</option>`).join('')}
     </select>
     ${isHistorical ? `
     <select class="filter-select" id="sel-team" onchange="team=this.value;renderStats()">
       <option value="all">${histTeamsForYear.length > 1 ? 'All Historical Teams' : 'All Teams'}</option>
       ${histTeamsForYear.map(tid => {
         const label = CAREER_TEAM_META[tid]?.name || tid.toUpperCase();
-        return `<option value="${tid}" ${tid===team?'selected':''}>${label}</option>`;
+        return `<option value="${esc(tid)}" ${tid===team?'selected':''}>${esc(label)}</option>`;
       }).join('')}
     </select>
-    <span style="font-size:12px;color:var(--muted);align-self:center;padding:0 8px">${year} historical data</span>
+    <span style="font-size:12px;color:var(--muted);align-self:center;padding:0 8px">${esc(year)} historical data</span>
     ` : `
     <select class="filter-select" id="sel-team" onchange="team=this.value;renderStats()">
       <option value="all">All Teams</option>
-      ${TEAMS.map(t=>`<option value="${t.id}" ${t.id===team?'selected':''}>${t.short||t.name}</option>`).join('')}
+      ${TEAMS.map(t=>`<option value="${esc(t.id)}" ${t.id===team?'selected':''}>${esc(t.short||t.name)}</option>`).join('')}
       <option disabled>── Historical ──</option>
-      ${HIST_TEAMS.map(t=>`<option value="${t.id}" ${t.id===team?'selected':''}>${t.name}</option>`).join('')}
+      ${HIST_TEAMS.map(t=>`<option value="${esc(t.id)}" ${t.id===team?'selected':''}>${esc(t.name)}</option>`).join('')}
     </select>
     <select class="filter-select" id="sel-split" onchange="split=this.value;sortKey=null;renderStats()">
       ${SPLITS.map(s=>`<option value="${s.val}" ${s.val===split?'selected':''}>${s.label}</option>`).join('')}
@@ -10531,10 +10570,10 @@ function buildStandTable(yr, sortKey, sortDir){
     // matches the current short-form data.
     const isWinStreak = r.strk && (r.strk[0] === 'W' || /^won/i.test(r.strk));
     const strk = isWinStreak
-      ?`<span class="streak-w">${r.strk}</span>`
-      :`<span class="streak-l">${r.strk}</span>`;
-    const diff=r.diff>0?`<span class="diff-pos">+${r.diff}</span>`:r.diff<0?`<span class="diff-neg">${r.diff}</span>`:`<span class="diff-zero">0</span>`;
-    const gb=r.gb==='—'?'<span style="color:var(--muted)">—</span>':`<span>${r.gb}</span>`;
+      ?`<span class="streak-w">${esc(r.strk)}</span>`
+      :`<span class="streak-l">${esc(r.strk)}</span>`;
+    const diff=r.diff>0?`<span class="diff-pos">+${esc(r.diff)}</span>`:r.diff<0?`<span class="diff-neg">${esc(r.diff)}</span>`:`<span class="diff-zero">0</span>`;
+    const gb=r.gb==='—'?'<span style="color:var(--muted)">—</span>':`<span>${esc(r.gb)}</span>`;
     const pctBar=r.pct.toFixed(3).replace(/^0\./,'.');
     const rowCls=i<3?`rank-${i+1}`:'';
     // Look up missing fields from team lists (historical rows lack _short/_id/_color)
@@ -10544,12 +10583,12 @@ function buildStandTable(yr, sortKey, sortDir){
     const _tColor=r._color||_atm?.color||'';
     return `<tr class="${rowCls}">
       <td class="rank-cell">${medal(i)||i+1}</td>
-      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" onclick="${_tId?`goPage('team','${_tId}')`:`goTeamByName('${r.t}')`}" title="View ${r.t} team page">${(()=>{const lid=getLogoId(r.t,_tId);return lid?`<span style="display:inline-block;width:42px;height:42px;overflow:hidden;margin-right:8px;flex-shrink:0;vertical-align:middle"><img src="logos/${lid}.png" style="width:100%;height:100%;object-fit:contain;display:block" loading="lazy"></span>`:_tColor?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${_tColor};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''})()}${_tShort?`<span class="stand-name-full" style="vertical-align:middle">${r.t}</span><span class="stand-name-abbr" style="vertical-align:middle">${_tShort}</span>`:`<span style="vertical-align:middle">${r.t}</span>`}</td>
-      <td class="num">${r.w}</td><td class="num">${r.l}</td><td class="num">${r.ti}</td>
-      <td class="num pts-col">${r.pts}</td>
+      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" ${_tId?`onclick="goPage('team','${jsArg(_tId)}')"`:`data-tname="${esc(r.t)}" onclick="goTeamByName(this.dataset.tname)"`} title="View ${esc(r.t)} team page">${(()=>{const lid=getLogoId(r.t,_tId);return lid?`<span style="display:inline-block;width:42px;height:42px;overflow:hidden;margin-right:8px;flex-shrink:0;vertical-align:middle"><img src="logos/${esc(lid)}.png" style="width:100%;height:100%;object-fit:contain;display:block" loading="lazy"></span>`:_tColor?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${esc(_tColor)};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''})()}${_tShort?`<span class="stand-name-full" style="vertical-align:middle">${esc(r.t)}</span><span class="stand-name-abbr" style="vertical-align:middle">${esc(_tShort)}</span>`:`<span style="vertical-align:middle">${esc(r.t)}</span>`}</td>
+      <td class="num">${esc(r.w)}</td><td class="num">${esc(r.l)}</td><td class="num">${esc(r.ti)}</td>
+      <td class="num pts-col">${esc(r.pts)}</td>
       <td class="num">${pctBar}</td>
       <td class="num">${gb}</td>
-      <td class="num">${r.pf}</td><td class="num">${r.pa}</td>
+      <td class="num">${esc(r.pf)}</td><td class="num">${esc(r.pa)}</td>
       <td class="num">${diff}</td>
       <td>${strk}</td>
     </tr>`;

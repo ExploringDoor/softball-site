@@ -443,15 +443,25 @@
           const token = localStorage.getItem('dvsl-notif-token');
           if (!token) { _dvslSetBadge(0); return; }
           try {
+            const headers = { 'Content-Type': 'application/json' };
+            // Send the signed-in user's ID token when the page has one.
+            try {
+              if (typeof window.__dvslIdToken === 'function') {
+                const idt = await window.__dvslIdToken();
+                if (idt) headers.Authorization = 'Bearer ' + idt;
+              }
+            } catch(_) {}
             const resp = await fetch('/api/check-pending-nav', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers,
               body: JSON.stringify({ token }),
             });
             if (!resp.ok) return;
             const data = await resp.json();
             const items = Array.isArray(data && data.items) ? data.items : [];
-            _dvslSetBadge(items.length);
+            // The server always returns `count`; item contents only come back
+            // to the token's own signed-in user.
+            _dvslSetBadge(typeof (data && data.count) === 'number' ? data.count : items.length);
           } catch(_) {}
         }
         function _dvslSetBadge(count) {
@@ -3074,13 +3084,123 @@ import {
   getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, deleteDoc, query, where, serverTimestamp, Timestamp
 } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAnalytics, isSupported as _gaIsSupported } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-analytics.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const firebaseConfig = window.LEAGUE_CONFIG.firebase;
 
 const fbApp = initializeApp(firebaseConfig);
 const db = getFirestore(fbApp);
+const auth = getAuth(fbApp);
 // Firebase Analytics — auto-logs page_view. Quiet failure on unsupported envs.
 _gaIsSupported().then(ok => { if (ok) try { getAnalytics(fbApp); } catch(_){} }).catch(()=>{});
+
+// Old builds saved sign-in passwords in localStorage. Never again: wipe them.
+try {
+  localStorage.removeItem('dvsl-admin-creds');
+  Object.keys(localStorage).filter(k => k.startsWith('dvsl-creds:')).forEach(k => localStorage.removeItem(k));
+} catch(_) {}
+
+// The shared nav script polls /api/check-pending-nav; let it send our ID token.
+window.__dvslIdToken = async () => (auth.currentUser ? auth.currentUser.getIdToken() : null);
+
+// ===== WHO IS SCORING =====
+// Real games need a signed-in admin or a captain of one of the two teams.
+// The rules trust only roles/{uid} (written by the server), so the page
+// reads the same doc to decide what to offer. Practice mode needs nothing
+// and never writes to Firestore.
+const SCORER = {
+  ready: false,        // first auth state + roles resolved
+  user: null,          // Firebase user, or null
+  isAdmin: false,
+  captainTeams: [],    // team ids this account captains
+  urlTeam: null,       // ?team= only when it is a team this account captains
+};
+
+function _firstAuthState() {
+  return new Promise(resolve => {
+    const unsub = onAuthStateChanged(auth, u => { try { unsub(); } catch(_) {} resolve(u); });
+  });
+}
+
+async function _loadScorerRoles(user) {
+  let apiRoles = null;
+  try {
+    const r = await fetch('/api/account', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await user.getIdToken() },
+      body: JSON.stringify({ action: 'refresh-roles' }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j && j.roles) apiRoles = j.roles;
+    else console.warn('[scorer] refresh-roles failed:', r.status, j && (j.message || j.error));
+  } catch (e) { console.warn('[scorer] refresh-roles error:', e); }
+  try {
+    const s = await getDoc(doc(db, 'roles', user.uid));
+    if (s.exists()) return s.data();
+  } catch (e) { console.warn('[scorer] roles read failed:', e); }
+  return apiRoles;
+}
+
+// True only for a real game this account may write. Every Firestore write
+// path checks this, so practice mode and signed-out visitors write nothing.
+function _scorerCanWrite() {
+  if (!G.gameId || G.gameId === 'practice') return false;
+  if (!SCORER.ready || !SCORER.user) return false;
+  if (SCORER.isAdmin) return true;
+  return !!G.scoringTeam && SCORER.captainTeams.includes(G.scoringTeam)
+      && (G.scoringTeam === G.awayTeam?.id || G.scoringTeam === G.homeTeam?.id);
+}
+
+// 'away' | 'home' when scoring as a captain of that side, else null (admin lane).
+function _scorerSide() {
+  if (!G.scoringTeam) return null;
+  return G.scoringTeam === G.awayTeam?.id ? 'away'
+       : G.scoringTeam === G.homeTeam?.id ? 'home' : null;
+}
+
+// Which captain team (if any) this account scores as for a game.
+// Admins without a matching ?team= get the admin lane (null).
+function _scorerTeamFor(awayId, homeId) {
+  const u = SCORER.urlTeam;
+  if (u && (u === awayId || u === homeId)) return u;
+  if (SCORER.isAdmin) return null;
+  return SCORER.captainTeams.find(t => t === awayId || t === homeId) || null;
+}
+
+// Longer-lived message than flashFeedback, for errors on user actions.
+function _scorerToast(msg, kind) {
+  try {
+    let el = document.getElementById('scorer-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'scorer-toast';
+      el.setAttribute('role', 'status');
+      el.style.cssText = 'position:fixed;left:16px;right:16px;bottom:max(24px,env(safe-area-inset-bottom));z-index:6000;max-width:480px;margin:0 auto;padding:14px 16px;border-radius:12px;font-family:"Barlow Condensed",sans-serif;font-size:16px;font-weight:700;line-height:1.35;box-shadow:0 8px 30px rgba(0,0,0,0.5);';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.background = kind === 'error' ? '#7f1d1d' : kind === 'ok' ? '#065f46' : '#1e3a5f';
+    el.style.color = '#fff';
+    el.style.display = 'block';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.display = 'none'; }, kind === 'error' ? 9000 : 4500);
+  } catch(_) { try { alert(msg); } catch(__) {} }
+}
+
+// Stored-script defense: every Firestore/API value (names, numbers, team
+// labels, play text) that lands in innerHTML or an attribute goes through this.
+function esc(v) {
+  if (v == null) return '';
+  return String(v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/`/g, '&#96;');
+}
+
+function _errText(e) {
+  if (!e) return 'unknown error';
+  if (e.code === 'permission-denied') return "this account isn't allowed to change this game";
+  return e.message || e.code || String(e);
+}
 
 // ===== GAME STATE =====
 const G = {
@@ -3120,7 +3240,7 @@ const G = {
   risp: { away: { h: 0, ab: 0 }, home: { h: 0, ab: 0 } },
   pitchCount: { away: {}, home: {} }, // {pitcherKey: {p:0, s:0}}
   errors: { away: [], home: [] },     // [{inning, pos}] — positional errors
-  scoringTeam: null,                  // team ID from ?team= URL param (null = admin)
+  scoringTeam: null,                  // captain team id for this game (null = admin lane); set at START
 };
 
 let gamesData = [];
@@ -3218,7 +3338,7 @@ function renderAll() {
   // Batter bar
   const b = currentBatter();
   const stats = batterStats();
-  const battingLabel = b ? `#${b.num} ${b.name.toUpperCase()}, ${stats.h}-${stats.ab}` : '#— BATTER, 0-0';
+  const battingLabel = b ? `#${esc(b.num)} ${esc(String(b.name || '').toUpperCase())}, ${esc(stats.h)}-${esc(stats.ab)}` : '#— BATTER, 0-0';
   document.getElementById('batter-info').innerHTML = `<span class="ab-label">AB · </span>${battingLabel}`;
 
   // Runners
@@ -3518,7 +3638,7 @@ function showSubRunnerPicker(base, originalRunner) {
     row.className = 'sheet-row';
     row.style.opacity = isOnBase ? '0.4' : '1';
     const nm2 = player.name || ('Player ' + player.num);
-    row.innerHTML = `<div class="sheet-row-content"><div class="sheet-row-label">#${player.num || '?'} ${nm2}</div>${isOnBase ? '<div class="sheet-row-sub" style="color:var(--red)">Already on base</div>' : ''}</div>`;
+    row.innerHTML = `<div class="sheet-row-content"><div class="sheet-row-label">#${esc(player.num || '?')} ${esc(nm2)}</div>${isOnBase ? '<div class="sheet-row-sub" style="color:var(--red)">Already on base</div>' : ''}</div>`;
     if (!isOnBase) {
       row.addEventListener('click', () => {
         snapshotState();
@@ -3974,7 +4094,7 @@ function renderDpSheet() {
     info.className = 'ras-row-info';
     const nm = (entry.runner.name && entry.runner.name !== 'Batter')
       ? entry.runner.name : (entry.runner.num ? '#' + entry.runner.num : 'Runner');
-    info.innerHTML = `<div class="ras-runner-name">${nm}</div><div class="ras-runner-from">${fromLabel(entry.from)}</div>`;
+    info.innerHTML = `<div class="ras-runner-name">${esc(nm)}</div><div class="ras-runner-from">${fromLabel(entry.from)}</div>`;
     const btnsDiv = document.createElement('div');
     btnsDiv.className = 'ras-btns';
     getDpOpts(entry.from, entry.isBatter).forEach(opt => {
@@ -4168,7 +4288,7 @@ function renderRasSheet() {
     info.className = 'ras-row-info';
     const nm = entry.runner.name && entry.runner.name !== 'Batter'
       ? entry.runner.name : (entry.runner.num ? '#' + entry.runner.num : 'Runner');
-    info.innerHTML = `<div class="ras-runner-name">${nm}</div><div class="ras-runner-from">${fromLabel(entry.from)}</div>`;
+    info.innerHTML = `<div class="ras-runner-name">${esc(nm)}</div><div class="ras-runner-from">${fromLabel(entry.from)}</div>`;
     const btnsDiv = document.createElement('div');
     btnsDiv.className = 'ras-btns';
     getRasBtns(entry.from, _rasHitType).forEach(opt => {
@@ -4196,7 +4316,7 @@ function renderRasSheet() {
     ? _rasBatEntry.name : (_rasBatEntry.num ? '#' + _rasBatEntry.num : 'Batter');
   const bInfo = document.createElement('div');
   bInfo.className = 'ras-row-info';
-  bInfo.innerHTML = `<div class="ras-runner-name">${bNm}</div><div class="ras-runner-from">batter</div>`;
+  bInfo.innerHTML = `<div class="ras-runner-name">${esc(bNm)}</div><div class="ras-runner-from">batter</div>`;
   const bBtns = document.createElement('div');
   bBtns.className = 'ras-btns';
   if (_rasHitType === 'fc') {
@@ -4394,7 +4514,7 @@ function endHalfInning() {
   // Stats cells
   function setCell(id, val, lbl) {
     document.getElementById(id).innerHTML =
-      `<div class="hes-val">${val}</div><div class="hes-lbl">${lbl}</div>`;
+      `<div class="hes-val">${esc(val)}</div><div class="hes-lbl">${esc(lbl)}</div>`;
   }
   setCell('hes-runs',    runsThisHalf,         'RUNS');
   setCell('hes-hits',    G.halfInningHits,      'HITS');
@@ -4414,9 +4534,9 @@ function endHalfInning() {
     const row = document.createElement('div');
     row.className = 'half-end-batter-row';
     row.innerHTML = `
-      <div class="half-end-batter-num">#${p.num || '?'}</div>
-      <div class="half-end-batter-name">${p.name || 'Player'}</div>
-      <div class="half-end-batter-stats">${h}-${ab}</div>
+      <div class="half-end-batter-num">#${esc(p.num || '?')}</div>
+      <div class="half-end-batter-name">${esc(p.name || 'Player')}</div>
+      <div class="half-end-batter-stats">${esc(h)}-${esc(ab)}</div>
     `;
     bDiv.appendChild(row);
   });
@@ -5207,7 +5327,7 @@ document.getElementById('menu-reset-game').addEventListener('click', async () =>
   // We AWAIT these so a silent quota/permission failure actually surfaces to
   // the captain — otherwise watch.html keeps showing the pre-reset score
   // (the game_states docs never got deleted).
-  if (G.gameId && G.gameId !== 'practice') {
+  if (_scorerCanWrite()) {
     const gid = G.gameId;
     const failures = [];
     try {
@@ -5216,12 +5336,20 @@ document.getElementById('menu-reset-game').addEventListener('click', async () =>
       // `game_states` instead, and nothing in the codebase ever writes to
       // live_scores. Attempting to delete from it just trips Firestore rules
       // (permission-denied) and makes reset look broken. Skip it.
-      const tries = [
-        ['game_states/'+gid,        () => _del(_doc(db, 'game_states', gid))],
-        ['game_states/'+gid+'_away',() => _del(_doc(db, 'game_states', `${gid}_away`))],
-        ['game_states/'+gid+'_home',() => _del(_doc(db, 'game_states', `${gid}_home`))],
-        ['games/'+gid+' (live=false)', () => _upd(_doc(db, 'games', gid), { live: false, away_score: 0, home_score: 0 })],
-      ];
+      // A captain resets only their own lane; the admin may clear all three.
+      const side = _scorerSide();
+      const tries = side
+        ? [['game_states/'+gid+'_'+side, () => _del(_doc(db, 'game_states', `${gid}_${side}`))]]
+        : [
+            ['game_states/'+gid,        () => _del(_doc(db, 'game_states', gid))],
+            ['game_states/'+gid+'_away',() => _del(_doc(db, 'game_states', `${gid}_away`))],
+            ['game_states/'+gid+'_home',() => _del(_doc(db, 'game_states', `${gid}_home`))],
+          ];
+      // Only the live broadcaster zeroes the public score, and never on a
+      // game that is already final.
+      if (G._isLiveOwner && !G._gameAlreadyFinal) {
+        tries.push(['games/'+gid+' (live=false)', () => _upd(_doc(db, 'games', gid), { live: false, away_score: 0, home_score: 0 })]);
+      }
       await Promise.all(tries.map(([label, fn]) =>
         fn().catch(err => {
           // Ignore not-found — that's a successful delete of a nonexistent doc
@@ -5291,12 +5419,16 @@ function showExitConfirmSheet() {
     div.style.display = 'none';
     // Save game state + box score
     await saveFullState().catch(() => {});
-    await saveBoxScore().catch(() => {});
-    if (G.gameId && G.gameId !== 'practice') {
+    const _bs = await saveBoxScore().catch(e => ({ error: true, message: _errText(e) }));
+    if (_bs && _bs.error) {
+      _scorerToast(`Couldn't save the box score draft (${_bs.message}). Your game is still saved on this phone.`, 'error');
+    }
+    // Only the live broadcaster updates the public score, and never after final.
+    if (_scorerCanWrite() && G._isLiveOwner && !G._gameAlreadyFinal) {
       await updateDoc(doc(db, 'games', G.gameId), {
         live: false,
         away_score: G.awayScore, home_score: G.homeScore
-      }).catch(() => {});
+      }).catch(e => _scorerToast(`Couldn't update the live score (${_errText(e)}).`, 'error'));
     }
     document.getElementById('app').classList.remove('visible');
     document.getElementById('bottom-nav').classList.remove('active');
@@ -5307,16 +5439,24 @@ function showExitConfirmSheet() {
     div.style.display = 'none';
     // Discard: delete saved state + live score so re-entry starts fresh
     try { clearLocalState(); } catch(_) {}
-    if (G.gameId && G.gameId !== 'practice') {
+    if (_scorerCanWrite()) {
       try {
         const { doc: _doc, deleteDoc: _del, updateDoc: _upd } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
-        await _del(_doc(db, 'game_states', G.gameId)).catch(() => {});
-        await _del(_doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
-        await _del(_doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
+        // A captain discards only their own lane; the admin may clear all three.
+        const side = _scorerSide();
+        if (side) {
+          await _del(_doc(db, 'game_states', `${G.gameId}_${side}`)).catch(() => {});
+        } else {
+          await _del(_doc(db, 'game_states', G.gameId)).catch(() => {});
+          await _del(_doc(db, 'game_states', `${G.gameId}_away`)).catch(() => {});
+          await _del(_doc(db, 'game_states', `${G.gameId}_home`)).catch(() => {});
+        }
         // live_scores is a dead collection — watch.html listens to game_states
         // instead, and nothing writes to live_scores. Deleting from it just
         // trips Firestore rules with permission-denied.
-        await _upd(_doc(db, 'games', G.gameId), { live: false, away_score: 0, home_score: 0 }).catch(() => {});
+        if (G._isLiveOwner && !G._gameAlreadyFinal) {
+          await _upd(_doc(db, 'games', G.gameId), { live: false, away_score: 0, home_score: 0 }).catch(() => {});
+        }
       } catch(e) {}
     }
     document.getElementById('app').classList.remove('visible');
@@ -5653,12 +5793,12 @@ function renderPlayLogEntries(container) {
     // ✎ = fix box-score stats only (no state rewind)
     // ↩ = rewind game state to BEFORE this play (erases this play + every newer play)
     row.innerHTML = `
-      <div class="play-log-inning">${entry.inning}</div>
+      <div class="play-log-inning">${esc(entry.inning)}</div>
       <div class="play-log-body">
-        <div class="play-log-player">${entry.team} · ${entry.player}</div>
-        <div class="play-log-desc">${entry.desc}</div>
+        <div class="play-log-player">${esc(entry.team)} · ${esc(entry.player)}</div>
+        <div class="play-log-desc">${esc(entry.desc)}</div>
       </div>
-      <div class="play-log-score">${entry.score}</div>
+      <div class="play-log-score">${esc(entry.score)}</div>
       <button class="play-log-rewind-btn" title="Rewind to before this play (erases this and newer plays)" style="background:none;border:none;color:#e65100;font-size:18px;font-weight:900;padding:4px 8px;cursor:pointer;opacity:.7">↩</button>
       <button class="play-log-edit-btn" title="Fix stats only (no state change)">✎</button>
     `;
@@ -6001,7 +6141,7 @@ function openBoxScoreSheet() {
   // Header row
   const thead = document.createElement('thead');
   let hdrHtml = '<tr><th class="bs-team-th">TEAM</th>';
-  innings.forEach(n => { hdrHtml += `<th>${n}</th>`; });
+  innings.forEach(n => { hdrHtml += `<th>${esc(n)}</th>`; });
   hdrHtml += '<th class="bs-total">R</th></tr>';
   thead.innerHTML = hdrHtml;
   tbl.appendChild(thead);
@@ -6011,12 +6151,12 @@ function openBoxScoreSheet() {
     const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
     const ls = G.linescores[side];
     const totalScore = side === 'away' ? G.awayScore : G.homeScore;
-    let rowHtml = `<tr><td class="bs-team-td">${teamObj.short}</td>`;
+    let rowHtml = `<tr><td class="bs-team-td">${esc(teamObj.short)}</td>`;
     innings.forEach((_, i) => {
       const runs = ls[i] !== undefined ? ls[i] : (i < G.inning - 1 || (i === G.inning - 1 && G.half === 'bottom' && side === 'away') ? 0 : '—');
-      rowHtml += `<td>${runs}</td>`;
+      rowHtml += `<td>${esc(runs)}</td>`;
     });
-    rowHtml += `<td class="bs-total">${totalScore}</td></tr>`;
+    rowHtml += `<td class="bs-total">${esc(totalScore)}</td></tr>`;
     tbody.innerHTML += rowHtml;
   });
   tbl.appendChild(tbody);
@@ -6070,17 +6210,17 @@ function openBoxScoreSheet() {
       totals.ab+=ab; totals.h+=h; totals.doubles+=d; totals.triples+=tri;
       totals.hr+=hr; totals.rbi+=rbi; totals.r+=r; totals.bb+=bb; totals.so+=so;
       btbody.innerHTML += `<tr>
-        <td class="bs-name-td"><span class="bs-player-num">#${p.num}</span>${p.name}</td>
-        <td>${ab}</td><td>${h}</td><td>${d}</td><td>${tri}</td><td>${hr}</td>
-        <td>${rbi}</td><td>${r}</td><td>${bb}</td><td>${so}</td>
+        <td class="bs-name-td"><span class="bs-player-num">#${esc(p.num)}</span>${esc(p.name)}</td>
+        <td>${esc(ab)}</td><td>${esc(h)}</td><td>${esc(d)}</td><td>${esc(tri)}</td><td>${esc(hr)}</td>
+        <td>${esc(rbi)}</td><td>${esc(r)}</td><td>${esc(bb)}</td><td>${esc(so)}</td>
       </tr>`;
     });
 
     // Totals row
     btbody.innerHTML += `<tr class="bs-totals-row">
       <td class="bs-name-td">TOTALS</td>
-      <td>${totals.ab}</td><td>${totals.h}</td><td>${totals.doubles}</td><td>${totals.triples}</td>
-      <td>${totals.hr}</td><td>${totals.rbi}</td><td>${totals.r}</td><td>${totals.bb}</td><td>${totals.so}</td>
+      <td>${esc(totals.ab)}</td><td>${esc(totals.h)}</td><td>${esc(totals.doubles)}</td><td>${esc(totals.triples)}</td>
+      <td>${esc(totals.hr)}</td><td>${esc(totals.rbi)}</td><td>${esc(totals.r)}</td><td>${esc(totals.bb)}</td><td>${esc(totals.so)}</td>
     </tr>`;
 
     bt.appendChild(btbody);
@@ -6104,7 +6244,7 @@ function openBoxScoreSheet() {
       const wrap2 = document.createElement('div'); wrap2.className = 'bs-batting-wrap';
       const pt2 = document.createElement('table'); pt2.className = 'bs-batting-table';
       pt2.innerHTML = `<thead><tr><th class="bs-name-th">PITCHER</th><th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th></tr></thead>
-        <tbody><tr><td class="bs-name-td"><span class="bs-player-num">#${p.num||'?'}</span>${p.name}</td><td>0.0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody>`;
+        <tbody><tr><td class="bs-name-td"><span class="bs-player-num">#${esc(p.num||'?')}</span>${esc(p.name)}</td><td>0.0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody>`;
       wrap2.appendChild(pt2); content.appendChild(wrap2);
       return;
     }
@@ -6127,8 +6267,8 @@ function openBoxScoreSheet() {
       const s = pStats[key];
       const ip = Math.floor(s.outs / 3) + '.' + (s.outs % 3);
       ptbody.innerHTML += `<tr>
-        <td class="bs-name-td"><span class="bs-player-num">#${s.num}</span>${s.name}</td>
-        <td>${ip}</td><td>${s.h||0}</td><td>${s.r||0}</td><td>${s.bb||0}</td><td>${s.k||0}</td>
+        <td class="bs-name-td"><span class="bs-player-num">#${esc(s.num)}</span>${esc(s.name)}</td>
+        <td>${esc(ip)}</td><td>${esc(s.h||0)}</td><td>${esc(s.r||0)}</td><td>${esc(s.bb||0)}</td><td>${esc(s.k||0)}</td>
       </tr>`;
     });
     pt.appendChild(ptbody);
@@ -6179,7 +6319,7 @@ function luRenderGrid(team) {
       card.className = 'lu-card';
       card.dataset.name = p.name;
       card.dataset.num = p.num || '';
-      card.innerHTML = `<div class="lu-cj">${p.num && p.num !== '?' ? '#' + p.num : ''}</div><div class="lu-cn">${p.name}</div>`;
+      card.innerHTML = `<div class="lu-cj">${p.num && p.num !== '?' ? '#' + esc(p.num) : ''}</div><div class="lu-cn">${esc(p.name)}</div>`;
       card.addEventListener('click', () => luTogglePlayer(team, p.name, p.num || ''));
       grid.appendChild(card);
     });
@@ -6207,7 +6347,7 @@ function luRefreshUI(team) {
   const strip = document.getElementById(stripId);
   if (strip) {
     strip.innerHTML = lineup.length
-      ? lineup.map((p, i) => `<div class="lu-chip"><span class="lu-chip-n">${i+1}</span>${p.num && p.num !== '?' ? `<span style="font-size:10px;color:var(--text-muted)">#${p.num}</span> ` : ''}<span>${p.name}</span><span class="lu-pos-badge" onclick="event.stopPropagation();luOpenPosPicker('${team}',${i})">${p.pos||'POS'}</span></div>`).join('')
+      ? lineup.map((p, i) => `<div class="lu-chip"><span class="lu-chip-n">${i+1}</span>${p.num && p.num !== '?' ? `<span style="font-size:10px;color:var(--text-muted)">#${esc(p.num)}</span> ` : ''}<span>${esc(p.name)}</span><span class="lu-pos-badge" onclick="event.stopPropagation();luOpenPosPicker('${team === 'home' ? 'home' : 'away'}',${Number(i)})">${esc(p.pos||'POS')}</span></div>`).join('')
       : '<span style="font-size:11px;color:var(--text-muted);font-style:italic">Tap players to build batting order</span>';
   }
 }
@@ -6239,7 +6379,7 @@ window.luAddCustom = function(team) {
   if (grid) {
     const card = document.createElement('div');
     card.className = 'lu-card'; card.dataset.name = name; card.dataset.num = num;
-    card.innerHTML = `<div class="lu-cj">${num ? '#' + num : ''}</div><div class="lu-cn">${name}</div>`;
+    card.innerHTML = `<div class="lu-cj">${num ? '#' + esc(num) : ''}</div><div class="lu-cn">${esc(name)}</div>`;
     card.addEventListener('click', () => luTogglePlayer(team, name, num));
     grid.appendChild(card);
   }
@@ -6261,7 +6401,7 @@ window.luApplyDummy = function(team) {
       const card = document.createElement('div');
       card.className = 'lu-card lu-sel'; card.dataset.name = p.name; card.dataset.num = '';
       const b = document.createElement('div'); b.className = 'lu-badge'; b.textContent = i + 1;
-      card.innerHTML = `<div class="lu-cj"></div><div class="lu-cn">${p.name}</div>`;
+      card.innerHTML = `<div class="lu-cj"></div><div class="lu-cn">${esc(p.name)}</div>`;
       card.prepend(b);
       card.addEventListener('click', () => luTogglePlayer(team, p.name, ''));
       grid.appendChild(card);
@@ -6279,13 +6419,23 @@ window.luSelectPitcher = function(team) {
   } else {
     list.innerHTML = lineup.map((p, i) => {
       const isCurrent = G.pitchers?.[team]?.name === p.name;
-      return `<div onclick="luSetPitcher('${team}','${p.name.replace(/'/g,"\\'")}','${(p.num||'').replace(/'/g,"\\'")}');luClosePitcherSheet()" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;margin-bottom:6px;background:${isCurrent?'rgba(34,197,94,.15)':'#0f172a'};border:1.5px solid ${isCurrent?'#22c55e':'rgba(255,255,255,.07)'};cursor:pointer">
+      // Names stay out of the handler: the row carries its lineup index and
+      // a listener (below) reads the player from G.lineups.
+      return `<div class="lu-pitcher-pick" data-i="${i}" style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:10px;margin-bottom:6px;background:${isCurrent?'rgba(34,197,94,.15)':'#0f172a'};border:1.5px solid ${isCurrent?'#22c55e':'rgba(255,255,255,.07)'};cursor:pointer">
         <span style="font-size:12px;color:#64748b;width:18px;text-align:center">${i+1}</span>
-        ${p.num&&p.num!=='?'?`<span style="font-size:11px;color:#64748b">#${p.num}</span>`:''}
-        <span style="font-size:15px;font-weight:700;color:white;flex:1">${p.name}</span>
+        ${p.num&&p.num!=='?'?`<span style="font-size:11px;color:#64748b">#${esc(p.num)}</span>`:''}
+        <span style="font-size:15px;font-weight:700;color:white;flex:1">${esc(p.name)}</span>
         ${isCurrent?'<span style="font-size:12px;color:#22c55e">✓ current</span>':''}
       </div>`;
     }).join('');
+    list.querySelectorAll('.lu-pitcher-pick').forEach(row => {
+      row.addEventListener('click', () => {
+        const p = lineup[Number(row.dataset.i)];
+        if (!p) return;
+        window.luSetPitcher(team, p.name, String(p.num || ''));
+        window.luClosePitcherSheet();
+      });
+    });
   }
   document.getElementById('lu-pitcher-sheet').style.display = 'block';
   document.getElementById('lu-pitcher-overlay').style.display = 'block';
@@ -6400,82 +6550,141 @@ document.getElementById('gom-continue-btn').addEventListener('click', () => {
 
 document.getElementById('gom-final-btn').addEventListener('click', async () => {
   const btn = document.getElementById('gom-final-btn');
+  const _restoreBtn = () => { btn.disabled = false; btn.textContent = '✅ Mark Final'; };
+  const _backToSetup = () => {
+    document.getElementById('game-over-overlay').classList.remove('open');
+    document.getElementById('app').classList.remove('visible');
+    document.getElementById('bottom-nav').classList.remove('active');
+    document.getElementById('setup-screen').style.display = 'flex';
+  };
   btn.disabled = true;
   btn.textContent = '⏳ Saving…';
+
+  // Practice: nothing is ever written.
+  if (!G.gameId || G.gameId === 'practice') {
+    _restoreBtn();
+    _scorerToast('Practice game over. Nothing was saved.', 'info');
+    _backToSetup();
+    return;
+  }
+  if (!_scorerCanWrite()) {
+    _restoreBtn();
+    _scorerToast('Sign in as a captain of this game (or the commissioner) to submit it. Your scoring is still saved on this phone.', 'error');
+    return;
+  }
+
   const result = await saveBoxScore(true);
-  if (G.gameId && G.gameId !== 'practice') {
-    // Determine which side this scorer represents (matches saveBoxScore logic)
-    const scoringSide = G.scoringTeam === G.awayTeam.id ? 'away'
-                      : G.scoringTeam === G.homeTeam.id ? 'home'
-                      : null;
+  if (result.error) {
+    _restoreBtn();
+    _scorerToast(`Couldn't save the final box score (${result.message}). Your game is still saved on this phone; try again.`, 'error');
+    return;
+  }
+
+  // Which side this scorer represents (matches saveBoxScore logic)
+  const scoringSide = _scorerSide();
+  let scoresWritten = false;   // this submission set the official score
+  let wentFinal = false;       // ...and that flipped the game to done
+  let lateConflict = false;    // late card that disagrees with the final on record
+  if (scoringSide) {
+    const otherSide = scoringSide === 'away' ? 'home' : 'away';
+    // Fresh read: decide from the game doc itself (first-submit-wins, same
+    // policy as captain.html and the Firestore rules).
+    let g = {};
+    try {
+      const gs = await getDoc(doc(db, 'games', G.gameId));
+      g = gs.exists() ? gs.data() : {};
+    } catch (e) { console.warn('game read before final failed:', e); }
+    const wasDone = g.done === true;
+    const iAlreadySubmitted = g[`score_submitted_${scoringSide}_away`] !== undefined;
+    const otherHasSubmitted = g[`score_submitted_${otherSide}_away`] !== undefined;
+
     // Always record THIS team's submission on the game doc so the captain page
     // can tell who has/hasn't turned in their card (matches captain.html field schema)
-    if (scoringSide) {
-      const submissionUpdate = {};
-      submissionUpdate[`score_submitted_${scoringSide}_away`] = G.awayScore;
-      submissionUpdate[`score_submitted_${scoringSide}_home`] = G.homeScore;
-      submissionUpdate[`score_submitted_${scoringSide}_by`]   =
-        (scoringSide === 'away' ? G.awayTeam.short : G.homeTeam.short) || G.scoringTeam;
-      await updateDoc(doc(db, 'games', G.gameId), submissionUpdate).catch(() => {});
-    }
-    if (result.firstSubmission) {
-      // First submission — set official score and recalc standings
-      await updateDoc(doc(db, 'games', G.gameId), {
+    const gameUpdate = {};
+    gameUpdate[`score_submitted_${scoringSide}_away`] = G.awayScore;
+    gameUpdate[`score_submitted_${scoringSide}_home`] = G.homeScore;
+    gameUpdate[`score_submitted_${scoringSide}_by`]   =
+      (scoringSide === 'away' ? G.awayTeam.short : G.homeTeam.short) || G.scoringTeam;
+
+    if (!wasDone || (iAlreadySubmitted && !otherHasSubmitted)) {
+      // First final (or fixing our own earlier card before the other team
+      // weighed in): set the official score.
+      Object.assign(gameUpdate, {
         done: true, live: false,
-        away_score: G.awayScore, home_score: G.homeScore
-      }).catch(() => {});
-      // Fire final-score push: this is the first + official submission
-      // from the live scorer, matching the captain-side "Final:" push.
-      try {
-        sendScorerFinalPush(G.gameId, G.awayTeam, G.homeTeam, G.awayScore, G.homeScore, G.wk);
-      } catch (e) { console.warn('final push skipped:', e); }
-      recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
-    } else if (scoringSide) {
-      // Second submission — this captain is authoritative for their own team's
-      // total. Overwrite just their side of the game score and flag discrepancy
-      // if the two submitters disagreed.
-      const perSideUpdate = {};
-      perSideUpdate[`${scoringSide}_score`] = scoringSide === 'away' ? G.awayScore : G.homeScore;
-      if (result.hasDiscrepancy) perSideUpdate.has_discrepancy = true;
-      await updateDoc(doc(db, 'games', G.gameId), perSideUpdate).catch(() => {});
-      recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
-    }
-    // Once finalized, stop any further saveScore calls from overwriting the games doc
-    G._gameAlreadyFinal = true;
-    // Clean up ONLY this submitter's own state. Previously this deleted
-    // every game_states doc for the game, which wiped the OTHER captain's
-    // mid-game state and ALSO wiped admin's private lane — so admin had
-    // no way to resume. Fix: delete only the lane this scorer owns.
-    //   - Captain side: game_states/{gameId}_{home|away} only
-    //   - Admin side:   game_states/{gameId} only
-    const _mySideForCleanup = G.scoringTeam === G.awayTeam?.id ? 'away'
-                            : G.scoringTeam === G.homeTeam?.id ? 'home'
-                            : null;
-    if (_mySideForCleanup) {
-      deleteDoc(doc(db, 'game_states', `${G.gameId}_${_mySideForCleanup}`)).catch(() => {});
-      try { localStorage.removeItem(`dvsl_scorer_state_${G.gameId}_${_mySideForCleanup}`); } catch(_){}
+        away_score: G.awayScore, home_score: G.homeScore,
+      });
+      scoresWritten = true;
+      wentFinal = !wasDone;
     } else {
-      // Admin lane (no scoringTeam set) — only the bare gameId doc.
-      deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
-      try { localStorage.removeItem(`dvsl_scorer_state_${G.gameId}`); } catch(_){}
+      // Late card: the final on record stands. Flag a disagreement for the
+      // commissioner instead of overwriting it.
+      const storedAway = (typeof g.away_score === 'number') ? g.away_score : G.awayScore;
+      const storedHome = (typeof g.home_score === 'number') ? g.home_score : G.homeScore;
+      if (storedAway !== G.awayScore || storedHome !== G.homeScore) {
+        gameUpdate.score_conflict = true;
+        lateConflict = true;
+      }
+      if (G._isLiveOwner) gameUpdate.live = false;
+    }
+    try {
+      await updateDoc(doc(db, 'games', G.gameId), gameUpdate);
+    } catch (e) {
+      console.warn('final game update failed:', e);
+      _restoreBtn();
+      _scorerToast(`Your box score was saved, but the game score didn't update (${_errText(e)}). Try Mark Final again, or tell the commissioner.`, 'error');
+      return;
+    }
+    if (scoresWritten) {
+      if (wentFinal) {
+        // Final-score push on the transition to done (matches captain.html).
+        try {
+          sendScorerFinalPush(G.gameId, G.awayTeam, G.homeTeam, G.awayScore, G.homeScore, G.wk);
+        } catch (e) { console.warn('final push skipped:', e); }
+      }
+      recalcStandingsFromAllGames().catch(e => console.warn('standings recalc failed:', e));
     }
   }
-  // Show a brief toast if this was a second submission
-  if (!result.firstSubmission) {
-    const msg = result.hasDiscrepancy
-      ? 'Submitted ✓ — stats discrepancy flagged for admin review'
-      : 'Submitted ✓ — stats matched the first scorer';
-    flashFeedback(msg, result.hasDiscrepancy ? 'var(--orange)' : 'var(--green)');
+  // Once finalized, stop any further saveScore calls from overwriting the games doc
+  G._gameAlreadyFinal = true;
+  // Clean up ONLY this submitter's own state. Previously this deleted
+  // every game_states doc for the game, which wiped the OTHER captain's
+  // mid-game state and ALSO wiped admin's private lane — so admin had
+  // no way to resume. Fix: delete only the lane this scorer owns.
+  //   - Captain side: game_states/{gameId}_{home|away} only
+  //   - Admin side:   game_states/{gameId} only
+  if (scoringSide) {
+    deleteDoc(doc(db, 'game_states', `${G.gameId}_${scoringSide}`)).catch(() => {});
+    try { localStorage.removeItem(`dvsl_scorer_state_${G.gameId}_${scoringSide}`); } catch(_){}
+  } else {
+    // Admin lane (no scoringTeam set) — only the bare gameId doc.
+    deleteDoc(doc(db, 'game_states', G.gameId)).catch(() => {});
+    try { localStorage.removeItem(`dvsl_scorer_state_${G.gameId}`); } catch(_){}
+  }
+
+  // Tell the scorer what happened when this wasn't the game-ending card
+  if (!wentFinal) {
+    let msg, color;
+    if (!scoringSide) {
+      msg = 'Saved ✓ — admin lane (publish it from admin.html)'; color = 'var(--green)';
+    } else if (result.adminLocked) {
+      msg = 'Submitted ✓ — the commissioner already published this box score'; color = 'var(--gold)';
+    } else if (lateConflict || result.hasDiscrepancy) {
+      msg = 'Submitted ✓ — discrepancy flagged for admin review'; color = 'var(--orange)';
+    } else if (scoresWritten) {
+      msg = 'Score updated ✓ — your earlier card was replaced'; color = 'var(--green)';
+    } else {
+      msg = 'Submitted ✓ — stats matched the first scorer'; color = 'var(--green)';
+    }
+    flashFeedback(msg, color);
     await new Promise(r => setTimeout(r, 2200));
   }
-  document.getElementById('game-over-overlay').classList.remove('open');
-  document.getElementById('app').classList.remove('visible');
-  document.getElementById('bottom-nav').classList.remove('active');
-  document.getElementById('setup-screen').style.display = 'flex';
+  _restoreBtn();
+  _backToSetup();
 });
 
 // Recalculate standings by reading all done games from Firestore
 async function recalcStandingsFromAllGames() {
+  if (!_scorerCanWrite()) return;
   const { collection, getDocs, query, where, updateDoc: upd, doc: firestoreDoc } = await import('https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js');
   const gamesSnap = await getDocs(query(collection(db, 'games'), where('done', '==', true)));
   const teamsSnap = await getDocs(collection(db, 'teams'));
@@ -6489,10 +6698,13 @@ async function recalcStandingsFromAllGames() {
   // for correct streaks. (Same fix as captain.html.)
   const _dk = g => (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) ? g.date_iso : String(g.wk||0).padStart(4,'0');
   const doneGames = gamesSnap.docs.map(d => d.data())
-    .filter(g => !g.ppd && !g.rained_out && g.away_score != null && g.home_score != null)
+    .filter(g => !g.ppd && !g.rained_out && g.away_score != null && g.home_score != null
+              && g.away_score !== '' && g.home_score !== ''
+              && Number.isFinite(Number(g.away_score)) && Number.isFinite(Number(g.home_score)))
     .sort((a,b) => _dk(a).localeCompare(_dk(b)));
   doneGames.forEach(g => {
-    const as = g.away_score, hs = g.home_score;
+    // Scores may be stored as digit strings; always do the math on numbers.
+    const as = Number(g.away_score), hs = Number(g.home_score);
     if (stats[g.away]) {
       const s = stats[g.away]; s.rs += as; s.ra += hs;
       if (as > hs) { s.w++; s.results.push('W'); }
@@ -6525,13 +6737,15 @@ async function recalcStandingsFromAllGames() {
     s.gb = diff === 0 ? '-' : (diff / 2).toString();
   });
 
+  let failed = 0;
   for (const t of allTeams) {
     const s = stats[t.id]; if (!s) continue;
     await upd(firestoreDoc(db, 'teams', t.id), {
       w: s.w, l: s.l, ti: s.ti, pct: parseFloat(s.pct.toFixed(3)),
       rs: s.rs, ra: s.ra, gb: s.gb, streak: s.streak
-    }).catch(() => {});
+    }).catch(e => { failed++; console.warn(`standings update failed for ${t.id}:`, e); });
   }
+  if (failed) console.warn(`[scorer] standings recalc: ${failed} team update(s) failed; the commissioner's recalc will catch up.`);
 }
 
 // ===== BOX SCORE HTML BUILDER (shared by PDF export & share sheet) =====
@@ -6555,9 +6769,9 @@ function buildBoxScoreHTML(autoprint) {
             rbi=s.rbi||0, r=s.r||0, bb=s.bb||0, so=s.so||0;
       tot.ab+=ab; tot.h+=h; tot.doubles+=d; tot.triples+=tri; tot.hr+=hr;
       tot.rbi+=rbi; tot.r+=r; tot.bb+=bb; tot.so+=so;
-      return `<tr><td>#${p.num} ${p.name}</td><td>${ab}</td><td>${h}</td><td>${d}</td><td>${tri}</td><td>${hr}</td><td>${rbi}</td><td>${r}</td><td>${bb}</td><td>${so}</td></tr>`;
+      return `<tr><td>#${esc(p.num)} ${esc(p.name)}</td><td>${esc(ab)}</td><td>${esc(h)}</td><td>${esc(d)}</td><td>${esc(tri)}</td><td>${esc(hr)}</td><td>${esc(rbi)}</td><td>${esc(r)}</td><td>${esc(bb)}</td><td>${esc(so)}</td></tr>`;
     }).join('');
-    rows += `<tr class="totals"><td>TOTALS</td><td>${tot.ab}</td><td>${tot.h}</td><td>${tot.doubles}</td><td>${tot.triples}</td><td>${tot.hr}</td><td>${tot.rbi}</td><td>${tot.r}</td><td>${tot.bb}</td><td>${tot.so}</td></tr>`;
+    rows += `<tr class="totals"><td>TOTALS</td><td>${esc(tot.ab)}</td><td>${esc(tot.h)}</td><td>${esc(tot.doubles)}</td><td>${esc(tot.triples)}</td><td>${esc(tot.hr)}</td><td>${esc(tot.rbi)}</td><td>${esc(tot.r)}</td><td>${esc(tot.bb)}</td><td>${esc(tot.so)}</td></tr>`;
     return rows;
   }
 
@@ -6569,16 +6783,16 @@ function buildBoxScoreHTML(autoprint) {
     if (keys.length === 0) {
       const p = G.pitchers[side];
       if (!p) return '';
-      return `<h2>${teamName.toUpperCase()} Pitching</h2>
+      return `<h2>${esc(String(teamName || '').toUpperCase())} Pitching</h2>
   <table><thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th></tr></thead>
-  <tbody><tr><td>#${p.num||'?'} ${p.name}</td><td>—</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody></table>`;
+  <tbody><tr><td>#${esc(p.num||'?')} ${esc(p.name)}</td><td>—</td><td>0</td><td>0</td><td>0</td><td>0</td></tr></tbody></table>`;
     }
     const rows = keys.map(k => {
       const s = pStats[k];
       const ip = Math.floor(s.outs/3) + '.' + (s.outs%3);
-      return `<tr><td>#${s.num||'?'} ${s.name}</td><td>${ip}</td><td>${s.h||0}</td><td>${s.r||0}</td><td>${s.bb||0}</td><td>${s.k||0}</td></tr>`;
+      return `<tr><td>#${esc(s.num||'?')} ${esc(s.name)}</td><td>${esc(ip)}</td><td>${esc(s.h||0)}</td><td>${esc(s.r||0)}</td><td>${esc(s.bb||0)}</td><td>${esc(s.k||0)}</td></tr>`;
     }).join('');
-    return `<h2>${teamName.toUpperCase()} Pitching</h2>
+    return `<h2>${esc(String(teamName || '').toUpperCase())} Pitching</h2>
   <table><thead><tr><th>Pitcher</th><th>IP</th><th>H</th><th>R</th><th>BB</th><th>K</th></tr></thead>
   <tbody>${rows}</tbody></table>`;
   }
@@ -6591,13 +6805,13 @@ function buildBoxScoreHTML(autoprint) {
     return notYetPlayed ? '' : 0;
   }
 
-  const lsInnings = innings.map(n => `<th>${n}</th>`).join('');
-  const awayLS = innings.map((_, i) => `<td>${lsCell('away', i)}</td>`).join('');
-  const homeLS = innings.map((_, i) => `<td>${lsCell('home', i)}</td>`).join('');
+  const lsInnings = innings.map(n => `<th>${esc(n)}</th>`).join('');
+  const awayLS = innings.map((_, i) => `<td>${esc(lsCell('away', i))}</td>`).join('');
+  const homeLS = innings.map((_, i) => `<td>${esc(lsCell('home', i))}</td>`).join('');
   const printScript = autoprint ? '<script>window.onload=function(){window.print();}<\/script>' : '';
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Box Score — ${away} vs ${home}</title>
+  <title>Box Score — ${esc(away)} vs ${esc(home)}</title>
   <style>
     body { font-family: Arial, sans-serif; font-size: 13px; margin: 24px; color: #111; }
     h1 { font-size: 20px; margin-bottom: 4px; }
@@ -6611,17 +6825,17 @@ function buildBoxScoreHTML(autoprint) {
     @media print { body { margin: 12px; } }
   </style></head><body>
   <h1>DVSL Box Score</h1>
-  <div class="final">${away} ${G.awayScore} — ${home} ${G.homeScore}</div>
+  <div class="final">${esc(away)} ${esc(G.awayScore)} — ${esc(home)} ${esc(G.homeScore)}</div>
   <h2>Linescore</h2>
   <table><thead><tr><th>Team</th>${lsInnings}<th>R</th></tr></thead>
   <tbody>
-    <tr><td>${away}</td>${awayLS}<td><b>${G.awayScore}</b></td></tr>
-    <tr><td>${home}</td>${homeLS}<td><b>${G.homeScore}</b></td></tr>
+    <tr><td>${esc(away)}</td>${awayLS}<td><b>${esc(G.awayScore)}</b></td></tr>
+    <tr><td>${esc(home)}</td>${homeLS}<td><b>${esc(G.homeScore)}</b></td></tr>
   </tbody></table>
-  <h2>${away.toUpperCase()} Batting</h2>
+  <h2>${esc(String(away || '').toUpperCase())} Batting</h2>
   <table><thead><tr><th>Player</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>K</th></tr></thead>
   <tbody>${buildBattingRows('away')}</tbody></table>
-  <h2>${home.toUpperCase()} Batting</h2>
+  <h2>${esc(String(home || '').toUpperCase())} Batting</h2>
   <table><thead><tr><th>Player</th><th>AB</th><th>H</th><th>2B</th><th>3B</th><th>HR</th><th>RBI</th><th>R</th><th>BB</th><th>K</th></tr></thead>
   <tbody>${buildBattingRows('home')}</tbody></table>
   ${buildPitchingSection('away')}
@@ -6739,7 +6953,7 @@ function renderStatsPanel() {
   const tbl = document.createElement('table');
   tbl.className = 'bs-table';
   let hdrHtml = '<thead><tr><th class="bs-team-th">TEAM</th>';
-  innings.forEach(n => { hdrHtml += `<th>${n}</th>`; });
+  innings.forEach(n => { hdrHtml += `<th>${esc(n)}</th>`; });
   hdrHtml += '<th class="bs-total">R</th></tr></thead>';
   tbl.innerHTML = hdrHtml;
   const tbody = document.createElement('tbody');
@@ -6747,12 +6961,12 @@ function renderStatsPanel() {
     const teamObj = side === 'away' ? G.awayTeam : G.homeTeam;
     const ls = G.linescores[side];
     const totalScore = side === 'away' ? G.awayScore : G.homeScore;
-    let rowHtml = `<tr><td class="bs-team-td">${teamObj.short}</td>`;
+    let rowHtml = `<tr><td class="bs-team-td">${esc(teamObj.short)}</td>`;
     innings.forEach((_, i) => {
       const runs = ls[i] !== undefined ? ls[i] : (i < G.inning - 1 || (i === G.inning - 1 && G.half === 'bottom' && side === 'away') ? 0 : '—');
-      rowHtml += `<td>${runs}</td>`;
+      rowHtml += `<td>${esc(runs)}</td>`;
     });
-    rowHtml += `<td class="bs-total">${totalScore}</td></tr>`;
+    rowHtml += `<td class="bs-total">${esc(totalScore)}</td></tr>`;
     tbody.innerHTML += rowHtml;
   });
   tbl.appendChild(tbody);
@@ -6795,15 +7009,15 @@ function renderStatsPanel() {
       const rowStyle = isAtBat ? ' style="background:rgba(245,200,66,.13);box-shadow:inset 2px 0 0 #F5C842;"' : '';
       const namePrefix = isAtBat ? '<span style="color:#F5C842;margin-right:4px;font-size:11px;">▶</span>' : '';
       btbody.innerHTML += `<tr${rowStyle}>
-        <td class="bs-name-td">${namePrefix}<span class="bs-player-num">#${p.num}</span>${p.name}</td>
-        <td>${ab}</td><td>${h}</td><td>${d}</td><td>${tri}</td><td>${hr}</td>
-        <td>${rbi}</td><td>${r}</td><td>${bb}</td><td>${so}</td>
+        <td class="bs-name-td">${namePrefix}<span class="bs-player-num">#${esc(p.num)}</span>${esc(p.name)}</td>
+        <td>${esc(ab)}</td><td>${esc(h)}</td><td>${esc(d)}</td><td>${esc(tri)}</td><td>${esc(hr)}</td>
+        <td>${esc(rbi)}</td><td>${esc(r)}</td><td>${esc(bb)}</td><td>${esc(so)}</td>
       </tr>`;
     });
     btbody.innerHTML += `<tr class="bs-totals-row">
       <td class="bs-name-td">TOTALS</td>
-      <td>${tot.ab}</td><td>${tot.h}</td><td>${tot.doubles}</td><td>${tot.triples}</td>
-      <td>${tot.hr}</td><td>${tot.rbi}</td><td>${tot.r}</td><td>${tot.bb}</td><td>${tot.so}</td>
+      <td>${esc(tot.ab)}</td><td>${esc(tot.h)}</td><td>${esc(tot.doubles)}</td><td>${esc(tot.triples)}</td>
+      <td>${esc(tot.hr)}</td><td>${esc(tot.rbi)}</td><td>${esc(tot.r)}</td><td>${esc(tot.bb)}</td><td>${esc(tot.so)}</td>
     </tr>`;
     bt.appendChild(btbody);
     bsWrap.appendChild(bt);
@@ -6844,14 +7058,14 @@ function renderStatsPanel() {
       const namePrefix = isCurrent ? '<span style="color:#F5C842;margin-right:4px;font-size:11px;">⚾</span>' : '';
       const ipStr = Math.floor(s.outs/3) + '.' + (s.outs%3);
       ptbody.innerHTML += `<tr${rowStyle}>
-        <td class="bs-name-td">${namePrefix}<span class="bs-player-num">#${s.num||'?'}</span>${s.name}</td>
-        <td>${ipStr}</td><td>${s.h||0}</td><td>${s.r||0}</td><td>${s.bb||0}</td><td>${s.k||0}</td><td>${pitches}</td>
+        <td class="bs-name-td">${namePrefix}<span class="bs-player-num">#${esc(s.num||'?')}</span>${esc(s.name)}</td>
+        <td>${esc(ipStr)}</td><td>${esc(s.h||0)}</td><td>${esc(s.r||0)}</td><td>${esc(s.bb||0)}</td><td>${esc(s.k||0)}</td><td>${esc(pitches)}</td>
       </tr>`;
     });
     if (pitcherKeys.length > 1) {
       ptbody.innerHTML += `<tr class="bs-totals-row">
         <td class="bs-name-td">TOTALS</td>
-        <td>${Math.floor(totIP/3)}.${totIP%3}</td><td>${totH}</td><td>${totR}</td><td>${totBB}</td><td>${totK}</td><td>${totP}</td>
+        <td>${esc(Math.floor(totIP/3))}.${esc(totIP%3)}</td><td>${esc(totH)}</td><td>${esc(totR)}</td><td>${esc(totBB)}</td><td>${esc(totK)}</td><td>${esc(totP)}</td>
       </tr>`;
     }
     pt.appendChild(ptbody);
@@ -6865,44 +7079,58 @@ async function loadGames() {
   try {
     const gamesSnap = await getDocs(collection(db, 'games'));
     const teamsSnap = await getDocs(collection(db, 'teams'));
-    // Pull existing score submissions so we can hide games this team has already submitted
-    let submittedSet = new Set();
-    try {
-      const subsSnap = await getDocs(collection(db, 'score_submissions'));
-      subsSnap.forEach(d => submittedSet.add(d.id)); // doc ids look like `${gameId}_${side}`
-    } catch (e) { console.warn('score_submissions read failed:', e); }
-
-    teamsSnap.forEach(d => { teamsData[d.id] = { id: d.id, ...d.data() }; });
 
     // Read URL params early so we can filter the dropdown around them.
-    // ?team=  → captain-mode: this scorer represents that team
+    // ?team=  → captain-mode, honored only for a team this account captains
     // ?from=admin or ?resume=1 → admin wants finalized games visible too,
     //   so they can resume their private admin lane after a captain
     //   already submitted final (which flipped games.done = true).
     const urlParams = new URLSearchParams(window.location.search);
-    const urlTeamId = urlParams.get('team');
-    const adminResumeMode = urlParams.get('from') === 'admin' || urlParams.get('resume') === '1';
+    const adminResumeMode = SCORER.isAdmin && (urlParams.get('from') === 'admin' || urlParams.get('resume') === '1');
+
+    // Pull existing score submissions so we can hide games this team has
+    // already submitted. The rules only allow a captain to list lanes of
+    // their own team (where team_id == T); admins can list everything.
+    let submittedSet = new Set();
+    try {
+      // Every team this account captains: _scorerTeamFor can fall back to any
+      // of them even when ?team= names one, so each one's lanes must be known.
+      const scopeTeams = SCORER.captainTeams;
+      if (SCORER.isAdmin && !SCORER.urlTeam) {
+        const subsSnap = await getDocs(collection(db, 'score_submissions'));
+        subsSnap.forEach(d => submittedSet.add(d.id)); // doc ids look like `${gameId}_${side}`
+      } else {
+        for (const t of scopeTeams) {
+          const subsSnap = await getDocs(query(collection(db, 'score_submissions'), where('team_id', '==', t)));
+          subsSnap.forEach(d => submittedSet.add(d.id));
+        }
+      }
+    } catch (e) { console.warn('score_submissions read failed:', e); }
+
+    teamsSnap.forEach(d => { teamsData[d.id] = { id: d.id, ...d.data() }; });
 
     gamesData = [];
     gamesSnap.forEach(d => {
       const data = d.data();
       const awayId = data.away || data.away_team_id || data.away_id || '';
       const homeId = data.home || data.home_team_id || data.home_id || '';
-      // Determine which side this scorer is on for THIS game (if any)
-      const mySide = urlTeamId === awayId ? 'away'
-                   : urlTeamId === homeId ? 'home'
-                   : null;
-      if (urlTeamId && mySide) {
+      // Which captain team (if any) this account scores as for THIS game
+      const myTeam = _scorerTeamFor(awayId, homeId);
+      const mySide = myTeam === awayId ? 'away' : myTeam === homeId ? 'home' : null;
+      if (myTeam && mySide) {
         // Captain-context: only hide if THIS team already submitted their scorecard
         if (submittedSet.has(`${d.id}_${mySide}`)) return;
         gamesData.push({ id: d.id, ...data, _alreadyFinal: data.done === true });
+      } else if (!SCORER.isAdmin) {
+        // Not a side this account captains, so it can't score this game.
+        return;
       } else if (adminResumeMode) {
         // Admin-resume mode: include finalized games so admin can re-enter
         // their private admin lane (game_states/{gameId}) after a captain
         // submission flipped the public game to done.
         gamesData.push({ id: d.id, ...data, _alreadyFinal: data.done === true });
       } else {
-        // No team context (admin/manual) — keep legacy behavior: hide done games
+        // Admin lane without resume — keep legacy behavior: hide done games
         if (data.done) return;
         gamesData.push({ id: d.id, ...data, _alreadyFinal: false });
       }
@@ -6912,7 +7140,7 @@ async function loadGames() {
     const loading = document.getElementById('setup-loading');
 
     if (gamesData.length === 0) {
-      loading.textContent = 'No active games found.';
+      loading.textContent = SCORER.isAdmin ? 'No active games found.' : 'No games for your team to score right now.';
       return;
     }
 
@@ -6933,7 +7161,7 @@ async function loadGames() {
       const week = wk ? `Wk${wk}: ` : '';
       const dateStr = game.date ? ` · ${game.date}` : '';
       const finalMark = game._alreadyFinal
-        ? (adminResumeMode ? ' ✓ Final (resume admin lane)' : ' ✓ (other team finalized — submit your card)')
+        ? (_scorerTeamFor(awayId, homeId) ? ' ✓ (other team finalized — submit your card)' : ' ✓ Final (resume admin lane)')
         : '';
       opt.textContent = `${week}${awayName} @ ${homeName}${dateStr}${finalMark}`;
       select.appendChild(opt);
@@ -6941,16 +7169,17 @@ async function loadGames() {
 
     document.getElementById('start-btn').disabled = false;
 
-    // Apply ?team= UI affordances (param itself was already read above)
-    if (urlTeamId) {
-      G.scoringTeam = urlTeamId;
+    // Show which team this scorer represents (captain lane only)
+    const badgeTeam = SCORER.urlTeam
+      || (!SCORER.isAdmin && SCORER.captainTeams.length === 1 ? SCORER.captainTeams[0] : null);
+    if (badgeTeam) {
       // Show a small badge on setup screen so scorer knows which team they're representing
       const existing = document.getElementById('scoring-as-badge');
       if (!existing) {
         const badge = document.createElement('div');
         badge.id = 'scoring-as-badge';
         badge.style.cssText = 'background:rgba(255,215,0,0.18);border:1px solid rgba(255,215,0,0.4);color:#FFD700;font-family:"Barlow Condensed",sans-serif;font-size:14px;font-weight:700;letter-spacing:1px;padding:7px 18px;border-radius:8px;text-align:center;';
-        const tName = (teamsData[urlTeamId] && (teamsData[urlTeamId].short || teamsData[urlTeamId].name)) || urlTeamId.toUpperCase();
+        const tName = (teamsData[badgeTeam] && (teamsData[badgeTeam].short || teamsData[badgeTeam].name)) || badgeTeam.toUpperCase();
         badge.textContent = `⚾ SCORING AS: ${tName}`;
         const card = document.getElementById('setup-card');
         if (card) card.insertAdjacentElement('afterend', badge);
@@ -6958,7 +7187,7 @@ async function loadGames() {
     }
 
     // Auto-start if game ID passed in URL (e.g. from admin/captain Score Live button)
-    const urlGameId = new URLSearchParams(window.location.search).get('game');
+    const urlGameId = urlParams.get('game');
     if (urlGameId && gamesData.find(g => g.id === urlGameId)) {
       select.value = urlGameId;
       document.getElementById('start-btn').click();
@@ -6967,6 +7196,37 @@ async function loadGames() {
     console.error('Error loading games:', err);
     document.getElementById('setup-loading').textContent = 'Error loading games. Check connection.';
   }
+}
+
+// Shown instead of the game picker when nobody (or an account with no
+// scoring role) is signed in. Practice mode stays available.
+function showScorerSignInRequired(user) {
+  const card = document.getElementById('setup-card');
+  if (!card) return;
+  card.textContent = '';
+  const label = document.createElement('label');
+  label.textContent = user ? 'Not a scorer account' : 'Sign in required';
+  const msg = document.createElement('div');
+  msg.className = 'loading-text';
+  msg.style.lineHeight = '1.45';
+  msg.textContent = user
+    ? `You're signed in as ${user.email || 'this account'}, which isn't a captain or the commissioner. Live scoring a real game needs a captain of one of the two teams, or the commissioner.`
+    : 'Live scoring a real game needs a signed-in captain of one of the two teams, or the commissioner. Sign in, then open the scorer again from your page.';
+  const linkStyle = 'display:block;text-align:center;text-decoration:none;';
+  const cap = document.createElement('a');
+  cap.className = 'btn-primary';
+  cap.href = '/captain.html';
+  cap.style.cssText = linkStyle;
+  cap.textContent = 'CAPTAIN SIGN IN';
+  const adm = document.createElement('a');
+  adm.href = '/admin.html';
+  adm.style.cssText = linkStyle + 'color:var(--text-muted);font-family:"Barlow Condensed",sans-serif;font-size:15px;font-weight:700;letter-spacing:1px;';
+  adm.textContent = 'Commissioner sign in';
+  const note = document.createElement('div');
+  note.className = 'loading-text';
+  note.style.fontSize = '13px';
+  note.textContent = 'Just want to try it? Practice Mode works without signing in and saves nothing.';
+  card.append(label, msg, cap, adm, note);
 }
 
 async function loadRosters(awayTeamId, homeTeamId) {
@@ -7023,12 +7283,11 @@ async function loadRosters(awayTeamId, homeTeamId) {
 //   fighting over the same live broadcast.
 async function saveScore() {
   if (!G.gameId || G.gameId === 'practice') return;
+  if (!_scorerCanWrite()) { saveLocalState(); return; }
   try {
     if (G._gameAlreadyFinal) { saveFullState(); return; }
 
-    const myRole = G.scoringTeam === G.awayTeam?.id ? 'away'
-                 : G.scoringTeam === G.homeTeam?.id ? 'home'
-                 : 'admin';
+    const myRole = _scorerSide() || 'admin';
 
     // Claim or check the live-watch lock atomically: read the games doc,
     // claim if unowned, defer if owned by someone else.
@@ -7103,8 +7362,7 @@ async function saveScore() {
 // plain gameId for admin.
 function stateDocKey() {
   if (!G.gameId) return null;
-  const side = G.scoringTeam === G.awayTeam?.id ? 'away'
-             : G.scoringTeam === G.homeTeam?.id ? 'home' : null;
+  const side = _scorerSide();
   return side ? `${G.gameId}_${side}` : G.gameId;
 }
 
@@ -7182,7 +7440,7 @@ async function saveFullState() {
   saveLocalState();
   _scorerSaveStatus('saving');
 
-  if (!G.gameId || G.gameId === 'practice') { _scorerSaveStatus('local'); return; }
+  if (!G.gameId || G.gameId === 'practice' || !_scorerCanWrite()) { _scorerSaveStatus('local'); return; }
   try {
     const payload = buildStatePayload();
     payload.savedAt = serverTimestamp();
@@ -7223,7 +7481,9 @@ function _scorerSaveStatus(kind) {
 
 // ===== SAVE BOX SCORE =====
 async function saveBoxScore(isFinal = false) {
-  if (!G.gameId) return { firstSubmission: true };
+  // Practice games and signed-out visitors never write anything.
+  if (!G.gameId || G.gameId === 'practice') return { practice: true, firstSubmission: false };
+  if (!_scorerCanWrite()) return { error: true, message: 'Sign in as a captain of this game (or the commissioner) to save it.' };
   try {
     // Build batting lineup arrays (only players who had at-bats or walks)
     function buildLineupArray(side) {
@@ -7339,9 +7599,7 @@ async function saveBoxScore(isFinal = false) {
     //   uses a "Publish my version as final" button in admin.html to
     //   override the captain merge.
     // ─────────────────────────────────────────────────────────────────────
-    const scoringSide = G.scoringTeam === G.awayTeam.id ? 'away'
-                      : G.scoringTeam === G.homeTeam.id ? 'home'
-                      : 'admin';
+    const scoringSide = _scorerSide() || 'admin';
 
     // ── Mid-game draft (not final): write to this scorer's lane only.
     // Public live score is updated on the games doc separately by
@@ -7393,12 +7651,13 @@ async function saveBoxScore(isFinal = false) {
       // the public stats page picks up the change without admin needing to
       // open admin.html. Best-effort — never block the save on this.
       _scorerRecalcStatsFromBoxScores(G.gameId).catch(e => console.warn('recalc skipped', e));
-      return { firstSubmission: r.firstSubmission, hasDiscrepancy: r.hasDiscrepancy };
+      return { firstSubmission: r.firstSubmission, hasDiscrepancy: r.hasDiscrepancy, adminLocked: r.mode === 'admin-locked' };
     }
     return { firstSubmission: false, adminOnly: true };
   } catch (err) {
     console.warn('saveBoxScore error:', err);
-    return { firstSubmission: true }; // safe default on error
+    // Never treat a failed save as a finalized game.
+    return { error: true, message: _errText(err) };
   }
 }
 
@@ -7412,6 +7671,7 @@ async function saveBoxScore(isFinal = false) {
 // auto-recalcs). Adam doesn't want admin to be the bottleneck —
 // stats should refresh the moment any game finalizes.
 async function _scorerRecalcStatsFromBoxScores(gameId) {
+  if (!_scorerCanWrite()) return;
   try {
     const justWrittenSnap = await getDoc(doc(db, 'box_scores', gameId));
     if (!justWrittenSnap.exists()) return;
@@ -7488,7 +7748,7 @@ async function _scorerRecalcStatsFromBoxScores(gameId) {
       if (!affectedKeys.has(key)) continue;
       const t = totalsByKey[key] || { gp:0, ab:0, r:0, h:0, d:0, t:0, hr:0, rbi:0, bb:0, so:0 };
       const ab = t.ab, h = t.h, bb = t.bb, dbl = t.d, tr = t.t, hr = t.hr;
-      const sing = h - dbl - tr - hr;
+      const sing = Math.max(0, h - dbl - tr - hr);
       const avg = ab > 0 ? h / ab : 0;
       const obp = (ab + bb) > 0 ? (h + bb) / (ab + bb) : 0;
       const slg = ab > 0 ? (sing + 2*dbl + 3*tr + 4*hr) / ab : 0;
@@ -7555,6 +7815,12 @@ async function recomputeCanonicalBoxScore(gameId) {
   const existing = existingSnap.exists() ? existingSnap.data() : null;
   const wasFirst = !existing;
 
+  // The commissioner published their own version as the official box.
+  // A captain's lane is still saved for review, but it must not replace it.
+  if (existing && (existing.single_source === 'admin' || existing.first_submitter === 'admin')) {
+    return { firstSubmission: false, hasDiscrepancy: false, mode: 'admin-locked' };
+  }
+
   // Single-source mode: only one captain submitted; they own everything.
   if (home && !away) {
     const canonical = {
@@ -7602,17 +7868,27 @@ async function recomputeCanonicalBoxScore(gameId) {
   }
 
   // Both captains submitted — per-side merge + discrepancy detection.
-  const firstSubmitter = (home.submitted_at < away.submitted_at) ? 'home' : 'away';
+  // Lanes written by captain.html are score-only (no lineups, and may lack
+  // submitted_at), so every field read from a lane needs a default.
+  const _laneMs = (l) => {
+    const t = l && l.submitted_at;
+    if (typeof t === 'string') { const ms = Date.parse(t); if (Number.isFinite(ms)) return ms; }
+    if (t && typeof t.toMillis === 'function') return t.toMillis();
+    if (l && l.timestamp && typeof l.timestamp.toMillis === 'function') return l.timestamp.toMillis();
+    return Number.MAX_SAFE_INTEGER;
+  };
+  const _num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const firstSubmitter = (_laneMs(home) <= _laneMs(away)) ? 'home' : 'away';
   const secondSubmitter = firstSubmitter === 'home' ? 'away' : 'home';
   const discrepancies = [];
 
   // Score disagreement: each captain reports both teams' final scores.
-  if ((home.away_score || 0) !== (away.away_score || 0) ||
-      (home.home_score || 0) !== (away.home_score || 0)) {
+  if (_num(home.away_score) !== _num(away.away_score) ||
+      _num(home.home_score) !== _num(away.home_score)) {
     discrepancies.push({
       type: 'score',
-      home_captain: { away: home.away_score || 0, home: home.home_score || 0 },
-      away_captain: { away: away.away_score || 0, home: away.home_score || 0 },
+      home_captain: { away: _num(home.away_score), home: _num(home.home_score) },
+      away_captain: { away: _num(away.away_score), home: _num(away.home_score) },
     });
   }
 
@@ -7636,17 +7912,17 @@ async function recomputeCanonicalBoxScore(gameId) {
     });
   });
 
-  const canonical = {
-    game_id: home.game_id,
-    away: home.away,
-    home: home.home,
+  const canonicalRaw = {
+    game_id: home.game_id || away.game_id || gameId,
+    away: home.away || away.away || '',
+    home: home.home || away.home || '',
     // Each captain authoritative for their own side
-    home_lineup:   home.home_lineup,
-    home_pitchers: home.home_pitchers,
-    home_score:    home.home_score,
-    away_lineup:   away.away_lineup,
-    away_pitchers: away.away_pitchers,
-    away_score:    away.away_score,
+    home_lineup:   home.home_lineup || [],
+    home_pitchers: home.home_pitchers || [],
+    home_score:    _num(home.home_score ?? away.home_score),
+    away_lineup:   away.away_lineup || [],
+    away_pitchers: away.away_pitchers || [],
+    away_score:    _num(away.away_score ?? home.away_score),
     // Linescores: each captain's view of their own side's innings
     linescores: {
       home: home.linescores?.home || home.home_linescore || [],
@@ -7669,10 +7945,14 @@ async function recomputeCanonicalBoxScore(gameId) {
     created_at: existing?.created_at || new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
+  // Backstop: Firestore rejects undefined values outright.
+  const canonical = Object.fromEntries(Object.entries(canonicalRaw).filter(([, v]) => v !== undefined));
   await setDoc(doc(db, 'box_scores', gameId), canonical);
+  // Score disagreements are tracked by games.score_conflict (set by the final
+  // handler); has_discrepancy on the game is for box-stat disagreements only.
   await updateDoc(doc(db, 'games', gameId), {
-    has_discrepancy: discrepancies.length > 0,
-  }).catch(()=>{});
+    has_discrepancy: discrepancies.some(d => d.type !== 'score'),
+  }).catch(e => console.warn('has_discrepancy update failed:', e));
   return { firstSubmission: wasFirst, hasDiscrepancy: discrepancies.length > 0, mode: 'merged' };
 }
 
@@ -7687,6 +7967,20 @@ document.getElementById('start-btn').addEventListener('click', async () => {
 
   const game = gamesData.find(g => g.id === gameId);
   if (!game) return;
+
+  // Lane for this game: a side this account captains, else the admin lane
+  // (admins only). loadGames lists only games this account may score.
+  const _sAway = game.away || game.away_team_id || game.away_id || '';
+  const _sHome = game.home || game.home_team_id || game.home_id || '';
+  G.scoringTeam = _scorerTeamFor(_sAway, _sHome);
+  if (!G.scoringTeam && !SCORER.isAdmin) {
+    btn.disabled = false;
+    btn.textContent = 'START SCORING';
+    _scorerToast("You're not a captain of either team in this game.", 'error');
+    return;
+  }
+  G._isLiveOwner = false;
+  G._showedLiveLockBanner = false;
 
   G.gameId = gameId;
   G.wk = game.wk || game.week || 0;
@@ -7723,8 +8017,7 @@ document.getElementById('start-btn').addEventListener('click', async () => {
   let resumed = false;
   let resumeSource = '';
   try {
-    const _myUrlTeamId = new URLSearchParams(window.location.search).get('team');
-    const _mySide = _myUrlTeamId === awayId ? 'away' : _myUrlTeamId === homeId ? 'home' : null;
+    const _mySide = _scorerSide();
 
     // Also pull from localStorage so we have a fallback if Firestore is
     // unavailable (field signal out, user was offline during scoring).
@@ -7838,63 +8131,77 @@ document.getElementById('start-btn').addEventListener('click', async () => {
     // game. We check game.live first: if the other captain already started
     // scoring, their session already sent the push.
     try {
-      if (!game._alreadyFinal && !game.live && G.awayTeam?.id && G.homeTeam?.id) {
+      if (_scorerCanWrite() && !game._alreadyFinal && !game.live && G.awayTeam?.id && G.homeTeam?.id) {
         sendLiveGamePush(game, G.awayTeam, G.homeTeam);
       }
     } catch(e) { console.warn('Live push skipped:', e); }
   }
+  // Ready for the next game when the scorer comes back to this screen
+  btn.disabled = false;
+  btn.textContent = 'START SCORING';
 });
 
-// Fire-and-forget "game is live" push. Deep-links to the watch page so
-// followers can jump into live scoring. Uses the shared admin secret so
-// the endpoint accepts the request.
-const SCORER_PUSH_SECRET = window.LEAGUE_CONFIG.push.adminSecret;
+// Fire-and-forget pushes. The endpoint decides from the signed-in user's
+// roles: a captain's live/scores push must name a game they play in (the
+// server then sets the audience to both teams); the admin may send anything.
+async function _scorerPush(payload) {
+  const user = auth.currentUser;
+  if (!user || !_scorerCanWrite()) return;
+  try {
+    const resp = await fetch('/api/send-notification', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await user.getIdToken() },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) {
+      const j = await resp.json().catch(() => ({}));
+      console.warn('[scorer] push refused:', resp.status, j.error, j.message);
+    }
+  } catch (e) { console.warn('[scorer] push failed:', e); }
+}
+
+// "Game is live" push. Deep-links to the watch page so followers can jump
+// into live scoring.
 function sendLiveGamePush(game, awayTeam, homeTeam) {
-  const url = `/watch.html?game=${encodeURIComponent(game.id)}`;
+  const url = `/watch.html?g=${encodeURIComponent(game.id)}`;
   const parts = [];
   if (game.wk) parts.push(`Week ${game.wk}`);
   if (game.time) parts.push(game.time);
   if (game.field) parts.push(game.field);
-  return fetch('/api/send-notification', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': SCORER_PUSH_SECRET },
-    body: JSON.stringify({
-      title: `⚾ LIVE: ${awayTeam.short || awayTeam.name} @ ${homeTeam.short || homeTeam.name}`,
-      body: parts.join(' · ') || 'Follow along live now',
-      category: 'live',
-      teams: [awayTeam.id, homeTeam.id],
-      url,
-      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
-    }),
-  }).catch(e => console.warn('Live push failed:', e));
+  return _scorerPush({
+    title: `⚾ LIVE: ${awayTeam.short || awayTeam.name} @ ${homeTeam.short || homeTeam.name}`,
+    body: parts.join(' · ') || 'Follow along live now',
+    category: 'live',
+    gameId: game.id,
+    teams: [awayTeam.id, homeTeam.id],
+    url,
+    excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+  });
 }
 
 // Fire "Final:" push when the live scorer finalizes a game. Adam
 // reported getting the "game started" push but NOT a "game ended"
 // one when the scorer wrapped a game — the game-done branch below
 // updates Firestore but never pinged /api/send-notification. This
-// closes that gap. Captain flows have their own push (captain.html)
-// so we guard on `live: false` transition to avoid double-pushing.
+// closes that gap. Only sent on the transition to done, so captain.html's
+// own final push and this one don't double up.
 function sendScorerFinalPush(gameId, awayTeam, homeTeam, awayScore, homeScore, wk) {
   const awayName = awayTeam?.short || awayTeam?.name || 'Away';
   const homeName = homeTeam?.short || homeTeam?.name || 'Home';
   const parts = [];
   if (wk) parts.push(`Week ${wk}`);
-  return fetch('/api/send-notification', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Admin-Secret': SCORER_PUSH_SECRET },
-    body: JSON.stringify({
-      title: `Final: ${awayName} ${awayScore}, ${homeName} ${homeScore}`,
-      body: parts.join(' · ') || 'Game final',
-      category: 'scores',
-      teams: [awayTeam?.id, homeTeam?.id].filter(Boolean),
-      // Deep-link to the box-score modal for this specific game (routes
-      // through index.html's "#game/<id>" handler). Fallback to /#scores
-      // if gameId is missing.
-      url: gameId ? `/#game/${gameId}` : '/#scores',
-      excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
-    }),
-  }).catch(e => console.warn('Final score push failed:', e));
+  return _scorerPush({
+    title: `Final: ${awayName} ${awayScore}, ${homeName} ${homeScore}`,
+    body: parts.join(' · ') || 'Game final',
+    category: 'scores',
+    gameId,
+    teams: [awayTeam?.id, homeTeam?.id].filter(Boolean),
+    // Deep-link to the box-score modal for this specific game (routes
+    // through index.html's "#game/<id>" handler). Fallback to /#scores
+    // if gameId is missing.
+    url: gameId ? `/#game/${encodeURIComponent(gameId)}` : '/#scores',
+    excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+  });
 }
 
 // ===== PRACTICE MODE =====
@@ -7911,7 +8218,12 @@ if (location.hash === '#practice') {
   }, 0);
 }
 document.getElementById('practice-btn').addEventListener('click', () => {
+  // Practice never writes to Firestore (every write path checks
+  // _scorerCanWrite(), which is false for 'practice') and needs no sign-in.
   G.gameId = 'practice';
+  G.scoringTeam = null;
+  G._isLiveOwner = false;
+  G._gameAlreadyFinal = false;
   G.awayTeam = { id:'dn', name:'Dead Nuts', short:'DN', color:'#C41E3A' };
   G.homeTeam = { id:'tbir', name:'TBIR', short:'TBIR', color:'#002D72' };
 
@@ -7947,18 +8259,60 @@ document.getElementById('half-end-cancel-btn').addEventListener('click', () => {
 });
 
 // ===== INIT =====
-loadGames();
+// Wait for the first auth state, then decide what this visitor may do.
+// Link this device's push token (if notifications were enabled here) to the
+// signed-in account so role-based pushes reach it. Fire and forget.
+async function _scorerAttachPushToken(user) {
+  let token = null;
+  try { token = localStorage.getItem('dvsl-notif-token'); } catch (_) {}
+  if (!token) return;
+  try {
+    const r = await fetch('/api/push-token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await user.getIdToken() },
+      body: JSON.stringify({ action: 'attach', token }),
+    });
+    if (!r.ok) console.warn('[scorer] push-token attach failed:', r.status);
+  } catch (e) { console.warn('[scorer] push-token attach error:', e); }
+}
+
+async function initScorer() {
+  const user = await _firstAuthState();
+  SCORER.user = user || null;
+  if (!user) {
+    SCORER.ready = true;
+    showScorerSignInRequired(null);
+    return;
+  }
+  const roles = await _loadScorerRoles(user);
+  _scorerAttachPushToken(user);
+  SCORER.isAdmin = !!(roles && roles.admin === true);
+  SCORER.captainTeams = (roles && Array.isArray(roles.captain_teams))
+    ? roles.captain_teams.filter(t => typeof t === 'string' && t && t !== '__playoff_brackets')
+    : [];
+  const urlTeam = new URLSearchParams(window.location.search).get('team');
+  SCORER.urlTeam = (urlTeam && SCORER.captainTeams.includes(urlTeam)) ? urlTeam : null;
+  SCORER.ready = true;
+  if (!SCORER.isAdmin && !SCORER.captainTeams.length) {
+    showScorerSignInRequired(user);
+    return;
+  }
+  loadGames();
+}
+initScorer().catch(err => {
+  console.error('Scorer init failed:', err);
+  const el = document.getElementById('setup-loading');
+  if (el) el.textContent = 'Error loading games. Check connection.';
+});
 
 // ===== CLEAR LIVE FLAG ON TAB CLOSE / HIDE =====
+// Only the live broadcaster clears the public LIVE flag, never on a final
+// game, never in practice.
 function clearLiveFlag() {
-  if (G.gameId) {
-    // Use sendBeacon for reliable delivery on page unload
-    const url = `https://firestore.googleapis.com/v1/projects/dvsl-292dd/databases/(default)/documents/games/${G.gameId}?updateMask.fieldPaths=live`;
-    // Best-effort: use navigator.sendBeacon if available, fallback to sync XHR
-    try {
-      updateDoc(doc(db, 'games', G.gameId), { live: false }).catch(() => {});
-    } catch(e) {}
-  }
+  if (!_scorerCanWrite() || !G._isLiveOwner || G._gameAlreadyFinal) return;
+  try {
+    updateDoc(doc(db, 'games', G.gameId), { live: false }).catch(() => {});
+  } catch(e) {}
 }
 window.addEventListener('beforeunload', clearLiveFlag);
 document.addEventListener('visibilitychange', () => {

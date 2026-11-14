@@ -452,7 +452,8 @@
             if (!resp.ok) return;
             const data = await resp.json();
             const items = Array.isArray(data && data.items) ? data.items : [];
-            _dvslSetBadge(items.length);
+            // count is returned even when item contents need a sign-in.
+            _dvslSetBadge(typeof (data && data.count) === 'number' ? data.count : items.length);
           } catch(_) {}
         }
         function _dvslSetBadge(count) {
@@ -712,15 +713,15 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
         </label>
       </div>
 
-      <!-- Commissioner-only row: visible only when ?admin=1 is passed in the URL.
-           Lets Adam flag his device as an admin-alert recipient. -->
+      <!-- Commissioner-only row: the 'admin' push category. Shown only when the
+           signed-in account's roles doc has admin:true. -->
       <div class="cat-item hidden" id="admin-toggle-row">
         <div class="cat-info">
           <div class="cat-name">Commissioner Alerts</div>
           <div class="cat-desc">Score conflicts, new signups, admin-only alerts</div>
         </div>
         <label class="toggle">
-          <input type="checkbox" id="admin-flag-toggle" onchange="updateAdminFlag()">
+          <input type="checkbox" id="admin-flag-toggle" data-cat="admin" onchange="updateCategories()">
           <span class="slider"></span>
         </label>
       </div>
@@ -771,7 +772,7 @@ body.dark{--bg:#0d0d11;--dark:#141418;--card:#1a1a1f;--card2:#22222a;--border:rg
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
 import { getMessaging, getToken, deleteToken, onMessage } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-messaging.js';
-import { getFirestore, collection, addDoc, query, where, getDocs, deleteDoc, doc, updateDoc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
+import { getFirestore, collection, query, where, getDocs, getDoc, doc } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js';
 import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
 
 const FIREBASE_CONFIG = window.LEAGUE_CONFIG.firebase;
@@ -785,10 +786,35 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 setPersistence(auth, browserLocalPersistence).catch(()=>{});
 let messaging = null;
-// Tracks the current player doc for the signed-in user. Used to gate the
-// commissioner-only admin alert toggle — must have is_admin: true on their
-// player record.
-let MY_PLAYER_DOC = null;
+
+// Escape every Firestore-sourced value before it goes into HTML (text or
+// attribute context): & < > " ' and backtick.
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'})[c]);
+}
+
+// Device tokens live in notification_tokens, which clients can no longer
+// read or write. Every token operation goes through /api/push-token
+// (upsert / get / attach / delete). The "Commissioner Alerts" toggle is the
+// 'admin' push category, shown only when roles/{uid}.admin is true; the
+// server decides who actually receives admin-only pushes from roles.
+let ROLES = null;      // roles/{uid} for the signed-in user (null = signed out)
+let IS_ADMIN = false;
+// True only once roles were actually read for the signed-in user. While
+// signed out, or when the roles read failed, we don't know whether this is a
+// commissioner, so the 'admin' category is left exactly as the server has it.
+let ROLES_KNOWN = false;
+// Set when a commissioner turns Commissioner Alerts off on this device, so
+// syncSavedToken doesn't switch it back on.
+const ADMIN_OPTOUT_KEY = 'dvsl-notif-admin-optout';
+let _authReadyResolve;
+const AUTH_READY = new Promise(r => { _authReadyResolve = r; });
+// Never hang the page if Firebase Auth fails to load.
+setTimeout(() => _authReadyResolve(), 6000);
+
+// Every category this page knows about. 'admin' is only ever saved for
+// commissioners.
+const DEFAULT_CATEGORIES = ['scores', 'rainouts', 'schedule', 'playoffs', 'team_chat', 'announcements', 'live', 'pregame', 'photos'];
 
 // Check if VAPID key is configured
 const isConfigured = VAPID_KEY !== 'YOUR_VAPID_KEY_HERE';
@@ -804,7 +830,99 @@ const enableSection = document.getElementById('enableSection');
 const enabledSection = document.getElementById('enabledSection');
 const btnEnable = document.getElementById('btnEnable');
 
+// Small non-blocking toast for save failures on user actions.
+function toast(msg) {
+  let el = document.getElementById('notif-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'notif-toast';
+    el.setAttribute('role', 'status');
+    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;max-width:calc(100% - 32px);background:#1a1a1a;color:#fff;padding:12px 16px;border-radius:10px;font-size:14px;line-height:1.4;box-shadow:0 6px 24px rgba(0,0,0,.25);display:none';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 4500);
+}
+
+// POST to one of our /api endpoints. Sends the Firebase ID token when the
+// visitor is signed in. Throws an Error carrying the server's message.
+async function api(name, payload) {
+  const headers = { 'Content-Type': 'application/json' };
+  const u = auth.currentUser;
+  if (u) {
+    try { headers.Authorization = 'Bearer ' + await u.getIdToken(); } catch(_) {}
+  }
+  const resp = await fetch('/api/' + name, { method: 'POST', headers, body: JSON.stringify(payload || {}) });
+  let data = {};
+  try { data = await resp.json(); } catch(_) {}
+  if (!resp.ok || (data && data.error)) {
+    const err = new Error((data && data.message) || ('Request failed (' + resp.status + ')'));
+    err.code = data && data.error;
+    err.status = resp.status;
+    throw err;
+  }
+  return data || {};
+}
+
+function pushToken(action, extra) {
+  return api('push-token', Object.assign({ action }, extra || {}));
+}
+
+function _localCategories() {
+  try {
+    const arr = JSON.parse(localStorage.getItem('dvsl-notif-categories') || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch(_) { return []; }
+}
+function _localTeams() {
+  try {
+    const arr = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch(_) { return []; }
+}
+// Strip the commissioner category only when we positively know the signed-in
+// user isn't an admin. Signed out / roles unknown: keep what's there (the
+// server gates admin delivery on roles, so a stray 'admin' is harmless).
+function _cleanCategories(cats) {
+  const out = [...new Set((cats || []).filter(c => typeof c === 'string' && c))];
+  return (ROLES_KNOWN && !IS_ADMIN) ? out.filter(c => c !== 'admin') : out;
+}
+
+// Save this device's full preference set (the endpoint replaces both arrays).
+async function _upsertPrefs(token, categories, teams) {
+  return pushToken('upsert', {
+    token,
+    categories: _cleanCategories(categories),
+    teams: Array.isArray(teams) ? teams : [],
+  });
+}
+
+// Read the signed-in user's roles. Asks the server to recompute them first
+// (self-heal), then reads roles/{uid}, which the rules let the owner get.
+// Returns null when neither the server nor the roles doc could be reached
+// (roles unknown), {} when the user genuinely has no roles.
+async function loadRoles(user) {
+  let fromServer = null;
+  let readOk = false;
+  try {
+    const d = await api('account', { action: 'refresh-roles' });
+    fromServer = d && d.roles ? d.roles : null;
+  } catch(e) { console.warn('refresh-roles failed:', e); }
+  try {
+    const snap = await getDoc(doc(db, 'roles', user.uid));
+    readOk = true;
+    if (snap.exists()) return snap.data() || {};
+  } catch(e) { console.warn('roles read failed:', e); }
+  if (fromServer) return fromServer;
+  return readOk ? {} : null;
+}
+
 function init() {
+  // Old builds kept these flags in localStorage; they mean nothing now.
+  try { localStorage.removeItem('dvsl-is-admin'); } catch(_) {}
+
   if (!isSupported) {
     comingSoon.querySelector('p').innerHTML = '<strong>Browser Not Supported</strong><br>Push notifications require a modern browser. Please try Chrome, Firefox, or Edge.';
     comingSoon.classList.remove('hidden');
@@ -837,15 +955,17 @@ function init() {
   if (savedToken) {
     updateUI(true);
     loadSavedCategories();
-    // Auto-migrate: add 'team_chat' to existing subscribers so they get the
-    // new team chat category without having to re-enable notifications.
-    migrateAddTeamChatCategory(savedToken);
+  }
+
+  // Auth first (roles decide the Commissioner Alerts row), then sync this
+  // device's saved prefs with the server.
+  initAuth();
+  if (savedToken) {
+    AUTH_READY.then(() => syncSavedToken(savedToken));
   }
 
   // Populate the team-preferences list regardless of subscription state
   loadTeamPrefs();
-  // Show + load commissioner-only toggle when ?admin=1 is passed.
-  initAdminToggle();
 
   // Listen for foreground messages
   onMessage(messaging, (payload) => {
@@ -874,34 +994,43 @@ function updateUI(enabled) {
   }
 }
 
-async function migrateAddTeamChatCategory(token) {
-  // Add any categories to existing subscribers' docs that didn't exist when
-  // they first enabled notifications. Opt-out for them means unchecking
-  // later — opt-in-by-default keeps them in the loop for new features.
-  // Note: captains_chat is NOT auto-added — only captains should subscribe,
-  // and they opt in by flipping the toggle themselves.
+// On load with a saved token: read the server copy, add any categories
+// that didn't exist when the device first subscribed (opt-in by default;
+// captains_chat and admin are never auto-added), and attach the device to
+// the signed-in account so audience checks use the user's roles.
+async function syncSavedToken(token) {
   const NEW_CATS = ['team_chat', 'announcements', 'live', 'pregame', 'photos'];
   try {
-    const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
-    const snap = await getDocs(q);
-    for (const d of snap.docs) {
-      const cats = d.data().categories || [];
-      const missing = NEW_CATS.filter(c => !cats.includes(c));
-      if (missing.length) {
-        const merged = [...cats, ...missing];
-        await updateDoc(doc(db, 'notification_tokens', d.id), { categories: merged });
-        // Keep localStorage in sync so the checkboxes reflect actual state.
-        try {
-          const saved = JSON.parse(localStorage.getItem('dvsl-notif-categories') || '[]');
-          const mergedSaved = [...new Set([...saved, ...missing])];
-          localStorage.setItem('dvsl-notif-categories', JSON.stringify(mergedSaved));
-          missing.forEach(c => {
-            document.querySelectorAll(`[data-cat="${c}"]`).forEach(cb => cb.checked = true);
-          });
-        } catch(e) {}
-      }
+    const cur = await pushToken('get', { token });
+    let cats, teams;
+    if (cur && cur.exists) {
+      cats = Array.isArray(cur.categories) ? cur.categories : [];
+      teams = Array.isArray(cur.teams) ? cur.teams : [];
+    } else {
+      // Server lost this device's row (old doc id, pruned, etc.). Re-save
+      // what this device has locally so it keeps getting alerts.
+      cats = _localCategories();
+      if (!cats.length) cats = DEFAULT_CATEGORIES.slice();
+      teams = _localTeams();
     }
-  } catch(e) { console.warn('category migration skipped:', e); }
+    const missing = NEW_CATS.filter(c => !cats.includes(c));
+    // Commissioners get admin alerts on unless they turned them off here
+    // (covers devices whose legacy is_admin flag was dropped on migration).
+    let optedOut = false;
+    try { optedOut = localStorage.getItem(ADMIN_OPTOUT_KEY) === '1'; } catch(_) {}
+    if (IS_ADMIN && !optedOut && cats.length && !cats.includes('admin')) missing.push('admin');
+    const merged = _cleanCategories([...cats, ...missing]);
+    const needsSave = !(cur && cur.exists) || missing.length || merged.length !== cats.length;
+    if (needsSave) {
+      await _upsertPrefs(token, merged, teams);
+    } else if (auth.currentUser && cur && !cur.mine) {
+      await pushToken('attach', { token });
+    }
+    // Server is the source of truth: mirror it locally + into the toggles.
+    localStorage.setItem('dvsl-notif-categories', JSON.stringify(merged));
+    localStorage.setItem('dvsl-notif-teams', JSON.stringify(teams));
+    loadSavedCategories();
+  } catch(e) { console.warn('token sync skipped:', e); }
 }
 
 function loadSavedCategories() {
@@ -917,18 +1046,25 @@ function loadSavedCategories() {
 }
 
 // Load teams from Firestore and render as checkboxes. Persists selections
-// to localStorage + Firestore so the backend can filter which tokens to
-// push a given team's alerts to.
+// to localStorage + the server so it can filter which devices get a given
+// team's alerts.
 // Detect the user's team via their Firebase Auth account (player roster
 // link). Used by the "Just my team" radio option to auto-fill.
 async function _detectMyTeam() {
   try {
+    await AUTH_READY;
     const u = auth.currentUser;
     if (!u) return null;
     const snap = await getDocs(query(collection(db, 'players'), where('auth_uid', '==', u.uid)));
-    if (snap.empty) return null;
-    const p = snap.docs[0].data();
-    return { id: p.team || p.team_id || null, name: p.team_name || '' };
+    const rows = snap.docs.map(d => d.data()).filter(p => p.active !== false && p.pending_approval !== true);
+    if (rows.length) {
+      const p = rows[0];
+      return { id: p.team || p.team_id || null, name: p.team_name || '' };
+    }
+    // Captains without a roster row: fall back to the team they captain.
+    const capTeams = (ROLES && Array.isArray(ROLES.captain_teams)) ? ROLES.captain_teams : [];
+    if (capTeams.length) return { id: capTeams[0], name: '' };
+    return null;
   } catch(_) { return null; }
 }
 
@@ -938,19 +1074,19 @@ async function loadTeamPrefs() {
   let teams = [];
   try {
     const snap = await getDocs(collection(db, 'teams'));
-    teams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    teams = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.id !== '__playoff_brackets');
   } catch(e) {
     host.innerHTML = '<div style="color:var(--muted);font-size:13px">Could not load teams.</div>';
     return;
   }
   teams.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
-  const saved = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
+  const saved = _localTeams();
 
   // Render the custom-mode checkboxes (hidden until "Custom" radio chosen).
   host.innerHTML = teams.map(t => `
     <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;background:var(--card)">
-      <input type="checkbox" data-team="${t.id}" ${saved.includes(t.id) ? 'checked' : ''} onchange="updateTeamPrefs()" style="cursor:pointer">
-      <span>${(t.name || t.id).replace(/</g,'&lt;')}</span>
+      <input type="checkbox" data-team="${esc(t.id)}" ${saved.includes(t.id) ? 'checked' : ''} onchange="updateTeamPrefs()" style="cursor:pointer">
+      <span>${esc(t.name || t.id)}</span>
     </label>`).join('') || '<div style="color:var(--muted);font-size:13px">No teams yet.</div>';
 
   // Auto-detect "my team" for the second radio option.
@@ -989,38 +1125,36 @@ window.setTeamMode = async function(mode) {
     localStorage.setItem('dvsl-notif-teams', JSON.stringify([]));
     document.querySelectorAll('[data-team]').forEach(cb => cb.checked = false);
     host.style.display = 'none';
-    await _saveTeamPrefsToFirestore([]);
+    await _saveTeamPrefs([]);
   } else if (mode === 'mine') {
     const tid = document.getElementById('tm-mine').dataset.teamId;
     if (!tid) return;
     localStorage.setItem('dvsl-notif-teams', JSON.stringify([tid]));
     document.querySelectorAll('[data-team]').forEach(cb => { cb.checked = (cb.dataset.team === tid); });
     host.style.display = 'none';
-    await _saveTeamPrefsToFirestore([tid]);
+    await _saveTeamPrefs([tid]);
   } else {
     // Custom — reveal the checkbox grid; user picks from there.
     host.style.display = 'flex';
   }
 };
 
-async function _saveTeamPrefsToFirestore(picked) {
+async function _saveTeamPrefs(picked) {
   const token = localStorage.getItem('dvsl-notif-token');
   if (!token) return;
   try {
-    const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
-    const snap = await getDocs(q);
-    for (const d of snap.docs) {
-      await updateDoc(doc(db, 'notification_tokens', d.id), { teams: picked });
-    }
-  } catch(err) { console.warn('Failed to update team prefs:', err); }
+    await _upsertPrefs(token, _localCategories(), picked);
+  } catch(err) {
+    console.warn('Failed to update team prefs:', err);
+    toast('Could not save your team choice. ' + (err.message || 'Please try again.'));
+  }
 }
 
 window.updateTeamPrefs = async function() {
   const picked = [];
   document.querySelectorAll('[data-team]').forEach(cb => { if (cb.checked) picked.push(cb.dataset.team); });
   localStorage.setItem('dvsl-notif-teams', JSON.stringify(picked));
-  await _saveTeamPrefsToFirestore(picked);
-  return; // (returnPath kept simple — Firestore handler reports its own warnings)
+  await _saveTeamPrefs(picked);
 };
 
 window.enableNotifications = async function() {
@@ -1056,52 +1190,21 @@ window.enableNotifications = async function() {
       throw new Error('No token received');
     }
 
-    const categories = ['scores', 'rainouts', 'schedule', 'playoffs', 'team_chat', 'announcements', 'live', 'pregame', 'photos'];
-    const teams = JSON.parse(localStorage.getItem('dvsl-notif-teams') || '[]');
+    await AUTH_READY;
+    // Commissioners get their admin alerts on by default.
+    const categories = IS_ADMIN ? [...DEFAULT_CATEGORIES, 'admin'] : DEFAULT_CATEGORIES.slice();
+    const teams = _localTeams();
 
-    // Save token to Firestore — backend filters on (categories, teams)
-    // to decide which tokens to push a given event to. An empty teams
-    // array means "all teams".
-    //
-    // Upsert by FCM token. The previous version unconditionally addDoc'd
-    // a new row every time Enable was tapped, so users who enabled +
-    // disabled + re-enabled (or who hit the button twice) accumulated
-    // duplicate rows and received 2×/3×/N× copies of every push. Also
-    // the admin fanout is hard-capped at pageSize=300, so unchecked
-    // duplicates could push real subscribers out of delivery.
-    try {
-      const existingSnap = await getDocs(query(
-        collection(db, 'notification_tokens'),
-        where('token', '==', token)
-      ));
-      if (existingSnap.empty) {
-        await addDoc(collection(db, 'notification_tokens'), {
-          token, categories, teams, timestamp: new Date()
-        });
-      } else {
-        // Update the first doc we find, and prune any duplicates that
-        // already snuck in before this fix shipped. Safe because we're
-        // filtering on the FCM token — every matched doc IS this device.
-        const [keep, ...dupes] = existingSnap.docs;
-        await updateDoc(doc(db, 'notification_tokens', keep.id), {
-          categories, teams, timestamp: new Date()
-        });
-        for (const d of dupes) {
-          try { await deleteDoc(doc(db, 'notification_tokens', d.id)); } catch(_) {}
-        }
-      }
-    } catch(e) {
-      // Fall back to the old behavior rather than fail the whole flow —
-      // worst case the user gets a duplicate, which is better than
-      // silently losing push access.
-      console.warn('Token upsert failed, falling back to addDoc:', e);
-      await addDoc(collection(db, 'notification_tokens'), {
-        token, categories, teams, timestamp: new Date()
-      });
-    }
+    // Save the device on the server — it filters on (categories, teams)
+    // to decide which devices get a given push. An empty teams array means
+    // "all teams". The endpoint keys docs by a hash of the token, so
+    // re-enabling never creates duplicates. When signed in, the ID token
+    // attaches this device to the account.
+    await _upsertPrefs(token, categories, teams);
 
     localStorage.setItem('dvsl-notif-token', token);
-    localStorage.setItem('dvsl-notif-categories', JSON.stringify(categories));
+    localStorage.setItem('dvsl-notif-categories', JSON.stringify(_cleanCategories(categories)));
+    loadSavedCategories();
 
     updateUI(true);
   } catch(err) {
@@ -1116,11 +1219,12 @@ window.disableNotifications = async function() {
   try {
     const token = localStorage.getItem('dvsl-notif-token');
     if (token) {
-      // Remove from Firestore
-      const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
-      const snap = await getDocs(q);
-      for (const d of snap.docs) {
-        await deleteDoc(doc(db, 'notification_tokens', d.id));
+      // Remove this device from the server
+      try {
+        await pushToken('delete', { token });
+      } catch(e) {
+        console.warn('Server delete failed:', e);
+        toast('Turned off on this device, but the server copy could not be removed. ' + (e.message || ''));
       }
 
       // Delete FCM token
@@ -1141,111 +1245,57 @@ window.disableNotifications = async function() {
   }
 };
 
-// The "Commissioner Alerts" toggle (admin-only push category) is gated by
-// the signed-in user's player doc: is_admin === true. The legacy ?admin=1
-// URL trick is gone — anyone could have used it to flag themselves.
-//
-// Flow:
-//   onAuthStateChanged → look up player doc by auth_uid →
-//     if is_admin: show toggle + load current state
-//     else: hide toggle + force is_admin=false on this token (defensive)
-async function initAdminToggle() {
-  // Wait for auth state to settle before deciding.
+// Auth + roles. The "Commissioner Alerts" row (data-cat="admin") is shown
+// only when roles/{uid}.admin === true. The server never trusts this page:
+// admin-only pushes go to devices whose attached account is an admin.
+function initAuth() {
   onAuthStateChanged(auth, async (user) => {
     const row = document.getElementById('admin-toggle-row');
     if (!user) {
+      ROLES = null;
+      IS_ADMIN = false;
+      ROLES_KNOWN = false;
       if (row) row.classList.add('hidden');
-      MY_PLAYER_DOC = null;
-      await _forceClearAdminFlagOnToken();
+      _authReadyResolve();
       return;
     }
-    // Find their player doc by auth_uid.
-    try {
-      const snap = await getDocs(query(collection(db, 'players'),
-        where('auth_uid', '==', user.uid)));
-      if (snap.empty) {
-        MY_PLAYER_DOC = null;
-        if (row) row.classList.add('hidden');
-        await _forceClearAdminFlagOnToken();
-        return;
-      }
-      MY_PLAYER_DOC = { id: snap.docs[0].id, ...snap.docs[0].data() };
-      const isAdmin = MY_PLAYER_DOC.is_admin === true;
-      if (!isAdmin) {
-        if (row) row.classList.add('hidden');
-        await _forceClearAdminFlagOnToken();
-        return;
-      }
-      // Authorized — show the toggle and reflect current state.
-      if (row) row.classList.remove('hidden');
-      const token = localStorage.getItem('dvsl-notif-token');
-      if (!token) return;
-      const tokSnap = await getDocs(query(collection(db, 'notification_tokens'),
-        where('token', '==', token)));
-      for (const d of tokSnap.docs) {
-        const cb = document.getElementById('admin-flag-toggle');
-        if (cb) cb.checked = d.data().is_admin === true;
-      }
-    } catch(e) { console.warn('Admin toggle init failed:', e); }
+    let loaded = null;
+    try { loaded = await loadRoles(user); } catch(_) { loaded = null; }
+    ROLES_KNOWN = !!loaded;
+    ROLES = loaded || {};
+    IS_ADMIN = ROLES.admin === true;
+    if (row) row.classList.toggle('hidden', !IS_ADMIN);
+    if (ROLES_KNOWN && !IS_ADMIN) {
+      const cb = document.getElementById('admin-flag-toggle');
+      if (cb) cb.checked = false;
+    }
+    _authReadyResolve();
   });
 }
-
-// Defensive: if the user is not an admin (or signed out), make sure their
-// notification_tokens doc doesn't have a stale is_admin: true left over
-// from before this gating was added.
-async function _forceClearAdminFlagOnToken() {
-  const token = localStorage.getItem('dvsl-notif-token');
-  if (!token) return;
-  try {
-    const snap = await getDocs(query(collection(db, 'notification_tokens'),
-      where('token', '==', token)));
-    for (const d of snap.docs) {
-      if (d.data().is_admin === true) {
-        await updateDoc(doc(db, 'notification_tokens', d.id), { is_admin: false });
-      }
-    }
-  } catch(_) {}
-}
-
-window.updateAdminFlag = async function() {
-  // Re-check authorization on every toggle. If the user isn't actually an
-  // admin (e.g. they edited the DOM to un-hide the row), refuse the update.
-  if (!MY_PLAYER_DOC || MY_PLAYER_DOC.is_admin !== true) {
-    const cb = document.getElementById('admin-flag-toggle');
-    if (cb) cb.checked = false;
-    return;
-  }
-  const token = localStorage.getItem('dvsl-notif-token');
-  if (!token) return;
-  const checked = !!document.getElementById('admin-flag-toggle')?.checked;
-  try {
-    const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
-    const snap = await getDocs(q);
-    for (const d of snap.docs) {
-      await updateDoc(doc(db, 'notification_tokens', d.id), { is_admin: checked });
-    }
-  } catch(e) { console.warn('Admin flag update failed:', e); }
-};
 
 window.updateCategories = async function() {
   const categories = [];
   document.querySelectorAll('[data-cat]').forEach(cb => {
     if (cb.checked) categories.push(cb.dataset.cat);
   });
+  const clean = _cleanCategories(categories);
 
-  localStorage.setItem('dvsl-notif-categories', JSON.stringify(categories));
+  localStorage.setItem('dvsl-notif-categories', JSON.stringify(clean));
+  if (IS_ADMIN) {
+    try {
+      if (clean.includes('admin')) localStorage.removeItem(ADMIN_OPTOUT_KEY);
+      else localStorage.setItem(ADMIN_OPTOUT_KEY, '1');
+    } catch(_) {}
+  }
 
-  // Update in Firestore
+  // Save on the server
   const token = localStorage.getItem('dvsl-notif-token');
   if (token) {
     try {
-      const q = query(collection(db, 'notification_tokens'), where('token', '==', token));
-      const snap = await getDocs(q);
-      for (const d of snap.docs) {
-        await updateDoc(doc(db, 'notification_tokens', d.id), { categories });
-      }
+      await _upsertPrefs(token, clean, _localTeams());
     } catch(err) {
       console.error('Failed to update categories:', err);
+      toast('Could not save your alert choices. ' + (err.message || 'Please try again.'));
     }
   }
 };
