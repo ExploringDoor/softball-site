@@ -17,6 +17,7 @@
   <!-- Bracket engine — admin uses it to resolve "WG-5" into the real team as
        scores are entered, so the Playoffs tab shows live matchups. -->
   <script src="/js/dvsl-bracket.js"></script>
+  <script src="/js/dvsl-standings.js"></script>
   <script>
     // SW registration + bottom tab bar + "More" sheet.
     //
@@ -2694,11 +2695,15 @@ window.poSeedChanged = function() {
 };
 
 window.poSeedFromStandings = function() {
-  const ranked = TEAMS.slice()
-    .filter(t => t.active !== false)
-    .map(t => ({ t, pts: (t.w || 0) * 3 + (t.ti || 0) * 2 + (t.l || 0) * 1, diff: (t.rs || 0) - (t.ra || 0) }))
-    .sort((a, b) => b.pts - a.pts || b.diff - a.diff)
-    .map(x => x.t.name || x.t.short || x.t.id);
+  // Seeds follow the rulebook (points, head to head, strength of schedule)
+  // via the same DVSLStandings.rank the public standings use. Until 2026-11
+  // this broke point ties on run differential, which the rules don't use.
+  const _act = TEAMS.slice().filter(t => t.active !== false);
+  const ranked = (window.DVSLStandings
+      ? DVSLStandings.rank(_act, GAMES)
+      : _act.map(t => ({ t, pts: (t.w || 0) * 3 + (t.ti || 0) * 2 + (t.l || 0) * 1, diff: (t.rs || 0) - (t.ra || 0) }))
+          .sort((a, b) => b.pts - a.pts || b.diff - a.diff).map(x => x.t))
+    .map(t => t.name || t.short || t.id);
   const slice = PO_CUR === 'gold' ? ranked.slice(0, 8) : ranked.slice(8, 16);
   if (!slice.length) { toast('No standings loaded yet.', 'error'); return; }
   slice.forEach((n, i) => { const sel = document.getElementById('po-seed-' + i); if (sel) sel.value = n; });
@@ -2849,6 +2854,7 @@ async function loadAllData() {
     ]);
     TEAMS = teams.filter(t => t.active !== false).sort((a,b) => (b.pct||0) - (a.pct||0));
     GAMES = games.sort((a,b) => (a.wk||0) - (b.wk||0) || (a.time||'').localeCompare(b.time||''));
+    if (window.DVSLStandings) TEAMS = DVSLStandings.rank(TEAMS, GAMES);   // rulebook order wherever admin lists teams
     PLAYERS = players;
     RECAPS_DATA = recaps;
 
@@ -6689,7 +6695,8 @@ async function recalcStandingsFromGames() {
       t.rs = s.rs; t.ra = s.ra; t.gb = s.gb; t.streak = s.streak;
     } catch(e) { console.error('Failed to update team', t.id, e); }
   }
-  TEAMS.sort((a,b) => (b.pct||0) - (a.pct||0));
+  if (window.DVSLStandings) { const _r = DVSLStandings.rank(TEAMS, GAMES); TEAMS.splice(0, TEAMS.length, ..._r); }
+  else TEAMS.sort((a,b) => (b.pct||0) - (a.pct||0));
 }
 
 window.autoCalcStandings = async function() {
@@ -10101,7 +10108,7 @@ window.exportRosterPDF = function() {
 // ── STANDINGS ─────────────────────────────────────────────────────
 window.exportStandingsPDF = function() {
   if (!TEAMS.length) { toast('No teams to export', 'error'); return; }
-  const sorted = [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
+  const sorted = window.DVSLStandings ? DVSLStandings.rank(TEAMS, GAMES) : [...TEAMS].sort((a,b) => (b.pct||0) - (a.pct||0));
 
   const pdf = _pdfNew(); if (!pdf) return;
   _pdfHeader(pdf, 'Standings', new Date().toLocaleDateString());

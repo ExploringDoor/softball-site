@@ -19,6 +19,7 @@
        lazily-injected playoffs fragment) because scripts in injected HTML
        don't execute. -->
   <script src="/js/dvsl-bracket.js"></script>
+  <script src="/js/dvsl-standings.js"></script>
   <script>
     // SW registration + bottom tab bar + "More" sheet.
     //
@@ -3150,9 +3151,9 @@ thead th.sorted-col .sarrow{opacity:1}
         <path d="M17 6h2.5A1.5 1.5 0 0 1 21 7.5 3.5 3.5 0 0 1 17.5 11H17"/>
       </svg>
       <div class="po-cta-txt">
-        <div class="po-cta-eyebrow">DVSL 2026 Postseason</div>
+        <div class="po-cta-eyebrow" id="po-cta-eyebrow">DVSL 2026 Postseason</div>
         <div class="po-cta-title">Playoff Brackets</div>
-        <div class="po-cta-sub">Gold &amp; Silver brackets are live. Tap a team to trace its path as the field advances.</div>
+        <div class="po-cta-sub" id="po-cta-sub">Gold &amp; Silver brackets are live. Tap a team to trace its path as the field advances.</div>
       </div>
       <span class="po-cta-btn">View Brackets →</span>
     </div>
@@ -6270,13 +6271,13 @@ function buildHomeSidebar(){
   // Home page keeps the mini-standings simple: rank · logo · name ·
   // W-L(-T). Adam asked to drop PTS from the home sidebar (it lives
   // on the full standings page instead), so the visual weight of the
-  // card stays on the record. Sort still uses points under the hood
-  // so the leader matches the standings page — PCT / W tiebreak.
-  const withPts = [...TEAMS].filter(t=>t.active!==false).map(t=>({
-    ...t,
-    pts: (t.w||0)*3 + (t.ti||0)*2 + (t.l||0)*1,
-  }));
-  const sorted = withPts.sort((a,b)=>b.pts-a.pts||b.pct-a.pct||b.w-a.w);
+  // card stays on the record. Order comes from DVSLStandings.rank
+  // (rulebook: points, then head to head, then strength of schedule), the
+  // same function the Standings page uses, so #1 always matches.
+  const _active = [...TEAMS].filter(t=>t.active!==false);
+  const sorted = window.DVSLStandings
+    ? DVSLStandings.rank(_active, SCHEDULE_PREVIEW)
+    : _active.sort((a,b)=>((b.w||0)*3+(b.ti||0)*2+(b.l||0))-((a.w||0)*3+(a.ti||0)*2+(a.l||0)));
   el.innerHTML=sorted.map((t,i)=>`<div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:10px" onclick="goPage('team','${t.id}')">
     <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;color:rgba(0,0,0,.35);width:18px">${i+1}</span>
     ${LOGO_TEAMS.has(t.id)?`<img src="logos/${t.id}.png" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" loading="lazy">`:`<span style="width:8px;height:8px;border-radius:50%;background:${t.color};flex-shrink:0"></span>`}
@@ -6420,7 +6421,22 @@ function _ensurePlayoffData(){
     // them now that the bracket data has arrived.
     try { if (typeof buildTicker2 === 'function') buildTicker2(); } catch(_) {}
     try { if (typeof buildRecaps === 'function') buildRecaps(); } catch(_) {}
+    try { _updatePlayoffCta(); } catch(_) {}
   }).catch(() => {});
+}
+
+// Home playoff CTA: once BOTH brackets have a champion it stops saying the
+// brackets are live and names the champions. While play is on, the authored
+// copy stays as is.
+function _updatePlayoffCta(){
+  const champs = _getBracketChampions();
+  if (champs.length < 2) return;
+  const by = {}; champs.forEach(c => { by[c.bracket] = c.team; });
+  if (!by.Gold || !by.Silver) return;
+  const eb = document.getElementById('po-cta-eyebrow');
+  const sub = document.getElementById('po-cta-sub');
+  if (eb) eb.textContent = 'DVSL 2026 Postseason \u00b7 Final';
+  if (sub) sub.textContent = by.Gold + ' won the Gold bracket and ' + by.Silver + ' won Silver. Relive every game and trace each team\u2019s path.';
 }
 
 // Convert decided playoff matchups into SCHEDULE_PREVIEW-shaped rows under a
@@ -6435,7 +6451,13 @@ function _playoffScheduleGames(){
   [['gold','Gold'],['silver','Silver']].forEach(([key,label]) => {
     const t = PLAYOFF_DATA[key];
     if (!t || !Array.isArray(t.games)) return;
+    // If-necessary finals that turned out moot never get played. The bracket
+    // page already drops them (championOutcome().hide); do the same here so
+    // they can't linger on the schedule or ticker as "upcoming" forever.
+    let _hide = new Set();
+    try { _hide = B.championOutcome(t, B.classify(t)).hide || _hide; } catch(_) {}
     t.games.forEach(g => {
+      if (_hide.has(g.g)) return;
       if (!g.date || !/^\d{4}-\d{2}-\d{2}$/.test(g.date)) return;
       const A = B.sideDisplay(t, g.away), H = B.sideDisplay(t, g.home);
       if (A.tbd || H.tbd || A.bye || H.bye) return;
@@ -6485,8 +6507,10 @@ function _upcomingPlayoffGames(){
   [['gold','Gold'],['silver','Silver']].forEach(([key,label]) => {
     const t = PLAYOFF_DATA[key];
     if (!t || !Array.isArray(t.games)) return;
+    let _hide = new Set();   // moot if-necessary games, see _playoffScheduleGames
+    try { _hide = B.championOutcome(t, B.classify(t)).hide || _hide; } catch(_) {}
     t.games.forEach(g => {
-      if (B.isPlayed(g)) return;
+      if (B.isPlayed(g) || _hide.has(g.g)) return;
       if (!g.date || !/^\d{4}-\d{2}-\d{2}$/.test(g.date)) return;
       if (new Date(g.date + 'T00:00:00') < today) return;
       const A = B.sideDisplay(t, g.away), H = B.sideDisplay(t, g.home);
@@ -9468,7 +9492,8 @@ function generateGamePreview(atm,htm,g){
   const aStrk=pStrk(atm?.streak), hStrk=pStrk(htm?.streak);
 
   // Standings rank
-  const sorted=[...TEAMS].filter(t=>t.w!=null).sort((a,b)=>(b.w/(b.w+b.l+.001))-(a.w/(a.w+a.l+.001)));
+  const _rk=[...TEAMS].filter(t=>t.w!=null&&t.active!==false);
+  const sorted=window.DVSLStandings?DVSLStandings.rank(_rk,SCHEDULE_PREVIEW):_rk.sort((a,b)=>(b.w/(b.w+b.l+.001))-(a.w/(a.w+a.l+.001)));
   const aRank=atm?sorted.findIndex(t=>t.id===atm.id)+1:0;
   const hRank=htm?sorted.findIndex(t=>t.id===htm.id)+1:0;
   const nTeams=sorted.length;
@@ -10448,8 +10473,15 @@ function buildStandTable(yr, sortKey, sortDir){
     if(typeof bv==='string') bv=parseFloat(bv)||0;
     const primary = sortDir==='desc' ? bv-av : av-bv;
     if (primary !== 0) return primary;
-    // Tiebreakers when primary sort is equal — keep order stable and sensible
-    // regardless of which column the user sorted on. W desc, then run diff desc.
+    // 2026 rows carry _rank, their official position from DVSLStandings.rank
+    // (rulebook: points, head to head, strength of schedule). It settles every
+    // tie, so the default PTS view IS the official standings. On a PTS
+    // ascending sort the tied teams flip along with it.
+    if (a._rank != null && b._rank != null) {
+      return (sortKey === 'pts' && sortDir !== 'desc') ? b._rank - a._rank : a._rank - b._rank;
+    }
+    // Historical seasons: keep order stable and sensible regardless of which
+    // column the user sorted on. W desc, then run diff desc.
     const aw = parseFloat(a.w)||0, bw = parseFloat(b.w)||0;
     if (aw !== bw) return bw - aw;
     const ad = parseFloat(a.diff)||0, bd = parseFloat(b.diff)||0;
@@ -10525,7 +10557,11 @@ function buildStandTable(yr, sortKey, sortDir){
 }
 
 function buildStand2026(){
-  const teams=[...TEAMS].filter(t=>t.active!==false).sort((a,b)=>b.pct-a.pct||b.w-a.w||(b.rs-b.ra)-(a.rs-a.ra));
+  // Order = league rulebook (points, head to head, strength of schedule)
+  // via the shared DVSLStandings.rank, so this page, the home sidebar, the
+  // captain profile and admin playoff seeding can never disagree again.
+  const _act26=[...TEAMS].filter(t=>t.active!==false);
+  const teams=window.DVSLStandings?DVSLStandings.rank(_act26,SCHEDULE_PREVIEW):_act26.sort((a,b)=>b.pct-a.pct||b.w-a.w||(b.rs-b.ra)-(a.rs-a.ra));
   if(!teams.length) return;
   const started=teams.some(t=>t.w>0||t.l>0);
   const leader=teams[0];
@@ -10548,7 +10584,7 @@ function buildStand2026(){
     const gb=i===0?'—':((leader.w-leader.l-(t.w-t.l))/2).toFixed(1);
     const avg=gp>0?(t.rs||0)/gp:0;
     return {
-      t:t.name, _id:t.id, _color:t.color, _short:t.short||'',
+      t:t.name, _id:t.id, _color:t.color, _short:t.short||'', _rank:i,
       w:t.w||0, l:t.l||0, ti:t.ti||0,
       pct:t.pct||0, avg, gb,
       pf:t.rs||0, pa:t.ra||0,

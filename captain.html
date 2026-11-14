@@ -1289,6 +1289,7 @@ select.form-input{cursor:pointer}
      enter box scores for their playoff games. Classic script so it's ready
      before the module below runs. -->
 <script src="/js/dvsl-bracket.js"></script>
+<script src="/js/dvsl-standings.js"></script>
 
 <script type="module">
 // ═══════════════════════════════════════════════════════════════════
@@ -1542,6 +1543,7 @@ async function persistGameResult(g, gameId, gameUpdate) {
 let MY_TEAM = null;
 let ALL_TEAMS = [];
 let MY_GAMES = [];
+let ALL_LEAGUE_GAMES = [];   // every league game, for the standings tiebreakers (head to head)
 let MY_PLAYERS = [];
 let ALL_PLAYERS = [];
 let MY_SUBMISSIONS = [];
@@ -2888,6 +2890,7 @@ async function loadAllData() {
     // filtered out of ALL_TEAMS above — grab it from the raw list first.
     PO_BRACKET_DOC = teams.find(t => t.id === PO_BRACKET_DOC_ID) || null;
     const allGames = games.sort((a,b) => (a.wk||0) - (b.wk||0) || (a.time||'').localeCompare(b.time||''));
+    ALL_LEAGUE_GAMES = allGames;
 
     // Find my team
     MY_TEAM = ALL_TEAMS.find(t => t.id === captainData.team_id) || null;
@@ -2973,14 +2976,14 @@ function renderTeam() {
   // ranked them lower. Adam ask 2026-06-09: TBIR (3-1, 10 pts) was
   // showing as #3 in captain profile but is actually behind BSMC
   // (4-2, 14 pts) on the league standings page.
-  const _withPts = ALL_TEAMS.filter(x => x.active !== false).map(x => ({
-    id: x.id,
-    pts: (x.w||0)*3 + (x.ti||0)*2 + (x.l||0)*1,
-    pct: x.pct || 0,
-    w: x.w || 0,
-  }));
-  _withPts.sort((a, b) => b.pts - a.pts || b.pct - a.pct || b.w - a.w);
-  const rank = _withPts.findIndex(x => x.id === t.id) + 1;
+  // 2026-11: rank now comes from DVSLStandings.rank, the rulebook order
+  // (points, head to head, strength of schedule) shared with every
+  // standings view, instead of PTS/PCT/W which ignored head to head.
+  const _act = ALL_TEAMS.filter(x => x.active !== false);
+  const _ranked = window.DVSLStandings
+    ? DVSLStandings.rank(_act, ALL_LEAGUE_GAMES)
+    : _act.slice().sort((a, b) => ((b.w||0)*3 + (b.ti||0)*2 + (b.l||0)) - ((a.w||0)*3 + (a.ti||0)*2 + (a.l||0)));
+  const rank = _ranked.findIndex(x => x.id === t.id) + 1;
   const gamesPlayed = MY_GAMES.filter(g => g.done).length;
   const gamesLeft = MY_GAMES.filter(g => !g.done).length;
 
