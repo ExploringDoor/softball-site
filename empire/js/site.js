@@ -15,13 +15,24 @@
   function team(id) { return D.teams.filter(function (t) { return t.id === id; })[0]; }
   /* a player = what the club posted, plus anything the family changed in the profile builder on this device */
   function player(id) {
-    var b = D.players.filter(function (p) { return p.id === id; })[0]; if (!b) return null;
-    var o = (sget('emp_ov') || {})[id]; if (!o) return b;
-    var p = Object.assign({}, b, o); p.m = Object.assign({}, b.m, o.m || {}); p.sampleM = false; p.edited = true; return p;
+    var cl = club();
+    var b = D.players.concat(cl.players || []).filter(function (p) { return p.id === id; })[0]; if (!b) return null;
+    var o = (sget('emp_ov') || {})[id], note = (cl.notes || {})[id];
+    if (!o && !note) return b;
+    var p = Object.assign({}, b, o || {}); p.m = Object.assign({}, b.m, (o || {}).m || {});
+    if (o) { p.sampleM = false; p.edited = true; }
+    if (note) p.coachNote = note;
+    return p;
   }
-  function players() { return D.players.map(function (p) { return player(p.id); }); }
+  function club() { return sget('emp_club') || {}; }
+  function EV() { return D.events.concat(club().events || []); }
+  function players() { return D.players.concat(club().players || []).map(function (p) { return player(p.id); }); }
+  function initialsPic(p) {
+    var ini = p.name.split(/\s+/).map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+    return 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="720" height="900"><rect width="720" height="900" fill="#e9d5a1"/><text x="360" y="520" text-anchor="middle" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="260" fill="#0b0b0b">' + ini + '</text></svg>');
+  }
   function roster(tid) { return players().filter(function (p) { return p.team === tid; }); }
-  function pphoto(p) { return p.photo || 'img/players/' + p.id + '.webp'; }
+  function pphoto(p) { return p.photo || (p.added ? initialsPic(p) : 'img/players/' + p.id + '.webp'); }
   function hand(c) { return c === 'L' ? 'Left' : c === 'S' ? 'Switch' : 'Right'; }
   function purl(p) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'player.html?p=' + p.id; }
   function ytId(u) { var m = String(u || '').match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/); return m ? m[1] : ''; }
@@ -74,11 +85,11 @@
 
   function header() {
     var links = NAV.slice(1).map(function (n) { return '<a href="' + n[0] + '"' + (n[2] === here ? ' aria-current="page"' : '') + '>' + n[1] + '</a>'; }).join('');
-    var sheet = NAV.concat([['tryouts.html', 'Tryouts', 'tryouts'], ['my-profile.html', 'Player sign in', 'builder']]).map(function (n, i) {
+    var sheet = NAV.concat([['tryouts.html', 'Tryouts', 'tryouts'], ['commits.html', 'Committed', 'commits'], ['roadmap.html', 'Recruiting road map', 'roadmap'], ['my-profile.html', 'Player sign in', 'builder'], ['coach.html', 'Coach desk', 'coach']]).map(function (n, i) {
       return '<a class="sheet__link" href="' + n[0] + '"' + (n[2] === here ? ' aria-current="page"' : '') + '><span>' + ('0' + (i + 1)).slice(-2) + '</span>' + n[1] + '</a>';
     }).join('');
     return '<a class="skip" href="#main">Skip to content</a>' +
-      '<a class="bar" href="tryouts.html">Tryout interest is open for every age group ' + I.arrow + '</a>' +
+      '<a class="bar" href="tryouts.html">' + esc(club().news || 'Tryout interest is open for every age group') + ' ' + I.arrow + '</a>' +
       '<header class="top"><div class="wrap top__in">' +
       '<a class="top__logo" href="index.html" aria-label="Empire Softball home"><img src="img/crest-sm.webp" width="320" height="199" alt="Empire Softball"></a>' +
       '<nav class="nav" aria-label="Main">' + links + '</nav>' +
@@ -95,8 +106,8 @@
     return '<footer class="foot">' + sky('foot__sky') + '<div class="foot__body"><div class="wrap foot__in">' +
       '<div class="foot__brand"><span class="foot__wm">Empire</span><span class="foot__wm foot__wm--b">Softball</span><p>' + esc(D.club.region) + '. Travel softball, ' + esc(D.club.ages) + '.</p></div>' +
       '<div class="foot__col"><b>The club</b>' + NAV.slice(1, 4).concat([['photos.html', 'Photos'], ['about.html', 'About']]).map(function (n) { return '<a href="' + n[0] + '">' + n[1] + '</a>'; }).join('') + '</div>' +
-      '<div class="foot__col"><b>Players</b><a href="tryouts.html">Tryouts</a><a href="my-profile.html">Build my profile</a><a href="cards.html?t=white-16u-elite">Team card set</a><a href="contact.html">Contact</a></div>' +
-      '<div class="foot__col"><b>Follow</b><a href="' + D.club.instagram + '" target="_blank" rel="noopener">Instagram</a><a href="' + D.club.facebook + '" target="_blank" rel="noopener">Facebook</a></div>' +
+      '<div class="foot__col"><b>Players</b><a href="tryouts.html">Tryouts</a><a href="my-profile.html">Build my profile</a><a href="cards.html?t=white-16u-elite">Team card set</a><a href="commits.html">Committed</a><a href="roadmap.html">Recruiting road map</a></div>' +
+      '<div class="foot__col"><b>Club</b><a href="contact.html">Contact</a><a href="coach.html">Coach desk</a><a href="' + D.club.instagram + '" target="_blank" rel="noopener">Instagram</a><a href="' + D.club.facebook + '" target="_blank" rel="noopener">Facebook</a></div>' +
       '</div><div class="wrap foot__fine"><span>Empire Softball</span><span>Sample site by Main Line Web Design</span></div></div></footer>';
   }
 
@@ -180,7 +191,7 @@
     }
     if (kind === 'commit') { o.college = p.college || 'Your college'; return C.commit(o); }
     if (kind === 'watch') {
-      o.events = upcoming(D.events.filter(function (e) { return e.teams.indexOf(t.id) > -1; })).slice(0, 4).map(function (e) { var a = ymd(e.start); return { mon: MON[a.m].toUpperCase(), day: a.d, name: e.name, place: e.place + ', ' + e.city }; });
+      o.events = upcoming(EV().filter(function (e) { return e.teams.indexOf(t.id) > -1; })).slice(0, 4).map(function (e) { var a = ymd(e.start); return { mon: MON[a.m].toUpperCase(), day: a.d, name: e.name, place: e.place + ', ' + e.city }; });
       return C.story(o);
     }
     return C.render(o);
@@ -191,7 +202,7 @@
 
   P.home = function () {
     var feat = ['kaitlyn-lozano', 'lily-suarez', 'julia-candelario', 'megan-hobdy', 'tiffany-matthews'].map(player);
-    var next = upcoming(D.events).slice(0, 3);
+    var next = upcoming(EV()).slice(0, 3);
     return '<section class="hero"><div class="wrap hero__in"><div class="hero__txt">' +
       '<p class="kicker">' + esc(D.club.region) + ' / ' + esc(D.club.ages) + '</p>' +
       '<h1 class="disp">Long Island <span class="wm">built.</span></h1>' +
@@ -203,7 +214,7 @@
       '<section class="facts"><div class="wrap facts__in">' +
       '<div class="fact"><b>' + D.teams.length + '</b><span>Teams in Black, White and Gold</span></div>' +
       '<div class="fact"><b>12U<i>to</i>18U</b><span>Every age group</span></div>' +
-      '<div class="fact"><b>' + D.players.length + '</b><span>Recruiting profiles posted</span></div>' +
+      '<div class="fact"><b>' + players().length + '</b><span>Recruiting profiles posted</span></div>' +
       '<div class="fact"><b>3</b><span>Seasons a year, August to July</span></div></div></section>' +
 
       '<section class="sec"><div class="wrap recruit"><div><p class="kicker">For college coaches</p>' +
@@ -240,7 +251,7 @@
     var t = team(qs.get('t')) || D.teams[1];
     document.title = t.name + ' | Empire Softball';
     var r = roster(t.id);
-    var evs = upcoming(D.events.filter(function (e) { return e.teams.indexOf(t.id) > -1; }));
+    var evs = upcoming(EV().filter(function (e) { return e.teams.indexOf(t.id) > -1; }));
     var staff = t.staff || [{ name: t.coach, role: 'Head Coach' }];
     return pageHead(esc(t.color) + ' <span class="wm">' + esc(t.age) + '</span>' + (t.tag ? ' ' + esc(t.tag) : ''), 'Head coach ' + esc(t.coach) + '.', ['teams.html', 'All teams'],
       r.length ? '<div class="ph__act noprint"><a class="btn btn--sm" href="#sheet-roster">Roster sheet</a><a class="btn btn--sm" href="cards.html?t=' + t.id + '">Team card set</a><a class="btn btn--sm" href="schedule.html?t=' + t.id + '">Schedule</a></div>' : '') +
@@ -270,7 +281,7 @@
 
   P.players = function () {
     var grads = []; var poss = [];
-    D.players.forEach(function (p) { if (grads.indexOf(p.grad) < 0) grads.push(p.grad); p.pos.forEach(function (x) { if (poss.indexOf(x) < 0) poss.push(x); }); });
+    players().forEach(function (p) { if (grads.indexOf(p.grad) < 0) grads.push(p.grad); p.pos.forEach(function (x) { if (poss.indexOf(x) < 0) poss.push(x); }); });
     grads.sort(); var order = ['P', 'C', '1B', '2B', '3B', 'SS', 'OF'];
     poss.sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); });
     function chips(kind, list, lab) { return list.map(function (v) { return '<button type="button" class="chip" data-f="' + kind + '" data-v="' + v + '" aria-pressed="false">' + (lab ? lab(v) : v) + '</button>'; }).join(''); }
@@ -280,7 +291,8 @@
       '<div class="filters__row"><span class="filters__lab">Position</span>' + chips('pos', poss) + '</div>' +
       '<div class="filters__row"><span class="filters__lab">GPA</span>' + chips('gpa', ['3.5', '3.8', '4.0'], function (v) { return v + ' and up'; }) + '</div>' +
       '<div class="filters__row filters__row--in"><div class="fld"><label for="find">Name or school</label><input id="find" type="search" placeholder="Search" autocomplete="off"></div>' +
-      '<div class="fld"><label for="sort">Sort by</label><select id="sort"><option value="name">Name</option><option value="grad">Class</option><option value="gpa">GPA, high to low</option></select></div></div></div>' +
+      '<div class="fld"><label for="sort">Sort by</label><select id="sort"><option value="name">Name</option><option value="grad">Class</option><option value="gpa">GPA, high to low</option></select></div></div>' +
+      '<div class="filters__row"><span class="filters__lab">Show as</span><button type="button" class="chip" data-f="view" data-v="" aria-pressed="true">Photos</button><button type="button" class="chip" data-f="view" data-v="list" aria-pressed="false">List</button></div></div>' +
       '<div class="listbar"><div class="count" id="count" aria-live="polite"></div>' +
       '<button type="button" class="chip chip--star" data-f="mine" data-v="1" aria-pressed="false">' + I.star + ' My list <b id="mineN">0</b></button></div>' +
       '<div class="mine" id="mine" hidden><span>Your list is saved on this device.</span><a class="btn btn--sm" href="compare.html">Compare side by side</a><a class="btn btn--sm" id="mineMail" href="#">Email my list to myself</a><button type="button" class="btn btn--sm" data-print>Print my list</button></div>' +
@@ -294,7 +306,7 @@
     var t = team(p.team);
     var head = (t.staff || [])[0] || { name: t.coach };
     document.title = p.name + ', ' + p.grad + ' ' + p.pos.join('/') + ' | Empire Softball';
-    var evs = upcoming(D.events.filter(function (e) { return e.teams.indexOf(t.id) > -1; })).slice(0, 3);
+    var evs = upcoming(EV().filter(function (e) { return e.teams.indexOf(t.id) > -1; })).slice(0, 3);
     var nm = p.name.split(' ');
     var meas = MEAS.filter(function (m) { return p.m[m[0]]; });
     var vids = (p.vid || []).map(ytId).filter(Boolean);
@@ -304,7 +316,7 @@
       '<div class="pp__photo"><img src="' + pphoto(p) + '" width="720" height="900" alt="' + esc(p.name) + '">' + (p.num ? '<span class="pp__num">' + esc(p.num) + '</span>' : '') + '</div>' +
       '<div class="pp__head"><a class="crumb" href="team.html?t=' + t.id + '">' + I.back + esc(t.name) + '</a>' +
       '<h1 class="disp">' + esc(nm[0]) + ' <span class="wm">' + esc(nm.slice(1).join(' ')) + '</span></h1>' +
-      '<div class="pp__tags"><span class="tag tag--ink">Class of ' + p.grad + '</span><span class="tag">' + esc(p.pos.join(' / ')) + '</span>' + (p.college ? '<span class="tag tag--gold">Committed: ' + esc(p.college) + '</span>' : p.commit ? '<span class="tag tag--gold">' + esc(p.commit) + '</span>' : '') + '</div>' +
+      '<div class="pp__tags"><span class="tag tag--ink">Class of ' + p.grad + '</span><span class="tag">' + esc(p.pos.join(' / ')) + '</span>' + (p.college ? '<span class="tag tag--gold">Committed: ' + esc(p.college) + '</span>' : p.commit ? '<span class="tag tag--gold">' + esc(p.commit) + '</span>' : '') + (p.transcript ? '<span class="tag">Transcript on request</span>' : '') + '</div>' +
       (p.about ? '<p class="pp__about">' + esc(p.about) + '</p>' : '') +
       '<dl class="dl">' +
       '<div><dt>Bats / Throws</dt><dd>' + hand(p.bats) + ' / ' + hand(p.throws) + '</dd></div>' +
@@ -338,6 +350,7 @@
       '<div><p>Pick what to make and a look, then save it to post or print. The code on it opens this page.</p>' + kindChips(p) + styleChips(p.cardStyle || 'pin') +
       '<div class="hero__cta"><button type="button" class="btn btn--ink btn--sm" id="cardShare">Share card</button><button type="button" class="btn btn--sm" id="cardSave">Save picture</button></div><p class="fine" id="cardMsg" role="status"></p></div></div></div>' +
 
+      (p.coachNote ? '<div class="blk blk--wide blk--gold"><div class="blk__top"><h2>Coach\'s take</h2><span class="tag">' + esc(head.name) + '</span></div><p class="lead">' + esc(p.coachNote) + '</p></div>' : '') +
       '<div class="blk"><div class="blk__top"><h2>Her coach</h2></div><div class="staff staff--one">' + staffRow(head, 'Head Coach, ' + t.name) + '</div>' +
       (p.hsCoach ? '<p class="fine">High school coach: ' + esc(p.hsCoach) + '</p>' : '') +
       '<div class="links">' + (p.fl ? '<a class="more" href="https://www.fieldlevel.com/app/profile/' + p.fl + '/softball" target="_blank" rel="noopener">FieldLevel profile ' + I.arrow + '</a>' : '') + '</div></div>' +
@@ -351,7 +364,10 @@
       '<div><button class="btn btn--gold" type="submit">Send to her coach ' + I.arrow + '</button></div>' +
       '<div class="form__ok" role="status">This is a sample site, so nothing was sent. On the live site this goes to ' + esc(head.name) + ' and the family.</div></form></div>' +
 
-      '</div><div class="wrap noprint"><p class="own"><a class="more" href="my-profile.html?p=' + p.id + '">Is this you? Update your profile ' + I.arrow + '</a></p></div></section>';
+      '</div><div class="wrap noprint">' + (function () {
+        var r = roster(t.id), i = r.map(function (x) { return x.id; }).indexOf(p.id), a = r[(i - 1 + r.length) % r.length], b = r[(i + 1) % r.length];
+        return r.length > 1 ? '<div class="pn2"><a href="player.html?p=' + a.id + '">' + I.back + '<span><i>Previous</i>' + esc(a.name) + '</span></a><a href="player.html?p=' + b.id + '"><span><i>Next</i>' + esc(b.name) + '</span>' + I.arrow + '</a></div>' : '';
+      })() + '<p class="own"><a class="more" href="my-profile.html?p=' + p.id + '">Is this you? Update your profile ' + I.arrow + '</a></p></div></section>';
   };
 
   P.builder = function () {
@@ -381,6 +397,7 @@
       '<div class="two">' + field('sat', 'SAT', 'text', 'inputmode="numeric"', p.sat || '') + field('act', 'ACT', 'text', 'inputmode="numeric"', p.act || '') + '</div>' +
       '<div class="two">' + field('ncaa', 'NCAA ID', 'text', 'inputmode="numeric"', p.ncaa || '') + field('hsCoach', 'High school coach and email', 'text', '', p.hsCoach || '') + '</div>' +
       '<label class="check"><input type="checkbox" id="hideGpa"' + (p.hideGpa ? ' checked' : '') + '> Keep my GPA off my page and card</label>' +
+      '<label class="check"><input type="checkbox" id="transcript"' + (p.transcript ? ' checked' : '') + '> My transcript is available on request</label>' +
       '<h2 class="fh">Measurables</h2>' +
       '<div class="two">' + field('ht', 'Height', 'text', 'placeholder="5\'6&quot;"', p.m.ht || '') + field('ev', 'Exit velo (mph)', 'text', 'inputmode="decimal"', p.m.ev || '') + '</div>' +
       '<div class="two">' + field('ov', 'Overhand velo (mph)', 'text', 'inputmode="decimal"', p.m.ov || '') + field('h1', 'Home to first (sec)', 'text', 'inputmode="decimal"', p.m.h1 || '') + '</div>' +
@@ -403,7 +420,9 @@
     var r = roster(t.id);
     return pageHead('Team <span class="wm">card set</span>', esc(t.name) + '. ' + (r.length ? 'One card for every player. Tap a card to save it, or print the whole set.' : ''), ['team.html?t=' + t.id, t.name],
       r.length ? '<div class="ph__act noprint">' + styleChips('pin') + '<button type="button" class="btn btn--sm" data-print>Print the set</button></div>' : '') +
-      '<section class="sec sec--tight"><div class="wrap">' + (r.length ? '<div class="set" id="set">' + r.map(function (p) { return '<button type="button" class="set__c" data-card="' + p.id + '" aria-label="Save the card for ' + esc(p.name) + '"><img width="500" height="700" alt="' + esc(p.name) + ' player card"></button>'; }).join('') + '</div><p class="fine noprint" id="cardMsg" role="status"></p>' :
+      '<section class="sec sec--tight"><div class="wrap">' + (r.length ? '<div class="set" id="set">' + r.map(function (p) { return '<button type="button" class="set__c" data-card="' + p.id + '" aria-label="Save the card for ' + esc(p.name) + '"><img width="500" height="700" alt="' + esc(p.name) + ' player card"></button>'; }).join('') + '</div><p class="fine noprint" id="cardMsg" role="status"></p>' +
+        '<div class="sec__head noprint" style="margin-top:44px"><h2 class="disp">Team graphics</h2><p>A poster for the fence with a code that opens the roster, and a roster graphic to post. Tap one to save it.</p></div>' +
+        '<div class="gfx2 noprint"><button type="button" class="set__c" data-tg="poster" aria-label="Save the team poster"><img id="tgPoster" width="540" height="675" alt="Team poster"></button><button type="button" class="set__c" data-tg="roster" aria-label="Save the roster graphic"><img id="tgRoster" width="540" height="675" alt="Roster graphic"></button></div>' :
         '<div class="empty"><h3>No cards yet</h3><p>Cards appear once this team has player profiles.</p><a class="btn" href="cards.html?t=white-16u-elite">See a finished set</a></div>') + '</div></section>';
   };
 
@@ -420,6 +439,54 @@
       '<section class="sec sec--tight"><div class="wrap">' + (ps.some(function (p) { return p.sampleM; }) ? '<p class="note">Height, velo and speed numbers are samples for this demo.</p>' : '') +
       '<div class="sheetbox" style="margin-top:0"><div class="tblwrap"><table class="tbl cmp"><thead><tr><th></th>' + ps.map(function (p) { return '<th><a href="player.html?p=' + p.id + '"><img src="' + pphoto(p) + '" alt="">' + esc(p.name) + '</a></th>'; }).join('') + '</tr></thead><tbody>' +
       rows.map(function (r) { return '<tr><th scope="row">' + r[0] + '</th>' + ps.map(function (p) { return '<td>' + esc(r[1](p)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></div></div></section>';
+  };
+
+  P.commits = function () {
+    var c = players().filter(function (p) { return p.college; });
+    return pageHead('Com<span class="wm">mitted</span>', 'Empire players who have chosen where they will play in college.') +
+      '<section class="sec sec--tight"><div class="wrap">' + (c.length ? '<div class="cm">' + c.map(function (p) { return '<a class="cm__row" href="player.html?p=' + p.id + '"><img src="' + pphoto(p) + '" alt=""><span class="cm__who"><b>' + esc(p.name) + '</b><i>Class of ' + p.grad + ', ' + esc(p.pos.join(' / ')) + ', ' + esc(p.school) + '</i></span><span class="cm__to"><i>Committed to</i><b>' + esc(p.college) + '</b></span></a>'; }).join('') + '</div>' :
+        '<div class="empty"><h3>The wall fills in as players commit</h3><p>When a player adds her college in the profile builder, she shows up here with her commitment graphic ready to post.</p><a class="btn" href="my-profile.html?p=kaitlyn-lozano">Try it in the profile builder</a></div>') +
+      '</div></section>' + tryoutCta();
+  };
+
+  P.roadmap = function () {
+    var steps = [
+      ['Freshman year', 'Build the base', ['Start your profile here and add a photo in uniform.', 'Protect your grades. A strong GPA opens more doors than any one tournament.', 'Play more than one position and learn where you help a team most.']],
+      ['Sophomore year', 'Get on video', ['Film a skills video: hitting, fielding, throwing and running.', 'Add your real numbers to your profile and keep them current.', 'Make a list of schools that fit you. Think about what you want to study first, softball second.']],
+      ['Junior year', 'Be seen', ['Send college coaches your profile link and your showcase schedule before each event.', 'Take the SAT or ACT and add the score to your profile.', 'Visit campuses, and ask your Empire coach to reach out for you.']],
+      ['Senior year', 'Decide', ['Narrow your list and talk through each offer with your family.', 'Commit, then add your college to your profile and post your commitment graphic.', 'Thank the coaches who helped you get there.']]
+    ];
+    return pageHead('Recruiting <span class="wm">road map</span>', 'A plain guide for players and parents: what to work on each year of high school.') +
+      '<section class="sec sec--tight"><div class="wrap"><div class="road">' + steps.map(function (st, i) { return '<div class="road__row"><span class="road__n" aria-hidden="true">' + (i + 1) + '</span><div><p class="kicker">' + st[0] + '</p><h2>' + st[1] + '</h2><ul>' + st[2].map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul></div></div>'; }).join('') + '</div>' +
+      '<p class="note">Recruiting rules and contact dates change and differ by division. Ask your Empire coach what applies to you right now.</p>' +
+      '<div class="hero__cta"><a class="btn btn--ink" href="my-profile.html">Build my profile ' + I.arrow + '</a><a class="btn" href="schedule.html">See the showcase schedule</a></div></div></section>';
+  };
+
+  P.coach = function () {
+    var topt = D.teams.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join('');
+    return pageHead('Coach <span class="wm">desk</span>', 'Where Empire coaches run the site: the top banner, rosters, the schedule and every form that comes in.') +
+      '<section class="sec sec--tight"><div class="wrap"><p class="note">Sample: on the real site coaches sign in first. Here anything you change saves on this phone or computer only, so try it.</p><div class="pgrid">' +
+
+      '<div class="blk blk--wide blk--ink" id="inbox"><div class="blk__top"><h2>Inbox</h2><button type="button" class="btn btn--sm" id="inboxClear">Clear inbox</button></div><div id="deskInbox"></div></div>' +
+
+      '<div class="blk"><div class="blk__top"><h2>Top banner</h2></div><form class="form cform" id="fNews"><div class="fld"><label for="news">Message across the top of every page</label><input id="news" maxlength="70" placeholder="Tryout interest is open for every age group"></div><div><button class="btn btn--ink btn--sm" type="submit">Post it</button></div></form></div>' +
+
+      '<div class="blk"><div class="blk__top"><h2>Coach\'s take on a player</h2></div><form class="form cform" id="fNote"><div class="fld"><label for="nWho">Player</label><select id="nWho"></select></div>' +
+      '<div class="fld"><label for="nTxt">Two or three lines a college coach should read</label><textarea id="nTxt" maxlength="320"></textarea></div><div><button class="btn btn--ink btn--sm" type="submit">Save to her page</button></div></form></div>' +
+
+      '<div class="blk"><div class="blk__top"><h2>Add a player</h2></div><form class="form cform" id="fPlayer" novalidate><div class="fld"><label for="aTeam">Team</label><select id="aTeam">' + topt + '</select></div>' +
+      field('aName', 'Player name', 'text', 'required') + '<div class="two">' + field('aGrad', 'Grad year', 'text', 'required inputmode="numeric" placeholder="2029"') + field('aPos', 'Positions', 'text', 'required placeholder="SS, OF"') + '</div>' +
+      '<div class="two">' + field('aSchool', 'High school', 'text', '') + field('aGpa', 'GPA', 'text', 'inputmode="decimal"') + '</div>' +
+      '<div><button class="btn btn--ink btn--sm" type="submit">Add to the roster</button></div></form><div class="dlist" id="deskPlayers"></div></div>' +
+
+      '<div class="blk"><div class="blk__top"><h2>Add an event</h2></div><form class="form cform" id="fEvent" novalidate>' + field('eName', 'Event name', 'text', 'required') +
+      '<div class="two">' + field('eStart', 'First day', 'date', 'required') + field('eEnd', 'Last day', 'date', '') + '</div>' +
+      '<div class="two">' + field('ePlace', 'Park or complex', 'text', 'required') + field('eCity', 'City and state', 'text', 'required placeholder="Baldwin, NY"') + '</div>' +
+      '<fieldset class="tpick"><legend>Teams playing</legend>' + D.teams.map(function (t) { return '<label class="check"><input type="checkbox" name="eTeam" value="' + t.id + '"> ' + esc(t.name.replace('Empire ', '')) + '</label>'; }).join('') + '</fieldset>' +
+      '<label class="check"><input type="checkbox" id="eShow"> College showcase</label>' +
+      '<div><button class="btn btn--ink btn--sm" type="submit">Add to the schedule</button></div></form><div class="dlist" id="deskEvents"></div></div>' +
+
+      '</div><p class="mt"><button type="button" class="btn btn--sm" id="deskReset">Undo everything I changed here</button></p></div></section>';
   };
 
   P.schedule = function () {
@@ -497,11 +564,11 @@
   document.addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-ics]');
     if (b) {
-      var e = D.events.filter(function (x) { return x.id === b.dataset.ics; })[0]; if (!e) return;
+      var e = EV().filter(function (x) { return x.id === b.dataset.ics; })[0]; if (!e) return;
       icsFile([e], 'empire-' + e.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.ics'); return;
     }
     var all = ev.target.closest('[data-icsall]');
-    if (all) { icsFile(upcoming(D.events.filter(function (x) { return x.teams.indexOf(all.dataset.icsall) > -1; })), 'empire-' + all.dataset.icsall + '.ics'); return; }
+    if (all) { icsFile(upcoming(EV().filter(function (x) { return x.teams.indexOf(all.dataset.icsall) > -1; })), 'empire-' + all.dataset.icsall + '.ics'); return; }
     if (ev.target.closest('[data-print]')) { window.print(); return; }
     var st = ev.target.closest('[data-star]');
     if (st) {
@@ -526,8 +593,8 @@
     if (q) {
       players().forEach(function (p) { if ((p.name + ' ' + p.school + ' ' + p.grad + ' ' + p.pos.join(' ')).toLowerCase().indexOf(q) > -1) out.push(['player.html?p=' + p.id, p.name, 'Player, ' + p.grad + ', ' + p.pos.join(' / ')]); });
       D.teams.forEach(function (t) { if ((t.name + ' ' + t.coach).toLowerCase().indexOf(q) > -1) out.push(['team.html?t=' + t.id, t.name, 'Team, coach ' + t.coach]); });
-      D.events.forEach(function (e) { if ((e.name + ' ' + e.place + ' ' + e.city).toLowerCase().indexOf(q) > -1) out.push(['schedule.html', e.name, 'Event, ' + e.place + ', ' + e.city]); });
-      NAV.concat([['tryouts.html', 'Tryouts'], ['my-profile.html', 'Build my profile'], ['compare.html', 'Compare players']]).forEach(function (n) { if (n[1].toLowerCase().indexOf(q) > -1) out.push([n[0], n[1], 'Page']); });
+      EV().forEach(function (e) { if ((e.name + ' ' + e.place + ' ' + e.city).toLowerCase().indexOf(q) > -1) out.push(['schedule.html', e.name, 'Event, ' + e.place + ', ' + e.city]); });
+      NAV.concat([['tryouts.html', 'Tryouts'], ['my-profile.html', 'Build my profile'], ['compare.html', 'Compare players'], ['commits.html', 'Committed players'], ['roadmap.html', 'Recruiting road map'], ['coach.html', 'Coach desk']]).forEach(function (n) { if (n[1].toLowerCase().indexOf(q) > -1) out.push([n[0], n[1], 'Page']); });
     }
     fr.innerHTML = out.slice(0, 12).map(function (o) { return '<a href="' + o[0] + '"><b>' + esc(o[1]) + '</b><span>' + esc(o[2]) + '</span></a>'; }).join('') || '<p class="mute">' + (q ? 'Nothing found. Try a name, a school, a position or a team.' : 'Type a name, school, position, team or event.') + '</p>';
   };
@@ -536,13 +603,19 @@
   fq.addEventListener('input', findDraw);
 
   /* demo forms */
-  [].forEach.call(document.querySelectorAll('form.form:not(#bform)'), function (form) {
+  [].forEach.call(document.querySelectorAll('form.form:not(#bform):not(.cform)'), function (form) {
     form.addEventListener('submit', function (e) {
       e.preventDefault();
       var bad = [].filter.call(form.querySelectorAll('[required]'), function (f) { return !f.value.trim() || (f.type === 'email' && !/^\S+@\S+\.\S+$/.test(f.value)); });
       [].forEach.call(form.querySelectorAll('input,textarea'), function (f) { f.classList.remove('bad'); });
       if (bad.length) { bad.forEach(function (f) { f.classList.add('bad'); }); bad[0].focus(); return; }
-      form.querySelector('.form__ok').classList.add('on');
+      var ok = form.querySelector('.form__ok'); ok.classList.add('on');
+      var fields = [].map.call(form.querySelectorAll('.fld'), function (d) { return [d.querySelector('label').textContent, d.querySelector('input,select,textarea').value]; }).filter(function (x) { return x[1]; });
+      var box = sget('emp_inbox') || [];
+      box.unshift({ kind: ({ tryouts: 'Tryout interest', contact: 'Contact form', player: 'College coach request', team: 'Text alert sign-up' })[page] || 'Form', about: document.querySelector('h1').textContent.trim(), when: new Date().toLocaleString(), fields: fields });
+      sset('emp_inbox', box.slice(0, 30));
+      if (!ok.querySelector('a')) ok.insertAdjacentHTML('beforeend', ' <a href="coach.html#inbox">See how it lands in the coach desk.</a>');
+      form.reset();
     });
   });
 
@@ -582,7 +655,7 @@
   }
 
   if (page === 'players') {
-    var state = { grad: qs.get('grad') || '', pos: qs.get('pos') || '', gpa: qs.get('gpa') || '', mine: '', q: '', sort: 'name' };
+    var state = { grad: qs.get('grad') || '', pos: qs.get('pos') || '', gpa: qs.get('gpa') || '', mine: '', q: '', sort: 'name', view: '' };
     var list = document.getElementById('list'), count = document.getElementById('count'), mineBox = document.getElementById('mine');
     var draw = function () {
       var q = state.q.toLowerCase(), l = shortlist();
@@ -591,7 +664,9 @@
           (!state.mine || l.indexOf(p.id) > -1) && (!q || (p.name + ' ' + p.school).toLowerCase().indexOf(q) > -1);
       });
       out.sort(function (a, b) { return state.sort === 'gpa' ? parseFloat(b.gpa) - parseFloat(a.gpa) : state.sort === 'grad' ? a.grad - b.grad || a.name.localeCompare(b.name) : a.name.localeCompare(b.name); });
-      list.innerHTML = out.map(playerCard).join('') || '<div class="empty"><h3>' + (state.mine ? 'Nobody on your list yet' : 'No players match') + '</h3><p>' + (state.mine ? 'Tap the star on any player to keep her here.' : 'Try clearing a filter.') + '</p></div>';
+      list.className = state.view ? '' : 'pcs';
+      list.innerHTML = (state.view && out.length ? '<div class="sheetbox" style="margin-top:0"><div class="tblwrap"><table class="tbl"><thead><tr><th>Player</th><th>Class</th><th>Pos</th><th>B/T</th><th>GPA</th><th>High school</th><th>Team</th></tr></thead><tbody>' +
+        out.map(function (p) { return '<tr><td><a href="player.html?p=' + p.id + '">' + esc(p.name) + '</a></td><td>' + p.grad + '</td><td>' + esc(p.pos.join(', ')) + '</td><td>' + p.bats + '/' + p.throws + '</td><td>' + (p.hideGpa ? '' : esc(p.gpa)) + '</td><td>' + esc(p.school) + '</td><td>' + esc(team(p.team).name.replace('Empire ', '')) + '</td></tr>'; }).join('') + '</tbody></table></div></div>' : out.map(playerCard).join('')) || '<div class="empty"><h3>' + (state.mine ? 'Nobody on your list yet' : 'No players match') + '</h3><p>' + (state.mine ? 'Tap the star on any player to keep her here.' : 'Try clearing a filter.') + '</p></div>';
       count.innerHTML = '<b>' + out.length + '</b> ' + (out.length === 1 ? 'player' : 'players');
       document.getElementById('mineN').textContent = l.length;
       mineBox.hidden = !state.mine || !out.length;
@@ -599,7 +674,7 @@
       [].forEach.call(document.querySelectorAll('.chip[data-f]'), function (c) { c.setAttribute('aria-pressed', String(state[c.dataset.f] === c.dataset.v)); });
     };
     onStar = draw;
-    document.getElementById('main').addEventListener('click', function (e) { var c = e.target.closest('.chip[data-f]'); if (!c) return; state[c.dataset.f] = state[c.dataset.f] === c.dataset.v ? '' : c.dataset.v; draw(); });
+    document.getElementById('main').addEventListener('click', function (e) { var c = e.target.closest('.chip[data-f]'); if (!c) return; state[c.dataset.f] = c.dataset.f === 'view' ? c.dataset.v : state[c.dataset.f] === c.dataset.v ? '' : c.dataset.v; draw(); });
     document.getElementById('find').addEventListener('input', function (e) { state.q = e.target.value; draw(); });
     document.getElementById('sort').addEventListener('change', function (e) { state.sort = e.target.value; draw(); });
     draw();
@@ -646,7 +721,7 @@
         var m = {}; MEAS.forEach(function (x) { m[x[0]] = val(x[0]); });
         o[pid] = { num: val('num'), pos: pos.length ? pos : player(pid).pos, bats: val('bats'), throws: val('throws'), about: val('about'), commit: val('commit'), school: val('school') || player(pid).school,
           gpa: val('gpa') || player(pid).gpa, major: val('major'), college: val('college'), sat: val('sat'), act: val('act'), ncaa: val('ncaa'), hsCoach: val('hsCoach'),
-          stats: (function () { var z = {}; STATS.forEach(function (x) { if (val('s_' + x[0])) z[x[0]] = val('s_' + x[0]); }); return z; })(), honors: val('honors').split(',').map(function (h) { return h.trim(); }).filter(Boolean), hideGpa: document.getElementById('hideGpa').checked, m: m, vid: [val('vid1'), val('vid2')].filter(Boolean), cardStyle: old.cardStyle, photo: newPhoto || old.photo };
+          stats: (function () { var z = {}; STATS.forEach(function (x) { if (val('s_' + x[0])) z[x[0]] = val('s_' + x[0]); }); return z; })(), honors: val('honors').split(',').map(function (h) { return h.trim(); }).filter(Boolean), hideGpa: document.getElementById('hideGpa').checked, transcript: document.getElementById('transcript').checked, m: m, vid: [val('vid1'), val('vid2')].filter(Boolean), cardStyle: old.cardStyle, photo: newPhoto || old.photo };
         if (!o[pid].photo) delete o[pid].photo;
         sset('emp_ov', o); document.getElementById('bok').classList.add('on'); redraw(); meter();
       });
@@ -676,8 +751,20 @@
     };
     document.getElementById('styles').addEventListener('click', function (e) {
       var b = e.target.closest('[data-style]'); if (!b) return; setStyle = b.dataset.style;
-      [].forEach.call(this.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', String(c === b)); }); drawSet();
+      [].forEach.call(this.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', String(c === b)); }); drawSet(); drawTg();
     });
+    var tg = function (kind, scale) {
+      var t = team(qs.get('t')) || D.teams[1];
+      var o = { style: setStyle, scale: scale, team: { name: t.name, coach: t.coach, photo: t.wide }, url: location.origin + location.pathname.replace(/[^/]*$/, '') + 'team.html?t=' + t.id,
+        players: r2.map(function (p) { return { name: p.name, grad: p.grad, pos: p.pos.join('/'), num: p.num }; }) };
+      return kind === 'poster' ? C.poster(o) : C.rosterGfx(o);
+    };
+    var drawTg = function () { tg('poster', 0.5).then(function (c) { document.getElementById('tgPoster').src = c.toDataURL('image/png'); return tg('roster', 0.5); }).then(function (c) { document.getElementById('tgRoster').src = c.toDataURL('image/png'); }); };
+    document.querySelector('.gfx2').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-tg]'); if (!b) return;
+      tg(b.dataset.tg, 1).then(function (c) { return C.share(c, 'empire-' + b.dataset.tg + '.png', 'Empire Softball'); });
+    });
+    drawTg();
     setEl.addEventListener('click', function (e) {
       var b = e.target.closest('[data-card]'); if (!b) return; var p = player(b.dataset.card), msg = document.getElementById('cardMsg');
       msg.textContent = 'Drawing the card.';
@@ -686,17 +773,56 @@
     drawSet();
   }
 
+  if (page === 'coach') {
+    var $ = function (id) { return document.getElementById(id); };
+    var saveClub = function (fn) { var c = club(); fn(c); sset('emp_club', c); deskDraw(); };
+    var deskDraw = function () {
+      var c = club(), box = sget('emp_inbox') || [];
+      $('deskInbox').innerHTML = box.length ? box.map(function (m) { return '<div class="inb"><div class="inb__top"><b>' + esc(m.kind) + '</b><span>' + esc(m.about) + ' / ' + esc(m.when) + '</span></div><dl>' + m.fields.map(function (f) { return '<div><dt>' + esc(f[0]) + '</dt><dd>' + esc(f[1]) + '</dd></div>'; }).join('') + '</dl></div>'; }).join('') :
+        '<p>Nothing yet. Fill in the <a href="tryouts.html">tryout form</a>, the <a href="contact.html">contact form</a> or the coach form on any <a href="player.html?p=kaitlyn-lozano#ask">player page</a> and it lands here.</p>';
+      $('deskPlayers').innerHTML = (c.players || []).map(function (p) { return '<div><span><b>' + esc(p.name) + '</b> ' + p.grad + ', ' + esc(p.pos.join('/')) + ', ' + esc(team(p.team).name.replace('Empire ', '')) + '</span><a href="player.html?p=' + p.id + '">View</a><button type="button" data-rmp="' + p.id + '">Remove</button></div>'; }).join('');
+      $('deskEvents').innerHTML = (c.events || []).map(function (e) { var a = ymd(e.start); return '<div><span><b>' + esc(e.name) + '</b> ' + MON[a.m] + ' ' + a.d + ', ' + esc(e.place) + '</span><a href="schedule.html">View</a><button type="button" data-rme="' + e.id + '">Remove</button></div>'; }).join('');
+      $('nWho').innerHTML = players().map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('');
+      $('nTxt').value = (c.notes || {})[$('nWho').value] || '';
+      $('news').value = c.news || '';
+    };
+    var need = function (form) { var bad = [].filter.call(form.querySelectorAll('[required]'), function (f) { return !f.value.trim(); }); [].forEach.call(form.querySelectorAll('input'), function (f) { f.classList.remove('bad'); }); bad.forEach(function (f) { f.classList.add('bad'); }); if (bad.length) bad[0].focus(); return !bad.length; };
+    $('fNews').addEventListener('submit', function (e) { e.preventDefault(); saveClub(function (c) { c.news = $('news').value.trim(); }); document.querySelector('.bar').firstChild.textContent = ($('news').value.trim() || 'Tryout interest is open for every age group') + ' '; });
+    $('nWho').addEventListener('change', function () { $('nTxt').value = (club().notes || {})[$('nWho').value] || ''; });
+    $('fNote').addEventListener('submit', function (e) { e.preventDefault(); var who = $('nWho').value, txt = $('nTxt').value.trim(); saveClub(function (c) { c.notes = c.notes || {}; if (txt) c.notes[who] = txt; else delete c.notes[who]; }); $('nWho').value = who; $('nTxt').value = txt; location.href = 'player.html?p=' + who; });
+    $('fPlayer').addEventListener('submit', function (e) {
+      e.preventDefault(); if (!need(this)) return;
+      var name = $('aName').value.trim(), pos = $('aPos').value.toUpperCase().split(/[,\/\s]+/).filter(Boolean);
+      saveClub(function (c) { c.players = c.players || []; c.players.push({ id: name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36), added: true, name: name, team: $('aTeam').value, pos: pos, school: $('aSchool').value.trim(), grad: parseInt($('aGrad').value, 10) || 2029, gpa: $('aGpa').value.trim(), hideGpa: !$('aGpa').value.trim(), bats: 'R', throws: 'R', m: {} }); });
+      this.reset();
+    });
+    $('fEvent').addEventListener('submit', function (e) {
+      e.preventDefault(); if (!need(this)) return;
+      var teams = [].map.call(this.querySelectorAll('[name=eTeam]:checked'), function (x) { return x.value; });
+      saveClub(function (c) { c.events = c.events || []; c.events.push({ id: 'x' + Date.now().toString(36), added: true, name: $('eName').value.trim(), start: $('eStart').value, end: $('eEnd').value && $('eEnd').value >= $('eStart').value ? $('eEnd').value : $('eStart').value, place: $('ePlace').value.trim(), city: $('eCity').value.trim(), teams: teams.length ? teams : D.teams.map(function (t) { return t.id; }), showcase: $('eShow').checked }); });
+      this.reset();
+    });
+    document.getElementById('main').addEventListener('click', function (e) {
+      var a = e.target.closest('[data-rmp]'), b = e.target.closest('[data-rme]');
+      if (a) saveClub(function (c) { c.players = (c.players || []).filter(function (p) { return p.id !== a.dataset.rmp; }); });
+      if (b) saveClub(function (c) { c.events = (c.events || []).filter(function (x) { return x.id !== b.dataset.rme; }); });
+    });
+    $('inboxClear').addEventListener('click', function () { sset('emp_inbox', []); deskDraw(); });
+    $('deskReset').addEventListener('click', function () { sset('emp_club', {}); location.reload(); });
+    deskDraw();
+  }
+
   if (page === 'schedule') {
     var sel = document.getElementById('tf'), box = document.getElementById('sched'), so = document.getElementById('showOnly');
     if (qs.get('t')) sel.value = qs.get('t');
     var drawS = function () {
-      var evs = upcoming(D.events.filter(function (e) { return (!sel.value || e.teams.indexOf(sel.value) > -1) && (!so.checked || e.showcase); }));
+      var evs = upcoming(EV().filter(function (e) { return (!sel.value || e.teams.indexOf(sel.value) > -1) && (!so.checked || e.showcase); }));
       var html = '', last = '';
       evs.forEach(function (e) { var a = ymd(e.start), k = MONTH[a.m] + ' ' + a.y; if (k !== last) { html += (last ? '</div>' : '') + '<h2 class="month">' + k + '</h2><div class="evs">'; last = k; } html += eventRow(e); });
       box.innerHTML = html ? html + '</div>' : '<div class="empty"><h3>Nothing here yet</h3><p>No events match for this team.</p></div>';
     };
     sel.addEventListener('change', drawS); so.addEventListener('change', drawS); drawS();
-    document.getElementById('icsAll').addEventListener('click', function () { icsFile(upcoming(D.events.filter(function (e) { return (!sel.value || e.teams.indexOf(sel.value) > -1) && (!so.checked || e.showcase); })), 'empire-schedule.ics'); });
+    document.getElementById('icsAll').addEventListener('click', function () { icsFile(upcoming(EV().filter(function (e) { return (!sel.value || e.teams.indexOf(sel.value) > -1) && (!so.checked || e.showcase); })), 'empire-schedule.ics'); });
   }
 
   if (page === 'photos') {

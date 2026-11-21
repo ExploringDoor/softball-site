@@ -233,5 +233,44 @@
     });
   }
 
-  window.EmpireCards = { STYLES: STYLES, render: render, back: back, commit: commit, story: story, share: share, W: W, H: H };
+  /* team poster for the fence, 1080 x 1350: big code that opens the team page */
+  function poster(o) {
+    var S = STYLES[o.style] || STYLES.pin, T = o.team || {}, k = o.scale || 1, w = 1080, h = 1350;
+    return Promise.all([fonts(), loadImg(T.photo)]).then(function (got) {
+      var s = shell(S, w, h, k, 0), x = s.x, y = 70;
+      if (got[1]) { photoBox(x, S, got[1], 60, 60, w - 120, 560); y = 660; }
+      x.fillStyle = S.accent === INK ? INK : S.accent; x.font = '700 36px ' + DISP; x.fillText('MEET THE TEAM', 60, y);
+      var nm = String(T.name || '').toUpperCase(); x.fillStyle = S.text; var ns = fit(x, nm, '900', 92, w - 120, 40); x.fillText(nm, 56, y + 54);
+      x.fillStyle = S.dim; x.font = '700 26px ' + BODY; x.fillText('HEAD COACH ' + String(T.coach || '').toUpperCase() + '   •   ' + (o.players || []).length + ' PLAYERS', 60, y + 66 + ns);
+      var qy = Math.max(y + 130 + ns, h - 60 - 300 - 70), size = Math.min(300, h - qy - 110);
+      var has = qrBox(x, o.url, 60, qy, size);
+      x.fillStyle = S.text; x.font = '900 40px ' + DISP;
+      ['SCAN FOR', 'EVERY PLAYER,', 'HER PAGE AND', 'THE SCHEDULE'].forEach(function (l, i) { x.fillText(l, has ? 60 + size + 40 : 60, qy + 20 + i * 56); });
+      brandLine(x, S, 60, h - 96, 28);
+      return s.c;
+    });
+  }
+
+  /* roster graphic, 1080 x 1350: every player in two columns */
+  function rosterGfx(o) {
+    var S = STYLES[o.style] || STYLES.pin, T = o.team || {}, k = o.scale || 1, w = 1080, h = 1350;
+    return fonts().then(function () {
+      var s = shell(S, w, h, k, 0), x = s.x;
+      x.fillStyle = S.accent === INK ? INK : S.accent; x.font = '700 32px ' + DISP; x.fillText('ROSTER', 60, 70);
+      var nm = String(T.name || '').toUpperCase(); x.fillStyle = S.text; var ns = fit(x, nm, '900', 80, w - 120, 36); x.fillText(nm, 56, 116);
+      x.fillStyle = S.dim; x.font = '700 24px ' + BODY; x.fillText('HEAD COACH ' + String(T.coach || '').toUpperCase(), 60, 128 + ns);
+      var list = (o.players || []).slice(0, 24), top = 200 + ns, cols = list.length > 14 ? 2 : 1, per = Math.ceil(list.length / cols), cw = (w - 120 - (cols - 1) * 30) / cols;
+      var rh = Math.min(80, (h - top - 150) / Math.max(per, 1));
+      list.forEach(function (p, i) {
+        var cx = 60 + Math.floor(i / per) * (cw + 30), cy = top + (i % per) * rh;
+        x.fillStyle = S.tileLine; x.fillRect(cx, cy + rh - 6, cw, 2);
+        x.textAlign = 'left'; x.fillStyle = S.text; fit(x, String(p.name).toUpperCase(), '700', cols > 1 ? 24 : 30, cw - 170, 14); x.fillText(String(p.name).toUpperCase(), cx, cy + rh * 0.22);
+        x.textAlign = 'right'; x.fillStyle = S.dim; fit(x, p.pos + '  ' + p.grad, '700', 22, 165, 13, BODY); x.fillText(p.pos + '  ' + p.grad, cx + cw, cy + rh * 0.26);
+      });
+      x.textAlign = 'left'; brandLine(x, S, 60, h - 96, 28);
+      return s.c;
+    });
+  }
+
+  window.EmpireCards = { STYLES: STYLES, render: render, back: back, commit: commit, story: story, poster: poster, rosterGfx: rosterGfx, share: share, W: W, H: H };
 })();
