@@ -26,6 +26,26 @@
   function purl(p) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'player.html?p=' + p.id; }
   function ytId(u) { var m = String(u || '').match(/(?:youtu\.be\/|v=|shorts\/|embed\/)([\w-]{11})/); return m ? m[1] : ''; }
   function shortlist() { return sget('emp_list') || []; }
+  function notes() { return sget('emp_notes') || {}; }
+  function avgGpa(list) { var g = list.filter(function (p) { return !p.hideGpa && parseFloat(p.gpa); }).map(function (p) { return parseFloat(p.gpa); }); return g.length ? (g.reduce(function (a, b) { return a + b; }, 0) / g.length).toFixed(2) : ''; }
+  var STATS = [['avg', 'AVG'], ['obp', 'OBP'], ['hr', 'HR'], ['rbi', 'RBI'], ['sb', 'SB'], ['era', 'ERA'], ['k', 'K'], ['ip', 'IP']];
+  var MEAS = [['ht', 'Height', ''], ['ev', 'Exit velo', 'mph'], ['ov', 'Overhand velo', 'mph'], ['h1', 'Home to first', 'sec'], ['pop', 'Pop time', 'sec'], ['pv', 'Pitch velo', 'mph']];
+  function icsFile(list, fileName) {
+    var out = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Empire Softball//EN'];
+    list.forEach(function (e) {
+      var s = e.start.replace(/-/g, ''); var en = ymd(e.end); var d = new Date(en.y, en.m, en.d + 1);
+      var endX = d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
+      out.push('BEGIN:VEVENT', 'UID:' + e.id + '@empiresoftball', 'DTSTAMP:' + s + 'T000000Z', 'DTSTART;VALUE=DATE:' + s, 'DTEND;VALUE=DATE:' + endX, 'SUMMARY:Empire Softball: ' + e.name, 'LOCATION:' + e.place + '\\, ' + e.city.replace(',', '\\,'), 'END:VEVENT');
+    });
+    out.push('END:VCALENDAR');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([out.join('\r\n')], { type: 'text/calendar' })); a.download = fileName;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+  function diamond(pos) {
+    var S = { P: [100, 120], C: [100, 166], '1B': [146, 114], '2B': [124, 86], '3B': [54, 114], SS: [76, 86], LF: [42, 66], CF: [100, 44], RF: [158, 66] };
+    return '<svg class="dia" viewBox="0 0 200 190" role="img" aria-label="Field diagram showing ' + esc(pos.join(', ')) + '"><path d="M100 180 L8 86 A100 100 0 0 1 192 86 Z" fill="#f1eee3" stroke="#0b0b0b" stroke-width="2.5" stroke-linejoin="round"/><path d="M100 166 L146 120 L100 74 L54 120 Z" fill="#e9d5a1" stroke="#0b0b0b" stroke-width="2" stroke-linejoin="round"/>' +
+      Object.keys(S).map(function (k) { var on = pos.indexOf(k) > -1 || (pos.indexOf('OF') > -1 && /F$/.test(k)); return '<circle cx="' + S[k][0] + '" cy="' + S[k][1] + '" r="13" fill="' + (on ? '#0b0b0b' : '#ffffff') + '" stroke="#0b0b0b" stroke-width="2"/><text x="' + S[k][0] + '" y="' + (S[k][1] + 3.5) + '" text-anchor="middle" font-size="9.5" font-weight="700" fill="' + (on ? '#e9d5a1' : '#8a867b') + '">' + k + '</text>'; }).join('') + '</svg>';
+  }
 
   var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var MONTH = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -40,6 +60,7 @@
     arrow: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M4 12h15M13 5l7 7-7 7"/></svg>',
     back: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M20 12H5M11 5l-7 7 7 7"/></svg>',
     play: '<svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l12 7-12 7z" fill="currentColor"/></svg>',
+    find: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></svg>',
     star: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.3L12 17.4 6.4 20.4l1.1-6.3L3 9.7l6.2-.9z"/></svg>'
   };
   var SKY = 'M0 70V52h34V40h22v12h30V30h18v-8h10v8h16v22h40V44h26V34h30v18h28V24h14V12h8V4h4v8h8v12h14v28h36V38h24v14h30V46h22V26h30v20h26V16h10V0h6v16h10v30h34V36h28v16h30V28h20v-8h12v8h20v24h32V42h26v10h30V32h36v20h28V44h30V22h14v-8h8v8h14v30h34V38h30v14h26V48h40v22z';
@@ -49,7 +70,7 @@
     ['index.html', 'Home', 'home'], ['teams.html', 'Teams', 'teams'], ['players.html', 'Players', 'players'],
     ['schedule.html', 'Where to watch', 'schedule'], ['photos.html', 'Photos', 'photos'], ['about.html', 'About', 'about'], ['contact.html', 'Contact', 'contact']
   ];
-  var here = { team: 'teams', player: 'players', cards: 'teams', builder: 'builder' }[page] || page;
+  var here = { team: 'teams', player: 'players', cards: 'teams', builder: 'builder', compare: 'players' }[page] || page;
 
   function header() {
     var links = NAV.slice(1).map(function (n) { return '<a href="' + n[0] + '"' + (n[2] === here ? ' aria-current="page"' : '') + '>' + n[1] + '</a>'; }).join('');
@@ -61,12 +82,13 @@
       '<header class="top"><div class="wrap top__in">' +
       '<a class="top__logo" href="index.html" aria-label="Empire Softball home"><img src="img/crest-sm.webp" width="320" height="199" alt="Empire Softball"></a>' +
       '<nav class="nav" aria-label="Main">' + links + '</nav>' +
-      '<div class="top__act"><a class="top__sign" href="my-profile.html">Player sign in</a><a class="btn btn--sm" href="tryouts.html">Tryouts</a>' +
+      '<div class="top__act"><button class="top__find" id="findOpen" type="button" aria-label="Search the site">' + I.find + '</button><a class="top__sign" href="my-profile.html">Player sign in</a><a class="btn btn--sm" href="tryouts.html">Tryouts</a>' +
       '<button class="menu-btn" id="menuOpen" aria-haspopup="dialog" aria-controls="sheet">Menu</button></div>' +
       '</div></header>' +
       '<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Menu"><div class="sheet__top"><img src="img/crest-sm.webp" width="320" height="199" alt="">' +
       '<button class="menu-btn" id="menuClose">Close</button></div><div class="sheet__links">' + sheet + '</div>' +
-      '<div class="sheet__soc"><a href="' + D.club.instagram + '" target="_blank" rel="noopener">Instagram</a><a href="' + D.club.facebook + '" target="_blank" rel="noopener">Facebook</a></div></div>';
+      '<div class="sheet__soc"><a href="' + D.club.instagram + '" target="_blank" rel="noopener">Instagram</a><a href="' + D.club.facebook + '" target="_blank" rel="noopener">Facebook</a></div></div>' +
+      '<dialog class="find" id="findDlg" aria-label="Search"><div class="find__bar"><input id="findQ" type="search" placeholder="Search players, teams, events" autocomplete="off" aria-label="Search the site"><button type="button" id="findX">Close</button></div><div id="findR" class="find__r"></div></dialog>';
   }
 
   function footer() {
@@ -144,6 +166,26 @@
     return '<div class="chips" id="styles" role="group" aria-label="Card style">' + Object.keys(C.STYLES).map(function (k) { return '<button type="button" class="chip" data-style="' + k + '" aria-pressed="' + (k === cur) + '">' + C.STYLES[k].name + '</button>'; }).join('') + '</div>';
   }
 
+  var KINDS = [['front', 'Card front'], ['back', 'Card back'], ['watch', 'Watch me play'], ['commit', 'Committed']];
+  function kindChips(p, all) {
+    return '<div class="chips" id="kinds" role="group" aria-label="What to make">' + KINDS.filter(function (k) { return all || k[0] !== 'commit' || p.college; }).map(function (k, i) { return '<button type="button" class="chip" data-kind="' + k[0] + '" aria-pressed="' + (i === 0) + '">' + k[1] + '</button>'; }).join('') + '</div>';
+  }
+  function gfx(p, kind, style, scale) {
+    var o = cardOpts(p, style, scale), t = team(p.team), head = (t.staff || [])[0] || { name: t.coach };
+    if (kind === 'back') {
+      o.back = { meas: p.sampleM ? [] : MEAS.filter(function (m) { return p.m[m[0]]; }).map(function (m) { return [p.m[m[0]] + (m[2] ? ' ' + m[2] : ''), m[1]]; }),
+        stats: STATS.filter(function (x) { return (p.stats || {})[x[0]]; }).map(function (x) { return [p.stats[x[0]], x[1]]; }), about: p.about || '', honors: p.honors || [],
+        lines: [p.school + (p.hideGpa ? '' : '   \u2022   ' + p.gpa + ' GPA'), 'Coach ' + head.name + (head.email ? '   \u2022   ' + head.email : '')] };
+      return C.back(o);
+    }
+    if (kind === 'commit') { o.college = p.college || 'Your college'; return C.commit(o); }
+    if (kind === 'watch') {
+      o.events = upcoming(D.events.filter(function (e) { return e.teams.indexOf(t.id) > -1; })).slice(0, 4).map(function (e) { var a = ymd(e.start); return { mon: MON[a.m].toUpperCase(), day: a.d, name: e.name, place: e.place + ', ' + e.city }; });
+      return C.story(o);
+    }
+    return C.render(o);
+  }
+
   /* ---------- pages ---------- */
   var P = {};
 
@@ -204,7 +246,13 @@
       r.length ? '<div class="ph__act noprint"><a class="btn btn--sm" href="#sheet-roster">Roster sheet</a><a class="btn btn--sm" href="cards.html?t=' + t.id + '">Team card set</a><a class="btn btn--sm" href="schedule.html?t=' + t.id + '">Schedule</a></div>' : '') +
       (t.wide ? '<div class="wrap"><figure class="tphoto"><img src="' + t.wide + '" alt="' + esc(t.name) + ' team photo"></figure></div>' : '') +
       '<section class="sec sec--tight"><div class="wrap"><div class="sec__head"><h2 class="disp">Roster</h2>' + (r.length ? '<p>' + r.length + ' players. Open a player for her full recruiting page.</p>' : '') + '</div>' +
-      (r.length ? '<div class="pcs noprint">' + r.map(playerCard).join('') + '</div>' +
+      (r.length ? (function () {
+        var by = {}; r.forEach(function (p) { by[p.grad] = (by[p.grad] || 0) + 1; });
+        var has = function (k) { return r.filter(function (p) { return p.pos.indexOf(k) > -1; }).length; };
+        return '<div class="nums"><div><b>' + r.length + '</b><span>Players</span></div><div><b>' + avgGpa(r) + '</b><span>Team GPA</span></div>' +
+          Object.keys(by).sort().map(function (g) { return '<div><b>' + by[g] + '</b><span>Class of ' + g + '</span></div>'; }).join('') +
+          '<div><b>' + has('P') + '</b><span>Pitchers</span></div><div><b>' + has('C') + '</b><span>Catchers</span></div></div>';
+      })() + '<div class="pcs noprint">' + r.map(playerCard).join('') + '</div>' +
         '<div class="sheetbox" id="sheet-roster"><div class="sheetbox__top"><h3>Roster sheet for coaches</h3><button type="button" class="btn btn--sm noprint" data-print>Print this sheet</button></div>' +
         '<div class="tblwrap"><table class="tbl"><thead><tr><th>Player</th><th>Class</th><th>Pos</th><th>B/T</th><th>GPA</th><th>High school</th></tr></thead><tbody>' +
         r.map(function (p) { return '<tr><td><a href="player.html?p=' + p.id + '">' + esc(p.name) + '</a></td><td>' + p.grad + '</td><td>' + esc(p.pos.join(', ')) + '</td><td>' + p.bats + '/' + p.throws + '</td><td>' + (p.hideGpa ? '' : esc(p.gpa)) + '</td><td>' + esc(p.school) + '</td></tr>'; }).join('') +
@@ -213,7 +261,11 @@
       '</div></section>' +
       '<section class="sec sec--tight sec--soft"><div class="wrap"><div class="sec__head"><h2 class="disp">Coaches</h2></div><div class="staff">' + staff.map(function (s) { return staffRow(s); }).join('') + '</div></div></section>' +
       '<section class="sec sec--tight noprint"><div class="wrap"><div class="sec__head"><h2 class="disp">Where to watch</h2><p>' + sample('Sample dates') + '</p></div>' +
-      '<div class="evs">' + evs.map(function (e) { return eventRow(e, { noTeams: true }); }).join('') + '</div></div></section>';
+      '<div class="evs">' + evs.map(function (e) { return eventRow(e, { noTeams: true }); }).join('') + '</div>' +
+      '<p class="mt"><button type="button" class="btn btn--sm" data-icsall="' + t.id + '">Add the whole schedule to my calendar</button></p></div></section>' +
+      '<section class="sec sec--tight sec--gold noprint"><div class="wrap split"><div><h2 class="disp" style="font-size:clamp(24px,6vw,40px)">Rainouts and field changes</h2><p class="mt">Get a text when a game for ' + esc(t.name) + ' moves, is rained out or changes fields.</p></div>' +
+      '<form class="form" novalidate><div class="two">' + field('an', 'Your name', 'text', 'required autocomplete="name"') + field('ap', 'Cell phone', 'tel', 'required autocomplete="tel"') + '</div>' +
+      '<div><button class="btn btn--ink" type="submit">Text me changes ' + I.arrow + '</button></div><div class="form__ok" role="status">This is a sample site, so nothing was saved. On the live site you would be on the text list for this team.</div></form></div></section>';
   };
 
   P.players = function () {
@@ -231,13 +283,11 @@
       '<div class="fld"><label for="sort">Sort by</label><select id="sort"><option value="name">Name</option><option value="grad">Class</option><option value="gpa">GPA, high to low</option></select></div></div></div>' +
       '<div class="listbar"><div class="count" id="count" aria-live="polite"></div>' +
       '<button type="button" class="chip chip--star" data-f="mine" data-v="1" aria-pressed="false">' + I.star + ' My list <b id="mineN">0</b></button></div>' +
-      '<div class="mine" id="mine" hidden><span>Your list is saved on this device.</span><a class="btn btn--sm" id="mineMail" href="#">Email my list to myself</a><button type="button" class="btn btn--sm" data-print>Print my list</button></div>' +
+      '<div class="mine" id="mine" hidden><span>Your list is saved on this device.</span><a class="btn btn--sm" href="compare.html">Compare side by side</a><a class="btn btn--sm" id="mineMail" href="#">Email my list to myself</a><button type="button" class="btn btn--sm" data-print>Print my list</button></div>' +
       '<div class="pcs" id="list"></div>' +
       '<p class="note">Profiles are posted for Empire White 16u Elite so far. Other teams appear here as their coaches add them.</p>' +
       '</div></section>';
   };
-
-  var MEAS = [['ht', 'Height', ''], ['ev', 'Exit velo', 'mph'], ['ov', 'Overhand velo', 'mph'], ['h1', 'Home to first', 'sec'], ['pop', 'Pop time', 'sec'], ['pv', 'Pitch velo', 'mph']];
 
   P.player = function () {
     var p = player(qs.get('p')) || player(D.players[0].id);
@@ -248,36 +298,48 @@
     var nm = p.name.split(' ');
     var meas = MEAS.filter(function (m) { return p.m[m[0]]; });
     var vids = (p.vid || []).map(ytId).filter(Boolean);
+    var st = STATS.filter(function (x) { return (p.stats || {})[x[0]]; });
+    var mail = 'mailto:?subject=' + encodeURIComponent(p.name + ', class of ' + p.grad + ', Empire Softball') + '&body=' + encodeURIComponent(p.name + '\n' + p.pos.join(' / ') + ', class of ' + p.grad + '\n' + p.school + '\n' + t.name + '\n\nFull profile: ' + purl(p));
     return '<section class="pp"><div class="wrap pp__in">' +
       '<div class="pp__photo"><img src="' + pphoto(p) + '" width="720" height="900" alt="' + esc(p.name) + '">' + (p.num ? '<span class="pp__num">' + esc(p.num) + '</span>' : '') + '</div>' +
       '<div class="pp__head"><a class="crumb" href="team.html?t=' + t.id + '">' + I.back + esc(t.name) + '</a>' +
       '<h1 class="disp">' + esc(nm[0]) + ' <span class="wm">' + esc(nm.slice(1).join(' ')) + '</span></h1>' +
-      '<div class="pp__tags"><span class="tag tag--ink">Class of ' + p.grad + '</span><span class="tag">' + esc(p.pos.join(' / ')) + '</span>' + (p.commit ? '<span class="tag tag--gold">' + esc(p.commit) + '</span>' : '') + '</div>' +
+      '<div class="pp__tags"><span class="tag tag--ink">Class of ' + p.grad + '</span><span class="tag">' + esc(p.pos.join(' / ')) + '</span>' + (p.college ? '<span class="tag tag--gold">Committed: ' + esc(p.college) + '</span>' : p.commit ? '<span class="tag tag--gold">' + esc(p.commit) + '</span>' : '') + '</div>' +
       (p.about ? '<p class="pp__about">' + esc(p.about) + '</p>' : '') +
       '<dl class="dl">' +
       '<div><dt>Bats / Throws</dt><dd>' + hand(p.bats) + ' / ' + hand(p.throws) + '</dd></div>' +
       (p.hideGpa ? '' : '<div><dt>GPA</dt><dd>' + esc(p.gpa) + '</dd></div>') +
       '<div><dt>High school</dt><dd>' + esc(p.school) + '</dd></div>' +
       '<div><dt>Team</dt><dd>' + esc(t.name) + '</dd></div>' +
-      (p.major ? '<div><dt>Wants to study</dt><dd>' + esc(p.major) + '</dd></div>' : '') + '</dl>' +
+      (p.major ? '<div><dt>Wants to study</dt><dd>' + esc(p.major) + '</dd></div>' : '') +
+      (p.sat ? '<div><dt>SAT</dt><dd>' + esc(p.sat) + '</dd></div>' : '') + (p.act ? '<div><dt>ACT</dt><dd>' + esc(p.act) + '</dd></div>' : '') +
+      (p.ncaa ? '<div><dt>NCAA ID</dt><dd>' + esc(p.ncaa) + '</dd></div>' : '') + '</dl>' +
       '<div class="pp__act noprint">' + starBtn(p).replace('class="star"', 'class="star star--btn"').replace('</button>', '<span>Save to my list</span></button>') +
       '<button class="btn btn--sm" type="button" id="share">Share</button><button class="btn btn--sm" type="button" data-print>Print one page</button>' +
-      '<a class="btn btn--sm" href="#ask">Ask about her</a></div></div></div></section>' +
+      '<a class="btn btn--sm" href="' + mail + '">Email this page</a><a class="btn btn--sm" href="#ask">Ask about her</a></div>' +
+      '<div class="pnote noprint" id="pnote" hidden><label for="pn">My private note about ' + esc(nm[0]) + '</label><textarea id="pn" placeholder="Only you see this. It stays on this device."></textarea></div></div></div></section>' +
 
       '<section class="sec sec--tight"><div class="wrap pgrid">' +
       '<div class="blk"><div class="blk__top"><h2>Measurables</h2>' + (p.sampleM ? sample('Sample numbers') : '') + '</div>' +
       (meas.length ? '<div class="meas">' + meas.map(function (m) { return '<div><b>' + esc(p.m[m[0]]) + (m[2] ? '<i>' + m[2] + '</i>' : '') + '</b><span>' + m[1] + '</span></div>'; }).join('') + '</div>' : '<p class="mute">No numbers posted yet.</p>') +
       (p.sampleM ? '<p class="fine">These are made up to show the layout. Her family enters the real ones in the profile builder.</p>' : '') + '</div>' +
 
-      '<div class="blk"><div class="blk__top"><h2>Video</h2></div>' +
+      '<div class="blk' + (st.length || (p.honors || []).length ? '' : ' noprint') + '"><div class="blk__top"><h2>This season</h2></div>' +
+      (st.length ? '<div class="meas meas--4">' + st.map(function (x) { return '<div><b>' + esc(p.stats[x[0]]) + '</b><span>' + x[1] + '</span></div>'; }).join('') + '</div>' : '<div class="slot"><span>No season stats posted yet. The family or coach adds them in the profile builder.</span></div>') +
+      ((p.honors || []).length ? '<div class="hon">' + p.honors.map(function (h) { return '<span class="tag tag--gold">' + esc(h) + '</span>'; }).join('') + '</div>' : '') + '</div>' +
+
+      '<div class="blk"><div class="blk__top"><h2>Where she plays</h2><span class="tag">' + esc(p.pos.join(' / ')) + '</span></div>' + diamond(p.pos) + '</div>' +
+
+      '<div class="blk noprint"><div class="blk__top"><h2>Video</h2></div>' +
       (vids.length ? '<div class="vids">' + vids.map(function (id, i) { return '<button type="button" class="vid" data-yt="' + id + '" aria-label="Play video ' + (i + 1) + '"><img src="https://i.ytimg.com/vi/' + id + '/hqdefault.jpg" loading="lazy" alt=""><span>' + I.play + '</span></button>'; }).join('') + '</div>' :
         '<div class="slot">' + I.play + '<span>No video posted yet. Paste a YouTube link in the profile builder and it plays right here.</span></div>') + '</div>' +
 
-      '<div class="blk noprint"><div class="blk__top"><h2>Her player card</h2></div><div class="cardbox"><img id="cardImg" class="cardimg" width="500" height="700" alt="Player card for ' + esc(p.name) + '">' +
-      '<div><p>Pick a look, then save it to post or print. The code on the card opens this page.</p>' + styleChips(p.cardStyle || 'pin') +
+      '<div class="blk noprint"><div class="blk__top"><h2>Cards and graphics</h2></div><div class="cardbox"><img id="cardImg" class="cardimg" width="500" height="700" alt="Graphic for ' + esc(p.name) + '">' +
+      '<div><p>Pick what to make and a look, then save it to post or print. The code on it opens this page.</p>' + kindChips(p) + styleChips(p.cardStyle || 'pin') +
       '<div class="hero__cta"><button type="button" class="btn btn--ink btn--sm" id="cardShare">Share card</button><button type="button" class="btn btn--sm" id="cardSave">Save picture</button></div><p class="fine" id="cardMsg" role="status"></p></div></div></div>' +
 
       '<div class="blk"><div class="blk__top"><h2>Her coach</h2></div><div class="staff staff--one">' + staffRow(head, 'Head Coach, ' + t.name) + '</div>' +
+      (p.hsCoach ? '<p class="fine">High school coach: ' + esc(p.hsCoach) + '</p>' : '') +
       '<div class="links">' + (p.fl ? '<a class="more" href="https://www.fieldlevel.com/app/profile/' + p.fl + '/softball" target="_blank" rel="noopener">FieldLevel profile ' + I.arrow + '</a>' : '') + '</div></div>' +
 
       '<div class="blk blk--wide noprint"><div class="blk__top"><h2>See her play</h2>' + sample('Sample dates') + '</div><div class="evs">' + evs.map(function (e) { return eventRow(e, { noTeams: true }); }).join('') + '</div></div>' +
@@ -312,20 +374,25 @@
       '<div class="two">' + field('num', 'Jersey number', 'text', 'inputmode="numeric" maxlength="2"', p.num || '') + field('pos', 'Positions', 'text', 'placeholder="C, OF"', p.pos.join(', ')) + '</div>' +
       '<div class="two">' + sel('bats', 'Bats', p.bats, hands) + sel('throws', 'Throws', p.throws, hands.slice(0, 2)) + '</div>' +
       '<div class="fld"><label for="about">About me</label><textarea id="about" name="about" maxlength="320" placeholder="Two or three lines a college coach should know">' + esc(p.about || '') + '</textarea></div>' +
-      field('commit', 'College status', 'text', 'placeholder="Uncommitted, or Committed to ..."', p.commit || '') +
+      '<div class="two">' + field('commit', 'College status', 'text', 'placeholder="Uncommitted"', p.commit || '') + field('college', 'Committed to (college name)', 'text', 'placeholder="Leave empty until it is official"', p.college || '') + '</div>' +
       '<h2 class="fh">School</h2>' +
       field('school', 'High school', 'text', '', p.school) +
       '<div class="two">' + field('gpa', 'GPA', 'text', 'inputmode="decimal"', p.gpa) + field('major', 'Wants to study', 'text', '', p.major || '') + '</div>' +
+      '<div class="two">' + field('sat', 'SAT', 'text', 'inputmode="numeric"', p.sat || '') + field('act', 'ACT', 'text', 'inputmode="numeric"', p.act || '') + '</div>' +
+      '<div class="two">' + field('ncaa', 'NCAA ID', 'text', 'inputmode="numeric"', p.ncaa || '') + field('hsCoach', 'High school coach and email', 'text', '', p.hsCoach || '') + '</div>' +
       '<label class="check"><input type="checkbox" id="hideGpa"' + (p.hideGpa ? ' checked' : '') + '> Keep my GPA off my page and card</label>' +
       '<h2 class="fh">Measurables</h2>' +
       '<div class="two">' + field('ht', 'Height', 'text', 'placeholder="5\'6&quot;"', p.m.ht || '') + field('ev', 'Exit velo (mph)', 'text', 'inputmode="decimal"', p.m.ev || '') + '</div>' +
       '<div class="two">' + field('ov', 'Overhand velo (mph)', 'text', 'inputmode="decimal"', p.m.ov || '') + field('h1', 'Home to first (sec)', 'text', 'inputmode="decimal"', p.m.h1 || '') + '</div>' +
       '<div class="two">' + field('pop', 'Pop time (catchers)', 'text', 'inputmode="decimal"', p.m.pop || '') + field('pv', 'Pitch velo (pitchers)', 'text', 'inputmode="decimal"', p.m.pv || '') + '</div>' +
+      '<h2 class="fh">This season</h2>' +
+      '<div class="three">' + STATS.map(function (x) { return field('s_' + x[0], x[1], 'text', 'inputmode="decimal"', (p.stats || {})[x[0]] || ''); }).join('') + '</div>' +
+      field('honors', 'Honors and awards, separated by commas', 'text', 'placeholder="All-County 2026, Team captain"', (p.honors || []).join(', ')) +
       '<h2 class="fh">Video</h2>' +
       field('vid1', 'YouTube link: skills video', 'url', 'placeholder="https://youtu.be/..."', v[0] || '') + field('vid2', 'YouTube link: game clips', 'url', '', v[1] || '') +
-      '<div class="build__act"><button class="btn btn--ink" type="submit">Save my profile ' + I.arrow + '</button><button class="btn" type="button" id="breset">Start over</button></div>' +
+      '<div class="build__act"><button class="btn btn--ink" type="submit">Save my profile ' + I.arrow + '</button><button class="btn" type="button" id="bfill">Fill in sample answers</button><button class="btn" type="button" id="breset">Start over</button></div>' +
       '<div class="form__ok" id="bok" role="status">Saved on this device. <a href="player.html?p=' + p.id + '">See my page</a></div></form>' +
-      '<aside class="build__side"><h2 class="fh">My player card</h2><img id="cardImg" class="cardimg" width="500" height="700" alt="Player card preview">' + styleChips(p.cardStyle || 'pin') +
+      '<aside class="build__side"><div class="meter" id="meter"></div><h2 class="fh">My cards and graphics</h2><img id="cardImg" class="cardimg" width="500" height="700" alt="Graphic preview">' + kindChips(p, true) + styleChips(p.cardStyle || 'pin') +
       '<div class="hero__cta"><button type="button" class="btn btn--ink btn--sm" id="cardShare">Share card</button><button type="button" class="btn btn--sm" id="cardSave">Save picture</button></div><p class="fine" id="cardMsg" role="status">The card updates when you save.</p></aside>' +
       '</div></section>';
   };
@@ -340,12 +407,28 @@
         '<div class="empty"><h3>No cards yet</h3><p>Cards appear once this team has player profiles.</p><a class="btn" href="cards.html?t=white-16u-elite">See a finished set</a></div>') + '</div></section>';
   };
 
+  P.compare = function () {
+    var ids = (qs.get('ids') ? qs.get('ids').split(',') : shortlist()).slice(0, 4);
+    var ps = ids.map(player).filter(Boolean);
+    if (ps.length < 2) return pageHead('Compare <span class="wm">players</span>', 'Star two to four players and they line up here side by side.', ['players.html', 'All players']) +
+      '<section class="sec sec--tight"><div class="wrap"><div class="empty"><h3>Star at least two players</h3><p>Tap the star on a player, then come back.</p><a class="btn" href="players.html">Go to the player list</a></div></div></section>';
+    var rows = [['Class', function (p) { return p.grad; }], ['Positions', function (p) { return p.pos.join(', '); }], ['Bats / Throws', function (p) { return p.bats + ' / ' + p.throws; }], ['GPA', function (p) { return p.hideGpa ? '' : p.gpa; }], ['High school', function (p) { return p.school; }]]
+      .concat(MEAS.map(function (m) { return [m[1], function (p) { return p.m[m[0]] ? p.m[m[0]] + (m[2] ? ' ' + m[2] : '') : ''; }]; }))
+      .concat(STATS.map(function (x) { return [x[1], function (p) { return (p.stats || {})[x[0]] || ''; }]; }))
+      .filter(function (r) { return ps.some(function (p) { return r[1](p) !== ''; }); });
+    return pageHead('Compare <span class="wm">players</span>', ps.length + ' players from your list, side by side.', ['players.html', 'All players'], '<div class="ph__act noprint"><button type="button" class="btn btn--sm" data-print>Print this</button></div>') +
+      '<section class="sec sec--tight"><div class="wrap">' + (ps.some(function (p) { return p.sampleM; }) ? '<p class="note">Height, velo and speed numbers are samples for this demo.</p>' : '') +
+      '<div class="sheetbox" style="margin-top:0"><div class="tblwrap"><table class="tbl cmp"><thead><tr><th></th>' + ps.map(function (p) { return '<th><a href="player.html?p=' + p.id + '"><img src="' + pphoto(p) + '" alt="">' + esc(p.name) + '</a></th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function (r) { return '<tr><th scope="row">' + r[0] + '</th>' + ps.map(function (p) { return '<td>' + esc(r[1](p)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></div></div></section>';
+  };
+
   P.schedule = function () {
     var opts = '<option value="">All teams</option>' + D.teams.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join('');
     return pageHead('Where to <span class="wm">watch</span>', 'Every tournament and showcase, by team. College coaches: showcase weekends are marked.') +
       '<section class="sec sec--tight"><div class="wrap">' +
       '<div class="schedbar"><div class="fld"><label for="tf">Show</label><select id="tf">' + opts + '</select></div>' +
-      '<label class="check"><input type="checkbox" id="showOnly"> College showcases only</label></div>' +
+      '<label class="check"><input type="checkbox" id="showOnly"> College showcases only</label>' +
+      '<button type="button" class="btn btn--sm" id="icsAll">Add these to my calendar</button></div>' +
       '<p class="note">These are sample dates to show how the page works. The real slate goes in from the coach page.</p>' +
       '<div id="sched"></div></div></section>';
   };
@@ -415,13 +498,10 @@
     var b = ev.target.closest('[data-ics]');
     if (b) {
       var e = D.events.filter(function (x) { return x.id === b.dataset.ics; })[0]; if (!e) return;
-      var s = e.start.replace(/-/g, ''); var en = ymd(e.end); var d = new Date(en.y, en.m, en.d + 1);
-      var endX = d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
-      var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Empire Softball//EN', 'BEGIN:VEVENT', 'UID:' + e.id + '@empiresoftball', 'DTSTAMP:' + s + 'T000000Z',
-        'DTSTART;VALUE=DATE:' + s, 'DTEND;VALUE=DATE:' + endX, 'SUMMARY:Empire Softball: ' + e.name, 'LOCATION:' + e.place + '\\, ' + e.city.replace(',', '\\,'), 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })); a.download = 'empire-' + e.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.ics';
-      document.body.appendChild(a); a.click(); a.remove(); return;
+      icsFile([e], 'empire-' + e.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.ics'); return;
     }
+    var all = ev.target.closest('[data-icsall]');
+    if (all) { icsFile(upcoming(D.events.filter(function (x) { return x.teams.indexOf(all.dataset.icsall) > -1; })), 'empire-' + all.dataset.icsall + '.ics'); return; }
     if (ev.target.closest('[data-print]')) { window.print(); return; }
     var st = ev.target.closest('[data-star]');
     if (st) {
@@ -439,6 +519,22 @@
     }
   });
 
+  /* search */
+  var fd = document.getElementById('findDlg'), fq = document.getElementById('findQ'), fr = document.getElementById('findR');
+  var findDraw = function () {
+    var q = fq.value.trim().toLowerCase(), out = [];
+    if (q) {
+      players().forEach(function (p) { if ((p.name + ' ' + p.school + ' ' + p.grad + ' ' + p.pos.join(' ')).toLowerCase().indexOf(q) > -1) out.push(['player.html?p=' + p.id, p.name, 'Player, ' + p.grad + ', ' + p.pos.join(' / ')]); });
+      D.teams.forEach(function (t) { if ((t.name + ' ' + t.coach).toLowerCase().indexOf(q) > -1) out.push(['team.html?t=' + t.id, t.name, 'Team, coach ' + t.coach]); });
+      D.events.forEach(function (e) { if ((e.name + ' ' + e.place + ' ' + e.city).toLowerCase().indexOf(q) > -1) out.push(['schedule.html', e.name, 'Event, ' + e.place + ', ' + e.city]); });
+      NAV.concat([['tryouts.html', 'Tryouts'], ['my-profile.html', 'Build my profile'], ['compare.html', 'Compare players']]).forEach(function (n) { if (n[1].toLowerCase().indexOf(q) > -1) out.push([n[0], n[1], 'Page']); });
+    }
+    fr.innerHTML = out.slice(0, 12).map(function (o) { return '<a href="' + o[0] + '"><b>' + esc(o[1]) + '</b><span>' + esc(o[2]) + '</span></a>'; }).join('') || '<p class="mute">' + (q ? 'Nothing found. Try a name, a school, a position or a team.' : 'Type a name, school, position, team or event.') + '</p>';
+  };
+  document.getElementById('findOpen').addEventListener('click', function () { fd.showModal(); fq.value = ''; findDraw(); fq.focus(); });
+  document.getElementById('findX').addEventListener('click', function () { fd.close(); });
+  fq.addEventListener('input', findDraw);
+
   /* demo forms */
   [].forEach.call(document.querySelectorAll('form.form:not(#bform)'), function (form) {
     form.addEventListener('submit', function (e) {
@@ -454,7 +550,12 @@
   function cardUi(getP) {
     var img = document.getElementById('cardImg'); if (!img || !C) return function () { };
     var style = getP().cardStyle || 'pin', msg = document.getElementById('cardMsg');
-    function draw() { C.render(cardOpts(getP(), style, 0.5)).then(function (c) { img.src = c.toDataURL('image/png'); }); }
+    var kind = 'front', kinds = document.getElementById('kinds');
+    function draw() { gfx(getP(), kind, style, 0.5).then(function (c) { img.style.aspectRatio = c.width + ' / ' + c.height; img.src = c.toDataURL('image/png'); }); }
+    if (kinds) kinds.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-kind]'); if (!b) return; kind = b.dataset.kind;
+      [].forEach.call(kinds.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', String(c === b)); }); draw();
+    });
     document.getElementById('styles').addEventListener('click', function (e) {
       var b = e.target.closest('[data-style]'); if (!b) return; style = b.dataset.style;
       [].forEach.call(this.querySelectorAll('.chip'), function (c) { c.setAttribute('aria-pressed', String(c === b)); });
@@ -463,7 +564,7 @@
     });
     function out(dl) {
       var p = getP(); msg.textContent = 'Drawing the card.';
-      C.render(cardOpts(p, style, 1)).then(function (c) { return C.share(c, 'empire-' + p.id + '.png', p.name + ', Empire Softball', dl); })
+      gfx(p, kind, style, 1).then(function (c) { return C.share(c, 'empire-' + p.id + (kind === 'front' ? '' : '-' + kind) + '.png', p.name + ', Empire Softball', dl); })
         .then(function (r) { msg.textContent = r === 'downloaded' ? 'Saved to your downloads.' : r === 'shared' ? 'Shared.' : ''; });
     }
     document.getElementById('cardShare').addEventListener('click', function () { out(false); });
@@ -494,7 +595,7 @@
       count.innerHTML = '<b>' + out.length + '</b> ' + (out.length === 1 ? 'player' : 'players');
       document.getElementById('mineN').textContent = l.length;
       mineBox.hidden = !state.mine || !out.length;
-      document.getElementById('mineMail').href = 'mailto:?subject=' + encodeURIComponent('My Empire Softball list') + '&body=' + encodeURIComponent(out.map(function (p) { return p.name + ', ' + p.grad + ', ' + p.pos.join('/') + ', ' + p.school + '\n' + purl(p); }).join('\n\n'));
+      document.getElementById('mineMail').href = 'mailto:?subject=' + encodeURIComponent('My Empire Softball list') + '&body=' + encodeURIComponent(out.map(function (p) { return p.name + ', ' + p.grad + ', ' + p.pos.join('/') + ', ' + p.school + (notes()[p.id] ? '\nMy note: ' + notes()[p.id] : '') + '\n' + purl(p); }).join('\n\n'));
       [].forEach.call(document.querySelectorAll('.chip[data-f]'), function (c) { c.setAttribute('aria-pressed', String(state[c.dataset.f] === c.dataset.v)); });
     };
     onStar = draw;
@@ -507,6 +608,10 @@
   if (page === 'player') {
     var cur = function () { return player(qs.get('p')) || player(D.players[0].id); };
     cardUi(cur);
+    var pnBox = document.getElementById('pnote'), pn = document.getElementById('pn');
+    var pnShow = function () { pnBox.hidden = shortlist().indexOf(cur().id) < 0; pn.value = notes()[cur().id] || ''; };
+    onStar = pnShow; pnShow();
+    pn.addEventListener('input', function () { var n = notes(); n[cur().id] = pn.value; sset('emp_notes', n); });
     var sh = document.getElementById('share');
     sh.addEventListener('click', function () {
       var p = cur(), done = function () { sh.textContent = 'Link copied'; };
@@ -540,9 +645,23 @@
         var pos = val('pos').toUpperCase().split(/[,\/\s]+/).filter(Boolean);
         var m = {}; MEAS.forEach(function (x) { m[x[0]] = val(x[0]); });
         o[pid] = { num: val('num'), pos: pos.length ? pos : player(pid).pos, bats: val('bats'), throws: val('throws'), about: val('about'), commit: val('commit'), school: val('school') || player(pid).school,
-          gpa: val('gpa') || player(pid).gpa, major: val('major'), hideGpa: document.getElementById('hideGpa').checked, m: m, vid: [val('vid1'), val('vid2')].filter(Boolean), cardStyle: old.cardStyle, photo: newPhoto || old.photo };
+          gpa: val('gpa') || player(pid).gpa, major: val('major'), college: val('college'), sat: val('sat'), act: val('act'), ncaa: val('ncaa'), hsCoach: val('hsCoach'),
+          stats: (function () { var z = {}; STATS.forEach(function (x) { if (val('s_' + x[0])) z[x[0]] = val('s_' + x[0]); }); return z; })(), honors: val('honors').split(',').map(function (h) { return h.trim(); }).filter(Boolean), hideGpa: document.getElementById('hideGpa').checked, m: m, vid: [val('vid1'), val('vid2')].filter(Boolean), cardStyle: old.cardStyle, photo: newPhoto || old.photo };
         if (!o[pid].photo) delete o[pid].photo;
-        sset('emp_ov', o); document.getElementById('bok').classList.add('on'); redraw();
+        sset('emp_ov', o); document.getElementById('bok').classList.add('on'); redraw(); meter();
+      });
+      var meter = function () {
+        var p = player(pid), m = p.m || {};
+        var checks = [['Your own photo', !!p.photo], ['About me', !!p.about], ['College status', !!(p.commit || p.college)], ['Your real numbers', !!p.edited && !!(m.ht && m.ev && m.ov && m.h1)], ['Season stats', !!Object.keys(p.stats || {}).length],
+          ['Honors', !!(p.honors || []).length], ['A video', !!(p.vid || []).length], ['Test scores', !!(p.sat || p.act)], ['What you want to study', !!p.major], ['High school coach', !!p.hsCoach]];
+        var done = checks.filter(function (c) { return c[1]; }).length, left = checks.filter(function (c) { return !c[1]; }).map(function (c) { return c[0]; });
+        document.getElementById('meter').innerHTML = '<b>' + done + ' of ' + checks.length + '</b><span>parts of my profile done</span><div class="meter__bar" role="img" aria-label="' + done + ' of ' + checks.length + ' done"><i style="width:' + (done * 10) + '%"></i></div>' + (left.length ? '<p>Still to add: ' + left.join(', ') + '.</p>' : '<p>Everything is filled in.</p>');
+      };
+      meter();
+      document.getElementById('bfill').addEventListener('click', function () {
+        var S = { about: 'Sample: I am a vocal leader who loves to compete. I want to play college softball while studying to be a nurse.', commit: 'Uncommitted', major: 'Nursing', sat: '1280', s_avg: '.412', s_obp: '.489', s_hr: '4', s_rbi: '27', s_sb: '11', honors: 'Sample: All-County 2026, Team captain', hsCoach: 'Sample Coach, coach@example.com' };
+        Object.keys(S).forEach(function (k) { var f = document.getElementById(k); if (f && !f.value) f.value = S[k]; });
+        document.getElementById('cardMsg').textContent = 'Sample answers filled in. Change anything, then save.';
       });
       document.getElementById('breset').addEventListener('click', function () { var o = sget('emp_ov') || {}; delete o[pid]; sset('emp_ov', o); location.reload(); });
     }
@@ -577,6 +696,7 @@
       box.innerHTML = html ? html + '</div>' : '<div class="empty"><h3>Nothing here yet</h3><p>No events match for this team.</p></div>';
     };
     sel.addEventListener('change', drawS); so.addEventListener('change', drawS); drawS();
+    document.getElementById('icsAll').addEventListener('click', function () { icsFile(upcoming(D.events.filter(function (e) { return (!sel.value || e.teams.indexOf(sel.value) > -1) && (!so.checked || e.showcase); })), 'empire-schedule.ics'); });
   }
 
   if (page === 'photos') {
