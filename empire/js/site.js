@@ -141,7 +141,7 @@
       '<div class="season">' + D.season.map(function (s) { return '<div class="season__row"><span class="season__n" aria-hidden="true">' + s.n + '</span><div><h3>' + esc(s.name) + '</h3><div class="season__when">' + esc(s.when) + '</div></div><p>' + esc(s.text) + '</p></div>'; }).join('') + '</div></div></section>' +
 
       '<section class="sec sec--band"><div class="wrap"><div class="sec__head"><h2 class="disp">Where to <span class="outline">watch</span></h2><p>Coming to see a player? Here is where Empire teams play next.</p></div>' +
-      '<div class="evs">' + next.map(function (e) { return eventRow(e); }).join('') + '</div>' +
+      '<p class="note" style="margin-bottom:18px">Sample dates for this demo.</p><div class="evs">' + next.map(function (e) { return eventRow(e); }).join('') + '</div>' +
       '<p style="margin-top:26px"><a class="more" href="schedule.html">Full schedule ' + I.arrow.replace('<svg', '<svg width="16" height="16"') + '</a></p></div></section>' +
       tryoutCta();
   };
