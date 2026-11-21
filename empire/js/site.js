@@ -260,7 +260,7 @@
       '<p class="mt"><a class="btn btn--gold" href="' + D.club.instagram + '" target="_blank" rel="noopener">Follow Empire ' + I.arrow + '</a></p></div></section>' +
 
       '<section class="sec"><div class="wrap"><div class="sec__head"><h2 class="disp">Team sponsors</h2><p>Local businesses help cover tournament fees and winter training. Sponsor names and logos go here.</p></div>' +
-      '<div class="spons"><span>Your business here</span><span>Your business here</span><span>Your business here</span><span>Your business here</span></div>' +
+      '<div class="spons">' + D.sponsors.map(function (x) { return '<span class="spons__real"><b>' + esc(x[0]) + '</b><i>' + esc(x[1]) + '</i></span>'; }).join('') + '<span>Your business here</span><span>Your business here</span><span>Your business here</span></div>' +
       '<p class="mt"><a class="more" href="contact.html">Ask about sponsoring a team ' + I.arrow + '</a></p></div></section>' +
       '<section class="sec sec--soft"><div class="wrap split"><div><p class="kicker">More than a team</p><h2 class="disp" style="font-size:clamp(26px,7vw,48px);margin:12px 0 16px">' + esc(D.club.program[0][0]) + '</h2><p class="lead">' + esc(D.club.program[0][1]) + '</p>' +
       '<div class="hero__cta"><a class="btn" href="about.html">About the program</a><a class="btn" href="' + D.club.store + '" target="_blank" rel="noopener">Team store</a></div></div>' +
@@ -280,7 +280,7 @@
     var evs = upcoming(EV().filter(function (e) { return e.teams.indexOf(t.id) > -1; }));
     var staff = t.staff || [{ name: t.coach, role: 'Head Coach' }];
     return pageHead(esc(t.color) + ' <span class="wm">' + esc(t.age) + '</span>' + (t.tag ? ' ' + esc(t.tag) : ''), 'Head coach ' + esc(t.coach) + '.' + (t.blurb ? ' ' + esc(t.blurb) : ''), ['teams.html', 'All teams'],
-      r.length ? '<div class="ph__act noprint"><a class="btn btn--sm" href="#sheet-roster">Roster sheet</a><a class="btn btn--sm" href="cards.html?t=' + t.id + '">Team card set</a><a class="btn btn--sm" href="schedule.html?t=' + t.id + '">Schedule</a></div>' : '') +
+      r.length ? '<div class="ph__act noprint"><a class="btn btn--sm" href="#sheet-roster">Roster sheet</a><a class="btn btn--sm" href="cards.html?t=' + t.id + '">Team card set</a><a class="btn btn--sm" href="schedule.html?t=' + t.id + '">Schedule</a>' + (t.ig ? '<a class="btn btn--sm" href="' + t.ig + '" target="_blank" rel="noopener">Team Instagram</a>' : '') + '</div>' : (t.ig ? '<div class="ph__act noprint"><a class="btn btn--sm" href="' + t.ig + '" target="_blank" rel="noopener">Team Instagram</a></div>' : '')) +
       (t.wide ? '<div class="wrap"><figure class="tphoto"><img src="' + t.wide + '" alt="' + esc(t.name) + ' team photo"></figure></div>' : '') +
       '<section class="sec sec--tight"><div class="wrap"><div class="sec__head"><h2 class="disp">Roster</h2>' + (r.length ? '<p>' + r.length + ' players. Open a player for her full recruiting page.</p>' : '') + '</div>' +
       (function () { var tr = RESULTS().filter(function (x) { return x.team === t.id; }); return tr.length ? '<div class="trs trs--row">' + tr.map(trophyRow).join('') + '</div>' : ''; })() +
@@ -297,7 +297,8 @@
         '</tbody></table></div></div>' :
         '<div class="empty"><h3>Roster coming soon</h3><p>Player profiles for this team have not been posted yet. Once the coach adds them, each player gets her own page here.</p><a class="btn" href="team.html?t=white-16u-elite">See a finished roster</a></div>') +
       '</div></section>' +
-      '<section class="sec sec--tight sec--soft"><div class="wrap"><div class="sec__head"><h2 class="disp">Coaches</h2></div><div class="staff">' + staff.map(function (s) { return staffRow(s); }).join('') + '</div></div></section>' +
+      '<section class="sec sec--tight sec--soft"><div class="wrap"><div class="sec__head"><h2 class="disp">Coaches</h2></div><div class="staff">' + staff.map(function (s) { return staffRow(s); }).join('') + '</div>' +
+      (t.partners ? '<div class="sec__head" style="margin-top:36px"><h2 class="disp" style="font-size:clamp(22px,5.4vw,34px)">Team partners</h2></div><div class="spons spons--real">' + t.partners.map(function (x) { return '<span><b>' + esc(x[0]) + '</b><i>' + esc(x[1]) + '</i></span>'; }).join('') + '</div>' : '') + '</div></section>' +
       '<section class="sec sec--tight noprint"><div class="wrap"><div class="sec__head"><h2 class="disp">Where to watch</h2><p>' + sample('Sample dates') + '</p></div>' +
       '<div class="evs">' + evs.map(function (e) { return eventRow(e, { noTeams: true }); }).join('') + '</div>' +
       '<p class="mt"><button type="button" class="btn btn--sm" data-icsall="' + t.id + '">Add the whole schedule to my calendar</button></p></div></section>' +
@@ -369,6 +370,7 @@
 
       '<div class="blk"><div class="blk__top"><h2>Where she plays</h2><span class="tag">' + esc(p.pos.join(' / ')) + '</span></div>' + diamond(p.pos) + '</div>' +
 
+      ((p.hl || []).length ? '<div class="blk blk--wide"><div class="blk__top"><h2>Highlights</h2><span class="tag">From her team\'s posts</span></div><ol class="hl">' + p.hl.map(function (h) { return '<li><b>' + esc(h[0]) + '</b><span>' + esc(h[1]) + '</span></li>'; }).join('') + '</ol></div>' : '') +
       '<div class="blk noprint"><div class="blk__top"><h2>Video</h2></div>' +
       (vids.length ? '<div class="vids">' + vids.map(function (id, i) { return '<button type="button" class="vid" data-yt="' + id + '" aria-label="Play video ' + (i + 1) + '"><img src="https://i.ytimg.com/vi/' + id + '/hqdefault.jpg" loading="lazy" alt=""><span>' + I.play + '</span></button>'; }).join('') + '</div>' :
         '<div class="slot">' + I.play + '<span>No video posted yet. Paste a YouTube link in the profile builder and it plays right here.</span></div>') + '</div>' +

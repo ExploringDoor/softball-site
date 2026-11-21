@@ -183,3 +183,37 @@ window.EMPIRE.faq = [
   ['Can we pay over time?', 'Sample answer. Registration offers pay in full, three payments or monthly payments, and the coach desk shows who is paid up.'],
   ['Which age group is my daughter?', 'Sample answer. The club posts its age cutoff here so families can check before tryouts.']
 ];
+
+/* REAL: from the White team's own Instagram (empire_white_elite) and the club's Facebook page, read 2026-11-20, in our words.
+   Jersey numbers, honors, a college commitment and dated highlights for players already on this site. */
+(function () {
+  var X = {
+    'megan-hobdy': { honors: ['All County 2026', 'Defensive MVP, National All State Championship 2025', 'Fall 2025 pitching MVP'], hl: [
+      ['June 2026', 'Named All County at Calhoun.'], ['December 2025', 'Defensive MVP at the National All State Championship in Florida.'], ['October 2025', 'Threw a perfect game with 9 strikeouts and hit a home run the same day.'],
+      ['October 2025', 'Fall pitching MVP: 1.15 ERA, hitters batted .162 against her, and she hit .643.'], ['November 2024', 'Toys for Tots overall MVP: hit .636 with 3 home runs and 9 RBI, and won 3 games in the circle with 18 strikeouts.'], ['July 2024', 'Tournament MVP.']] },
+    'shayna-argentina': { num: '18', honors: ['Fall 2025 season MVP', 'Toys for Tots offensive MVP 2024', 'All State All-Star Game 2024'], hl: [
+      ['October 2025', 'Season MVP for the unbeaten fall: hit .778 while playing third base.'], ['November 2024', 'Toys for Tots offensive MVP with 3 home runs, on her birthday.'], ['July 2024', 'Offensive MVP of the USSSA Long Island Championship.'], ['June 2024', 'Offensive MVP of the Wounded Warrior Tournament.']] },
+    'kerriann-orth': { num: '24', honors: ['All County 2026', 'Highest GPA, POB varsity softball 2025', 'Toys for Tots defensive MVP 2024'], hl: [
+      ['June 2026', 'Named All County at POB JFK.'], ['June 2025', 'Highest GPA on the POB varsity team, plus the "I Got Your Back" award.'], ['November 2024', 'Toys for Tots defensive MVP: caught every inning, hit .571 and hit a grand slam in the final.'], ['June 2024', 'Team MVP of the Wounded Warrior Tournament.']] },
+    'logan-berg': { num: '00', honors: ['All County Honorable Mention 2026'], hl: [['June 2026', 'All County Honorable Mention at Hicksville.'], ['October 2025', 'Went 2 for 3 with two triples.'], ['June 2025', 'Hit .600 for the tournament.']] },
+    'tiffany-matthews': { num: '16', honors: ['All County 2025', 'Pitcher of the Year 2025'], hl: [['June 2025', 'All County and Pitcher of the Year.'], ['April 2025', 'Hit a home run in her high school game.']] },
+    'lia-arduini': { honors: ['All Conference 2025', 'Fall League championship MVP 2024', 'All State All-Star Game 2024'], hl: [
+      ['June 2025', 'Hit .615 for the tournament with 3 doubles and 5 RBI.'], ['June 2025', 'Named All Conference.'], ['October 2024', 'Co-MVP of the Fall League championship: pitched 3 innings and hit a go-ahead home run.'], ['June 2024', 'Pitching MVP of the Wounded Warrior Tournament.'], ['April 2024', '10 strikeouts in one game.']] },
+    'angelina-mancuso': { num: '20', honors: ['Tournament batting leader, June 2025'], hl: [['June 2025', 'Led the team for the tournament: .700 with 3 doubles, a home run and 7 RBI.'], ['January 2025', 'Attended the Hofstra Winter All Skills Camp.'], ['November 2024', 'Two walk-off hits, 2 home runs and 9 RBI at Toys for Tots.'], ['October 2024', 'Her first home run was a grand slam.']] },
+    'julia-candelario': { num: '63', college: 'SUNY Morrisville', commit: 'Verbal commitment', honors: ['Verbal commitment to SUNY Morrisville, March 2026'], hl: [['March 2026', 'Verbally committed to SUNY Morrisville.'], ['November 2024', 'Hit .667 at Toys for Tots.'], ['October 2024', 'Went 3 for 4 with two doubles and made a bare-hand play in the field.']] },
+    'lily-suarez': { num: '9', honors: ['Tournament MVP, USSSA Long Island Championship 2024'], hl: [['June 2025', 'Home run in tournament play.'], ['November 2024', 'Hit .750 with 9 RBI at Toys for Tots.'], ['July 2024', 'Tournament MVP of the USSSA Long Island Championship.']] },
+    'jocelyn-mueller': { hl: [['October 2025', 'Most Improved for the fall season.']] },
+    'kaitlyn-lozano': { num: '10' }, 'jessica-dobrzeniecki': { num: '22' }, 'gabriella-marino': { num: '44' }
+  };
+  window.EMPIRE.players.forEach(function (p) { var x = X[p.id]; if (x) Object.keys(x).forEach(function (k) { p[k] = x[k]; }); });
+  var T = window.EMPIRE.teams, by = function (id) { return T.filter(function (t) { return t.id === id; })[0]; };
+  by('white-16u-elite').ig = 'https://www.instagram.com/empire_white_elite/';
+  by('white-16u-elite').partners = [['Brooklyn Delights Bakery', 'Player of the Game sponsor'], ['Max Effort Baseball', 'Winter training'], ['Joe Szadok Fitness', 'Strength and conditioning']];
+  by('black-18u').ig = 'https://www.instagram.com/empire_18u_black/';
+  window.EMPIRE.results.push({ id: 'r4', date: '2024-06-16', team: 'white-16u-elite', event: 'Island Fastpitch Wounded Warrior Tournament', finish: 'Champions', record: '6-0' });
+  window.EMPIRE.news.push(
+    { id: 'n12', date: '2026-06-16', title: 'Three White players earn All County honors', text: 'Kerriann Orth and Megan Hobdy were named All County, and Logan Berg earned All County Honorable Mention.' },
+    { id: 'n11', date: '2026-03-10', title: 'Julia Candelario commits to SUNY Morrisville', text: 'Julia gave her verbal commitment to play four more years of softball at SUNY Morrisville.' },
+    { id: 'n10', date: '2025-10-12', title: 'Megan Hobdy throws a perfect game', text: 'Megan struck out nine in a perfect game and homered the same day, as the team went 3-0 at the Play Pink Tournament.' });
+  window.EMPIRE.sponsors = [['Brooklyn Delights Bakery', 'Player of the Game sponsor, Empire White']];
+})();
