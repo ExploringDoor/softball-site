@@ -869,6 +869,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="standings" data-sec="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
       <div class="nav-item" data-section="banner" data-sec="banner" onclick="showSection('banner')"><span class="icon">&#128227;</span> Banner / Alerts</div>
       <div class="nav-item" data-section="push" data-sec="push" onclick="showSection('push')"><span class="icon">&#128276;</span> Push Notifications</div>
+      <div class="nav-item" data-section="texts" data-sec="texts" onclick="showSection('texts')"><span class="icon" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span> Texts</div>
       <div class="nav-item" data-section="contacts" data-sec="contacts" onclick="showSection('contacts')"><span class="icon">&#128222;</span> Contacts</div>
       <div class="nav-item" data-section="financials" data-sec="financials" onclick="showSection('financials')"><span class="icon">&#128181;</span> Financials</div>
       <div class="nav-item" data-section="registrations" data-sec="registrations" onclick="showSection('registrations')"><span class="icon">&#128221;</span> Registrations</div>
@@ -1640,6 +1641,131 @@ select.form-input{cursor:pointer}
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ═══ TEXTS (SMS) ═══ Builder C. Self-contained: its own module script
+         at the end of the page talks only to /api/sms-send, /api/sms-seed and
+         /api/sms-alerts (all admin-checked on the server). Nothing here
+         writes Firestore. -->
+    <div class="section" id="sec-texts">
+      <style>
+        #sec-texts .tx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+        #sec-texts .tx-sw{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fff}
+        #sec-texts .tx-sw-name{font-weight:700;font-size:14px;color:var(--text)}
+        #sec-texts .tx-sw-sub{font-size:12px;color:var(--muted);line-height:1.4}
+        #sec-texts .tx-pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;letter-spacing:.04em;text-transform:uppercase}
+        #sec-texts .tx-on{background:#dcfce7;color:#166534}
+        #sec-texts .tx-off{background:#f3f4f6;color:#4b5563}
+        #sec-texts .tx-warn{background:#fef3c7;color:#92400e}
+        #sec-texts .tx-bad{background:#fee2e2;color:#991b1b}
+        #sec-texts .tx-checks{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;margin-top:12px}
+        #sec-texts .tx-preview{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:8px}
+        #sec-texts .tx-note{font-size:12px;color:var(--muted);line-height:1.5}
+        #sec-texts .tx-msg{margin-top:10px;font-size:13px}
+        #sec-texts .tx-msg.err{color:#b91c1c}
+        #sec-texts .tx-msg.ok{color:#166534}
+        #sec-texts .tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+        #sec-texts .tx-log-text{max-width:420px;white-space:pre-wrap;font-size:12px}
+        #sec-texts details summary{cursor:pointer;font-weight:700;color:var(--navy);font-size:13px}
+      </style>
+      <div class="main-header">
+        <div class="main-title">Texts</div>
+        <div class="main-subtitle">Text a score in, team texts and schedule change texts. Everything stays off until you switch it on.</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <span>Switches</span>
+          <button type="button" class="btn btn-outline btn-sm" id="tx-refresh">Refresh</button>
+        </div>
+        <div id="tx-switches" class="tx-grid"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        <div id="tx-env" class="tx-checks"></div>
+        <div id="tx-top-msg" class="tx-msg"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Send a team text</div>
+        <div class="form-row">
+          <div class="form-col" style="max-width:260px"><label class="form-label" for="tx-template">What</label>
+            <select class="form-input" id="tx-template">
+              <option value="cancel">Game is cancelled</option>
+              <option value="move">Game is moved</option>
+              <option value="free">Your own message</option>
+            </select>
+          </div>
+          <div class="form-col" style="max-width:300px" id="tx-game-col"><label class="form-label" for="tx-game">Game</label>
+            <select class="form-input" id="tx-game"><option value="">Loading…</option></select>
+          </div>
+          <div class="form-col" style="max-width:260px"><label class="form-label" for="tx-team">Who gets it</label>
+            <select class="form-input" id="tx-team"></select>
+          </div>
+        </div>
+        <div class="form-row" id="tx-move-row" style="display:none">
+          <div class="form-col"><label class="form-label" for="tx-moveto">Moved to (optional, up to 80 characters)</label>
+            <input type="text" class="form-input" id="tx-moveto" maxlength="80" placeholder="Leave empty to use the game's date, time and field on the schedule">
+          </div>
+        </div>
+        <div class="form-row" id="tx-free-row" style="display:none">
+          <div class="form-col"><label class="form-label" for="tx-text">Message (up to 300 characters)</label>
+            <textarea class="form-input" id="tx-text" rows="3" maxlength="300" placeholder="Bring both jerseys tonight. Field 5 is wet, we are on field 4."></textarea>
+            <div class="tx-note"><span id="tx-count">0</span> of 300</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+          <button type="button" class="btn btn-outline" id="tx-preview-btn">Preview</button>
+          <button type="button" class="btn btn-primary" id="tx-send-btn" disabled>Send</button>
+        </div>
+        <div id="tx-preview"></div>
+        <div id="tx-send-msg" class="tx-msg"></div>
+        <div class="tx-note" style="margin-top:10px">Only numbers that replied YES get team texts. Changes you make on the Schedule tab text both teams by themselves when Schedule change texts are on, so you do not need to send those twice. Team texts go out between 8 AM and 9 PM.</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Schedule change texts</div>
+        <div class="tx-note">Every 15 minutes the site compares the schedule with what it saw last time and texts both teams about any game that moved, was rained out, cancelled, put back on, added or taken off. Changes made after 9 PM go out at 8 AM.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <button type="button" class="btn btn-outline" id="tx-dry-btn">What would the next run send?</button>
+        </div>
+        <div id="tx-dry"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Signed up, by team</div>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Team</th><th style="text-align:right">Opted in</th><th style="text-align:right">Waiting for YES</th><th style="text-align:right">Stopped</th><th style="text-align:right">Can text scores</th></tr></thead><tbody id="tx-teams"></tbody></table></div>
+        <details style="margin-top:6px"><summary>Everyone who signed up</summary>
+          <div class="tbl-wrap" style="margin-top:10px"><table class="tbl"><thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Phone</th><th>Status</th><th>When</th></tr></thead><tbody id="tx-optins"></tbody></table></div>
+        </details>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Who can text scores in</div>
+        <div class="tx-note" style="margin-bottom:10px">Captains come from the Captains list (their phone numbers). Use Seed to copy them in. A captain still has to sign up and reply YES before the site texts him first.</div>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Team</th><th>Role</th><th>Phone</th><th>Gets texts</th><th></th></tr></thead><tbody id="tx-senders"></tbody></table></div>
+        <div class="form-row" style="margin-top:6px">
+          <div class="form-col" style="max-width:200px"><label class="form-label" for="tx-add-name">Name</label><input type="text" class="form-input" id="tx-add-name" maxlength="60"></div>
+          <div class="form-col" style="max-width:200px"><label class="form-label" for="tx-add-phone">Cell</label><input type="tel" class="form-input" id="tx-add-phone" maxlength="20" placeholder="(215) 555-0100"></div>
+          <div class="form-col" style="max-width:160px"><label class="form-label" for="tx-add-role">Role</label>
+            <select class="form-input" id="tx-add-role"><option value="captain">Captain</option><option value="admin">League office</option></select></div>
+          <div class="form-col" style="max-width:220px"><label class="form-label" for="tx-add-team">Team</label><select class="form-input" id="tx-add-team"></select></div>
+        </div>
+        <button type="button" class="btn btn-outline btn-sm" id="tx-add-btn">Add</button>
+        <div id="tx-add-msg" class="tx-msg"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Seed</div>
+        <div class="tx-note">Copies captain phone numbers into the score senders list, and records every game as it stands now so schedule change texts start quiet. Run it again after a bulk schedule import or restore. Switching Schedule change texts on does the schedule half for you.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <button type="button" class="btn btn-outline" id="tx-seed-dry">Check first (changes nothing)</button>
+          <button type="button" class="btn btn-primary" id="tx-seed-go">Seed now</button>
+        </div>
+        <div id="tx-seed-msg" class="tx-msg"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Text log (latest 60)</div>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>When</th><th>Way</th><th>Phone</th><th>Team</th><th>Kind</th><th>Text</th><th>Result</th></tr></thead><tbody id="tx-log"></tbody></table></div>
       </div>
     </div>
 
@@ -10046,6 +10172,266 @@ window.exportContactsPDF = function() {
   toast('Contacts exported');
 };
 
+</script>
+<script type="module">
+// ═══════════════════════════════════════════════════════════════════
+// TEXTS TAB (Builder C). Self-contained on purpose: it reuses the Firebase
+// app the main module already started (same SDK URL, so getApp() finds
+// it), sends the admin's ID token to /api/sms-send, /api/sms-seed and
+// /api/sms-alerts, and renders every value through txEsc(). No inline
+// handlers, no Firestore writes. Phones arrive as last 4 digits only.
+// ═══════════════════════════════════════════════════════════════════
+import { getApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+
+const txAuth = getAuth(getApp());
+const $ = (id) => document.getElementById(id);
+function txEsc(s) {
+  return (s == null ? '' : String(s))
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/`/g, '&#96;');
+}
+async function txCall(path, opts = {}) {
+  const u = txAuth.currentUser;
+  if (!u) throw new Error('You are signed out. Sign in again.');
+  const token = await u.getIdToken();
+  const r = await fetch(path, {
+    method: opts.method || 'POST',
+    headers: Object.assign({ Authorization: 'Bearer ' + token }, opts.method === 'GET' ? {} : { 'Content-Type': 'application/json' }),
+    body: opts.method === 'GET' ? undefined : JSON.stringify(opts.body || {}),
+  });
+  let j = {};
+  try { j = await r.json(); } catch (_) { j = {}; }
+  if (!r.ok || j.error) {
+    const e = new Error(j.message || ('The server said no (' + r.status + ').'));
+    e.code = j.error || ('http_' + r.status);
+    throw e;
+  }
+  return j;
+}
+const sendApi = (action, extra) => txCall('/api/sms-send', { body: Object.assign({ action }, extra || {}) });
+function setMsg(el, kind, text) { if (!el) return; el.className = 'tx-msg ' + (kind || ''); el.textContent = text || ''; }
+function when(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+function dayTime(g) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(g.date || '');
+  const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+  const day = d ? d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }) + ' ' + (+m[2]) + '/' + (+m[3]) : (g.date || '');
+  let t = '';
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(g.time || '');
+  if (tm) { const h = +tm[1]; t = ' ' + ((h % 12) || 12) + ':' + tm[2] + (h < 12 ? ' AM' : ' PM'); }
+  return day + t;
+}
+
+let TX = { status: null, mine: null, previewKey: '' };
+const SWITCH_INFO = {
+  inbound: ['Text a score in', 'Captains on the senders list text a final score and it posts.'],
+  box_photo: ['Box score by photo', 'A captain texts a photo of the scorebook; YES posts it.'],
+  schedule_alerts: ['Schedule change texts', 'Automatic texts to both teams when a game changes.'],
+  team_texts: ['Team texts', 'You and the captains can text a team from here and the Captain Portal.'],
+};
+
+function renderSwitches(st) {
+  $('tx-switches').innerHTML = Object.keys(SWITCH_INFO).map(k => {
+    const on = !!st.switches[k];
+    return `<div class="tx-sw"><div><div class="tx-sw-name">${txEsc(SWITCH_INFO[k][0])} <span class="tx-pill ${on ? 'tx-on' : 'tx-off'}">${on ? 'On' : 'Off'}</span></div>
+      <div class="tx-sw-sub">${txEsc(SWITCH_INFO[k][1])}</div></div>
+      <button type="button" class="btn ${on ? 'btn-outline' : 'btn-primary'} btn-sm" data-tx-switch="${txEsc(k)}" data-tx-to="${on ? '0' : '1'}">${on ? 'Turn off' : 'Turn on'}</button></div>`;
+  }).join('');
+  const e = st.env || {};
+  const chk = (ok, label) => `<span><span class="tx-pill ${ok ? 'tx-on' : 'tx-bad'}">${ok ? 'Ready' : 'Missing'}</span> ${txEsc(label)}</span>`;
+  $('tx-env').innerHTML = [
+    chk(e.twilio, 'Twilio account'),
+    chk(e.messagingService || e.from, 'Sending number'),
+    chk(e.inboundUrl && e.authToken, 'Inbound texts (signature check)'),
+    chk(e.statusUrl, 'Delivery receipts'),
+    chk(e.cronSecret, 'Every 15 minute check'),
+    e.dryRun ? '<span><span class="tx-pill tx-warn">Dry run</span> SMS_DRY_RUN is on, nothing really sends</span>' : '',
+    `<span>Number: <strong>${txEsc(e.number || 'not set')}</strong></span>`,
+    `<span>Games remembered: <strong>${txEsc(st.snapshots)}</strong></span>`,
+    `<span>${st.inWindow ? 'Inside' : 'Outside'} sending hours (8 AM to 9 PM)</span>`,
+  ].filter(Boolean).join('');
+}
+
+function teamName(id) {
+  const st = TX.status, m = TX.mine;
+  const t = (st && st.teams.find(x => x.id === id)) || (m && m.teams.find(x => x.id === id));
+  return t ? t.name : (id || '');
+}
+
+function renderTables(st) {
+  $('tx-teams').innerHTML = st.teams.map(t => `<tr><td>${txEsc(t.name)}</td><td class="num">${txEsc(t.optedIn)}</td><td class="num">${txEsc(t.waiting)}</td><td class="num">${txEsc(t.stopped)}</td><td class="num">${txEsc(t.senders)}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="tx-note">No teams.</td></tr>';
+  $('tx-optins').innerHTML = st.optins.map(o => {
+    const s = o.stopped ? '<span class="tx-pill tx-bad">Stopped</span>' : o.confirmed ? '<span class="tx-pill tx-on">Opted in</span>' : '<span class="tx-pill tx-warn">Waiting for YES</span>';
+    return `<tr><td>${txEsc(o.name)}</td><td>${txEsc(teamName(o.team_id))}</td><td>${txEsc(o.role)}</td><td>ends ${txEsc(o.last4)}</td><td>${s}</td><td>${txEsc(when(o.at))}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="tx-note">Nobody has signed up yet. The sign-up page is /sms.html.</td></tr>';
+  $('tx-senders').innerHTML = st.senders.map(s => {
+    const teams = (s.team_ids && s.team_ids.length ? s.team_ids : [s.team_id]).filter(Boolean).map(teamName).join(', ');
+    const role = s.role === 'admin' ? 'League office' : 'Captain';
+    const gets = s.optedIn ? '<span class="tx-pill tx-on">Yes</span>' : '<span class="tx-pill tx-off">Not signed up</span>';
+    const act = s.active ? `<button type="button" class="btn btn-outline btn-sm" data-tx-remove="${txEsc(s.ref)}">Remove</button>` : '<span class="tx-note">Removed</span>';
+    return `<tr${s.active ? '' : ' style="opacity:.55"'}><td>${txEsc(s.name)}</td><td>${txEsc(teams)}</td><td>${txEsc(role)}</td><td>ends ${txEsc(s.last4)}</td><td>${gets}</td><td>${act}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="tx-note">Nobody yet. Press Seed now to copy in the captains.</td></tr>';
+  $('tx-log').innerHTML = st.log.map(l => `<tr><td>${txEsc(when(l.at))}</td><td>${l.dir === 'in' ? 'In' : 'Out'}</td><td>${l.last4 ? 'ends ' + txEsc(l.last4) : ''}</td><td>${txEsc(teamName(l.team_id))}</td><td>${txEsc(l.kind)}</td><td class="tx-log-text">${txEsc(l.text)}</td><td>${txEsc(l.outcome)}</td></tr>`).join('')
+    || '<tr><td colspan="7" class="tx-note">No texts yet.</td></tr>';
+  const addTeam = $('tx-add-team');
+  const keep = addTeam.value;
+  addTeam.innerHTML = st.teams.map(t => `<option value="${txEsc(t.id)}">${txEsc(t.name)}</option>`).join('');
+  if (keep) addTeam.value = keep;
+}
+
+function renderCompose() {
+  const m = TX.mine;
+  if (!m) return;
+  const tpl = $('tx-template').value;
+  $('tx-game-col').style.display = tpl === 'free' ? 'none' : '';
+  $('tx-move-row').style.display = tpl === 'move' ? '' : 'none';
+  $('tx-free-row').style.display = tpl === 'free' ? '' : 'none';
+  const gameSel = $('tx-game');
+  const gKeep = gameSel.value;
+  gameSel.innerHTML = m.games.length
+    ? m.games.map(g => `<option value="${txEsc(g.id)}">${txEsc(dayTime(g) + '  ' + g.awayName + ' at ' + g.homeName + (g.status === 'postponed' ? ' (rained out)' : ''))}</option>`).join('')
+    : '<option value="">No games in the next three weeks</option>';
+  if (gKeep && m.games.some(g => g.id === gKeep)) gameSel.value = gKeep;
+  const teamSel = $('tx-team');
+  const tKeep = teamSel.value;
+  const opts = [];
+  if (tpl === 'free') opts.push(['all', 'Every team']);
+  else opts.push(['both', 'Both teams in this game']);
+  const g = m.games.find(x => x.id === gameSel.value);
+  for (const t of m.teams) if (tpl === 'free' || !g || t.id === g.away || t.id === g.home) opts.push([t.id, t.name + ' (' + t.optedIn + ' signed up)']);
+  teamSel.innerHTML = opts.map(([v, l]) => `<option value="${txEsc(v)}">${txEsc(l)}</option>`).join('');
+  if (tKeep && opts.some(o => o[0] === tKeep)) teamSel.value = tKeep;
+}
+
+function composeBody() {
+  const tpl = $('tx-template').value;
+  const b = { template: tpl, team: $('tx-team').value };
+  if (tpl !== 'free') b.gameId = $('tx-game').value;
+  if (tpl === 'move') b.moveTo = $('tx-moveto').value;
+  if (tpl === 'free') b.text = $('tx-text').value;
+  return b;
+}
+function invalidatePreview() { TX.previewKey = ''; $('tx-send-btn').disabled = true; }
+
+async function doPreview() {
+  const b = composeBody();
+  setMsg($('tx-send-msg'), '', '');
+  $('tx-preview').innerHTML = '<div class="tx-note" style="margin-top:10px">Building the preview…</div>';
+  try {
+    const p = await sendApi('preview', b);
+    $('tx-preview').innerHTML = p.texts.map(t => `<div style="margin-top:12px"><div class="tx-note"><strong>${txEsc(t.teamName)}</strong>: ${txEsc(t.count)} ${t.count === 1 ? 'person' : 'people'}, ${txEsc(t.segments)} text${t.segments === 1 ? '' : 's'} each</div><div class="tx-preview">${txEsc(t.body)}</div></div>`).join('')
+      + `<div class="tx-note" style="margin-top:8px">Total: <strong>${txEsc(p.total)}</strong>. ${p.live ? '' : 'Team texts are switched off, so Send will not work yet.'} ${p.inWindow ? '' : 'It is outside 8 AM to 9 PM, so Send will wait for the morning.'}</div>`;
+    TX.previewKey = JSON.stringify(b);
+    TX.previewTotal = p.total;
+    $('tx-send-btn').disabled = !(p.live && p.inWindow && p.total > 0);
+  } catch (e) {
+    $('tx-preview').innerHTML = '';
+    setMsg($('tx-send-msg'), 'err', e.message);
+  }
+}
+
+async function doSend() {
+  const b = composeBody();
+  if (JSON.stringify(b) !== TX.previewKey) { invalidatePreview(); setMsg($('tx-send-msg'), 'err', 'Something changed. Preview again first.'); return; }
+  if (!confirm('Send this to ' + TX.previewTotal + ' ' + (TX.previewTotal === 1 ? 'person' : 'people') + '?')) return;
+  $('tx-send-btn').disabled = true;
+  setMsg($('tx-send-msg'), '', 'Sending…');
+  try {
+    const r = await sendApi('send', Object.assign({ confirm: true }, b));
+    setMsg($('tx-send-msg'), 'ok', 'Sent ' + r.sent + (r.dry ? ', dry run ' + r.dry : '') + (r.refused ? ', not allowed ' + r.refused : '') + (r.failed ? ', failed ' + r.failed : '') + '.');
+    invalidatePreview();
+    loadStatus();
+  } catch (e) {
+    setMsg($('tx-send-msg'), 'err', e.message);
+    $('tx-send-btn').disabled = false;
+  }
+}
+
+async function doDry() {
+  const box = $('tx-dry');
+  box.innerHTML = '<div class="tx-note" style="margin-top:10px">Checking the schedule…</div>';
+  try {
+    const r = await txCall('/api/sms-alerts?dry=1', { method: 'GET' });
+    if (r.wouldSeed) { box.innerHTML = '<div class="tx-note" style="margin-top:10px">No games remembered yet. The first run only records the schedule and sends nothing. Press Seed now to do that today.</div>'; return; }
+    const head = `<div class="tx-note" style="margin-top:10px"><strong>${txEsc(r.changes)}</strong> change${r.changes === 1 ? '' : 's'}, <strong>${txEsc(r.texts)}</strong> text${r.texts === 1 ? '' : 's'}. Switch is ${r.enabled ? 'on' : 'off'}.${r.ignoredNew ? ' ' + txEsc(r.ignoredNew) + ' new games look like an import and are not texted.' : ''}</div>`;
+    box.innerHTML = head + (r.preview || []).map(p => `<div style="margin-top:10px"><div class="tx-note">To ${txEsc(p.to)}</div><div class="tx-preview">${txEsc(p.body)}</div></div>`).join('');
+  } catch (e) { box.innerHTML = ''; setMsg($('tx-top-msg'), 'err', e.message); }
+}
+
+async function doSeed(dry) {
+  if (!dry && !confirm('Copy captain phones in and record the schedule as it stands now?')) return;
+  setMsg($('tx-seed-msg'), '', dry ? 'Checking…' : 'Seeding…');
+  try {
+    const r = await txCall('/api/sms-seed', { body: { dry } });
+    const s = r.senders || {}, g = r.schedule || {};
+    setMsg($('tx-seed-msg'), 'ok', (dry ? 'Would add ' : 'Added ') + (s.created || 0) + ' and update ' + (s.updated || 0) + ' captain senders, turn off ' + (s.deactivated || 0) +
+      ' old ones (' + (s.noPhone || 0) + ' captains have no phone). ' + (dry ? 'Would record ' : 'Recorded ') + (g.snapshots || 0) + ' games.');
+    if (!dry) loadStatus();
+  } catch (e) { setMsg($('tx-seed-msg'), 'err', e.message); }
+}
+
+async function loadStatus() {
+  setMsg($('tx-top-msg'), '', '');
+  try {
+    const [st, mine] = await Promise.all([sendApi('status'), sendApi('mine')]);
+    TX.status = st; TX.mine = mine;
+    renderSwitches(st); renderTables(st); renderCompose();
+  } catch (e) {
+    $('tx-switches').innerHTML = '';
+    setMsg($('tx-top-msg'), 'err', e.message);
+  }
+}
+
+document.addEventListener('click', async (ev) => {
+  const sw = ev.target.closest && ev.target.closest('[data-tx-switch]');
+  if (sw && $('sec-texts').contains(sw)) {
+    const key = sw.getAttribute('data-tx-switch'), on = sw.getAttribute('data-tx-to') === '1';
+    if (!confirm((on ? 'Turn on ' : 'Turn off ') + (SWITCH_INFO[key] ? SWITCH_INFO[key][0] : key) + '?')) return;
+    sw.disabled = true;
+    try {
+      const r = await sendApi('config', { key, enabled: on });
+      setMsg($('tx-top-msg'), 'ok', (SWITCH_INFO[key] ? SWITCH_INFO[key][0] : key) + ' is ' + (on ? 'on' : 'off') + '.' + (r.reseeded ? ' Recorded ' + r.reseeded.snapshots + ' games so it starts quiet.' : ''));
+      loadStatus();
+    } catch (e) { setMsg($('tx-top-msg'), 'err', e.message); sw.disabled = false; }
+    return;
+  }
+  const rm = ev.target.closest && ev.target.closest('[data-tx-remove]');
+  if (rm && $('sec-texts').contains(rm)) {
+    if (!confirm('Remove this number from the score senders?')) return;
+    try { await sendApi('remove-sender', { ref: rm.getAttribute('data-tx-remove') }); loadStatus(); }
+    catch (e) { setMsg($('tx-add-msg'), 'err', e.message); }
+  }
+});
+
+$('tx-refresh').addEventListener('click', loadStatus);
+$('tx-template').addEventListener('change', () => { invalidatePreview(); renderCompose(); });
+$('tx-game').addEventListener('change', () => { invalidatePreview(); renderCompose(); });
+$('tx-team').addEventListener('change', invalidatePreview);
+$('tx-moveto').addEventListener('input', invalidatePreview);
+$('tx-text').addEventListener('input', () => { invalidatePreview(); $('tx-count').textContent = String($('tx-text').value.length); });
+$('tx-preview-btn').addEventListener('click', doPreview);
+$('tx-send-btn').addEventListener('click', doSend);
+$('tx-dry-btn').addEventListener('click', doDry);
+$('tx-seed-dry').addEventListener('click', () => doSeed(true));
+$('tx-seed-go').addEventListener('click', () => doSeed(false));
+$('tx-add-role').addEventListener('change', () => { $('tx-add-team').disabled = $('tx-add-role').value === 'admin'; });
+$('tx-add-btn').addEventListener('click', async () => {
+  const role = $('tx-add-role').value;
+  try {
+    const r = await sendApi('add-sender', { name: $('tx-add-name').value, phone: $('tx-add-phone').value, role, team: role === 'captain' ? $('tx-add-team').value : '' });
+    setMsg($('tx-add-msg'), 'ok', 'Added the number ending ' + r.last4 + '.');
+    $('tx-add-name').value = ''; $('tx-add-phone').value = '';
+    loadStatus();
+  } catch (e) { setMsg($('tx-add-msg'), 'err', e.message); }
+});
+// Load when the tab opens (the sidebar's showSection does the showing).
+document.querySelectorAll('.nav-item[data-section="texts"]').forEach(n => n.addEventListener('click', () => { if (txAuth.currentUser) loadStatus(); }));
 </script>
 </body>
 </html>

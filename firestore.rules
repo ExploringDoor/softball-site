@@ -455,6 +455,16 @@ service cloud.firestore {
     match /pending_nav/{id} { allow read, write: if false; }
     match /api_usage/{id} { allow read, write: if false; }
 
+    // Texting (server writes only). The admin Texts tab may read the sender
+    // list, opt-ins, log, switches and change-watcher snapshots. Sessions
+    // (half-finished conversations) stay server-only.
+    match /sms_senders/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /sms_optins/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /sms_log/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /sms_state/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /sms_schedule/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /sms_sessions/{id} { allow read, write: if false; }
+
     // Everything else is denied by default.
   }
 }

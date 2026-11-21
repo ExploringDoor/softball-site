@@ -896,6 +896,38 @@ select.form-input{cursor:pointer}
         </div>
         <div id="next-up-content"><div class="loading"><div class="spinner"></div> Loading...</div></div>
       </div>
+      <!-- TEXT MY TEAM (Builder C). Hidden until /api/sms-send says this
+           account captains a team. Its own module script at the end of the
+           page; nothing here writes Firestore. -->
+      <div class="panel" id="txc-panel" style="margin-top:18px;display:none">
+        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+          <span>Text my team</span>
+          <span id="txc-count" style="font-family:'Barlow',sans-serif;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--muted)"></span>
+        </div>
+        <div id="txc-off" style="display:none;font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.5">Team texts are not switched on yet. You can still preview a text.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+          <div id="txc-team-wrap"><label class="form-label" for="txc-team">Team</label><select class="form-input" id="txc-team"></select></div>
+          <div><label class="form-label" for="txc-template">What</label>
+            <select class="form-input" id="txc-template">
+              <option value="cancel">Game is cancelled</option>
+              <option value="move">Game is moved</option>
+              <option value="free">My own message</option>
+            </select></div>
+          <div id="txc-game-wrap"><label class="form-label" for="txc-game">Game</label><select class="form-input" id="txc-game"></select></div>
+        </div>
+        <div id="txc-move-wrap" style="display:none;margin-top:10px"><label class="form-label" for="txc-moveto">Moved to (optional)</label>
+          <input type="text" class="form-input" id="txc-moveto" maxlength="80" placeholder="Leave empty to use the date, time and field on the schedule"></div>
+        <div id="txc-free-wrap" style="display:none;margin-top:10px"><label class="form-label" for="txc-text">Message (up to 300 characters)</label>
+          <textarea class="form-input" id="txc-text" rows="3" maxlength="300" placeholder="Bring both jerseys tonight."></textarea>
+          <div style="font-size:12px;color:var(--muted)"><span id="txc-len">0</span> of 300</div></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <button type="button" class="btn btn-outline btn-sm" id="txc-preview-btn">Preview</button>
+          <button type="button" class="btn btn-primary btn-sm" id="txc-send-btn" disabled>Send</button>
+        </div>
+        <div id="txc-preview"></div>
+        <div id="txc-msg" style="margin-top:10px;font-size:13px"></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.5">Only teammates who signed up at <a href="/sms.html" style="color:var(--navy)">dvsl.vercel.app/sms.html</a> and replied YES get texts. Share that link with your team. When the league changes the schedule, both teams are texted by themselves. Texts go out between 8 AM and 9 PM.</div>
+      </div>
     </div>
 
     <!-- NOTIFICATIONS -->
@@ -942,6 +974,8 @@ select.form-input{cursor:pointer}
     <div class="section" id="sec-scores">
       <div class="section-title">Submit Score</div>
       <div class="section-sub">Submit final scores for your games. Both captains must confirm — scores are live once both agree.</div>
+      <!-- Text a score help line (Builder C); filled by the Text my team module. -->
+      <div id="txc-score-help" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:8px;padding:10px 12px;margin:0 0 16px;font-size:13px;line-height:1.5"></div>
       <div id="score-confirm-banners"></div>
       <div class="panel-title" style="margin-top:8px">Games Awaiting Scores</div>
       <div id="pending-games">
@@ -7553,6 +7587,147 @@ window.sendCaptMsg = async function() {
   input.focus();
 };
 
+</script>
+<script type="module">
+// ═══════════════════════════════════════════════════════════════════
+// TEXT MY TEAM (Builder C). Self-contained: reuses the Firebase app the
+// main module started, asks /api/sms-send which teams this account may
+// text (server checks roles/{uid}.captain_teams), previews the exact text
+// and the number of teammates, then sends. Everything rendered goes
+// through txcEsc(); no inline handlers; no Firestore writes.
+// ═══════════════════════════════════════════════════════════════════
+import { getApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+
+const txcAuth = getAuth(getApp());
+const $ = (id) => document.getElementById(id);
+function txcEsc(s) {
+  return (s == null ? '' : String(s))
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/`/g, '&#96;');
+}
+async function txcApi(action, extra) {
+  const u = txcAuth.currentUser;
+  if (!u) throw new Error('Sign in again.');
+  const r = await fetch('/api/sms-send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (await u.getIdToken()) },
+    body: JSON.stringify(Object.assign({ action }, extra || {})),
+  });
+  let j = {};
+  try { j = await r.json(); } catch (_) { j = {}; }
+  if (!r.ok || j.error) { const e = new Error(j.message || ('The server said no (' + r.status + ').')); e.status = r.status; throw e; }
+  return j;
+}
+function msg(kind, text) { const el = $('txc-msg'); el.style.color = kind === 'err' ? '#b91c1c' : kind === 'ok' ? '#166534' : 'var(--muted)'; el.textContent = text || ''; }
+function dayTime(g) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(g.date || '');
+  const d = m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null;
+  let s = d ? d.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' }) + ' ' + (+m[2]) + '/' + (+m[3]) : (g.date || '');
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(g.time || '');
+  if (tm) { const h = +tm[1]; s += ' ' + ((h % 12) || 12) + ':' + tm[2] + (h < 12 ? ' AM' : ' PM'); }
+  return s;
+}
+
+let M = null, previewKey = '', previewTotal = 0;
+function currentTeam() {
+  const sel = $('txc-team');
+  return sel.value || (M && M.teams[0] && M.teams[0].id) || '';
+}
+function render() {
+  if (!M) return;
+  const sel = $('txc-team');
+  let want = sel.value;
+  if (!want) { try { want = localStorage.getItem('dvsl-captain-team') || ''; } catch (_) { want = ''; } }
+  sel.innerHTML = M.teams.map(t => `<option value="${txcEsc(t.id)}">${txcEsc(t.name)}</option>`).join('');
+  if (want && M.teams.some(t => t.id === want)) sel.value = want;
+  $('txc-team-wrap').style.display = M.teams.length > 1 ? '' : 'none';
+  const team = currentTeam();
+  const t = M.teams.find(x => x.id === team);
+  $('txc-count').textContent = t ? (t.optedIn + (t.optedIn === 1 ? ' teammate signed up' : ' teammates signed up')) : '';
+  const tpl = $('txc-template').value;
+  $('txc-game-wrap').style.display = tpl === 'free' ? 'none' : '';
+  $('txc-move-wrap').style.display = tpl === 'move' ? '' : 'none';
+  $('txc-free-wrap').style.display = tpl === 'free' ? '' : 'none';
+  const games = M.games.filter(g => g.away === team || g.home === team);
+  const gsel = $('txc-game');
+  const gKeep = gsel.value;
+  gsel.innerHTML = games.length
+    ? games.map(g => `<option value="${txcEsc(g.id)}">${txcEsc(dayTime(g) + ' vs ' + (g.away === team ? g.homeName : g.awayName))}</option>`).join('')
+    : '<option value="">No games in the next three weeks</option>';
+  if (gKeep && games.some(g => g.id === gKeep)) gsel.value = gKeep;
+  $('txc-off').style.display = M.live ? 'none' : '';
+}
+function body() {
+  const tpl = $('txc-template').value;
+  const b = { team: currentTeam(), template: tpl };
+  if (tpl !== 'free') b.gameId = $('txc-game').value;
+  if (tpl === 'move') b.moveTo = $('txc-moveto').value;
+  if (tpl === 'free') b.text = $('txc-text').value;
+  return b;
+}
+function invalidate() { previewKey = ''; $('txc-send-btn').disabled = true; }
+
+async function load() {
+  try {
+    M = await txcApi('mine');
+  } catch (e) {
+    M = null;
+    $('txc-panel').style.display = 'none';
+    return;
+  }
+  if (!M.teams.length) { $('txc-panel').style.display = 'none'; return; }
+  $('txc-panel').style.display = '';
+  const help = $('txc-score-help');
+  if (M.inboundOn && M.number) {
+    help.innerHTML = `<strong>Text a score:</strong> send the final to <strong>${txcEsc(M.number)}</strong> from your phone, for example <em>OA 12 SA 9</em>, <em>we won 12-9</em> or <em>rained out</em>.` +
+      (M.photoOn ? ' You can also text a photo of the scorebook and reply YES to post it.' : '') + ' Reply MENU for more.';
+    help.style.display = '';
+  } else help.style.display = 'none';
+  render();
+}
+
+$('txc-team').addEventListener('change', () => { invalidate(); render(); });
+$('txc-template').addEventListener('change', () => { invalidate(); render(); });
+$('txc-game').addEventListener('change', invalidate);
+$('txc-moveto').addEventListener('input', invalidate);
+$('txc-text').addEventListener('input', () => { invalidate(); $('txc-len').textContent = String($('txc-text').value.length); });
+$('txc-preview-btn').addEventListener('click', async () => {
+  msg('', '');
+  const b = body();
+  try {
+    const p = await txcApi('preview', b);
+    const t = p.texts[0] || { body: '', count: 0 };
+    $('txc-preview').innerHTML = `<div style="white-space:pre-wrap;font-size:13px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-top:12px">${txcEsc(t.body)}</div>` +
+      `<div style="font-size:12px;color:var(--muted);margin-top:6px">Goes to ${txcEsc(t.count)} ${t.count === 1 ? 'teammate' : 'teammates'}.${p.live ? '' : ' Team texts are switched off.'}${p.inWindow ? '' : ' It is outside 8 AM to 9 PM.'}</div>`;
+    previewKey = JSON.stringify(b);
+    previewTotal = p.total;
+    $('txc-send-btn').disabled = !(p.live && p.inWindow && p.total > 0);
+  } catch (e) { $('txc-preview').innerHTML = ''; msg('err', e.message); }
+});
+$('txc-send-btn').addEventListener('click', async () => {
+  const b = body();
+  if (JSON.stringify(b) !== previewKey) { invalidate(); msg('err', 'Something changed. Preview again first.'); return; }
+  if (!confirm('Send this text to ' + previewTotal + (previewTotal === 1 ? ' teammate?' : ' teammates?'))) return;
+  $('txc-send-btn').disabled = true;
+  msg('', 'Sending…');
+  try {
+    const r = await txcApi('send', Object.assign({ confirm: true }, b));
+    msg('ok', 'Sent to ' + r.sent + (r.sent === 1 ? ' teammate.' : ' teammates.') + (r.failed ? ' ' + r.failed + ' did not go through.' : ''));
+    invalidate();
+  } catch (e) { msg('err', e.message); $('txc-send-btn').disabled = false; }
+});
+
+let _loadedFor = '';
+onAuthStateChanged(txcAuth, (u) => {
+  if (!u) { _loadedFor = ''; M = null; $('txc-panel').style.display = 'none'; $('txc-score-help').style.display = 'none'; return; }
+  if (_loadedFor === u.uid) return;
+  _loadedFor = u.uid;
+  // Give the portal a moment to refresh roles after sign-in.
+  setTimeout(load, 1500);
+});
+// Re-read the remembered team when the captain switches teams.
+document.querySelectorAll('.tab-item[data-tab="team"]').forEach(n => n.addEventListener('click', () => { if (M) render(); }));
 </script>
 </body>
 </html>

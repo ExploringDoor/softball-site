@@ -715,3 +715,9 @@ export default async function handler(req, res) {
 
 // Exposed for unit tests only.
 export const _test = { feedsPlayedGame, cleanName, cleanNum, toInt, buildTeamIdMap, newDocId };
+
+// Used by the text-a-score webhook (api/sms-inbound.js) so a texted playoff
+// score goes through the exact same checks as the captain portal.
+// Call as actPlayoffScore(null, { bracket, g, as, hs }, roles); it throws
+// HttpError { status, code, message } when the score is refused.
+export { actPlayoffScore, HttpError };
