@@ -95,7 +95,7 @@
 
   function header() {
     var links = NAV.slice(1).map(function (n) { return '<a href="' + n[0] + '"' + (n[2] === here ? ' aria-current="page"' : '') + '>' + n[1] + '</a>'; }).join('');
-    var sheet = NAV.concat([['register.html', 'Register', 'register'], ['tryouts.html', 'Tryouts', 'tryouts'], ['news.html', 'News', 'news'], ['commits.html', 'Committed', 'commits'], ['roadmap.html', 'Recruiting road map', 'roadmap'], ['my-profile.html', 'Player sign in', 'builder'], ['coach.html', 'Coach desk', 'coach']]).map(function (n, i) {
+    var sheet = NAV.concat([['family.html', 'My family', 'family'], ['register.html', 'Register', 'register'], ['tryouts.html', 'Tryouts', 'tryouts'], ['news.html', 'News', 'news'], ['commits.html', 'Committed', 'commits'], ['roadmap.html', 'Recruiting road map', 'roadmap'], ['my-profile.html', 'Player sign in', 'builder'], ['coach.html', 'Coach desk', 'coach']]).map(function (n, i) {
       return '<a class="sheet__link" href="' + n[0] + '"' + (n[2] === here ? ' aria-current="page"' : '') + '><span>' + ('0' + (i + 1)).slice(-2) + '</span>' + n[1] + '</a>';
     }).join('');
     return '<a class="skip" href="#main">Skip to content</a>' +
@@ -116,8 +116,8 @@
     return '<footer class="foot">' + sky('foot__sky') + '<div class="foot__body"><div class="wrap foot__in">' +
       '<div class="foot__brand"><span class="foot__wm">Empire</span><span class="foot__wm foot__wm--b">Softball</span><p>' + esc(D.club.region) + '. Travel softball, ' + esc(D.club.ages) + '.</p></div>' +
       '<div class="foot__col"><b>The club</b>' + NAV.slice(1, 4).concat([['photos.html', 'Photos'], ['about.html', 'About']]).map(function (n) { return '<a href="' + n[0] + '">' + n[1] + '</a>'; }).join('') + '</div>' +
-      '<div class="foot__col"><b>Players</b><a href="register.html">Register</a><a href="tryouts.html">Tryouts</a><a href="my-profile.html">Build my profile</a><a href="cards.html?t=white-16u-elite">Team card set</a><a href="commits.html">Committed</a><a href="roadmap.html">Recruiting road map</a></div>' +
-      '<div class="foot__col"><b>Club</b><a href="news.html">News</a><a href="' + D.club.store + '" target="_blank" rel="noopener">Team store</a><a href="contact.html">Contact</a><a href="coach.html">Coach desk</a><a href="' + D.club.instagram + '" target="_blank" rel="noopener">Instagram</a><a href="' + D.club.facebook + '" target="_blank" rel="noopener">Facebook</a></div>' +
+      '<div class="foot__col"><b>Players</b><a href="family.html">My family</a><a href="register.html">Register</a><a href="tryouts.html">Tryouts</a><a href="my-profile.html">Build my profile</a><a href="cards.html?t=white-16u-elite">Team card set</a><a href="commits.html">Committed</a><a href="roadmap.html">Recruiting road map</a></div>' +
+      '<div class="foot__col"><b>Club</b><a href="news.html">News</a><a href="derby.html">Home Run Derby</a><a href="sponsor.html">Sponsor Empire</a><a href="' + D.club.store + '" target="_blank" rel="noopener">Team store</a><a href="contact.html">Contact</a><a href="coach.html">Coach desk</a><a href="' + D.club.instagram + '" target="_blank" rel="noopener">Instagram</a><a href="' + D.club.facebook + '" target="_blank" rel="noopener">Facebook</a></div>' +
       '</div><div class="wrap foot__fine"><span>Empire Softball</span><span>Sample site by Main Line Web Design</span></div></div></footer>';
   }
 
@@ -155,7 +155,7 @@
     return '<div class="ev' + (e.showcase ? ' ev--show' : '') + '"><div class="ev__date"><i>' + MON[a.m] + '</i><b>' + a.d + '</b><small>' + (e.start === e.end ? a.y : 'to ' + (b.m === a.m ? '' : MON[b.m] + ' ') + b.d) + '</small></div>' +
       '<div class="ev__body"><h3>' + esc(e.name) + (e.showcase ? ' <span class="tag tag--ink">College showcase</span>' : '') + '</h3>' +
       '<div class="ev__place">' + esc(e.place) + ', ' + esc(e.city) + '</div>' + teams +
-      '<div class="ev__act"><button type="button" data-ics="' + e.id + '">Add to my calendar</button>' +
+      '<div class="ev__act"><a href="weekend.html?e=' + e.id + '">Weekend sheet</a>' + (e.showcase ? '<a href="scout.html?e=' + e.id + '">Scout sheet</a>' : '') + '<button type="button" data-ics="' + e.id + '">Add to my calendar</button>' +
       '<a href="https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(e.place + ' ' + e.city) + '" target="_blank" rel="noopener">Directions</a></div></div></div>';
   }
   function staffRow(s, sub) {
@@ -261,7 +261,7 @@
 
       '<section class="sec"><div class="wrap"><div class="sec__head"><h2 class="disp">Team sponsors</h2><p>Local businesses help cover tournament fees and winter training. Sponsor names and logos go here.</p></div>' +
       '<div class="spons">' + D.sponsors.map(function (x) { return '<span class="spons__real"><b>' + esc(x[0]) + '</b><i>' + esc(x[1]) + '</i></span>'; }).join('') + '<span>Your business here</span><span>Your business here</span><span>Your business here</span></div>' +
-      '<p class="mt"><a class="more" href="contact.html">Ask about sponsoring a team ' + I.arrow + '</a></p></div></section>' +
+      '<p class="mt"><a class="more" href="sponsor.html">Sponsor packages ' + I.arrow + '</a></p></div></section>' +
       '<section class="sec sec--soft"><div class="wrap split"><div><p class="kicker">More than a team</p><h2 class="disp" style="font-size:clamp(26px,7vw,48px);margin:12px 0 16px">' + esc(D.club.program[0][0]) + '</h2><p class="lead">' + esc(D.club.program[0][1]) + '</p>' +
       '<div class="hero__cta"><a class="btn" href="about.html">About the program</a><a class="btn" href="' + D.club.store + '" target="_blank" rel="noopener">Team store</a></div></div>' +
       '<div class="cm">' + D.alumni.map(alumRow).join('') + '<p><a class="more" href="commits.html">Playing in college ' + I.arrow + '</a></p></div></div></section>' +
@@ -539,7 +539,8 @@
   P.coach = function () {
     var topt = D.teams.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join('');
     return pageHead('Coach <span class="wm">desk</span>', 'Where Empire coaches run the site: the top banner, rosters, the schedule and every form that comes in.') +
-      '<section class="sec sec--tight"><div class="wrap"><p class="note">Sample: on the real site coaches sign in first. Here anything you change saves on this phone or computer only, so try it.</p><div class="pgrid">' +
+      '<section class="sec sec--tight"><div class="wrap"><p class="note">Sample: on the real site coaches sign in first. Here anything you change saves on this phone or computer only, so try it.</p>' +
+      '<nav class="ql ql--desk" aria-label="Coach tools"><div class="ql__in"><a href="messages.html"><b>Message families</b><span>Texts and emails to the right group</span></a><a href="tryout-night.html"><b>Tryout night</b><span>Check in, score, make offers</span></a><a href="derby.html#coach"><b>Derby day</b><span>Enter home runs, see who owes</span></a><a href="register.html"><b>Registration</b><span>What families fill in</span></a></div></nav><div class="pgrid">' +
 
       '<div class="blk blk--wide blk--ink" id="inbox"><div class="blk__top"><h2>Inbox</h2><button type="button" class="btn btn--sm" id="inboxClear">Clear inbox</button></div><div id="deskInbox"></div></div>' +
 
@@ -606,7 +607,7 @@
       '<figure class="frame"><img src="img/photos/gold12-team.webp" loading="lazy" alt="Empire Gold 12u team photo"></figure></div></section>' +
       '<section class="sec sec--soft"><div class="wrap"><div class="sec__head"><h2 class="disp">One year, three seasons</h2></div>' + seasonRows() + '</div></section>' +
       '<section class="sec"><div class="wrap"><div class="sec__head"><h2 class="disp">More than a team</h2><p>From the club\'s own posts.</p></div><div class="season">' + D.club.program.map(function (x, i) { return '<div class="season__row"><span class="season__n" aria-hidden="true">0' + (i + 1) + '</span><div><h3>' + esc(x[0]) + '</h3></div><p>' + esc(x[1]) + '</p></div>'; }).join('') + '</div>' +
-      '<div class="hero__cta"><a class="btn" href="commits.html">Playing in college</a><a class="btn" href="' + D.club.store + '" target="_blank" rel="noopener">Team store</a></div></div></section>' +
+      '<div class="hero__cta"><a class="btn btn--ink" href="derby.html">Home Run Derby pledges</a><a class="btn" href="commits.html">Playing in college</a><a class="btn" href="' + D.club.store + '" target="_blank" rel="noopener">Team store</a></div></div></section>' +
       '<section class="sec sec--soft"><div class="wrap"><div class="sec__head"><h2 class="disp">Coaching staff</h2></div><div class="staff">' +
       coaches.map(function (c) { return staffRow({ name: c.s.name, photo: c.s.photo }, c.teams.join(' and ')); }).join('') + '</div></div></section>' + tryoutCta().replace('class="cta"', 'class="cta cta--flat"');
   };
@@ -641,6 +642,12 @@
   };
 
   /* ---------- render ---------- */
+  /* feature files (js/x-*.js) register pages in window.EMPIRE_EXT before this script runs */
+  var H = { D: D, C: C, qs: qs, page: page, esc: esc, team: team, player: player, players: players, roster: roster, pphoto: pphoto, purl: purl, sget: sget, sset: sset,
+    club: club, regs: regs, fee: fee, money: money, EV: EV, upcoming: upcoming, ymd: ymd, MON: MON, MONTH: MONTH, longDate: longDate, I: I, sky: sky,
+    pageHead: pageHead, sample: sample, field: field, eventRow: eventRow, staffRow: staffRow, playerCard: playerCard, cardOpts: cardOpts };
+  var EXT = window.EMPIRE_EXT || { pages: {}, init: {} };
+  Object.keys(EXT.pages || {}).forEach(function (k) { P[k] = function () { return EXT.pages[k](H); }; });
   app.innerHTML = header() + '<main id="main">' + (P[page] || P.home)() + '</main>' + footer();
 
   /* menu */
@@ -677,6 +684,8 @@
     }
   });
 
+  if (EXT.init && EXT.init[page]) EXT.init[page](H);
+
   /* search */
   var fd = document.getElementById('findDlg'), fq = document.getElementById('findQ'), fr = document.getElementById('findR');
   var findDraw = function () {
@@ -685,7 +694,7 @@
       players().forEach(function (p) { if ((p.name + ' ' + p.school + ' ' + p.grad + ' ' + p.pos.join(' ')).toLowerCase().indexOf(q) > -1) out.push(['player.html?p=' + p.id, p.name, 'Player, ' + p.grad + ', ' + p.pos.join(' / ')]); });
       D.teams.forEach(function (t) { if ((t.name + ' ' + t.coach).toLowerCase().indexOf(q) > -1) out.push(['team.html?t=' + t.id, t.name, 'Team, coach ' + t.coach]); });
       EV().forEach(function (e) { if ((e.name + ' ' + e.place + ' ' + e.city).toLowerCase().indexOf(q) > -1) out.push(['schedule.html', e.name, 'Event, ' + e.place + ', ' + e.city]); });
-      NAV.concat([['tryouts.html', 'Tryouts'], ['my-profile.html', 'Build my profile'], ['compare.html', 'Compare players'], ['commits.html', 'Committed players'], ['roadmap.html', 'Recruiting road map'], ['coach.html', 'Coach desk'], ['register.html', 'Register for the season'], ['news.html', 'News']]).forEach(function (n) { if (n[1].toLowerCase().indexOf(q) > -1) out.push([n[0], n[1], 'Page']); });
+      NAV.concat([['tryouts.html', 'Tryouts'], ['my-profile.html', 'Build my profile'], ['compare.html', 'Compare players'], ['commits.html', 'Committed players'], ['roadmap.html', 'Recruiting road map'], ['coach.html', 'Coach desk'], ['register.html', 'Register for the season'], ['news.html', 'News'], ['family.html', 'My family'], ['derby.html', 'Home Run Derby'], ['sponsor.html', 'Sponsor Empire'], ['messages.html', 'Message families'], ['tryout-night.html', 'Tryout night']]).forEach(function (n) { if (n[1].toLowerCase().indexOf(q) > -1) out.push([n[0], n[1], 'Page']); });
     }
     fr.innerHTML = out.slice(0, 12).map(function (o) { return '<a href="' + o[0] + '"><b>' + esc(o[1]) + '</b><span>' + esc(o[2]) + '</span></a>'; }).join('') || '<p class="mute">' + (q ? 'Nothing found. Try a name, a school, a position or a team.' : 'Type a name, school, position, team or event.') + '</p>';
   };
@@ -703,7 +712,7 @@
       var ok = form.querySelector('.form__ok'); ok.classList.add('on');
       var fields = [].map.call(form.querySelectorAll('.fld'), function (d) { return [d.querySelector('label').textContent, d.querySelector('input,select,textarea').value]; }).filter(function (x) { return x[1]; });
       var box = sget('emp_inbox') || [];
-      box.unshift({ kind: ({ tryouts: 'Tryout interest', contact: 'Contact form', player: 'College coach request', team: 'Text alert sign-up' })[page] || 'Form', about: document.querySelector('h1').textContent.trim(), when: new Date().toLocaleString(), fields: fields });
+      box.unshift({ kind: ({ tryouts: 'Tryout interest', contact: 'Contact form', player: 'College coach request', team: 'Text alert sign-up', sponsor: 'Sponsor inquiry', derby: 'Derby pledge', family: 'Family form' })[page] || 'Form', about: document.querySelector('h1').textContent.trim(), when: new Date().toLocaleString(), fields: fields });
       sset('emp_inbox', box.slice(0, 30));
       if (!ok.querySelector('a')) ok.insertAdjacentHTML('beforeend', ' <a href="coach.html#inbox">See how it lands in the coach desk.</a>');
       form.reset();
