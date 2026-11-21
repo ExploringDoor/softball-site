@@ -104,18 +104,81 @@ window.EMPIRE.tryoutDates = [
   { id: 't3', label: 'Sunday, August 15, 2027: 16U, 9:00 am' },
   { id: 't4', label: 'Sunday, August 15, 2027: 18U, 12:00 pm' }
 ];
+/* REAL: taken from the club's own Instagram posts (eya_softball and its team accounts), read 2026-11-20, rewritten in our words. */
 window.EMPIRE.news = [
-  { id: 'n1', sample: true, date: '2027-04-19', title: 'White 16u Elite opens the spring in Baldwin', photo: 'img/photos/white16-team.webp', text: 'This is a sample post. A coach writes a few lines after the weekend, picks a photo, and it shows here and on the home page.' },
-  { id: 'n2', sample: true, date: '2027-03-02', title: 'Winter training wraps up', photo: 'img/photos/huddle.webp', text: 'This is a sample post. Use news for training dates, tryout reminders, field changes and shout outs.' },
-  { id: 'n3', sample: true, date: '2027-02-10', title: 'Team photo day for Gold 12u', photo: 'img/photos/gold12-team.webp', text: 'This is a sample post. Each post can carry one photo and a link.' }
+  { id: 'n9', date: '2026-11-15', title: 'White ends the fall with another championship', text: 'The team closed out the fall season with one more title and heads into the offseason.' },
+  { id: 'n8', date: '2026-10-18', title: '14U takes the title on Championship Sunday', text: 'The 14U team went 3-0-1 on the weekend and won the final 11-2 to bring home the championship.' },
+  { id: 'n7', date: '2026-10-06', title: 'Meet the 2026 Black 13U', text: 'A new group opens its fall season at the Island Fastpitch USSSA Play Pink Tournament, led by head coach Dan Morra and assistant coach Jim Ganly.' },
+  { id: 'n6', date: '2026-08-02', title: 'First 14U tournament title, and unbeaten all night', photo: 'img/ig/champs-14u-2026.webp', text: 'The girls won their first 14U championship without a loss and finished it with a 5-0 shutout in the final.' },
+  { id: 'n5', date: '2025-07-16', title: 'Black 18u wins the USA Strong Island Championship', photo: 'img/ig/black18-strong-island.webp', text: 'Empire Black 18u took the Strong Island title in July.' },
+  { id: 'n4', date: '2025-06-30', title: 'Gold 12u wins the USSSA State tournament', text: 'Gold 12u went unbeaten and won the state title in an Empire against Empire final. It was the team\'s seventh tournament win of the year.' },
+  { id: 'n3', date: '2025-02-06', title: 'Brooke Gullo is the first Empire Athletics Foundation scholarship winner', photo: 'img/ig/brooke-gullo.webp', text: 'Brooke, who is playing at Oswego State, became the first softball player to receive the foundation scholarship, given in memory of Coach Brandon Wilson.' },
+  { id: 'n2', date: '2024-07-09', title: 'First Home Run Derby and Combine', text: 'Every Empire team took part in a home run derby and skills combine that raised money for the Empire Athletics Foundation.' }
 ];
 window.EMPIRE.results = [
-  { id: 'r1', sample: true, team: 'white-16u-elite', event: 'Spring Opener', finish: 'Champions', record: '5-0' },
-  { id: 'r2', sample: true, team: 'gold-12u', event: 'Tri-State Championship', finish: 'Champions', record: '6-0' },
-  { id: 'r3', sample: true, team: 'gold-14u', event: 'Long Island Invitational', finish: 'Finalist', record: '4-1' }
+  { id: 'r20', date: '2026-11-15', team: 'white-16u-elite', event: 'Toys for Tots Tournament', finish: 'Champions' },
+  { id: 'r19', date: '2026-10-18', label: 'Empire 14U', event: 'Championship Sunday, October 2026', finish: 'Champions', record: '3-0-1' },
+  { id: 'r18', date: '2026-08-02', label: 'Empire Black and Gold 2031', event: 'First 14U tournament title', finish: 'Champions', record: 'Unbeaten' },
+  { id: 'r17', date: '2026-07-12', label: 'Empire Gold 2031', event: 'Angels in the Outfield', finish: 'Champions' },
+  { id: 'r16', date: '2025-07-16', team: 'black-18u', event: 'USA Strong Island Championship', finish: 'Champions' },
+  { id: 'r15', date: '2025-07-15', label: 'Empire Black 12u', event: 'USSSA Angels in the Outfield', finish: 'Champions' },
+  { id: 'r14', date: '2025-07-14', team: 'white-16u-elite', event: 'USSSA Angels in the Outfield', finish: 'Finalist' },
+  { id: 'r13', date: '2025-07-06', label: 'Empire Black 14u', event: 'CYA Firecracker Classic, 16u division', finish: 'Champions' },
+  { id: 'r12', date: '2025-06-30', team: 'gold-12u', event: 'USSSA State Tournament', finish: 'Champions', record: 'Unbeaten' },
+  { id: 'r11', date: '2025-06-16', team: 'black-16u', event: 'USSSA Fathers Day Faceoff', finish: 'Co-champions' },
+  { id: 'r10', date: '2025-06-02', team: 'white-16u-elite', event: 'We Play for A.K. Tournament', finish: 'Champions' },
+  { id: 'r9', date: '2025-05-28', team: 'white-16u-elite', event: 'USSSA Memorial Day Tournament, 18u division', finish: 'Finalist' },
+  { id: 'r8', date: '2025-04-07', team: 'gold-12u', event: 'Rally for Hailey', finish: 'Champions' },
+  { id: 'r7', date: '2024-11-11', team: 'white-16u-elite', event: 'USSSA Toys for Tots Tournament', finish: 'Champions', record: '5-0' },
+  { id: 'r6', date: '2024-11-01', team: 'white-16u-elite', event: 'Island Fastpitch Fall League, 16/18u', finish: 'Champions', record: 'Unbeaten' },
+  { id: 'r5', date: '2024-07-28', team: 'white-16u-elite', event: 'USSSA Long Island Championship', finish: 'Champions' }
 ];
+/* REAL: college commitments the club announced on Instagram. */
+window.EMPIRE.alumni = [
+  { name: 'Brooke Gullo', college: 'Oswego State', note: 'Class of 2025, Empire Black 18u. First Empire Athletics Foundation scholarship winner.', photo: 'img/ig/brooke-gullo.webp' },
+  { name: 'Caragh Doyle', college: 'SUNY Old Westbury', note: 'Class of 2025.', photo: 'img/ig/caragh-doyle.webp' },
+  { name: 'Giulia Scibilia', college: 'Western Connecticut State University', note: 'Empire\'s first college softball commit, announced October 2024.', photo: 'img/ig/giulia-scibilia.webp' }
+];
+/* REAL: honors and fall 2025 numbers the club posted for players already on this site. */
+(function () {
+  var H = {
+    'megan-hobdy': { honors: ['All County Honorable Mention 2025', 'Fall 2025 pitching MVP', 'Toys for Tots MVP 2024'], stats: { avg: '.643', era: '1.15' }, statsNote: 'Fall 2025, posted by the team' },
+    'shayna-argentina': { honors: ['Fall 2025 season MVP', 'All State All-Star Game 2024'], stats: { avg: '.778' }, statsNote: 'Fall 2025, posted by the team' },
+    'tiffany-matthews': { honors: ['All County Pitcher of the Year 2025'] },
+    'lia-arduini': { honors: ['All Conference 2025', 'All State All-Star Game 2024'] },
+    'kerriann-orth': { honors: ['Toys for Tots defensive MVP 2024', 'All State All-Star Game 2024'] },
+    'jocelyn-mueller': { honors: ['Most Improved, fall 2025'] }
+  };
+  window.EMPIRE.players.forEach(function (p) { if (H[p.id]) { p.honors = H[p.id].honors; if (H[p.id].stats) { p.stats = H[p.id].stats; p.statsNote = H[p.id].statsNote; } } });
+  var t = window.EMPIRE.teams.filter(function (x) { return x.id === 'white-16u-elite'; })[0];
+  t.blurb = 'Unbeaten in the fall of 2025 and 58-18-1 in 2024, with titles at Toys for Tots, We Play for A.K. and the USSSA Long Island Championship.';
+  window.EMPIRE.club.ages = '10U to 18U';
+  window.EMPIRE.club.store = 'https://empire2027.itemorder.com';
+  window.EMPIRE.club.program = [
+    ['Empire Athletics Foundation', 'A nonprofit that helps keep player fees down, helps athletes who could not otherwise play, and gives scholarships to Empire players moving on to college. The Brandon Wilson Scholarship honors a late Empire coach.'],
+    ['Home Run Derby and Combine', 'Once a year every Empire team takes part in a home run derby and a skills combine. Families and friends pledge per home run, and the money goes to the foundation.'],
+    ['Winter training and college clinics', 'Teams train indoors through the winter, and Empire has brought in college coaching staffs to run clinics for its players.']
+  ];
+  window.EMPIRE.photos = window.EMPIRE.photos.concat([
+    { src: 'img/ig/champs-14u-2026.webp', w: 1600, h: 1200, cap: 'First 14U title, August 2026' },
+    { src: 'img/ig/black18-strong-island.webp', w: 1206, h: 858, cap: 'Black 18u, Strong Island champions' },
+    { src: 'img/ig/hands-in.webp', w: 1440, h: 1440, cap: 'Hands in' },
+    { src: 'img/ig/angels-2026.webp', w: 1600, h: 1200, cap: 'Angels in the Outfield champions, 2026' },
+    { src: 'img/ig/li-championship-2024.webp', w: 1440, h: 1440, cap: 'USSSA Long Island Championship, 2024' },
+    { src: 'img/ig/firecracker-dazzle.webp', w: 1440, h: 1080, cap: 'Firecracker Dazzle champions' },
+    { src: 'img/ig/nationals-18u.webp', w: 1440, h: 1266, cap: '18u Nationals' },
+    { src: 'img/ig/fever-pitch.webp', w: 1440, h: 1080, cap: 'Fever Pitch champions' },
+    { src: 'img/ig/white-2024.webp', w: 1440, h: 1335, cap: 'Empire White' },
+    { src: 'img/ig/softball-prom.webp', w: 1440, h: 1080, cap: 'Softball Prom champions' },
+    { src: 'img/ig/rally-for-hailey.webp', w: 1440, h: 1080, cap: 'Rally for Hailey champions' },
+    { src: 'img/ig/back-the-blue.webp', w: 1440, h: 1605, cap: 'Back the Blue champions' },
+    { src: 'img/ig/firecracker-classic.webp', w: 1200, h: 900, cap: 'Firecracker Classic champions' },
+    { src: 'img/ig/wounded-warriors.webp', w: 1440, h: 914, cap: 'Wounded Warriors champions' }
+  ]);
+})();
 window.EMPIRE.faq = [
-  ['How do tryouts work?', 'Sample answer. Players sign up for the date that matches their age group, check in with a parent, and go through hitting, fielding, throwing and running stations.'],
+  ['How do tryouts work?', 'Tryouts run over about a week at two locations, Seaford and Huntington Station, for age groups 10U to 18U. Every player signs up online first. From the club\'s 2025-26 tryout post.'],
+  ['Is there a tryout fee?', 'New players paid a $20 fee when they signed up for 2025-26 tryouts.'],
   ['What does the season fee cover?', 'Sample answer. The club lists what is included here: tournament entries, winter training, uniforms and insurance.'],
   ['Can we pay over time?', 'Sample answer. Registration offers pay in full, three payments or monthly payments, and the coach desk shows who is paid up.'],
   ['Which age group is my daughter?', 'Sample answer. The club posts its age cutoff here so families can check before tryouts.']
