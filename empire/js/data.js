@@ -75,3 +75,23 @@ window.EMPIRE = {
     { src: 'img/photos/white-unis.webp', w: 960, h: 2081, cap: 'Whites on game day' }
   ]
 };
+
+/* SAMPLE measurables for the demo (not the players' real numbers). A family replaces them in the profile builder. */
+(function () {
+  var M = {
+    'angelina-mancuso': { ht: "5'4\"", ev: 66, ov: 58, h1: '2.92' },
+    'gabriella-marino': { ht: "5'6\"", ev: 64, ov: 59, h1: '2.88' },
+    'jessica-dobrzeniecki': { ht: "5'5\"", ev: 65, ov: 57, h1: '2.95' },
+    'jocelyn-mueller': { ht: "5'5\"", ev: 63, ov: 58, h1: '2.85' },
+    'julia-candelario': { ht: "5'7\"", ev: 69, ov: 61, h1: '3.02', pop: '1.98' },
+    'kaitlyn-lozano': { ht: "5'6\"", ev: 70, ov: 62, h1: '2.98', pop: '1.92' },
+    'kerriann-orth': { ht: "5'5\"", ev: 67, ov: 60, h1: '3.05', pop: '1.96' },
+    'lia-arduini': { ht: "5'8\"", ev: 68, ov: 61, h1: '3.00', pv: 57 },
+    'lily-suarez': { ht: "5'9\"", ev: 71, ov: 58, h1: '3.08' },
+    'logan-berg': { ht: "5'6\"", ev: 66, ov: 58, h1: '2.94' },
+    'megan-hobdy': { ht: "5'7\"", ev: 65, ov: 60, h1: '2.90', pv: 58 },
+    'shayna-argentina': { ht: "5'6\"", ev: 68, ov: 60, h1: '3.01' },
+    'tiffany-matthews': { ht: "5'7\"", ev: 66, ov: 61, h1: '2.87', pv: 59 }
+  };
+  window.EMPIRE.players.forEach(function (p) { p.m = M[p.id] || {}; p.sampleM = true; });
+})();
