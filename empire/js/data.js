@@ -95,3 +95,28 @@ window.EMPIRE = {
   };
   window.EMPIRE.players.forEach(function (p) { p.m = M[p.id] || {}; p.sampleM = true; });
 })();
+
+/* SAMPLE club content for the demo: fee, tryout dates, news, results, questions. The club replaces all of it in the coach desk. */
+window.EMPIRE.fee = 1800;
+window.EMPIRE.tryoutDates = [
+  { id: 't1', label: 'Saturday, August 14, 2027: 12U and 13U, 9:00 am' },
+  { id: 't2', label: 'Saturday, August 14, 2027: 14U, 12:00 pm' },
+  { id: 't3', label: 'Sunday, August 15, 2027: 16U, 9:00 am' },
+  { id: 't4', label: 'Sunday, August 15, 2027: 18U, 12:00 pm' }
+];
+window.EMPIRE.news = [
+  { id: 'n1', sample: true, date: '2027-04-19', title: 'White 16u Elite opens the spring in Baldwin', photo: 'img/photos/white16-team.webp', text: 'This is a sample post. A coach writes a few lines after the weekend, picks a photo, and it shows here and on the home page.' },
+  { id: 'n2', sample: true, date: '2027-03-02', title: 'Winter training wraps up', photo: 'img/photos/huddle.webp', text: 'This is a sample post. Use news for training dates, tryout reminders, field changes and shout outs.' },
+  { id: 'n3', sample: true, date: '2027-02-10', title: 'Team photo day for Gold 12u', photo: 'img/photos/gold12-team.webp', text: 'This is a sample post. Each post can carry one photo and a link.' }
+];
+window.EMPIRE.results = [
+  { id: 'r1', sample: true, team: 'white-16u-elite', event: 'Spring Opener', finish: 'Champions', record: '5-0' },
+  { id: 'r2', sample: true, team: 'gold-12u', event: 'Tri-State Championship', finish: 'Champions', record: '6-0' },
+  { id: 'r3', sample: true, team: 'gold-14u', event: 'Long Island Invitational', finish: 'Finalist', record: '4-1' }
+];
+window.EMPIRE.faq = [
+  ['How do tryouts work?', 'Sample answer. Players sign up for the date that matches their age group, check in with a parent, and go through hitting, fielding, throwing and running stations.'],
+  ['What does the season fee cover?', 'Sample answer. The club lists what is included here: tournament entries, winter training, uniforms and insurance.'],
+  ['Can we pay over time?', 'Sample answer. Registration offers pay in full, three payments or monthly payments, and the coach desk shows who is paid up.'],
+  ['Which age group is my daughter?', 'Sample answer. The club posts its age cutoff here so families can check before tryouts.']
+];

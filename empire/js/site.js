@@ -25,6 +25,14 @@
     return p;
   }
   function club() { return sget('emp_club') || {}; }
+  function regs() { return sget('emp_reg') || []; }
+  function fee() { return parseInt(club().fee, 10) || D.fee; }
+  function money(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
+  function NEWS() { return (Array.isArray(club().news) ? club().news : []).concat(D.news).slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }); }
+  function RESULTS() { return (club().results || []).concat(D.results); }
+  function longDate(s) { var a = ymd(s); return MONTH[a.m] + ' ' + a.d + ', ' + a.y; }
+  function newsRow(n) { return '<article class="nw" id="' + n.id + '">' + (n.photo ? '<img src="' + n.photo + '" loading="lazy" alt="">' : '') + '<div><p class="nw__d">' + longDate(n.date) + (n.sample ? ' ' + sample() : '') + '</p><h3>' + esc(n.title) + '</h3><p>' + esc(n.text) + '</p></div></article>'; }
+  function trophyRow(r) { var t = team(r.team); return '<a class="tr" href="team.html?t=' + t.id + '"><span class="tr__f' + (/champ/i.test(r.finish) ? ' tr__f--1' : '') + '">' + esc(r.finish) + '</span><span class="tr__e"><b>' + esc(r.event) + '</b><i>' + esc(t.name) + (r.record ? ', ' + esc(r.record) : '') + (r.sample ? ' ' + sample() : '') + '</i></span></a>'; }
   function EV() { return D.events.concat(club().events || []); }
   function players() { return D.players.concat(club().players || []).map(function (p) { return player(p.id); }); }
   function initialsPic(p) {
@@ -85,15 +93,15 @@
 
   function header() {
     var links = NAV.slice(1).map(function (n) { return '<a href="' + n[0] + '"' + (n[2] === here ? ' aria-current="page"' : '') + '>' + n[1] + '</a>'; }).join('');
-    var sheet = NAV.concat([['tryouts.html', 'Tryouts', 'tryouts'], ['commits.html', 'Committed', 'commits'], ['roadmap.html', 'Recruiting road map', 'roadmap'], ['my-profile.html', 'Player sign in', 'builder'], ['coach.html', 'Coach desk', 'coach']]).map(function (n, i) {
+    var sheet = NAV.concat([['register.html', 'Register', 'register'], ['tryouts.html', 'Tryouts', 'tryouts'], ['news.html', 'News', 'news'], ['commits.html', 'Committed', 'commits'], ['roadmap.html', 'Recruiting road map', 'roadmap'], ['my-profile.html', 'Player sign in', 'builder'], ['coach.html', 'Coach desk', 'coach']]).map(function (n, i) {
       return '<a class="sheet__link" href="' + n[0] + '"' + (n[2] === here ? ' aria-current="page"' : '') + '><span>' + ('0' + (i + 1)).slice(-2) + '</span>' + n[1] + '</a>';
     }).join('');
     return '<a class="skip" href="#main">Skip to content</a>' +
-      '<a class="bar" href="tryouts.html">' + esc(club().news || 'Tryout interest is open for every age group') + ' ' + I.arrow + '</a>' +
+      '<a class="bar" href="tryouts.html">' + esc(club().banner || 'Registration and tryout sign-ups are open') + ' ' + I.arrow + '</a>' +
       '<header class="top"><div class="wrap top__in">' +
       '<a class="top__logo" href="index.html" aria-label="Empire Softball home"><img src="img/crest-sm.webp" width="320" height="199" alt="Empire Softball"></a>' +
       '<nav class="nav" aria-label="Main">' + links + '</nav>' +
-      '<div class="top__act"><button class="top__find" id="findOpen" type="button" aria-label="Search the site">' + I.find + '</button><a class="top__sign" href="my-profile.html">Player sign in</a><a class="btn btn--sm" href="tryouts.html">Tryouts</a>' +
+      '<div class="top__act"><button class="top__find" id="findOpen" type="button" aria-label="Search the site">' + I.find + '</button><a class="top__sign" href="my-profile.html">Player sign in</a><a class="btn btn--sm btn--ink" href="register.html">Register</a>' +
       '<button class="menu-btn" id="menuOpen" aria-haspopup="dialog" aria-controls="sheet">Menu</button></div>' +
       '</div></header>' +
       '<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Menu"><div class="sheet__top"><img src="img/crest-sm.webp" width="320" height="199" alt="">' +
@@ -106,8 +114,8 @@
     return '<footer class="foot">' + sky('foot__sky') + '<div class="foot__body"><div class="wrap foot__in">' +
       '<div class="foot__brand"><span class="foot__wm">Empire</span><span class="foot__wm foot__wm--b">Softball</span><p>' + esc(D.club.region) + '. Travel softball, ' + esc(D.club.ages) + '.</p></div>' +
       '<div class="foot__col"><b>The club</b>' + NAV.slice(1, 4).concat([['photos.html', 'Photos'], ['about.html', 'About']]).map(function (n) { return '<a href="' + n[0] + '">' + n[1] + '</a>'; }).join('') + '</div>' +
-      '<div class="foot__col"><b>Players</b><a href="tryouts.html">Tryouts</a><a href="my-profile.html">Build my profile</a><a href="cards.html?t=white-16u-elite">Team card set</a><a href="commits.html">Committed</a><a href="roadmap.html">Recruiting road map</a></div>' +
-      '<div class="foot__col"><b>Club</b><a href="contact.html">Contact</a><a href="coach.html">Coach desk</a><a href="' + D.club.instagram + '" target="_blank" rel="noopener">Instagram</a><a href="' + D.club.facebook + '" target="_blank" rel="noopener">Facebook</a></div>' +
+      '<div class="foot__col"><b>Players</b><a href="register.html">Register</a><a href="tryouts.html">Tryouts</a><a href="my-profile.html">Build my profile</a><a href="cards.html?t=white-16u-elite">Team card set</a><a href="commits.html">Committed</a><a href="roadmap.html">Recruiting road map</a></div>' +
+      '<div class="foot__col"><b>Club</b><a href="news.html">News</a><a href="contact.html">Contact</a><a href="coach.html">Coach desk</a><a href="' + D.club.instagram + '" target="_blank" rel="noopener">Instagram</a><a href="' + D.club.facebook + '" target="_blank" rel="noopener">Facebook</a></div>' +
       '</div><div class="wrap foot__fine"><span>Empire Softball</span><span>Sample site by Main Line Web Design</span></div></div></footer>';
   }
 
@@ -217,6 +225,8 @@
       '<div class="fact"><b>' + players().length + '</b><span>Recruiting profiles posted</span></div>' +
       '<div class="fact"><b>3</b><span>Seasons a year, August to July</span></div></div></section>' +
 
+      '<nav class="ql" aria-label="Shortcuts"><div class="wrap ql__in"><a href="register.html"><b>Register</b><span>Season sign-up and dues</span></a><a href="tryouts.html"><b>Tryouts</b><span>Dates by age group</span></a><a href="schedule.html"><b>Schedule</b><span>Where each team plays</span></a><a href="players.html"><b>Recruiting</b><span>Player profiles</span></a></div></nav>' +
+
       '<section class="sec"><div class="wrap recruit"><div><p class="kicker">For college coaches</p>' +
       '<h2 class="disp">Find your next <span class="wm">recruit.</span></h2>' +
       '<p class="lead">Every Empire player has a full recruiting page right here: measurables, academics, video, her coach and where she plays next. Save the ones you like to your own list.</p>' +
@@ -234,11 +244,22 @@
       '<div class="hero__cta"><a class="btn btn--gold" href="my-profile.html?p=kaitlyn-lozano">Try the profile builder ' + I.arrow + '</a><a class="btn btn--line" href="cards.html?t=white-16u-elite">See a team card set</a></div></div>' +
       '<div class="fan" id="fan" aria-label="Three sample player cards"></div></div></section>' +
 
-      '<section class="sec"><div class="wrap"><div class="sec__head"><h2 class="disp">One year, three seasons</h2><p>The travel season runs from late August to July.</p></div>' + seasonRows() + '</div></section>' +
+      '<section class="sec"><div class="wrap split"><div><div class="sec__head"><h2 class="disp">Trophy case</h2><p>How Empire teams finished.</p></div><div class="trs">' + RESULTS().slice(0, 4).map(trophyRow).join('') + '</div></div>' +
+      '<div><div class="sec__head"><h2 class="disp">News</h2><p>From the coaches.</p></div><div class="nws nws--sm">' + NEWS().slice(0, 2).map(newsRow).join('') + '</div><p class="mt"><a class="more" href="news.html">All news ' + I.arrow + '</a></p></div></div></section>' +
 
-      '<section class="sec sec--soft"><div class="wrap"><div class="sec__head"><h2 class="disp">Where to watch</h2><p>Coming to see a player? Here is where Empire teams play next. ' + sample('Sample dates') + '</p></div>' +
+      '<section class="sec sec--soft"><div class="wrap"><div class="sec__head"><h2 class="disp">One year, three seasons</h2><p>The travel season runs from late August to July.</p></div>' + seasonRows() + '</div></section>' +
+
+      '<section class="sec"><div class="wrap"><div class="sec__head"><h2 class="disp">Where to watch</h2><p>Coming to see a player? Here is where Empire teams play next. ' + sample('Sample dates') + '</p></div>' +
       '<div class="evs">' + next.map(function (e) { return eventRow(e); }).join('') + '</div>' +
       '<p class="mt"><a class="more" href="schedule.html">Full schedule ' + I.arrow + '</a></p></div></section>' +
+
+      '<section class="sec sec--ink"><div class="wrap"><div class="sec__head"><h2 class="disp">On <span class="wm wm--onink">Instagram</span></h2><p>Game day photos and team news at eya_softball.</p></div>' +
+      '<div class="ig">' + D.photos.map(function (ph) { return '<a href="' + D.club.instagram + '" target="_blank" rel="noopener"><img src="' + ph.src + '" loading="lazy" alt="' + esc(ph.cap) + '"></a>'; }).join('') + '</div>' +
+      '<p class="mt"><a class="btn btn--gold" href="' + D.club.instagram + '" target="_blank" rel="noopener">Follow Empire ' + I.arrow + '</a></p></div></section>' +
+
+      '<section class="sec"><div class="wrap"><div class="sec__head"><h2 class="disp">Team sponsors</h2><p>Local businesses help cover tournament fees and winter training. Sponsor names and logos go here.</p></div>' +
+      '<div class="spons"><span>Your business here</span><span>Your business here</span><span>Your business here</span><span>Your business here</span></div>' +
+      '<p class="mt"><a class="more" href="contact.html">Ask about sponsoring a team ' + I.arrow + '</a></p></div></section>' +
       tryoutCta();
   };
 
@@ -257,6 +278,7 @@
       r.length ? '<div class="ph__act noprint"><a class="btn btn--sm" href="#sheet-roster">Roster sheet</a><a class="btn btn--sm" href="cards.html?t=' + t.id + '">Team card set</a><a class="btn btn--sm" href="schedule.html?t=' + t.id + '">Schedule</a></div>' : '') +
       (t.wide ? '<div class="wrap"><figure class="tphoto"><img src="' + t.wide + '" alt="' + esc(t.name) + ' team photo"></figure></div>' : '') +
       '<section class="sec sec--tight"><div class="wrap"><div class="sec__head"><h2 class="disp">Roster</h2>' + (r.length ? '<p>' + r.length + ' players. Open a player for her full recruiting page.</p>' : '') + '</div>' +
+      (function () { var tr = RESULTS().filter(function (x) { return x.team === t.id; }); return tr.length ? '<div class="trs trs--row">' + tr.map(trophyRow).join('') + '</div>' : ''; })() +
       (r.length ? (function () {
         var by = {}; r.forEach(function (p) { by[p.grad] = (by[p.grad] || 0) + 1; });
         var has = function (k) { return r.filter(function (p) { return p.pos.indexOf(k) > -1; }).length; };
@@ -441,6 +463,49 @@
       rows.map(function (r) { return '<tr><th scope="row">' + r[0] + '</th>' + ps.map(function (p) { return '<td>' + esc(r[1](p)) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></div></div></section>';
   };
 
+  P.news = function () {
+    return pageHead('News', 'From the Empire coaches.') + '<section class="sec sec--tight"><div class="wrap"><div class="nws">' + NEWS().map(newsRow).join('') + '</div></div></section>';
+  };
+
+  P.register = function () {
+    var F = fee(), mine = regs();
+    var sizes = ['Youth M', 'Youth L', 'Adult S', 'Adult M', 'Adult L', 'Adult XL'];
+    function pick(id, label, opts, req) { return '<div class="fld"><label for="' + id + '">' + label + '</label><select id="' + id + '"' + (req ? ' required' : '') + '>' + opts.map(function (o) { return '<option' + (o === '' ? ' value=""' : '') + '>' + (o === '' ? 'Choose' : esc(o)) + '</option>'; }).join('') + '</select></div>'; }
+    return pageHead('Season <span class="wm">registration</span>', 'For players who have been offered a spot. It takes about five minutes.') +
+      '<section class="sec sec--tight"><div class="wrap narrow">' +
+      (mine.length ? '<div class="blk mine2"><div class="blk__top"><h2>Registered on this device</h2></div>' + mine.map(function (r) { var owe = r.fee - r.paid; return '<div class="mine2__row"><span><b>' + esc(r.player) + '</b><i>' + esc(team(r.team).name) + ' / receipt ' + r.id + '</i></span><span class="mine2__bal">' + (owe > 0 ? money(owe) + ' left' : 'Paid in full') + '</span>' + (owe > 0 ? '<button type="button" class="btn btn--sm" data-pay="' + r.id + '">Pay ' + money(Math.min(owe, r.each)) + '</button>' : '') + '</div>'; }).join('') + '<p class="fine">Sample checkout: no card is asked for and nothing is charged.</p></div>' : '') +
+      '<p class="note">Sample: the fee, the sizes and the agreements below are placeholders the club replaces. Nothing is charged and nothing leaves this device.</p>' +
+      '<form class="form cform reg" id="reg" novalidate>' +
+      '<div class="steps" id="steps" aria-live="polite"></div>' +
+
+      '<div class="step" data-step="Player">' + field('rPlayer', 'Player full name', 'text', 'required autocomplete="off"') +
+      '<div class="two">' + field('rDob', 'Date of birth', 'date', 'required') + field('rGrad', 'Grad year', 'text', 'required inputmode="numeric" placeholder="2029"') + '</div>' +
+      '<div class="fld"><label for="rTeam">Team</label><select id="rTeam" required>' + D.teams.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join('') + '</select></div>' +
+      field('rPos', 'Positions', 'text', 'placeholder="SS, OF"') + field('rSchool', 'School', 'text', '') + '</div>' +
+
+      '<div class="step" data-step="Family">' + field('rParent', 'Parent or guardian name', 'text', 'required autocomplete="name"') +
+      '<div class="two">' + field('rEmail', 'Email', 'email', 'required autocomplete="email"') + field('rPhone', 'Cell phone', 'tel', 'required autocomplete="tel"') + '</div>' +
+      '<div class="two">' + field('rEmer', 'Emergency contact name', 'text', 'required') + field('rEmerPhone', 'Emergency contact phone', 'tel', 'required') + '</div>' +
+      '<div class="fld"><label for="rMed">Allergies or medical notes the coach should know</label><textarea id="rMed"></textarea></div></div>' +
+
+      '<div class="step" data-step="Uniform"><div class="two">' + pick('rJersey', 'Jersey size', [''].concat(sizes), true) + pick('rPants', 'Pants size', [''].concat(sizes), true) + '</div>' +
+      '<div class="three">' + field('rN1', 'Number, first choice', 'text', 'required inputmode="numeric" maxlength="2"') + field('rN2', 'Second choice', 'text', 'inputmode="numeric" maxlength="2"') + field('rN3', 'Third choice', 'text', 'inputmode="numeric" maxlength="2"') + '</div>' +
+      '<p class="fine">Numbers are given out by the coach. Returning players keep theirs.</p></div>' +
+
+      '<div class="step" data-step="Agreements">' +
+      '<label class="check check--box"><input type="checkbox" id="rA1" required> <span><b>Code of conduct.</b> My player and I will follow the club code of conduct for players and parents.</span></label>' +
+      '<label class="check check--box"><input type="checkbox" id="rA2" required> <span><b>Medical release.</b> I allow coaches to get emergency care for my player if I cannot be reached.</span></label>' +
+      '<label class="check check--box"><input type="checkbox" id="rA3"> <span><b>Photos.</b> The club may use photos of my player on this site and its social pages. Optional.</span></label>' +
+      field('rSign', 'Type your full name to sign', 'text', 'required autocomplete="off"') + '</div>' +
+
+      '<div class="step" data-step="Payment"><fieldset class="plans"><legend>Season fee: ' + money(F) + ' ' + sample('Sample fee') + '</legend>' +
+      [['full', 'Pay in full', F, 'One payment today'], ['three', 'Three payments', F / 3, 'Today, then two more'], ['six', 'Monthly', F / 6, 'Today, then five monthly payments']].map(function (pl, i) { return '<label class="plan"><input type="radio" name="rPlan" value="' + pl[0] + '" data-each="' + Math.round(pl[2]) + '"' + (i === 1 ? ' checked' : '') + '><span><b>' + pl[1] + '</b><i>' + pl[3] + '</i></span><strong>' + money(pl[2]) + '</strong></label>'; }).join('') + '</fieldset>' +
+      '<p class="fine">Sample checkout: no card is asked for and nothing is charged. On the real site this step is the card or bank payment.</p></div>' +
+
+      '<div class="reg__nav"><button type="button" class="btn" id="regBack">Back</button><button type="submit" class="btn btn--ink" id="regNext">Next ' + I.arrow + '</button></div></form>' +
+      '<div class="blk blk--gold" id="regDone" hidden></div></div></section>';
+  };
+
   P.commits = function () {
     var c = players().filter(function (p) { return p.college; });
     return pageHead('Com<span class="wm">mitted</span>', 'Empire players who have chosen where they will play in college.') +
@@ -469,7 +534,19 @@
 
       '<div class="blk blk--wide blk--ink" id="inbox"><div class="blk__top"><h2>Inbox</h2><button type="button" class="btn btn--sm" id="inboxClear">Clear inbox</button></div><div id="deskInbox"></div></div>' +
 
-      '<div class="blk"><div class="blk__top"><h2>Top banner</h2></div><form class="form cform" id="fNews"><div class="fld"><label for="news">Message across the top of every page</label><input id="news" maxlength="70" placeholder="Tryout interest is open for every age group"></div><div><button class="btn btn--ink btn--sm" type="submit">Post it</button></div></form></div>' +
+      '<div class="blk blk--wide" id="dues"><div class="blk__top"><h2>Registrations and dues</h2><div class="hero__cta" style="margin:0"><button type="button" class="btn btn--sm" id="regCsv">Download spreadsheet</button><button type="button" class="btn btn--sm" id="regSample">Add sample families</button></div></div><div id="deskRegs"></div>' +
+      '<form class="form cform" id="fFee" style="margin-top:16px"><div class="fld" style="max-width:260px"><label for="feeIn">Season fee per player</label><input id="feeIn" inputmode="numeric"></div><div><button class="btn btn--ink btn--sm" type="submit">Save fee</button></div></form></div>' +
+
+      '<div class="blk"><div class="blk__top"><h2>Post news</h2></div><form class="form cform" id="fPost" novalidate>' + field('pTitle', 'Headline', 'text', 'required maxlength="80"') +
+      '<div class="fld"><label for="pText">What happened</label><textarea id="pText" required maxlength="500"></textarea></div>' +
+      '<div class="fld"><label for="pPhoto">Photo</label><select id="pPhoto"><option value="">No photo</option>' + D.photos.map(function (ph) { return '<option value="' + ph.src + '">' + esc(ph.cap) + '</option>'; }).join('') + '</select></div>' +
+      '<div><button class="btn btn--ink btn--sm" type="submit">Post it</button></div></form><div class="dlist" id="deskNews"></div></div>' +
+
+      '<div class="blk"><div class="blk__top"><h2>Post a result</h2></div><form class="form cform" id="fRes" novalidate><div class="fld"><label for="xTeam">Team</label><select id="xTeam">' + topt + '</select></div>' +
+      field('xEvent', 'Tournament', 'text', 'required') + '<div class="two"><div class="fld"><label for="xFin">Finish</label><select id="xFin"><option>Champions</option><option>Finalist</option><option>Semifinalist</option><option>Played</option></select></div>' + field('xRec', 'Record', 'text', 'placeholder="5-0"') + '</div>' +
+      '<div><button class="btn btn--ink btn--sm" type="submit">Add to the trophy case</button></div></form><div class="dlist" id="deskRes"></div></div>' +
+
+      '<div class="blk"><div class="blk__top"><h2>Top banner</h2></div><form class="form cform" id="fNews"><div class="fld"><label for="news">Message across the top of every page</label><input id="news" maxlength="70" placeholder="Registration and tryout sign-ups are open"></div><div><button class="btn btn--ink btn--sm" type="submit">Post it</button></div></form></div>' +
 
       '<div class="blk"><div class="blk__top"><h2>Coach\'s take on a player</h2></div><form class="form cform" id="fNote"><div class="fld"><label for="nWho">Player</label><select id="nWho"></select></div>' +
       '<div class="fld"><label for="nTxt">Two or three lines a college coach should read</label><textarea id="nTxt" maxlength="320"></textarea></div><div><button class="btn btn--ink btn--sm" type="submit">Save to her page</button></div></form></div>' +
@@ -529,13 +606,16 @@
       '<section class="sec sec--tight"><div class="wrap split split--rev"><figure class="frame"><img src="img/photos/gold14-team.webp" loading="lazy" alt="Empire Gold 14u team photo"></figure>' +
       '<form class="form" novalidate><div class="two">' + field('pn', 'Player name', 'text', 'required autocomplete="off"') +
       '<div class="fld"><label for="ag">Age group</label><select id="ag" name="ag">' + ages.reverse().map(function (a) { return '<option>' + a + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="fld"><label for="td">Tryout date</label><select id="td" name="td"><option value="">I am not sure yet</option>' + D.tryoutDates.map(function (d) { return '<option>' + esc(d.label) + '</option>'; }).join('') + '</select><small>Sample dates for this demo.</small></div>' +
       '<div class="two">' + field('gy', 'Grad year', 'text', 'inputmode="numeric" placeholder="2029"') + field('po', 'Positions', 'text', 'placeholder="SS, OF"') + '</div>' +
       field('ct', 'Current team (if any)') +
       '<div class="two">' + field('pa', 'Parent or guardian name', 'text', 'required autocomplete="name"') + field('em', 'Parent email', 'email', 'required autocomplete="email"') + '</div>' +
       field('ph', 'Parent phone', 'tel', 'autocomplete="tel"') +
       '<div class="fld"><label for="ms">Anything we should know</label><textarea id="ms" name="ms"></textarea></div>' +
       '<div><button class="btn btn--ink" type="submit">Send to the coaches ' + I.arrow + '</button></div>' +
-      '<div class="form__ok" role="status">This is a sample site, so nothing was sent. On the live site this goes straight to the coach for that age group.</div></form></div></section>';
+      '<div class="form__ok" role="status">This is a sample site, so nothing was sent. On the live site this goes straight to the coach for that age group.</div></form></div></section>' +
+      '<section class="sec sec--soft"><div class="wrap narrow"><div class="sec__head"><h2 class="disp">Common questions</h2><p>' + sample('Sample answers') + '</p></div><div class="faq">' + D.faq.map(function (q) { return '<details><summary>' + esc(q[0]) + '</summary><p>' + esc(q[1]) + '</p></details>'; }).join('') + '</div>' +
+      '<p class="mt">Already offered a spot? <a class="more" href="register.html">Register for the season ' + I.arrow + '</a></p></div></section>';
   };
   P.contact = function () {
     return pageHead('Contact', 'Questions about a team, a player or tryouts.') +
@@ -594,7 +674,7 @@
       players().forEach(function (p) { if ((p.name + ' ' + p.school + ' ' + p.grad + ' ' + p.pos.join(' ')).toLowerCase().indexOf(q) > -1) out.push(['player.html?p=' + p.id, p.name, 'Player, ' + p.grad + ', ' + p.pos.join(' / ')]); });
       D.teams.forEach(function (t) { if ((t.name + ' ' + t.coach).toLowerCase().indexOf(q) > -1) out.push(['team.html?t=' + t.id, t.name, 'Team, coach ' + t.coach]); });
       EV().forEach(function (e) { if ((e.name + ' ' + e.place + ' ' + e.city).toLowerCase().indexOf(q) > -1) out.push(['schedule.html', e.name, 'Event, ' + e.place + ', ' + e.city]); });
-      NAV.concat([['tryouts.html', 'Tryouts'], ['my-profile.html', 'Build my profile'], ['compare.html', 'Compare players'], ['commits.html', 'Committed players'], ['roadmap.html', 'Recruiting road map'], ['coach.html', 'Coach desk']]).forEach(function (n) { if (n[1].toLowerCase().indexOf(q) > -1) out.push([n[0], n[1], 'Page']); });
+      NAV.concat([['tryouts.html', 'Tryouts'], ['my-profile.html', 'Build my profile'], ['compare.html', 'Compare players'], ['commits.html', 'Committed players'], ['roadmap.html', 'Recruiting road map'], ['coach.html', 'Coach desk'], ['register.html', 'Register for the season'], ['news.html', 'News']]).forEach(function (n) { if (n[1].toLowerCase().indexOf(q) > -1) out.push([n[0], n[1], 'Page']); });
     }
     fr.innerHTML = out.slice(0, 12).map(function (o) { return '<a href="' + o[0] + '"><b>' + esc(o[1]) + '</b><span>' + esc(o[2]) + '</span></a>'; }).join('') || '<p class="mute">' + (q ? 'Nothing found. Try a name, a school, a position or a team.' : 'Type a name, school, position, team or event.') + '</p>';
   };
@@ -773,6 +853,40 @@
     drawSet();
   }
 
+  if (page === 'register') {
+    var rf = document.getElementById('reg'), stepEls = [].slice.call(rf.querySelectorAll('.step')), at = 0, g = function (id) { return (document.getElementById(id).value || '').trim(); };
+    var showStep = function () {
+      stepEls.forEach(function (el, i) { el.hidden = i !== at; });
+      document.getElementById('steps').innerHTML = '<b>Step ' + (at + 1) + ' of ' + stepEls.length + '</b><span>' + stepEls[at].dataset.step + '</span><div class="meter__bar"><i style="width:' + ((at + 1) / stepEls.length * 100) + '%"></i></div>';
+      document.getElementById('regBack').hidden = at === 0;
+      document.getElementById('regNext').innerHTML = at === stepEls.length - 1 ? 'Finish and pay ' + money(+rf.querySelector('[name=rPlan]:checked').dataset.each) : 'Next ' + I.arrow;
+    };
+    rf.addEventListener('change', function (e) { if (e.target.name === 'rPlan') showStep(); });
+    document.getElementById('regBack').addEventListener('click', function () { at = Math.max(0, at - 1); showStep(); rf.scrollIntoView(); });
+    rf.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var need = [].filter.call(stepEls[at].querySelectorAll('[required]'), function (f) { return f.type === 'checkbox' ? !f.checked : !f.value.trim() || (f.type === 'email' && !/^\S+@\S+\.\S+$/.test(f.value)); });
+      [].forEach.call(rf.querySelectorAll('.bad'), function (f) { f.classList.remove('bad'); });
+      if (need.length) { need.forEach(function (f) { (f.type === 'checkbox' ? f.closest('label') : f).classList.add('bad'); }); need[0].focus(); return; }
+      if (at < stepEls.length - 1) { at++; showStep(); rf.scrollIntoView(); return; }
+      var plan = rf.querySelector('[name=rPlan]:checked'), each = +plan.dataset.each, F = fee(), n = new Date();
+      var r = { id: 'E' + String(n.getTime()).slice(-6), when: n.toLocaleDateString(), player: g('rPlayer'), dob: g('rDob'), grad: g('rGrad'), team: g('rTeam'), pos: g('rPos'), school: g('rSchool'), parent: g('rParent'), email: g('rEmail'), phone: g('rPhone'), emer: g('rEmer'), emerPhone: g('rEmerPhone'), med: g('rMed'),
+        jersey: g('rJersey'), pants: g('rPants'), nums: [g('rN1'), g('rN2'), g('rN3')].filter(Boolean), photoOk: document.getElementById('rA3').checked, sign: g('rSign'), plan: plan.value, fee: F, each: each, paid: Math.min(each, F) };
+      sset('emp_reg', regs().concat([r]));
+      rf.hidden = true; var d = document.getElementById('regDone'); d.hidden = false;
+      d.innerHTML = '<div class="blk__top"><h2>' + esc(r.player) + ' is registered</h2><span class="tag tag--ink">Receipt ' + r.id + '</span></div>' +
+        '<dl class="dl"><div><dt>Team</dt><dd>' + esc(team(r.team).name) + '</dd></div><div><dt>Paid today</dt><dd>' + money(r.paid) + '</dd></div><div><dt>Still to pay</dt><dd>' + money(r.fee - r.paid) + '</dd></div><div><dt>Uniform</dt><dd>Jersey ' + esc(r.jersey) + ', pants ' + esc(r.pants) + ', number ' + esc(r.nums.join(' or ')) + '</dd></div><div><dt>Signed by</dt><dd>' + esc(r.sign) + ', ' + esc(r.when) + '</dd></div></dl>' +
+        '<p class="fine" style="color:inherit">Sample checkout: nothing was charged. On the real site the family also gets this by email.</p>' +
+        '<div class="hero__cta noprint"><button type="button" class="btn btn--sm" data-print>Print receipt</button><a class="btn btn--sm btn--ink" href="coach.html#dues">See it in the coach desk</a></div>';
+      d.scrollIntoView();
+    });
+    document.getElementById('main').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-pay]'); if (!b) return;
+      sset('emp_reg', regs().map(function (r) { if (r.id === b.dataset.pay) r.paid = Math.min(r.fee, r.paid + r.each); return r; })); location.reload();
+    });
+    showStep();
+  }
+
   if (page === 'coach') {
     var $ = function (id) { return document.getElementById(id); };
     var saveClub = function (fn) { var c = club(); fn(c); sset('emp_club', c); deskDraw(); };
@@ -784,10 +898,34 @@
       $('deskEvents').innerHTML = (c.events || []).map(function (e) { var a = ymd(e.start); return '<div><span><b>' + esc(e.name) + '</b> ' + MON[a.m] + ' ' + a.d + ', ' + esc(e.place) + '</span><a href="schedule.html">View</a><button type="button" data-rme="' + e.id + '">Remove</button></div>'; }).join('');
       $('nWho').innerHTML = players().map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join('');
       $('nTxt').value = (c.notes || {})[$('nWho').value] || '';
-      $('news').value = c.news || '';
+      $('news').value = c.banner || '';
+      var R = regs(), paid = R.reduce(function (a, r) { return a + r.paid; }, 0), owed = R.reduce(function (a, r) { return a + (r.fee - r.paid); }, 0), sz = {};
+      R.forEach(function (r) { sz[r.jersey] = (sz[r.jersey] || 0) + 1; });
+      $('deskRegs').innerHTML = '<div class="nums nums--3"><div><b>' + R.length + '</b><span>Registered</span></div><div><b>' + money(paid) + '</b><span>Collected</span></div><div><b>' + money(owed) + '</b><span>Still owed</span></div></div>' +
+        (R.length ? '<div class="tblwrap"><table class="tbl"><thead><tr><th>Player</th><th>Team</th><th>Paid</th><th>Owes</th><th>Jersey</th><th>Pants</th><th>No.</th><th>Parent</th><th>Phone</th><th></th></tr></thead><tbody>' +
+          R.map(function (r) { var owe = r.fee - r.paid; return '<tr><td>' + esc(r.player) + (r.sample ? ' ' + sample() : '') + '</td><td>' + esc(team(r.team).name.replace('Empire ', '')) + '</td><td>' + money(r.paid) + '</td><td>' + (owe > 0 ? '<b class="owe">' + money(owe) + '</b>' : 'Paid') + '</td><td>' + esc(r.jersey) + '</td><td>' + esc(r.pants) + '</td><td>' + esc(r.nums[0] || '') + '</td><td>' + esc(r.parent) + '</td><td>' + esc(r.phone) + '</td><td class="acts">' + (owe > 0 ? '<button type="button" data-paid="' + r.id + '">Mark paid</button>' : '') + '<button type="button" data-rmr="' + r.id + '">Remove</button></td></tr>'; }).join('') + '</tbody></table></div>' +
+          '<p class="fine">Jersey order: ' + Object.keys(sz).map(function (k) { return sz[k] + ' ' + k; }).join(', ') + '.</p>' :
+          '<p class="mute">No one has registered on this device yet. Fill in the <a href="register.html">registration form</a>, or add sample families to see how this fills up.</p>');
+      $('feeIn').value = fee();
+      $('deskNews').innerHTML = (c.news || []).map(function (n) { return '<div><span><b>' + esc(n.title) + '</b></span><a href="news.html">View</a><button type="button" data-rmn="' + n.id + '">Remove</button></div>'; }).join('');
+      $('deskRes').innerHTML = (c.results || []).map(function (r) { return '<div><span><b>' + esc(r.finish) + '</b> ' + esc(r.event) + ', ' + esc(team(r.team).name.replace('Empire ', '')) + '</span><button type="button" data-rmx="' + r.id + '">Remove</button></div>'; }).join('');
     };
+    var today = function () { var n = new Date(); return n.getFullYear() + '-' + ('0' + (n.getMonth() + 1)).slice(-2) + '-' + ('0' + n.getDate()).slice(-2); };
+    $('fFee').addEventListener('submit', function (e) { e.preventDefault(); var v = parseInt($('feeIn').value.replace(/[^0-9]/g, ''), 10); if (v > 0) saveClub(function (c) { c.fee = v; }); });
+    $('fPost').addEventListener('submit', function (e) { e.preventDefault(); if (!$('pTitle').value.trim() || !$('pText').value.trim()) return; saveClub(function (c) { c.news = c.news || []; c.news.unshift({ id: 'n' + Date.now().toString(36), date: today(), title: $('pTitle').value.trim(), text: $('pText').value.trim(), photo: $('pPhoto').value }); }); this.reset(); });
+    $('fRes').addEventListener('submit', function (e) { e.preventDefault(); if (!$('xEvent').value.trim()) { $('xEvent').focus(); return; } saveClub(function (c) { c.results = c.results || []; c.results.unshift({ id: 'r' + Date.now().toString(36), team: $('xTeam').value, event: $('xEvent').value.trim(), finish: $('xFin').value, record: $('xRec').value.trim() }); }); this.reset(); });
+    $('regSample').addEventListener('click', function () {
+      var F = fee(), mk = function (i, player, tm, paid, j, pnt, n, parent, phone) { return { id: 'S' + (1041 + i), sample: true, when: today(), player: player, team: tm, fee: F, paid: Math.round(paid * F), each: Math.round(F / 3), plan: 'three', jersey: j, pants: pnt, nums: [n], parent: parent, phone: phone, email: 'family' + i + '@example.com' }; };
+      var add = [mk(1, 'Sample Player One', 'black-18u', 1, 'Adult M', 'Adult M', '7', 'Sample Parent', '516-555-0101'), mk(2, 'Sample Player Two', 'gold-14u', 1 / 3, 'Adult S', 'Adult S', '12', 'Sample Parent', '516-555-0102'), mk(3, 'Sample Player Three', 'gold-12u', 2 / 3, 'Youth L', 'Youth L', '3', 'Sample Parent', '516-555-0103'), mk(4, 'Sample Player Four', 'white-13u', 0, 'Adult S', 'Youth L', '21', 'Sample Parent', '516-555-0104')];
+      sset('emp_reg', regs().filter(function (r) { return !r.sample; }).concat(add)); deskDraw();
+    });
+    $('regCsv').addEventListener('click', function () {
+      var q = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+      var rows = [['Player', 'Team', 'Fee', 'Paid', 'Owes', 'Plan', 'Jersey', 'Pants', 'Number choices', 'Parent', 'Email', 'Phone', 'Emergency contact', 'Emergency phone', 'Medical notes', 'Signed by', 'Date', 'Receipt']].concat(regs().map(function (r) { return [r.player, team(r.team).name, r.fee, r.paid, r.fee - r.paid, r.plan, r.jersey, r.pants, (r.nums || []).join(' / '), r.parent, r.email, r.phone, r.emer, r.emerPhone, r.med, r.sign, r.when, r.id]; }));
+      var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.map(function (r) { return r.map(q).join(','); }).join('\r\n')], { type: 'text/csv' })); a.download = 'empire-registrations.csv'; document.body.appendChild(a); a.click(); a.remove();
+    });
     var need = function (form) { var bad = [].filter.call(form.querySelectorAll('[required]'), function (f) { return !f.value.trim(); }); [].forEach.call(form.querySelectorAll('input'), function (f) { f.classList.remove('bad'); }); bad.forEach(function (f) { f.classList.add('bad'); }); if (bad.length) bad[0].focus(); return !bad.length; };
-    $('fNews').addEventListener('submit', function (e) { e.preventDefault(); saveClub(function (c) { c.news = $('news').value.trim(); }); document.querySelector('.bar').firstChild.textContent = ($('news').value.trim() || 'Tryout interest is open for every age group') + ' '; });
+    $('fNews').addEventListener('submit', function (e) { e.preventDefault(); saveClub(function (c) { c.banner = $('news').value.trim(); }); document.querySelector('.bar').firstChild.textContent = ($('news').value.trim() || 'Registration and tryout sign-ups are open') + ' '; });
     $('nWho').addEventListener('change', function () { $('nTxt').value = (club().notes || {})[$('nWho').value] || ''; });
     $('fNote').addEventListener('submit', function (e) { e.preventDefault(); var who = $('nWho').value, txt = $('nTxt').value.trim(); saveClub(function (c) { c.notes = c.notes || {}; if (txt) c.notes[who] = txt; else delete c.notes[who]; }); $('nWho').value = who; $('nTxt').value = txt; location.href = 'player.html?p=' + who; });
     $('fPlayer').addEventListener('submit', function (e) {
@@ -806,9 +944,14 @@
       var a = e.target.closest('[data-rmp]'), b = e.target.closest('[data-rme]');
       if (a) saveClub(function (c) { c.players = (c.players || []).filter(function (p) { return p.id !== a.dataset.rmp; }); });
       if (b) saveClub(function (c) { c.events = (c.events || []).filter(function (x) { return x.id !== b.dataset.rme; }); });
+      var n = e.target.closest('[data-rmn]'), x = e.target.closest('[data-rmx]'), pd = e.target.closest('[data-paid]'), rr = e.target.closest('[data-rmr]');
+      if (n) saveClub(function (c) { c.news = (c.news || []).filter(function (z) { return z.id !== n.dataset.rmn; }); });
+      if (x) saveClub(function (c) { c.results = (c.results || []).filter(function (z) { return z.id !== x.dataset.rmx; }); });
+      if (pd) { sset('emp_reg', regs().map(function (r) { if (r.id === pd.dataset.paid) r.paid = r.fee; return r; })); deskDraw(); }
+      if (rr) { sset('emp_reg', regs().filter(function (r) { return r.id !== rr.dataset.rmr; })); deskDraw(); }
     });
     $('inboxClear').addEventListener('click', function () { sset('emp_inbox', []); deskDraw(); });
-    $('deskReset').addEventListener('click', function () { sset('emp_club', {}); location.reload(); });
+    $('deskReset').addEventListener('click', function () { sset('emp_club', {}); sset('emp_reg', []); location.reload(); });
     deskDraw();
   }
 
