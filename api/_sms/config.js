@@ -6,7 +6,7 @@ import { todayIn } from './core.js';
 
 export const TZ = 'America/New_York';
 export const SITE = 'https://dvsl.vercel.app';
-export const SWITCHES = ['inbound', 'box_photo', 'schedule_alerts', 'team_texts'];
+export const SWITCHES = ['inbound', 'box_photo', 'schedule_alerts', 'team_texts', 'reminders']; // reminders: late score + makeup texts (api/league-reminders.js)
 // Automatic and bulk texts only go out 8:00 AM to 8:59 PM league time.
 export const SEND_FROM_HOUR = 8;
 export const SEND_UNTIL_HOUR = 21;

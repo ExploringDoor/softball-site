@@ -245,6 +245,8 @@ async function loadGame(id) {
 }
 
 const calledOff = (g) => !!(g.ppd || g.rained_out || /^(ppd|postponed|cancel+ed|rained ?out)$/i.test(String(g.status || '')));
+// A forfeit (games.forfeit) carries no runs and no box score (Rule 19).
+const isForfeit = (g) => ['away', 'home', 'double'].includes(g && g.forfeit);
 function started(g, clock) {
   if (!g.date_iso) return !!(g.playoff && g.done);
   return hasStarted({ date: g.date_iso, time: g.time_24 || g.time || '', status: g.done ? 'final' : (g.live ? 'live' : null) }, clock);
@@ -273,7 +275,7 @@ export async function findGames(teamIds) {
     fsQuery('playoff_games', [['home', '==', t]]).then(a => Promise.all(a.map(playoffGame))),
   ]))).flat();
   const seen = new Set();
-  const all = rows.filter(g => g && !seen.has(g.id) && seen.add(g.id) && !calledOff(g))
+  const all = rows.filter(g => g && !seen.has(g.id) && seen.add(g.id) && !calledOff(g) && !isForfeit(g))
     .map(g => ({ ...g, _team: teamIds.includes(g.home) ? g.home : g.away }));
   const inWindow = all.filter(g => (g.date_iso ? g.date_iso >= from && g.date_iso <= today : g.playoff && g.done));
   const startedGames = inWindow.filter(g => started(g, clock))
@@ -613,6 +615,7 @@ async function postBox({ from, sender, teamId, session, pb }) {
   catch (e) { log('game read failed', from, e.message); return { reply: brand(TEXT.tryAgain), session }; }
   if (!game || (game.away !== teamId && game.home !== teamId)) return { reply: brand(TEXT.gameGone), session: cleared };
   if (calledOff(game)) return { reply: brand(TEXT.rainedOut), session: cleared };
+  if (isForfeit(game)) return { reply: brand('The commissioner ruled that game a forfeit, so it has no box score. Nothing was posted.'), session: cleared };
   const role = game.home === teamId ? 'home' : 'away';
   const box = { ...pb.box, away: game.away, home: game.home };
   const as = box.away_score, hs = box.home_score;

@@ -15,11 +15,19 @@
 // them as-is, which concatenates if a score was ever stored as the string the
 // rules allow ("7"). For numeric data, which is all of it today, the two match.
 //
+// Forfeits (2026-11, js/dvsl-standings.js has the rules): a done game with
+// forfeit 'away' | 'home' | 'double' counts with no scores. The side that
+// forfeited takes an L (both sides on a double forfeit), the other side a W;
+// it never adds to rs / ra. Points are not stored on teams docs, so nothing
+// else changes here.
+//
 // Only teams whose numbers changed are written, in one commit.
 import { fsQuery, fsCommit, encFields } from '../_lib/dvsl.js';
 
 const FIELDS = ['w', 'l', 'ti', 'pct', 'rs', 'ra', 'gb', 'streak'];
 const BRACKETS_ID = '__playoff_brackets';
+
+const forfeitOf = (g) => (g && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double')) ? g.forfeit : '';
 
 const scoreOf = (v) => {
   if (v === null || v === undefined || v === '') return null;
@@ -35,10 +43,20 @@ export function computeStandings(games, teams) {
 
   const dk = g => (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) ? g.date_iso : String(g.wk || 0).padStart(4, '0');
   const done = (games || [])
-    .filter(g => g && g.done === true && !g.ppd && !g.rained_out && scoreOf(g.away_score) !== null && scoreOf(g.home_score) !== null)
+    .filter(g => g && g.done === true && !g.ppd && !g.rained_out
+      && (forfeitOf(g) || (scoreOf(g.away_score) !== null && scoreOf(g.home_score) !== null)))
     .sort((a, b) => dk(a).localeCompare(dk(b)));
 
   done.forEach(g => {
+    const ff = forfeitOf(g);
+    if (ff) {
+      for (const [me, opp] of [['away', 'home'], ['home', 'away']]) {
+        const s = stats[g[me]];
+        if (!s) continue;
+        if (ff === opp) { s.w++; s.results.push('W'); } else { s.l++; s.results.push('L'); }
+      }
+      return;
+    }
     const as = scoreOf(g.away_score), hs = scoreOf(g.home_score);
     if (stats[g.away]) {
       const s = stats[g.away]; s.rs += as; s.ra += hs;

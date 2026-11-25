@@ -36,6 +36,7 @@ import { isPlayed, parseBracketField } from '../_lib/bracket.js';
 import { sendPush } from '../_lib/push.js';
 import { actPlayoffScore, HttpError } from '../account.js';
 import { recalcStandings } from './standings.js';
+import DVSLStandings from '../../js/dvsl-standings.js'; // CommonJS module shared with the pages
 import { phoneDocId, lastFour } from './ids.js';
 
 export const LEAGUE = { id: 'dvsl', name: 'DVSL', abbrev: 'DVSL', timezone: 'America/New_York', sport: 'softball' };
@@ -44,6 +45,13 @@ const BRACKETS_ID = '__playoff_brackets';
 export const PO_RE = /^po__(gold|silver)_([0-9]+)$/;
 const LIVE_FRESH_MS = 60 * 60 * 1000;   // index.html hides a LIVE badge after 60 min
 const PUSH_TIMEOUT_MS = 4000;
+
+// A game the commissioner ruled a forfeit (games.forfeit 'away' | 'home' |
+// 'double', set in admin.html) has no runs and is not changed by text: no
+// score, live score or PPD from a captain or the commissioner's phone.
+// Forfeits are only ever set in admin.
+export const isForfeit = (g) => !!g && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double');
+export const FORFEIT_REPLY = 'The commissioner ruled that game a forfeit, so it is not changed by text. If that is wrong, contact the commissioner.';
 
 export class ReplyError extends Error {
   constructor(reply, code = 'refused') { super(reply); this.smsReply = reply; this.code = code; }
@@ -102,7 +110,8 @@ function liveFresh(g, nowMs) {
 export function toStoreGame(g, idx, nowMs = Date.now()) {
   const as = num(g.away_score), hs = num(g.home_score);
   let status = null;
-  if (g.done === true && as !== null && hs !== null) status = 'final';
+  if (g.done === true && isForfeit(g)) status = 'final';   // no runs: scores stay null below
+  else if (g.done === true && as !== null && hs !== null) status = 'final';
   else if (g.ppd || g.rained_out) status = 'postponed';
   else if (liveFresh(g, nowMs)) status = 'live';
   return {
@@ -114,8 +123,8 @@ export function toStoreGame(g, idx, nowMs = Date.now()) {
     status,
     away_team_id: idx.resolve(g.away),
     home_team_id: idx.resolve(g.home),
-    away_score: status === 'final' || status === 'live' ? as : null,
-    home_score: status === 'final' || status === 'live' ? hs : null,
+    away_score: (status === 'final' || status === 'live') && !isForfeit(g) ? as : null,
+    home_score: (status === 'final' || status === 'live') && !isForfeit(g) ? hs : null,
     current_inning: status === 'live' ? num(g.inning) : null,
     current_half: status === 'live' ? (g.half || null) : null,
   };
@@ -260,6 +269,7 @@ export async function reportCaptainFinal({ gameId, teamId, away, home, by, boxWr
   const meta = { id: gameId, wk: g.wk, date: g.date, field: g.field, away: idx.resolve(g.away), home: idx.resolve(g.home) };
   const side = meta.home === teamId ? 'home' : meta.away === teamId ? 'away' : null;
   if (!side) throw new ReplyError('Your team is not in that game.', 'not-your-game');
+  if (isForfeit(g)) throw new ReplyError(FORFEIT_REPLY, 'forfeit');
   const oth = other(side);
 
   const wasDone = !!g.done;
@@ -480,6 +490,7 @@ async function writeOfficeFinal(gameId, away, home, by) {
   }
   const g = await fsGet(`games/${gameId}`);
   if (!g) throw new ReplyError('That game is no longer on the schedule.', 'no-game');
+  if (isForfeit(g)) throw new ReplyError('That game is marked a forfeit on the site, so a texted score was not used. Change it in admin.', 'forfeit');
   const box = await fsGet(`box_scores/${gameId}`);
   const boxStillDiffers = !!(box && box.has_discrepancy === true && Array.isArray(box.discrepancies) && box.discrepancies.length > 0);
   const update = { away_score: away, home_score: home, done: true, score_conflict: false, score_pending: false, score_confirmed: true, last_edited_by: `text: ${String(by.name || 'commissioner').slice(0, 60)}`, last_edited_at: isoNow() };
@@ -609,11 +620,23 @@ export function dvslStore() {
         division: null, ageGroup: null, active: t.active !== false,
       }));
     },
+    // Same order as the site's standings table: rulebook points (Rule 19,
+    // forfeits included) then the Rule 19 tiebreakers, via the one shared
+    // ranking module the pages use.
     async standings() {
-      return (await teams()).filter(t => t.active !== false).map(t => ({
+      const active = (await teams()).filter(t => t.active !== false);
+      let ordered = active;
+      try {
+        const done = await fsQuery('games', [['done', '==', true]]);
+        ordered = DVSLStandings.rank(active, done);
+      } catch (e) {
+        console.warn('[sms] standings rank fell back to pct:', e && e.message);
+        ordered = active.slice().sort((a, b) => (num(b.pct) || 0) - (num(a.pct) || 0) || (num(b.w) || 0) - (num(a.w) || 0));
+      }
+      return ordered.map(t => ({
         teamId: t.id, name: t.name || t.id, division: '', ageGroup: '',
         w: num(t.w) || 0, l: num(t.l) || 0, t: num(t.ti) || 0, pct: num(t.pct) || 0,
-      })).sort((a, b) => b.pct - a.pct || b.w - a.w || a.l - b.l || a.name.localeCompare(b.name));
+      }));
     },
 
     async getSession(from) {
@@ -665,6 +688,7 @@ export function dvslStore() {
       const sender = await senderFor(by.phone);
       const side = sideFor(sender, { home: g.home, away: g.away });
       if (!side) throw new ReplyError('Your team is not in that game.', 'not-your-game');
+      if (isForfeit(g)) throw new ReplyError(FORFEIT_REPLY, 'forfeit');
       const idx = teamIndex(await teams());
       const ppdBy = side === 'admin' ? 'admin' : g[side];
       const editedBy = side === 'admin' ? 'admin' : idx.full(g[side]);

@@ -465,6 +465,29 @@ service cloud.firestore {
     match /sms_schedule/{id} { allow read: if isAdmin(); allow write: if false; }
     match /sms_sessions/{id} { allow read, write: if false; }
 
+    // Schedule-change emails and score reminders (server writes only).
+    // Opt-outs hold only a hash of the address; nobody reads them from a browser.
+    match /email_log/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /email_optouts/{id} { allow read, write: if false; }
+    match /reminders_log/{id} { allow read: if isAdmin(); allow write: if false; }
+
+    // Player of the Week picks: public; the commissioner sets or overrides them.
+    match /awards/{id} {
+      allow read: if true;
+      allow delete: if isAdmin();
+      allow create, update: if isAdmin()
+        && id.matches('^[0-9]{4}_w([0-9]{1,2}|po)$')
+        && request.resource.data.keys().hasOnly(['season','wk','cleared','picks','note','photo_url','updated_at','updated_by_uid'])
+        && request.resource.data.season is int && request.resource.data.wk is string
+        && request.resource.data.cleared is bool
+        && request.resource.data.picks is list && request.resource.data.picks.size() <= 4
+        && request.resource.data.note is string && request.resource.data.note.size() <= 140 && noTags(request.resource.data.note)
+        && request.resource.data.photo_url is string && request.resource.data.photo_url.size() <= 500
+        && (request.resource.data.photo_url == '' || request.resource.data.photo_url.matches('^https://[^<>"\' ]+$'))
+        && request.resource.data.updated_at == request.time
+        && request.resource.data.updated_by_uid == request.auth.uid;
+    }
+
     // Everything else is denied by default.
   }
 }

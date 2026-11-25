@@ -18,6 +18,10 @@
        scores are entered, so the Playoffs tab shows live matchups. -->
   <script src="/js/dvsl-bracket.js"></script>
   <script src="/js/dvsl-standings.js"></script>
+  <!-- Makeup tracker math (Rules 11-12), same file on admin, captain and public pages. -->
+  <script src="/js/dvsl-makeups.js"></script>
+  <!-- Player of the Week math, same file the public site uses. -->
+  <script src="/js/dvsl-awards.js"></script>
   <script>
     // SW registration + bottom tab bar + "More" sheet.
     //
@@ -864,6 +868,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="playoffs" data-sec="playoffs" onclick="showSection('playoffs')"><span class="icon">&#127942;</span> Playoffs</div>
       <div class="nav-item" data-section="gamechanger" data-sec="gamechanger" onclick="showSection('gamechanger')"><span class="icon">&#128229;</span> GameChanger</div>
       <div class="nav-item" data-section="schedule" data-sec="schedule" onclick="showSection('schedule')"><span class="icon">&#128197;</span> Schedule</div>
+      <div class="nav-item" data-section="makeups" data-sec="makeups" onclick="showSection('makeups')"><span class="icon" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M12 13v3l2 1"/></svg></span> Makeups<span id="mk-nav-badge" style="display:none;margin-left:auto;background:#b91c1c;color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:1px 7px"></span></div>
       <div class="nav-item" data-section="rosters" data-sec="rosters" onclick="showSection('rosters')"><span class="icon">&#129309;</span> Rosters</div>
       <div class="nav-item" data-section="waivers" data-sec="waivers" onclick="showSection('waivers')"><span class="icon">&#128221;</span> Waivers</div>
       <div class="nav-item" data-section="standings" data-sec="standings" onclick="showSection('standings')"><span class="icon">&#127942;</span> Standings</div>
@@ -879,6 +884,7 @@ select.form-input{cursor:pointer}
       <div class="nav-item" data-section="captains" data-sec="captains" onclick="showSection('captains')"><span class="icon">&#128101;</span> Captains</div>
       <div class="nav-item" data-section="score-reviews" data-sec="score-reviews" onclick="showSection('score-reviews')" style="display:none"><span class="icon">&#9989;</span> Score Reviews</div>
       <div class="nav-item" data-section="media" data-sec="media" onclick="showSection('media')"><span class="icon">📸</span> Player Media</div>
+      <div class="nav-item" data-section="potw" data-sec="potw" onclick="showSection('potw')"><span class="icon" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px"><circle cx="12" cy="9" r="6"/><path d="M8.5 14.2 7 22l5-3 5 3-1.5-7.8"/></svg></span> Player of the Week</div>
       <div style="height:1px;background:var(--border);margin:8px 14px"></div>
       <div class="nav-item" data-section="help" data-sec="help" onclick="showSection('help')"><span class="icon">❓</span> Help &amp; Tutorial</div>
     </nav>
@@ -1022,6 +1028,61 @@ select.form-input{cursor:pointer}
       <div id="add-game-form" style="display:none"></div>
       <div id="schedule-content">
         <div class="loading"><div class="spinner"></div> Loading schedule...</div>
+      </div>
+    </div>
+
+    <!-- ═══ MAKEUPS (Rules 11-12, 14) ═══ -->
+    <div class="section" id="sec-makeups">
+      <style>
+        #sec-makeups .mk-sum{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--muted);margin-bottom:4px}
+        #sec-makeups .mk-sum strong{color:var(--text);font-size:15px}
+        #sec-makeups .mk-row{border-top:1px solid var(--border);padding:14px 0;display:flex;flex-direction:column;gap:8px}
+        #sec-makeups .mk-row:first-child{border-top:0;padding-top:4px}
+        #sec-makeups .mk-match{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        #sec-makeups .mk-logo{width:40px;height:40px;object-fit:contain;flex-shrink:0}
+        #sec-makeups .mk-teams{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:19px;color:var(--navy);line-height:1.1}
+        #sec-makeups .mk-at{color:var(--muted);font-weight:600;font-size:14px;margin:0 2px}
+        #sec-makeups .mk-meta{font-size:12.5px;color:var(--muted)}
+        #sec-makeups .mk-chip{display:inline-block;font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+        #sec-makeups .mk-need{background:#fef3c7;color:#92400e}
+        #sec-makeups .mk-set{background:#dcfce7;color:#166534}
+        #sec-makeups .mk-over{background:#fee2e2;color:#991b1b}
+        #sec-makeups .mk-dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px 14px;font-size:13px}
+        #sec-makeups .mk-dl div span{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+        #sec-makeups .mk-dl div b{color:var(--text)}
+        #sec-makeups .mk-warn{font-size:12.5px;color:#991b1b}
+        #sec-makeups .mk-actions{display:flex;gap:8px;flex-wrap:wrap}
+        #sec-makeups .mk-actions .btn{min-height:40px}
+        #sec-makeups details summary{cursor:pointer;font-size:12.5px;font-weight:700;color:var(--navy)}
+        #sec-makeups .mk-log{font-size:12px;color:var(--muted);margin:6px 0 0;padding-left:18px;line-height:1.6}
+        #sec-makeups .mk-prev{font-size:13px;border-top:1px solid var(--border);padding:10px 0}
+        #sec-makeups .mk-prev:first-child{border-top:0}
+        #sec-makeups .mk-prev-body{white-space:pre-wrap;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:12.5px}
+        #sec-makeups .mk-note{font-size:12px;color:var(--muted);line-height:1.5}
+        #sec-makeups .mk-msg{font-size:13px;margin-top:8px}
+        #sec-makeups .mk-msg.err{color:#b91c1c}
+      </style>
+      <div class="main-header">
+        <div class="main-title">Makeups</div>
+        <div class="main-subtitle">Postponed games: a makeup date within 48 hours, played within 21 days (Rules 11 and 12). Late score reminders (Rule 14).</div>
+      </div>
+      <div class="panel">
+        <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <span>Postponed games</span>
+          <button type="button" class="btn btn-outline btn-sm" id="mk-refresh">Refresh</button>
+        </div>
+        <div class="mk-sum" id="mk-summary"></div>
+        <div id="mk-list"><div class="loading"><div class="spinner"></div> Loading...</div></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Score and makeup reminders</div>
+        <p class="mk-note" style="margin:0 0 10px">Twice a day (10 AM and 7 PM New York) the site pushes the captain of each side with no score 3 hours after first pitch, nudges both captains when a postponed game passes 48 hours with no makeup date, and sends you one digest a day of games 24 hours past with no score. Each reminder goes out once.</p>
+        <div id="mk-texts" class="mk-note" style="margin-bottom:10px"></div>
+        <div class="mk-actions">
+          <button type="button" class="btn btn-primary" id="mk-preview">Run reminders now (preview)</button>
+        </div>
+        <div class="mk-msg" id="mk-preview-msg"></div>
+        <div id="mk-preview-out" style="margin-top:8px"></div>
       </div>
     </div>
 
@@ -1439,6 +1500,9 @@ select.form-input{cursor:pointer}
       <!-- Summary cards -->
       <div id="fin-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px"></div>
 
+      <!-- Forfeit fees owed: computed from forfeit games (renderForfeitFees) -->
+      <div id="fin-forfeit-fees" class="panel" style="margin-bottom:16px"></div>
+
       <!-- Add payment form -->
       <div id="fin-add-form" style="display:none" class="panel" style="margin-bottom:16px"></div>
 
@@ -1670,8 +1734,8 @@ select.form-input{cursor:pointer}
         #sec-texts details summary{cursor:pointer;font-weight:700;color:var(--navy);font-size:13px}
       </style>
       <div class="main-header">
-        <div class="main-title">Texts</div>
-        <div class="main-subtitle">Text a score in, team texts and schedule change texts. Everything stays off until you switch it on.</div>
+        <div class="main-title">Texts and Emails</div>
+        <div class="main-subtitle">Text a score in, team texts, and schedule change texts and emails. Everything stays off until you switch it on.</div>
       </div>
 
       <div class="panel">
@@ -1730,6 +1794,36 @@ select.form-input{cursor:pointer}
         <div id="tx-dry"></div>
       </div>
 
+      <!-- Schedule change EMAILS (Builder E). Its own module script at the end
+           of the page talks only to /api/sms-send email-* actions. -->
+      <div class="panel" id="em-panel">
+        <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <span>Schedule change emails</span>
+          <button type="button" class="btn btn-outline btn-sm" id="em-refresh">Refresh</button>
+        </div>
+        <div class="tx-note">The same 15 minute check as the texts. When a game is moved, postponed, cancelled, added or taken off, each team's captains and rostered players get one email listing the changes. Every email has an unsubscribe link and the text sign up link. Emails follow the same 8 AM to 9 PM hours.</div>
+        <div id="em-switch" class="tx-grid" style="margin-top:12px"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+        <div id="em-ready" class="tx-checks"></div>
+        <div id="em-msg" class="tx-msg"></div>
+        <div class="form-row" style="margin-top:14px">
+          <div class="form-col" style="max-width:280px"><label class="form-label" for="em-team">Show the email for</label>
+            <select class="form-input" id="em-team"><option value="">Any team with a change</option></select>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline" id="em-preview-btn">Preview what the next run would send</button>
+        <div id="em-preview"></div>
+        <details style="margin-top:14px"><summary>Who gets them, by team</summary>
+          <div class="tbl-wrap" style="margin-top:10px"><table class="tbl"><thead><tr><th>Team</th><th style="text-align:right">Captains</th><th style="text-align:right">Players</th><th style="text-align:right">Gets the email</th><th style="text-align:right">Unsubscribed</th></tr></thead><tbody id="em-teams"></tbody></table></div>
+          <div class="tx-note">Captains come from the Captains list, players from active roster spots with an email. A person on the list twice gets one email. Deactivated players, players waiting for approval and inactive teams get nothing.</div>
+        </details>
+        <details style="margin-top:8px"><summary>Last runs</summary>
+          <div class="tbl-wrap" style="margin-top:10px"><table class="tbl"><thead><tr><th>When</th><th style="text-align:right">Changes</th><th style="text-align:right">Teams</th><th style="text-align:right">Emails</th><th style="text-align:right">Sent</th><th style="text-align:right">Not sent</th><th>Result</th></tr></thead><tbody id="em-runs"></tbody></table></div>
+        </details>
+        <details style="margin-top:8px"><summary>Email log (latest 60)</summary>
+          <div class="tbl-wrap" style="margin-top:10px"><table class="tbl"><thead><tr><th>When</th><th>Team</th><th>To (domain only)</th><th>Subject</th><th>Result</th></tr></thead><tbody id="em-log"></tbody></table></div>
+        </details>
+      </div>
+
       <div class="panel">
         <div class="panel-title">Signed up, by team</div>
         <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Team</th><th style="text-align:right">Opted in</th><th style="text-align:right">Waiting for YES</th><th style="text-align:right">Stopped</th><th style="text-align:right">Can text scores</th></tr></thead><tbody id="tx-teams"></tbody></table></div>
@@ -1776,6 +1870,37 @@ select.form-input{cursor:pointer}
         <div class="main-subtitle">Photos &amp; videos posted by players via the Player Portal</div>
       </div>
       <div id="admin-media-content">
+        <div class="loading"><div class="spinner"></div> Loading…</div>
+      </div>
+    </div>
+
+    <!-- PLAYER OF THE WEEK: formula pick per completed week (js/dvsl-awards.js)
+         with an optional league override / clear + one-line note, saved to
+         awards/{season}_w{n}. Public: home card + Leaders > Player of the Week. -->
+    <div class="section" id="sec-potw">
+      <div class="main-header">
+        <div class="main-title">Player of the Week</div>
+        <div class="main-subtitle" id="potw-admin-formula">The site picks one automatically each week. Change or clear a pick and add a note here.</div>
+      </div>
+      <style>
+        #potw-admin-content .pw-row{display:grid;grid-template-columns:150px 1fr;gap:14px;padding:16px 0;border-bottom:1px solid var(--border)}
+        #potw-admin-content .pw-wk{font-weight:800;font-size:16px;color:var(--navy)}
+        #potw-admin-content .pw-dates{font-size:12px;color:var(--muted)}
+        #potw-admin-content .pw-auto{font-size:13px;color:var(--muted);margin-bottom:8px}
+        #potw-admin-content .pw-auto b{color:var(--text)}
+        #potw-admin-content .pw-state{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 8px;border-radius:4px;margin-left:6px;background:#eef2f8;color:var(--navy)}
+        #potw-admin-content .pw-state.ovr{background:#fff4d6;color:#7a5d00}
+        #potw-admin-content .pw-state.clr{background:#fee2e2;color:#b91c1c}
+        #potw-admin-content .pw-ctrls{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1.4fr) auto;gap:8px;align-items:center}
+        #potw-admin-content .pw-photo{grid-column:1 / 3}
+        #potw-admin-content .pw-msg{font-size:12px;color:var(--muted);min-height:16px;margin-top:4px}
+        @media (max-width:760px){
+          #potw-admin-content .pw-row{grid-template-columns:1fr;gap:8px}
+          #potw-admin-content .pw-ctrls{grid-template-columns:1fr}
+          #potw-admin-content .pw-photo{grid-column:auto}
+        }
+      </style>
+      <div id="potw-admin-content">
         <div class="loading"><div class="spinner"></div> Loading…</div>
       </div>
     </div>
@@ -2746,6 +2871,7 @@ window.showSection = function(name) {
   if (name === 'pages') loadPageEditor();
   if (name === 'waivers') initWaiversSection();
   if (name === 'media') loadAdminMedia();
+  if (name === 'potw') loadPotwAdmin();
   if (name === 'gamechanger') renderGcLinks();
   if (name === 'playoffs') loadPlayoffs();
   // Notifications section lazy-loads the full list on first open; if the
@@ -2890,11 +3016,16 @@ window.poSeedFromStandings = function() {
   // via the same DVSLStandings.rank the public standings use. Until 2026-11
   // this broke point ties on run differential, which the rules don't use.
   const _act = TEAMS.slice().filter(t => t.active !== false);
-  const ranked = (window.DVSLStandings
+  let ranked = (window.DVSLStandings
       ? DVSLStandings.rank(_act, GAMES)
       : _act.map(t => ({ t, pts: (t.w || 0) * 3 + (t.ti || 0) * 2 + (t.l || 0) * 1, diff: (t.rs || 0) - (t.ra || 0) }))
-          .sort((a, b) => b.pts - a.pts || b.diff - a.diff).map(x => x.t))
-    .map(t => t.name || t.short || t.id);
+          .sort((a, b) => b.pts - a.pts || b.diff - a.diff).map(x => x.t));
+  // Rule 24: a team with two or more forfeits has forfeited its playoff spot
+  // and is skipped, so everyone below it moves up a seed.
+  const _ffT = (window.DVSLStandings && DVSLStandings.forfeitTally) ? DVSLStandings.forfeitTally(_act, GAMES) : {};
+  const _skipped = ranked.filter(t => window.DVSLStandings && ((_ffT[t.id] || {}).forfeits || 0) >= DVSLStandings.FORFEITS_TO_LOSE_SPOT);
+  if (_skipped.length) toast(`Skipped for Rule 24 (two forfeits): ${_skipped.map(t => t.name || t.id).join(', ')}`, 'info');
+  ranked = ranked.filter(t => !_skipped.includes(t)).map(t => t.name || t.short || t.id);
   const slice = PO_CUR === 'gold' ? ranked.slice(0, 8) : ranked.slice(8, 16);
   if (!slice.length) { toast('No standings loaded yet.', 'error'); return; }
   slice.forEach((n, i) => { const sel = document.getElementById('po-seed-' + i); if (sel) sel.value = n; });
@@ -3800,7 +3931,9 @@ function renderScores() {
           <div class="teams">${esc(getTeamName(g.away))} <span class="vs">@</span> ${esc(getTeamName(g.home))}</div>
           <div class="meta">${esc(g.date||'')} ${esc(g.day||'')} &bull; ${esc(g.time||'')} &bull; ${esc(g.field||'')}</div>
           ${conflictBadge}${pendingBadge}${ppdBadge}
-          ${done
+          ${(done && _forfeitOf(g))
+            ? _forfeitCardHtml(g)
+            : done
             ? `<div class="score-display">${esc(g.away_score ?? '-')} &ndash; ${esc(g.home_score ?? '-')}</div>
                <span class="badge badge-done">Final</span>
                ${g.has_discrepancy ? `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;cursor:pointer" onclick="openBoxScore('${jsArg(g.id)}')" title="Two scorers submitted conflicting data">⚠ Stats Differ</span>` : ''}
@@ -3808,16 +3941,19 @@ function renderScores() {
                <button class="btn btn-outline btn-sm" onclick="openBoxScore('${jsArg(g.id)}')">Box Score</button>
                <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="openPdfUpload('${jsArg(g.id)}')">📄 Upload Sheet</button>
                <button class="btn btn-outline btn-sm" style="background:#fef3c7;color:#92400e;border-color:#d97706;font-weight:700" onclick="window.open('scorer.html?game=${jsArg(encodeURIComponent(g.id))}&from=admin&resume=1','_blank')" title="Resume your private admin scoring lane (the captain's submission already set the public score; this is your separate view)">⚡ Resume Live Score</button>
-               <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${jsArg(g.id)}')">↺ Reset Game</button>`
+               <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${jsArg(g.id)}')">↺ Reset Game</button>
+               ${_forfeitBtn(g)}`
             : isPpd
             ? `<button class="btn btn-outline btn-sm" onclick="editGame('${jsArg(g.id)}')" title="Edit this game (set new date/time/field for the make-up, or un-mark PPD)">✏ Edit / Reschedule</button>
-               <button class="btn btn-outline btn-sm" onclick="togglePpd('${jsArg(g.id)}')" title="Un-mark PPD and put this game back on the schedule as-is">↺ Un-mark PPD</button>`
+               <button class="btn btn-outline btn-sm" onclick="togglePpd('${jsArg(g.id)}')" title="Un-mark PPD and put this game back on the schedule as-is">↺ Un-mark PPD</button>
+               ${_forfeitBtn(g)}`
             : `<span class="badge badge-pending">Pending</span>
                <button class="btn btn-outline btn-sm" onclick="adminShowScoreOnly('${jsArg(g.id)}')">📝 Score Only</button>
                <button class="btn btn-outline btn-sm" onclick="openBoxScore('${jsArg(g.id)}')">Box Score</button>
                <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="openPdfUpload('${jsArg(g.id)}')">📄 Upload Sheet</button>
                <button class="btn btn-outline btn-sm" style="background:#fef3c7;color:#92400e;border-color:#d97706;font-weight:700" onclick="window.open('scorer.html?game=${jsArg(encodeURIComponent(g.id))}&from=admin','_blank')">⚡ Live Score</button>
-               <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${jsArg(g.id)}')" title="Clear any captain submissions or in-progress scorer state for this game">↺ Reset Game</button>`
+               <button class="btn btn-outline btn-sm" style="color:#e65100;border-color:#e65100" onclick="resetGame('${jsArg(g.id)}')" title="Clear any captain submissions or in-progress scorer state for this game">↺ Reset Game</button>
+               ${_forfeitBtn(g)}`
           }
           ${submissionLine}
           <div id="score-form-${esc(g.id)}" style="display:none;width:100%;margin-top:10px"></div>
@@ -3826,6 +3962,117 @@ function renderScores() {
     </div>
   `).join('');
 }
+
+// ─── FORFEITS (Rule 19 points, Rule 24 Two Forfeits Rule, $50 fee) ──────
+// games/{id}.forfeit = 'away' | 'home' (that side forfeited) | 'double'.
+// Absent = a normal game. A forfeit is a final with NO runs: done:true and
+// away_score / home_score null. Every standings copy counts it as a W for
+// the other side and an L for the forfeiting side (both on a double), with
+// no runs; points come from js/dvsl-standings.js. Public pages show a
+// FORFEIT pill instead of a score. Forfeits are only set here (captains and
+// texts can't), and the forfeit wins over any score written later: use
+// "Remove forfeit" (or Reset Game) to go back to a played game.
+function _forfeitOf(g) {
+  if (window.DVSLStandings && DVSLStandings.forfeitOf) return DVSLStandings.forfeitOf(g);
+  return (g && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double')) ? g.forfeit : '';
+}
+function _forfeitText(g) {
+  const f = _forfeitOf(g);
+  if (f === 'double') return 'Double forfeit';
+  return f ? `${getTeamName(g[f])} forfeited` : '';
+}
+function _forfeitBtn(g) {
+  return `<button class="btn btn-outline btn-sm" style="color:#991b1b;border-color:#dc2626" onclick="openForfeitForm('${jsArg(g.id)}')" title="Record a forfeit (Rule 19)">Forfeit</button>`;
+}
+function _forfeitCardHtml(g) {
+  return `<span class="badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-weight:800;letter-spacing:.06em">FORFEIT</span>
+    <span style="font-size:13px;font-weight:700;color:#991b1b">${esc(_forfeitText(g))}</span>
+    <button class="btn btn-outline btn-sm" onclick="openForfeitForm('${jsArg(g.id)}')">Change forfeit</button>
+    <button class="btn btn-outline btn-sm" onclick="clearForfeit('${jsArg(g.id)}')">Remove forfeit</button>`;
+}
+window.openForfeitForm = function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  const formEl = document.getElementById('score-form-' + gameId);
+  if (!g || !formEl) return;
+  if (formEl.style.display !== 'none' && formEl.dataset.mode === 'forfeit') { formEl.style.display = 'none'; return; }
+  formEl.dataset.mode = 'forfeit';
+  formEl.style.display = 'block';
+  const cur = _forfeitOf(g);
+  const opt = (v, label) => `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:14px;background:#fff">
+      <input type="radio" name="ff-pick" value="${v}"${cur === v ? ' checked' : ''} style="width:18px;height:18px"> ${label}</label>`;
+  formEl.innerHTML = `<div class="inline-form" style="border-color:#dc2626">
+    <div style="font-weight:700;color:#991b1b;margin-bottom:6px;font-size:13px">Forfeit: ${esc(getTeamName(g.away))} @ ${esc(getTeamName(g.home))}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">The other team gets the win and 3 points (Rule 19). No runs are recorded. A forfeiting team owes the $50 umpire fee, and two forfeits cost a team its playoff spot (Rule 24).</div>
+    <div id="ff-opts-${esc(gameId)}" style="display:grid;gap:6px;margin-bottom:10px">
+      ${opt('away', esc(getTeamName(g.away)) + ' forfeited')}
+      ${opt('home', esc(getTeamName(g.home)) + ' forfeited')}
+      ${opt('double', 'Double forfeit (both teams, 0 points each)')}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sm" style="background:#991b1b;color:#fff" onclick="saveForfeit('${jsArg(gameId)}')">Save forfeit</button>
+      ${cur ? `<button class="btn btn-outline btn-sm" onclick="clearForfeit('${jsArg(gameId)}')">Remove forfeit</button>` : ''}
+      <button class="btn btn-outline btn-sm" onclick="document.getElementById('score-form-${jsArg(gameId)}').style.display='none'">Cancel</button>
+    </div>
+  </div>`;
+};
+window.saveForfeit = async function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  const box = document.getElementById('ff-opts-' + gameId);
+  if (!g || !box) return;
+  const pick = box.querySelector('input[name="ff-pick"]:checked');
+  const side = pick ? pick.value : '';
+  if (side !== 'away' && side !== 'home' && side !== 'double') { toast('Pick who forfeited', 'error'); return; }
+  const label = side === 'double' ? 'Double forfeit' : `${getTeamName(g[side])} forfeited`;
+  if (!confirm(`${label}: ${getTeamName(g.away)} @ ${getTeamName(g.home)}?\n\nThe game becomes a final with no score and the standings update now.`)) return;
+  // Captain report fields go too, so no captain can rewrite this final from
+  // the portal (the rules only let a first reporter correct their own report).
+  const laneFields = ['score_submitted_away_away', 'score_submitted_away_home', 'score_submitted_away_by',
+                      'score_submitted_home_away', 'score_submitted_home_home', 'score_submitted_home_by'];
+  const update = {
+    forfeit: side, forfeit_at: new Date().toISOString(), forfeit_by: 'admin',
+    done: true, away_score: null, home_score: null, live: false,
+    ppd: false, rained_out: false,
+    score_conflict: false, score_pending: false, score_confirmed: true,
+  };
+  laneFields.forEach(k => { update[k] = deleteField(); });
+  try {
+    await updateDoc(doc(db, 'games', gameId), update);
+    Object.assign(g, { forfeit: side, forfeit_at: update.forfeit_at, forfeit_by: 'admin', done: true, away_score: null, home_score: null,
+      live: false, ppd: false, rained_out: false, score_conflict: false, score_pending: false, score_confirmed: true });
+    laneFields.forEach(k => { delete g[k]; });
+    // Any captain lanes for this game are settled so they leave Score Reviews.
+    for (const s of ['away', 'home']) {
+      try {
+        const laneRef = doc(db, 'score_submissions', `${gameId}_${s}`);
+        const laneSnap = await getDoc(laneRef);
+        if (laneSnap.exists() && laneSnap.data().status !== 'rejected') await updateDoc(laneRef, { status: 'rejected' });
+      } catch (laneErr) { console.warn('Could not settle lane', gameId, s, laneErr); }
+    }
+    toast(`${label}. Standings updated.`);
+    await logActivity('Forfeit', `${label}: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk || '?'}`);
+    await recalcStandingsFromGames();
+    renderScores(); renderDashboard(); renderStandings();
+    try { renderFinancials(); } catch (_) {}
+  } catch (e) { toast('Failed: ' + e.message, 'error'); }
+};
+window.clearForfeit = async function(gameId) {
+  const g = GAMES.find(x => x.id === gameId);
+  if (!g || !_forfeitOf(g)) return;
+  if (!confirm(`Remove the forfeit from ${getTeamName(g.away)} @ ${getTeamName(g.home)}?\n\nThe game goes back to not played with no score, so it can be scored normally.`)) return;
+  try {
+    await updateDoc(doc(db, 'games', gameId), {
+      forfeit: deleteField(), forfeit_at: deleteField(), forfeit_by: deleteField(),
+      done: false, away_score: null, home_score: null, score_confirmed: false,
+    });
+    delete g.forfeit; delete g.forfeit_at; delete g.forfeit_by;
+    Object.assign(g, { done: false, away_score: null, home_score: null, score_confirmed: false });
+    toast('Forfeit removed');
+    await logActivity('Forfeit', `Removed forfeit: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk || '?'}`);
+    await recalcStandingsFromGames();
+    renderScores(); renderDashboard(); renderStandings();
+    try { renderFinancials(); } catch (_) {}
+  } catch (e) { toast('Failed: ' + e.message, 'error'); }
+};
 
 window.editScore = function(gameId) {
   const g = GAMES.find(x => x.id === gameId);
@@ -4019,6 +4266,7 @@ window.resetGame = async function(gameId) {
     // Clear score, done flag, AND all submission tracking fields on the game doc
     const gameUpdate = {
       done: false, live: false, away_score: 0, home_score: 0,
+      forfeit: deleteField(), forfeit_at: deleteField(), forfeit_by: deleteField(),
       live_owner: deleteField(),
       live_owner_started_at: deleteField(),
       score_pending: deleteField(),
@@ -4031,6 +4279,7 @@ window.resetGame = async function(gameId) {
     };
     await updateDoc(doc(db, 'games', gameId), gameUpdate);
     g.done = false; g.away_score = 0; g.home_score = 0;
+    delete g.forfeit; delete g.forfeit_at; delete g.forfeit_by;
     delete g.score_pending;
     delete g.score_submitted_away_away; delete g.score_submitted_away_home; delete g.score_submitted_away_by;
     delete g.score_submitted_home_away; delete g.score_submitted_home_home; delete g.score_submitted_home_by;
@@ -6498,6 +6747,16 @@ async function recalcStandingsFromGames() {
     .filter(g => g.done && !g.ppd && !g.rained_out)
     .sort((a,b) => (a.wk||0) - (b.wk||0));
   doneGames.forEach(g => {
+    // Forfeits (games.forfeit, see setForfeit): the forfeiting side takes an
+    // L (both on a double forfeit), the other a W, and no runs count.
+    const _ff = _forfeitOf(g);
+    if (_ff) {
+      [['away','home'],['home','away']].forEach(([me, opp]) => {
+        const s = stats[g[me]]; if (!s) return;
+        if (_ff === opp) { s.w++; s.results.push('W'); } else { s.l++; s.results.push('L'); }
+      });
+      return;
+    }
     const as = g.away_score || 0, hs = g.home_score || 0;
     if (stats[g.away]) {
       stats[g.away].rs += as; stats[g.away].ra += hs;
@@ -6588,7 +6847,16 @@ function renderStandings() {
   // Rulebook order via the same DVSLStandings.rank the public standings
   // use (points, then the rulebook tiebreakers). Fallback when the shared
   // script didn't load: POINTS (3·W + 2·T + 1·L) desc, PCT desc, name.
-  const _pts = (t) => (t.w||0)*3 + (t.ti||0)*2 + (t.l||0)*1;
+  // Forfeit losses are worth FORFEIT_LOSS_POINTS, not 1, so points come from
+  // the shared module with the forfeit tally from GAMES.
+  const _ffTally = (window.DVSLStandings && DVSLStandings.forfeitTally) ? DVSLStandings.forfeitTally(TEAMS, GAMES) : {};
+  const _pts = (t) => (window.DVSLStandings ? DVSLStandings.points(t, _ffTally[t.id]) : (t.w||0)*3 + (t.ti||0)*2 + (t.l||0)*1);
+  const _ffMark = (t) => {
+    const f = (_ffTally[t.id] && _ffTally[t.id].forfeits) || 0;
+    if (!f) return '';
+    const lost = window.DVSLStandings && f >= DVSLStandings.FORFEITS_TO_LOSE_SPOT;
+    return `<div style="font-size:11px;font-weight:700;color:#991b1b;margin-top:2px">${f} forfeit${f > 1 ? 's' : ''}${lost ? ' · Playoff spot forfeited (Rule 24)' : ''}</div>`;
+  };
   let sorted = null;
   if (window.DVSLStandings && typeof DVSLStandings.rank === 'function') {
     try { sorted = DVSLStandings.rank(TEAMS, GAMES); } catch (e) { console.warn('DVSLStandings.rank failed', e); }
@@ -6604,11 +6872,11 @@ function renderStandings() {
     <thead><tr><th>#</th><th>Team</th><th>W</th><th>L</th><th>T</th><th title="Points: 3 per win + 2 per tie + 1 per loss — matches the public standings page">PTS</th><th>PCT</th><th>GB</th><th>RS</th><th>RA</th><th>Streak</th><th>Actions</th></tr></thead>
     <tbody>${sorted.map((t, i) => `<tr id="standing-row-${esc(t.id)}">
       <td>${i+1}</td>
-      <td><strong>${esc(t.name)}</strong></td>
+      <td><strong>${esc(t.name)}</strong>${_ffMark(t)}</td>
       <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${esc(t.w||0)}" id="st-w-${esc(t.id)}" min="0"></td>
       <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${esc(t.l||0)}" id="st-l-${esc(t.id)}" min="0"></td>
       <td><input type="number" class="form-input" style="width:55px;padding:5px;text-align:center" value="${esc(t.ti||0)}" id="st-t-${esc(t.id)}" min="0"></td>
-      <td style="font-weight:800;color:#b8860b" id="st-pts-${esc(t.id)}">${(t.w||0)*3 + (t.ti||0)*2 + (t.l||0)*1}</td>
+      <td style="font-weight:800;color:#b8860b" id="st-pts-${esc(t.id)}">${_pts(t)}</td>
       <td>${(t.pct||0).toFixed(3)}</td>
       <td>${esc(t.gb||'-')}</td>
       <td><input type="number" class="form-input" style="width:65px;padding:5px;text-align:center" value="${esc(t.rs||0)}" id="st-rs-${esc(t.id)}" min="0"></td>
@@ -6637,7 +6905,9 @@ window.saveOneStanding = async function(teamId) {
     }
     // Refresh the row's PTS cell (3·W + 2·T + 1·L, matching front-end).
     const ptsCell = document.getElementById('st-pts-' + teamId);
-    if (ptsCell) ptsCell.textContent = (w*3 + ties*2 + l*1);
+    if (ptsCell) ptsCell.textContent = (window.DVSLStandings && DVSLStandings.forfeitTally)
+      ? DVSLStandings.points({ w, l, ti: ties }, DVSLStandings.forfeitTally(TEAMS, GAMES)[teamId])
+      : (w*3 + ties*2 + l*1);
     toast('Saved standings for ' + getTeamName(teamId));
     await logActivity('Standings', `Updated ${getTeamFull(teamId)}: ${w}-${l}-${ties}`);
   } catch(e) {
@@ -6854,6 +7124,7 @@ window.saveNewGame = async function() {
     data.id = ref.id;
     GAMES.push(data);
     GAMES.sort((a,b) => (a.wk||0) - (b.wk||0));
+    if (typeof window.dvslAfterGameAdded === 'function') { try { await window.dvslAfterGameAdded(data); } catch (_) {} } // Makeups tab link
     const wantsNotify = !!document.getElementById('ag-notify')?.checked;
     document.getElementById('add-game-form').style.display = 'none';
     toast('Game added!');
@@ -7203,6 +7474,197 @@ window.togglePpd = async function(gameId) {
 };
 // Backward-compat alias — a few older handlers might still call toggleRainout.
 window.toggleRainout = window.togglePpd;
+
+// ═══════════════════════════════════════════════════════════════════
+// MAKEUPS (Rules 11-12) + LATE SCORE REMINDERS (Rule 14). Builder M.
+// The tracker math is js/dvsl-makeups.js (window.DVSLMakeups), the same file
+// the server cron uses a copy of. Setting a makeup date reuses the Schedule
+// tab's Add Game form + saveNewGame (the way makeups have always been added);
+// dvslAfterGameAdded below links the new game to the postponed one
+// (games.makeup_of / makeup_game_id) and fills ppd_rescheduled_to so the
+// public schedule shows "PPD, rescheduled to Tue Jul 14".
+// ═══════════════════════════════════════════════════════════════════
+const MK = { report: null, preview: null, loading: false };
+const mkM = () => window.DVSLMakeups;
+function mkLogo(id) {
+  const s = String(id || '');
+  if (!/^[A-Za-z0-9_-]{1,24}$/.test(s)) return '';
+  return `<img class="mk-logo" src="logos/${esc(s.toLowerCase())}.png" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`;
+}
+function mkWhen(ms) { const M = mkM(); return M && Number.isFinite(ms) ? `${M.fmtDay(ms)} ${M.fmtClock(ms)}` : ''; }
+function mkChip(e) {
+  if (e.status === 'date_set') return '<span class="mk-chip mk-set">Date set</span>';
+  if (e.status === 'overdue') return '<span class="mk-chip mk-over">Overdue: commissioner assigns</span>';
+  return '<span class="mk-chip mk-need">Needs a date</span>';
+}
+function mkStageLabel(r) {
+  const side = r.side === 'admin' ? 'you' : r.side === 'away' || r.side === 'home' ? `${r.side} captain` : '';
+  const what = { score: 'Score reminder', makeup: 'Makeup date reminder', score24: 'In your late score digest', makeup48: 'In your makeup digest' }[r.stage] || r.stage || 'Reminder';
+  const bits = [];
+  if (r.push_sent != null) bits.push(`${r.push_sent} push${r.push_sent === 1 ? '' : 'es'}`);
+  if (r.texts_sent) bits.push(`${r.texts_sent} text${r.texts_sent === 1 ? '' : 's'}`);
+  return `${what}${side ? ' to ' + side : ''}${bits.length ? ', ' + bits.join(', ') : ''}`;
+}
+function mkLogHtml(gameId) {
+  const rows = ((MK.report && MK.report.log) || []).filter(r => r.game_id === gameId);
+  if (!MK.report) return '<details><summary>Reminders sent</summary><div class="mk-log">Tap "Run reminders now (preview)" to load the reminder log.</div></details>';
+  if (!rows.length) return '<details><summary>Reminders sent (0)</summary><div class="mk-log">None yet.</div></details>';
+  return `<details><summary>Reminders sent (${rows.length})</summary><ul class="mk-log">${rows.map(r =>
+    `<li>${esc(mkWhen(Date.parse(r.at)))}: ${esc(mkStageLabel(r))}</li>`).join('')}</ul></details>`;
+}
+function mkRowHtml(e) {
+  const M = mkM();
+  const mk = e.makeup && !e.makeup.ppd ? e.makeup : null;
+  let makeupTxt = 'Not set';
+  if (mk) makeupTxt = `${M.fmtYmd(mk.date_iso)}${mk.time ? ' ' + mk.time : ''}${mk.field ? ', ' + mk.field : ''}${mk.linked ? '' : ' (found on the schedule)'}`;
+  else if (e.note) makeupTxt = `Note: ${e.note}`;
+  const warn = [];
+  if (e.overdueWhy === 'no_date_48h') warn.push('No makeup date 48 hours after the postponement. Rule 12: the commissioners assign the date and field.');
+  if (e.overdueWhy === 'not_played_21d') warn.push('Not played within 21 days of the original date. Rule 12: the commissioners assign it.');
+  if (e.lateMakeup) warn.push(`The makeup date is after the 21 day limit (${M.fmtYmd(e.playBy)}).`);
+  const ago = e.daysSince == null ? '' : e.daysSince === 0 ? ' (today)' : ` (${e.daysSince} day${e.daysSince === 1 ? '' : 's'} ago)`;
+  return `<div class="mk-row" data-mk-id="${esc(e.id)}">
+    <div class="mk-match">${mkLogo(e.away)}<span class="mk-teams">${esc(getTeamName(e.away))} <span class="mk-at">@</span> ${esc(getTeamName(e.home))}</span>${mkLogo(e.home)} ${mkChip(e)}</div>
+    <div class="mk-meta">Wk ${esc(e.wk || '?')}, ${esc(M.fmtYmd(e.origDate))}${e.origTime ? ' ' + esc(e.origTime) : ''}${e.field ? ', ' + esc(e.field) : ''}</div>
+    <div class="mk-dl">
+      <div><span>Postponed</span><b>${esc(mkWhen(e.postponedAt))}</b>${esc(ago)}</div>
+      <div><span>Pick a makeup date by</span><b>${esc(mkWhen(e.pickBy))}</b></div>
+      <div><span>Must be played by</span><b>${esc(M.fmtYmd(e.playBy))}</b></div>
+      <div><span>Makeup</span><b>${esc(makeupTxt)}</b></div>
+    </div>
+    ${warn.map(w => `<div class="mk-warn">${esc(w)}</div>`).join('')}
+    <div class="mk-actions">
+      ${mk ? `<button type="button" class="btn btn-outline btn-sm" data-mk-edit="${esc(mk.id)}">Change makeup date</button>`
+           : `<button type="button" class="btn btn-primary btn-sm" data-mk-set="${esc(e.id)}">Set makeup date</button>`}
+    </div>
+    ${mkLogHtml(e.id)}
+  </div>`;
+}
+window.renderMakeups = function() {
+  const list = document.getElementById('mk-list');
+  if (!list) return;
+  const M = mkM();
+  if (!M) { list.innerHTML = '<div class="empty">Could not load the makeup tracker. Reload the page.</div>'; return; }
+  const now = Date.now();
+  const { open, madeUp } = M.trackMakeups(GAMES || [], now);
+  const cur = open.filter(e => !M.isStale(e, now));
+  const old = open.filter(e => M.isStale(e, now));
+  const n = (s) => cur.filter(e => e.status === s).length;
+  document.getElementById('mk-summary').innerHTML =
+    `<span><strong>${n('needs_date')}</strong> need a date</span><span><strong>${n('date_set')}</strong> date set</span>` +
+    `<span><strong>${n('overdue')}</strong> overdue</span><span><strong>${madeUp.length}</strong> made up</span>`;
+  const badge = document.getElementById('mk-nav-badge');
+  if (badge) { const o = n('overdue') + n('needs_date'); badge.textContent = String(o); badge.style.display = o ? '' : 'none'; }
+  list.innerHTML = (cur.length ? cur.map(mkRowHtml).join('') : '<div class="empty">No postponed games waiting on a makeup.</div>')
+    + (old.length ? `<details style="margin-top:12px"><summary>${old.length} older postponed game${old.length === 1 ? '' : 's'} (21 day window closed)</summary>${old.map(mkRowHtml).join('')}</details>` : '');
+};
+
+// "Set makeup date": open the Schedule tab's Add Game form, prefilled.
+function mkOpenAddGame(ppdId) {
+  const g = (GAMES || []).find(x => x.id === ppdId);
+  const M = mkM();
+  if (!g || !M) return;
+  const e = M.trackMakeups(GAMES, Date.now()).open.find(x => x.id === ppdId);
+  showSection('schedule');
+  const host = document.getElementById('add-game-form');
+  if (!host) return;
+  host.style.display = 'none';          // openAddGame toggles; start closed
+  openAddGame();
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v != null && v !== '') el.value = String(v); };
+  set('ag-wk', g.wk); set('ag-away', g.away); set('ag-home', g.home); set('ag-field', g.field); set('ag-time', g.time_24); set('ag-addr', g.addr);
+  const notify = document.getElementById('ag-notify'); if (notify) notify.checked = true;
+  const form = host.querySelector('.inline-form');
+  if (form) {
+    const b = document.createElement('div');
+    b.id = 'mk-addgame-banner';
+    b.dataset.ppd = ppdId;
+    b.style.cssText = 'background:#fef3c7;border:1px solid #d97706;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#78350f;line-height:1.5';
+    b.innerHTML = `<strong>Makeup for ${esc(getTeamName(g.away))} @ ${esc(getTeamName(g.home))}</strong>, postponed from ${esc(M.fmtYmd(String(g.date_iso || '').slice(0, 10)))}.`
+      + (e ? ` Pick a date by ${esc(mkWhen(e.pickBy))}. Must be played by ${esc(M.fmtYmd(e.playBy))}.` : '')
+      + ' Pick the date, time and field, then Save Game.';
+    form.insertBefore(b, form.children[1] || null);
+  }
+  try { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+}
+
+// Called by saveNewGame after a game is added. Links it when the Add Game
+// form was opened from the Makeups tab for the same two teams.
+window.dvslAfterGameAdded = async function(data) {
+  const banner = document.getElementById('mk-addgame-banner');
+  const ppdId = banner && banner.dataset.ppd;
+  if (!ppdId || !data || !data.id) return;
+  const g = (GAMES || []).find(x => x.id === ppdId);
+  if (!g || [g.away, g.home].sort().join('|') !== [data.away, data.home].sort().join('|')) return;
+  const label = [data.day, data.date].filter(Boolean).join(' ') + (data.time ? ' ' + data.time : '');
+  try {
+    await updateDoc(doc(db, 'games', data.id), { makeup_of: ppdId });
+    await updateDoc(doc(db, 'games', ppdId), { makeup_game_id: data.id, ppd_rescheduled_to: label || null });
+    Object.assign(data, { makeup_of: ppdId });
+    Object.assign(g, { makeup_game_id: data.id, ppd_rescheduled_to: label || null });
+    await logActivity('Schedule', `Makeup set: ${getTeamName(g.away)} @ ${getTeamName(g.home)} (postponed ${g.date || ''}) now ${label}`);
+    toast('Makeup date set. It shows on the Makeups tab and the public schedule.');
+  } catch (e) { toast('Game added, but linking it to the postponed game failed: ' + e.message, 'error'); }
+  banner.remove();
+  window.renderMakeups();
+};
+
+async function mkPreview() {
+  const msg = document.getElementById('mk-preview-msg'), out = document.getElementById('mk-preview-out');
+  if (MK.loading) return;
+  MK.loading = true;
+  msg.className = 'mk-msg'; msg.textContent = 'Checking...';
+  try {
+    const u = auth.currentUser;
+    if (!u) throw new Error('You are signed out. Sign in again to continue.');
+    const r = await fetch('/api/league-reminders?dry=1', { headers: { Authorization: 'Bearer ' + await u.getIdToken() } });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.message || ('The server said no (' + r.status + ').'));
+    MK.preview = d; MK.report = d.report || null;
+    const sc = d.preview.filter(p => p.stage === 'score').length, mkc = d.preview.filter(p => p.stage === 'makeup').length;
+    msg.textContent = `Nothing was sent. A run now would send ${sc} score reminder${sc === 1 ? '' : 's'} and ${mkc} makeup reminder${mkc === 1 ? '' : 's'} to captains`
+      + (d.digest && d.digest.items ? `, and ${d.digest.alreadySentToday ? 'no digest (today\'s already went out)' : 'you a digest of ' + d.digest.items + ' game' + (d.digest.items === 1 ? '' : 's')}` : '')
+      + `. ${d.captain.alreadySent} already sent before.`;
+    const items = d.preview.map(p => `<div class="mk-prev">
+        <div><strong>${esc(p.game)}</strong>, ${esc(p.when)}: to the ${esc(p.team)} captain${p.pushDevices == null ? '' : ` (${esc(p.pushDevices)} device${p.pushDevices === 1 ? '' : 's'})`}</div>
+        <div class="mk-prev-body">${esc(p.push.title)}\n${esc(p.push.body)}</div>
+        ${p.textWouldSend ? `<div class="mk-note" style="margin-top:6px">Text to ${esc(p.textCandidates)} captain phone${p.textCandidates === 1 ? '' : 's'} (only ones that said YES):</div><div class="mk-prev-body">${esc(p.text)}</div>` : ''}
+      </div>`).join('');
+    const dg = d.digest && d.digest.title ? `<div class="mk-prev"><div><strong>Your digest</strong>${d.digest.devices == null ? '' : ` (${esc(d.digest.devices)} device${d.digest.devices === 1 ? '' : 's'})`}</div><div class="mk-prev-body">${esc(d.digest.title)}\n${esc(d.digest.body)}</div></div>` : '';
+    out.innerHTML = items + dg || '<div class="mk-note">Nothing due right now.</div>';
+    mkRenderTexts(d.texts);
+    window.renderMakeups();
+  } catch (e) {
+    msg.className = 'mk-msg err'; msg.textContent = e.message;
+  } finally { MK.loading = false; }
+}
+function mkRenderTexts(t) {
+  const el = document.getElementById('mk-texts');
+  if (!el || !t) return;
+  el.innerHTML = `Reminder texts are <strong>${t.switchOn ? 'on' : 'off'}</strong>${t.twilio ? '' : ' (texting is not set up yet)'}. Pushes go out either way. `
+    + `<button type="button" class="btn btn-outline btn-sm" data-mk-texts="${t.switchOn ? '0' : '1'}">${t.switchOn ? 'Turn texts off' : 'Turn texts on'}</button>`;
+}
+document.getElementById('sec-makeups')?.addEventListener('click', async (ev) => {
+  const t = ev.target.closest('button');
+  if (!t) return;
+  if (t.id === 'mk-refresh') { window.renderMakeups(); return; }
+  if (t.id === 'mk-preview') { mkPreview(); return; }
+  if (t.dataset.mkSet) { mkOpenAddGame(t.dataset.mkSet); return; }
+  if (t.dataset.mkEdit) { showSection('schedule'); if (typeof window.editGame === 'function') window.editGame(t.dataset.mkEdit); return; }
+  if (t.dataset.mkTexts) {
+    const on = t.dataset.mkTexts === '1';
+    t.disabled = true;
+    try {
+      await apiPost('sms-send', { action: 'config', key: 'reminders', enabled: on });
+      toast(on ? 'Reminder texts on.' : 'Reminder texts off.');
+      mkPreview();
+    } catch (e) { toast(e.message, 'error'); t.disabled = false; }
+  }
+});
+(function() {
+  const _orig = window.showSection;
+  if (typeof _orig !== 'function') return;
+  window.showSection = function(name) { _orig(name); if (name === 'makeups') window.renderMakeups(); };
+})();
 
 // Bulk rainout — mark every game on a single date as rained out. Used when
 // the weather kills the whole night. Opens an inline panel at the top of
@@ -8956,7 +9418,39 @@ function populateFinTeamSel() {
     TEAMS.map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('');
 }
 
+// Forfeit fees owed: $50 umpire fee per forfeit (rules: "If your team
+// forfeits, you owe the $50 umpire's fee to the DVSL"). Computed from the
+// games, nothing is stored; a double forfeit charges both teams.
+function renderForfeitFees() {
+  const el = document.getElementById('fin-forfeit-fees');
+  if (!el) return;
+  const fee = (window.DVSLStandings && DVSLStandings.FORFEIT_FEE) || 50;
+  const lose = (window.DVSLStandings && DVSLStandings.FORFEITS_TO_LOSE_SPOT) || 2;
+  const rows = {};
+  GAMES.forEach(g => {
+    const f = _forfeitOf(g);
+    if (!f || g.done !== true || g.ppd || g.rained_out) return;
+    const sides = f === 'double' ? ['away', 'home'] : [f];
+    sides.forEach(sd => {
+      const id = g[sd]; if (!id) return;
+      const opp = sd === 'away' ? g.home : g.away;
+      (rows[id] = rows[id] || []).push(`${g.date || ''}${g.date ? ' ' : ''}vs ${getTeamName(opp)}${f === 'double' ? ' (double)' : ''}`);
+    });
+  });
+  const ids = Object.keys(rows).sort((a, b) => rows[b].length - rows[a].length || String(getTeamName(a)).localeCompare(String(getTeamName(b))));
+  const total = ids.reduce((n, id) => n + rows[id].length * fee, 0);
+  el.innerHTML = `<div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span>Forfeit fees owed</span><span style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:${total ? '#dc2626' : '#16a34a'}">$${total.toLocaleString()}</span></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:${ids.length ? '10px' : '0'}">$${fee} umpire fee per forfeit, counted from the games marked as a forfeit on the Scores tab. Record the payment below when it comes in.</div>
+    ${ids.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Team</th><th>Forfeits</th><th>Owed</th><th>Games</th></tr></thead><tbody>
+      ${ids.map(id => `<tr><td><strong>${esc(getTeamName(id))}</strong>${rows[id].length >= lose ? '<div style="font-size:11px;font-weight:700;color:#991b1b">Playoff spot forfeited (Rule 24)</div>' : ''}</td>
+        <td>${rows[id].length}</td><td style="font-weight:800;color:#dc2626">$${(rows[id].length * fee).toLocaleString()}</td>
+        <td style="font-size:12px;color:var(--muted2)">${rows[id].map(esc).join('<br>')}</td></tr>`).join('')}
+    </tbody></table></div>` : ''}`;
+}
+
 window.renderFinancials = function() {
+  try { renderForfeitFees(); } catch (e) { console.warn('forfeit fees', e); }
   // Summary cards
   const summary = document.getElementById('fin-summary');
   if (summary) {
@@ -9590,6 +10084,109 @@ window.peRevert = async function() {
 };
 
 window.loadPageEditor = function() { peBuildList(); };
+
+// ═══════════════════════════════════════════════════════════════════
+// PLAYER OF THE WEEK (awards/{season}_w{n}; math in js/dvsl-awards.js)
+// Doc shape: {season, wk, cleared, picks:[{name, team, player_id}], note,
+// photo_url, updated_at, updated_by_uid}. No doc = the formula pick.
+// ═══════════════════════════════════════════════════════════════════
+let _potwWeeks = {};
+async function loadPotwAdmin() {
+  const el = document.getElementById('potw-admin-content');
+  const AW = window.DVSLAwards;
+  if (!el) return;
+  if (!AW) { el.innerHTML = '<div style="padding:24px;color:var(--muted)">Player of the Week code did not load. Refresh the page.</div>'; return; }
+  el.innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+  const f = document.getElementById('potw-admin-formula');
+  if (f) f.textContent = 'How the site picks: ' + AW.FORMULA_TEXT + ' Change or clear a pick and add a note below.';
+  try {
+    const [bsSnap, awSnap, gSnap] = await Promise.all([
+      getDocs(collection(db, 'box_scores')),
+      getDocs(collection(db, 'awards')),
+      GAMES.length ? Promise.resolve(null) : getDocs(collection(db, 'games')),
+    ]);
+    const box = bsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const awards = awSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const games = gSnap ? gSnap.docs.map(d => ({ id: d.id, ...d.data() })) : GAMES;
+    const yr = (window.LEAGUE_CONFIG && window.LEAGUE_CONFIG.season && window.LEAGUE_CONFIG.season.year) || new Date().getFullYear();
+    const base = AW.weeks(box, { games, teams: TEAMS, defaultYear: yr });
+    const weeks = AW.applyOverrides(base, awards).filter(w => w.complete);
+    const awById = Object.fromEntries(awards.map(a => [a.id, a]));
+    _potwWeeks = {};
+    if (!weeks.length) { el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">No completed weeks with box scores yet.</div>'; return; }
+    const tShort = id => { const t = TEAMS.find(x => x.id === id); return (t && t.short) || String(id || '').toUpperCase(); };
+    const who = a => esc(a.name) + ' (' + esc(tShort(a.team)) + ')' + (a.points != null && a.games ? ', ' + esc(a.points) + ' pts' : '');
+    el.innerHTML = weeks.map(w => {
+      const formula = base.find(b => b.id === w.id) || w;
+      const awDoc = awById[w.id] || null;
+      const cands = (formula.candidates || []).slice(0, 12);
+      const curPick = awDoc && Array.isArray(awDoc.picks) && awDoc.picks[0] ? awDoc.picks[0] : null;
+      let curKey = curPick ? AW.cleanName(curPick.name) + '||' + String(curPick.team || '').toLowerCase() : '';
+      if (curPick && !cands.some(c => c.key === curKey)) cands.push({ key: curKey, name: String(curPick.name || ''), team: String(curPick.team || '').toLowerCase() });
+      _potwWeeks[w.id] = { week: w, cands };
+      const mode = awDoc && awDoc.cleared ? 'none' : (curPick ? 'k:' + curKey : 'auto');
+      const state = w.cleared ? '<span class="pw-state clr">No pick</span>' : (w.overridden ? '<span class="pw-state ovr">League pick</span>' : '<span class="pw-state">Automatic</span>');
+      const opts = ['<option value="auto"' + (mode === 'auto' ? ' selected' : '') + '>Formula pick (automatic)</option>',
+        '<option value="none"' + (mode === 'none' ? ' selected' : '') + '>No pick this week</option>']
+        .concat(cands.map(c => '<option value="' + esc('k:' + c.key) + '"' + (mode === 'k:' + c.key ? ' selected' : '') + '>' +
+          esc(c.name + ', ' + tShort(c.team) + (c.points != null ? ', ' + c.points + ' pts' : '') + (c.games ? ' (' + AW.statLine(c) + ')' : '')) + '</option>'));
+      return '<div class="pw-row" data-pw-id="' + esc(w.id) + '">' +
+        '<div><div class="pw-wk">' + esc(w.label) + '</div><div class="pw-dates">' + esc(w.dates) + '</div></div>' +
+        '<div><div class="pw-auto">Formula: <b>' + (formula.winners.length ? formula.winners.map(who).join(' and ') : 'no qualified hitter') + '</b>' + state +
+          (w.overridden && w.winners.length ? '<br>Showing: <b>' + w.winners.map(who).join(' and ') + '</b>' : '') + '</div>' +
+          '<div class="pw-ctrls">' +
+            '<select class="form-input" data-pw-mode aria-label="Pick for ' + esc(w.label) + '">' + opts.join('') + '</select>' +
+            '<input class="form-input" data-pw-note maxlength="140" placeholder="One line note (optional)" value="' + esc((awDoc && awDoc.note) || '') + '">' +
+            '<button type="button" class="btn btn-success btn-sm" data-pw-save>Save</button>' +
+            '<input class="form-input pw-photo" data-pw-photo maxlength="500" placeholder="Photo link, https only (optional, shows on the home card)" value="' + esc((awDoc && awDoc.photo_url) || '') + '">' +
+          '</div><div class="pw-msg" data-pw-msg></div></div>' +
+      '</div>';
+    }).join('');
+  } catch (e) {
+    console.error('Player of the Week load failed:', e);
+    el.innerHTML = '<div style="padding:24px;color:#b91c1c;font-size:13px">Could not load Player of the Week: ' + esc(e.message || e) + '</div>';
+  }
+}
+document.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest && ev.target.closest('#potw-admin-content [data-pw-save]');
+  if (!btn) return;
+  const row = btn.closest('[data-pw-id]');
+  const id = row && row.getAttribute('data-pw-id');
+  const entry = id && _potwWeeks[id];
+  const msg = row.querySelector('[data-pw-msg]');
+  if (!entry) return;
+  const mode = row.querySelector('[data-pw-mode]').value;
+  const note = row.querySelector('[data-pw-note]').value.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 140);
+  const photo = row.querySelector('[data-pw-photo]').value.trim();
+  if (photo && (!/^https:\/\/[^\s"'<>]+$/i.test(photo) || photo.length > 500)) { msg.textContent = 'Photo link must start with https:// (or leave it empty).'; return; }
+  const w = entry.week;
+  btn.disabled = true; msg.textContent = 'Saving…';
+  try {
+    const ref = doc(db, 'awards', id);
+    if (mode === 'auto' && !note && !photo) {
+      await deleteDoc(ref);
+    } else {
+      let picks = [];
+      if (mode.indexOf('k:') === 0) {
+        const c = entry.cands.find(x => 'k:' + x.key === mode);
+        if (!c) throw new Error('That player is no longer in the list. Reload and try again.');
+        const pl = window.DVSLAwards.matchPlayer(c.name, c.team, PLAYERS);
+        picks = [{ name: String(c.name).slice(0, 80), team: String(c.team).slice(0, 40), player_id: pl ? pl.id : '' }];
+      }
+      await setDoc(ref, {
+        season: Number(w.season), wk: String(w.wk), cleared: mode === 'none', picks,
+        note, photo_url: photo, updated_at: serverTimestamp(),
+        updated_by_uid: (auth.currentUser && auth.currentUser.uid) || '',
+      });
+    }
+    toast('Player of the Week saved for ' + w.label);
+    loadPotwAdmin();
+  } catch (e) {
+    console.error('Player of the Week save failed:', e);
+    msg.textContent = 'Save failed: ' + (e.message || e);
+    btn.disabled = false;
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // PLAYER MEDIA MANAGER
@@ -10432,6 +11029,133 @@ $('tx-add-btn').addEventListener('click', async () => {
 });
 // Load when the tab opens (the sidebar's showSection does the showing).
 document.querySelectorAll('.nav-item[data-section="texts"]').forEach(n => n.addEventListener('click', () => { if (txAuth.currentUser) loadStatus(); }));
+</script>
+<script type="module">
+// ═══════════════════════════════════════════════════════════════════
+// SCHEDULE EMAILS (Builder E). Self-contained like the Texts tab script:
+// reuses the Firebase app, sends the admin's ID token to /api/sms-send
+// (email-status / email-config / email-preview), renders every value
+// through emEsc(). No inline handlers, no Firestore writes. The server never
+// sends a full address: counts, domains and hashes only.
+// ═══════════════════════════════════════════════════════════════════
+import { getApp } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js';
+import { getAuth } from 'https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js';
+
+const emAuth = getAuth(getApp());
+const el = (id) => document.getElementById(id);
+function emEsc(s) {
+  return (s == null ? '' : String(s))
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/`/g, '&#96;');
+}
+async function emApi(action, extra) {
+  const u = emAuth.currentUser;
+  if (!u) throw new Error('You are signed out. Sign in again.');
+  const r = await fetch('/api/sms-send', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + (await u.getIdToken()), 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ action }, extra || {})),
+  });
+  let j = {};
+  try { j = await r.json(); } catch (_) { j = {}; }
+  if (!r.ok || j.error) throw new Error(j.message || ('The server said no (' + r.status + ').'));
+  return j;
+}
+function emMsg(kind, text) { const m = el('em-msg'); m.className = 'tx-msg ' + (kind || ''); m.textContent = text || ''; }
+function emWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString('en-US', { timeZone: 'America/New_York', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+const REASON = {
+  'no-provider': 'No sending service key (RESEND_API_KEY or SENDGRID_API_KEY).',
+  'no-from': 'EMAIL_FROM is not set. Pick the league domain first.',
+  'sandbox-from': 'EMAIL_FROM is the Resend test sender. It can only reach your own inbox.',
+  'free-mailbox-from': 'EMAIL_FROM is a Gmail or similar address. It has to be on a domain the league owns.',
+  'no-unsub-secret': 'EMAIL_UNSUB_SECRET is not set, so emails would have no unsubscribe link.',
+};
+let EM = { status: null };
+
+function emPill(kind, label) { return '<span class="tx-pill ' + emEsc(kind) + '">' + emEsc(label) + '</span>'; }
+
+function renderEmail(st) {
+  const on = !!st.enabled, r = st.readiness || {};
+  const state = on ? (r.ready ? emPill('tx-on', 'On') : emPill('tx-warn', 'On, waiting')) : emPill('tx-off', 'Off');
+  el('em-switch').innerHTML = `<div class="tx-sw"><div><div class="tx-sw-name">Schedule change emails ${state}</div>
+    <div class="tx-sw-sub">${emEsc(on && !r.ready ? 'Nothing goes to teams until every item below says Ready.' : 'One email per team per run to its captains and players.')}</div></div>
+    <button type="button" class="btn ${on ? 'btn-outline' : 'btn-primary'} btn-sm" id="em-toggle" data-em-to="${on ? '0' : '1'}">${on ? 'Turn off' : 'Turn on'}</button></div>`;
+  const chk = (ok, label, warn) => `<span>${ok ? emPill('tx-on', 'Ready') : emPill(warn ? 'tx-warn' : 'tx-bad', warn ? 'Check' : 'Missing')} ${emEsc(label)}</span>`;
+  const fromLabel = r.from ? ('From ' + (r.fromName ? r.fromName + ', ' : '') + 'at ' + r.fromDomain) : 'From address (EMAIL_FROM)';
+  el('em-ready').innerHTML = [
+    chk(!!r.provider, r.provider ? 'Sending service: ' + (r.provider === 'resend' ? 'Resend' : 'SendGrid') : 'Sending service'),
+    chk(r.from && !r.sandbox && !r.freeMailbox, fromLabel),
+    r.domainVerified === true ? chk(true, 'Domain verified') : r.domainVerified === false ? chk(false, 'Domain not verified at Resend yet') : chk(false, 'Domain check not available', true),
+    chk(!!r.unsubSecret, 'Unsubscribe links'),
+    chk(!!r.replyTo, 'Replies go to the commissioner (EMAIL_REPLY_TO)', true),
+    r.dryRun ? '<span>' + emPill('tx-warn', 'Dry run') + ' EMAIL_DRY_RUN is on, nothing really sends</span>' : '',
+    `<span>Sent today: <strong>${emEsc(st.sentToday)}</strong> of ${emEsc(r.cap)}</span>`,
+    `<span>Last check: <strong>${emEsc(emWhen(st.lastCheck) || 'not yet')}</strong></span>`,
+    `<span>Unsubscribed: <strong>${emEsc(st.optedOut)}</strong></span>`,
+  ].filter(Boolean).join('');
+  if (r.reason && REASON[r.reason]) emMsg(on ? 'err' : '', REASON[r.reason]); else emMsg('', '');
+
+  el('em-teams').innerHTML = st.teams.map(t => `<tr><td>${emEsc(t.name)}</td><td class="num">${emEsc(t.captains)}</td><td class="num">${emEsc(t.players)}</td><td class="num"><strong>${emEsc(t.recipients)}</strong></td><td class="num">${emEsc(t.optedOut)}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="tx-note">No active teams.</td></tr>';
+  el('em-runs').innerHTML = st.runs.map(x => `<tr><td>${emEsc(emWhen(x.at))}</td><td class="num">${emEsc(x.changes)}</td><td class="num">${emEsc(x.teams)}</td><td class="num">${emEsc(x.planned)}</td><td class="num">${emEsc(x.sent || 0)}</td><td class="num">${emEsc((x.refused || 0) + (x.failed || 0))}</td><td>${emEsc((x.skipped === 'season-load' ? '' : x.skipped ? (String(x.skipped).indexOf('dormant') === 0 ? 'Waiting for setup, not sent' : 'Off, not sent') : (x.failed ? 'Some failed' : 'Sent')) + (x.note ? (x.skipped === 'season-load' ? '' : ', ') + x.note : ''))}</td></tr>`).join('')
+    || '<tr><td colspan="7" class="tx-note">No runs with changes yet.</td></tr>';
+  const names = Object.fromEntries(st.teams.map(t => [t.id, t.name]));
+  el('em-log').innerHTML = st.log.map(l => `<tr><td>${emEsc(emWhen(l.at))}</td><td>${emEsc(names[l.team_id] || l.team_id)}</td><td>${emEsc(l.domain)}</td><td class="tx-log-text">${emEsc(l.subject)}</td><td>${emEsc(l.outcome)}${l.error ? ' ' + emEsc(l.error) : ''}</td></tr>`).join('')
+    || '<tr><td colspan="5" class="tx-note">No emails yet.</td></tr>';
+  const sel = el('em-team'), keep = sel.value;
+  sel.innerHTML = '<option value="">Any team with a change</option>' + st.teams.map(t => `<option value="${emEsc(t.id)}">${emEsc(t.name)} (${emEsc(t.recipients)})</option>`).join('');
+  if (keep && st.teams.some(t => t.id === keep)) sel.value = keep;
+}
+
+async function loadEmail() {
+  try { EM.status = await emApi('email-status'); renderEmail(EM.status); }
+  catch (e) { el('em-switch').innerHTML = ''; emMsg('err', e.message); }
+}
+
+function sampleHtml(s, label) {
+  // The server built and escaped this email; it is shown in a sandboxed frame (no scripts, no forms).
+  return `<div style="margin-top:12px"><div class="tx-note">${emEsc(label)}</div>
+    <div class="tx-note" style="margin-top:4px">Subject: <strong>${emEsc(s.subject)}</strong></div>
+    <iframe sandbox="" title="Email preview" srcdoc="${emEsc(s.html)}" style="width:100%;height:520px;border:1px solid var(--border);border-radius:8px;margin-top:8px;background:#fff"></iframe>
+    <details style="margin-top:6px"><summary>Plain text version</summary><div class="tx-preview">${emEsc(s.text)}</div></details></div>`;
+}
+
+async function doEmailPreview() {
+  const box = el('em-preview'), team = el('em-team').value;
+  box.innerHTML = '<div class="tx-note" style="margin-top:10px">Checking the schedule…</div>';
+  try {
+    const r = await emApi('email-preview', { team });
+    if (r.wouldSeed) { box.innerHTML = '<div class="tx-note" style="margin-top:10px">No games remembered yet. The first run only records the schedule and sends nothing.</div>'; return; }
+    const p = r.preview || { total: 0, teams: [] };
+    const state = r.enabled ? (r.ready ? 'Emails are on.' : 'Emails are on but waiting for setup, so nothing would really go out.') : 'Emails are off, so nothing would really go out.';
+    let html = `<div class="tx-note" style="margin-top:10px"><strong>${emEsc(r.changes)}</strong> change${r.changes === 1 ? '' : 's'}, <strong>${emEsc(p.total)}</strong> email${p.total === 1 ? '' : 's'} to <strong>${emEsc(p.teams.length)}</strong> team${p.teams.length === 1 ? '' : 's'}. ${emEsc(state)}${p.ignoredNew ? ' ' + emEsc(p.ignoredNew) + ' new games look like a season load and are not emailed (the same as texts).' : ''}</div>`;
+    html += p.teams.map(t => `<div class="tx-note">${emEsc(t.teamName)}: ${emEsc(t.recipients)} people, ${emEsc(t.changes)} change${t.changes === 1 ? '' : 's'}</div>`).join('');
+    if (p.sample && (!team || p.sample.team === team)) html += sampleHtml(p.sample, 'The email ' + p.sample.teamName + ' would get (' + p.sample.recipients + ' people):');
+    else if (r.example && r.example.sample) html += sampleHtml(r.example.sample, 'Nothing is pending for this team. Here is an EXAMPLE of how a change would look, using its next game (made up time, not sent):');
+    else if (team) html += '<div class="tx-note" style="margin-top:8px">Nothing pending for this team, and it has no upcoming game to show an example with.</div>';
+    box.innerHTML = html;
+  } catch (e) { box.innerHTML = ''; emMsg('err', e.message); }
+}
+
+el('em-panel').addEventListener('click', async (ev) => {
+  const b = ev.target.closest && ev.target.closest('#em-toggle');
+  if (!b) return;
+  const on = b.getAttribute('data-em-to') === '1';
+  if (!confirm(on ? 'Turn on schedule change emails to every team?' : 'Turn off schedule change emails?')) return;
+  b.disabled = true;
+  try {
+    const r = await emApi('email-config', { enabled: on });
+    emMsg('ok', 'Schedule change emails are ' + (on ? 'on' : 'off') + '.' + (r.reseeded ? ' Recorded ' + r.reseeded.snapshots + ' games so it starts quiet.' : ''));
+    loadEmail();
+  } catch (e) { emMsg('err', e.message); b.disabled = false; }
+});
+el('em-refresh').addEventListener('click', loadEmail);
+el('em-preview-btn').addEventListener('click', doEmailPreview);
+document.querySelectorAll('.nav-item[data-section="texts"]').forEach(n => n.addEventListener('click', () => { if (emAuth.currentUser) loadEmail(); }));
 </script>
 </body>
 </html>

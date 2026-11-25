@@ -20,6 +20,28 @@
        don't execute. -->
   <script src="/js/dvsl-bracket.js"></script>
   <script src="/js/dvsl-standings.js"></script>
+  <!-- Makeup tracker math (Rules 11-12), same file on admin, captain and public pages. -->
+  <script src="/js/dvsl-makeups.js"></script>
+  <!-- Player of the Week + Records Book math (shared with admin.html) and the
+       home card / Leaders tabs that render it. The UI file is deferred: it
+       reads this page's globals after parsing. -->
+  <script src="/js/dvsl-awards.js"></script>
+  <script src="/js/dvsl-awards-ui.js" defer></script>
+  <!-- Link previews (iMessage, Facebook, Slack, X) -->
+  <meta name="description" content="Delaware Valley Softball League: scores, schedule, standings, stats, Player of the Week and the league records book.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="DVSL Softball">
+  <meta property="og:title" content="DVSL | Delaware Valley Softball League">
+  <meta property="og:description" content="Scores, schedule, standings, stats, Player of the Week and the league records book.">
+  <meta property="og:url" content="https://dvsl.vercel.app/">
+  <meta property="og:image" content="https://dvsl.vercel.app/assets/og-dvsl.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="DVSL league logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DVSL | Delaware Valley Softball League">
+  <meta name="twitter:description" content="Scores, schedule, standings, stats, Player of the Week and the league records book.">
+  <meta name="twitter:image" content="https://dvsl.vercel.app/assets/og-dvsl.jpg">
   <script>
     // SW registration + bottom tab bar + "More" sheet.
     //
@@ -2577,6 +2599,22 @@ tbody td.pts-col,
 thead th.pts-col{font-weight:900;color:var(--navy);font-family:'Barlow Condensed',sans-serif;font-size:22px;letter-spacing:.02em}
 thead th.pts-col{font-size:14px;color:var(--navy)}
 
+/* Forfeits (games.forfeit): a FORFEIT pill stands in for the score, runs are
+   never shown for a forfeit. */
+.ff-pill{display:inline-block;padding:2px 8px;border-radius:5px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;text-transform:uppercase;line-height:1.35;white-space:nowrap;vertical-align:middle}
+/* Playoff race (Rule 20 lines) on the 2026 standings table */
+tr.race-line td{padding:7px 12px!important;background:#f4f6fa;border-top:2px solid var(--navy);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--navy);text-align:left!important}
+tr.race-line.gold td{border-top-color:#C9A227;color:#7a5c00}
+.race-tag{display:inline-block;margin:3px 0 0 6px;padding:1px 7px;border-radius:4px;font-family:'Inter',sans-serif;font-size:11px;font-weight:700;letter-spacing:.01em;line-height:1.5;vertical-align:middle;white-space:nowrap;text-decoration:none}
+.race-tag.clinched{background:#fdf6dc;color:#6b5000;border:1px solid #e4c860}
+.race-tag.out{background:#f1f2f4;color:#4b5160;border:1px solid #d6d9df}
+.race-tag.ff{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.race-tag.seed{background:#eef2f9;color:#002D72;border:1px solid #c9d4ea}
+.race-legend{margin:14px 0 0;padding:12px 14px;border:1px solid rgba(0,45,114,.16);border-left:3px solid var(--navy);border-radius:8px;background:#fff;font-size:12.5px;line-height:1.6;color:rgba(0,0,0,.72)}
+.race-legend b{color:var(--navy)}
+.race-legend p{margin:0}
+.race-legend p+p{margin-top:6px}
+
 /* Points scoring rubric (3/2/1) shown above the standings table so
    readers know what PTS means before scanning the column. */
 .pts-rubric{
@@ -3164,6 +3202,44 @@ thead th.sorted-col .sarrow{opacity:1}
 
   <div class="divider"></div>
 
+  <!-- PLAYER OF THE WEEK — filled by js/dvsl-awards-ui.js (newest completed
+       week, formula in js/dvsl-awards.js, admin overrides in awards/*).
+       Stays hidden until there is a pick. -->
+  <style>
+    #home-potw{background:var(--bg);padding:26px 48px 28px;border-top:4px solid #C9A227}
+    #home-potw .potw-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+    #home-potw .potw-eyebrow{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+    #home-potw .potw-sep{color:#C9A227;margin:0 4px}
+    #home-potw .potw-all{font-size:13px;font-weight:600;color:var(--gold);text-decoration:none;white-space:nowrap}
+    #home-potw .potw-people{display:grid;gap:18px 32px}
+    #home-potw .potw-people.many{grid-template-columns:1fr 1fr}
+    #home-potw .potw-player{display:flex;align-items:center;gap:22px;cursor:pointer;min-width:0;border-radius:10px;-webkit-tap-highlight-color:rgba(0,45,114,.12)}
+    #home-potw .potw-player:focus-visible{outline:3px solid #C9A227;outline-offset:4px}
+    #home-potw .potw-media{position:relative;width:124px;height:124px;flex-shrink:0}
+    #home-potw .potw-logo{width:100%;height:100%;object-fit:contain;display:block;filter:drop-shadow(0 2px 6px rgba(0,0,0,.12))}
+    #home-potw .potw-photo{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover;border:3px solid #C9A227}
+    #home-potw .potw-photo ~ .potw-logo{position:absolute;right:-8px;bottom:-8px;width:54px;height:54px;z-index:1;background:#fff;border-radius:50%;padding:4px}
+    #home-potw .potw-txt{flex:1;min-width:0}
+    #home-potw .potw-name{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(30px,4.4vw,46px);line-height:.95;text-transform:uppercase;color:var(--white);letter-spacing:-.01em}
+    #home-potw .potw-team{font-size:14px;font-weight:600;color:var(--muted);margin-top:4px}
+    #home-potw .potw-line{font-size:16px;font-weight:600;color:var(--white);margin-top:8px}
+    #home-potw .potw-go{flex-shrink:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:.05em;text-transform:uppercase;color:#002D72;background:#C9A227;padding:11px 20px;border-radius:10px}
+    #home-potw .potw-people.many .potw-go{display:none}
+    #home-potw .potw-note{margin-top:14px;padding-left:12px;border-left:3px solid #C9A227;font-size:14px;color:var(--muted);font-style:italic}
+    #home-potw .aw-logo-txt{display:flex;align-items:center;justify-content:center;border-radius:50%;background:#002D72;color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:22px;filter:none}
+    @media (max-width:640px){
+      #home-potw{padding:20px 16px 22px}
+      #home-potw .potw-head{flex-wrap:wrap;margin-bottom:12px}
+      #home-potw .potw-eyebrow{font-size:13px;letter-spacing:.1em}
+      #home-potw .potw-people.many{grid-template-columns:1fr}
+      #home-potw .potw-player{gap:16px}
+      #home-potw .potw-media{width:92px;height:92px}
+      #home-potw .potw-go{display:none}
+      #home-potw .potw-line{font-size:15px}
+    }
+  </style>
+  <section id="home-potw" aria-label="Player of the Week" hidden></section>
+
   <!-- SCHEDULE + STANDINGS (two-column) -->
   <section class="sec" style="background:var(--bg2)">
     <div class="container">
@@ -3224,6 +3300,75 @@ thead th.sorted-col .sarrow{opacity:1}
   <div class="page-header-pad" style="padding:130px 48px 28px;background:var(--bg)">
     <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:clamp(34px,5vw,54px);text-transform:uppercase;line-height:.95">Individual <span style="color:var(--gold)">Leaders</span></h1>
   </div>
+  <!-- Leaders | Player of the Week | Records Book. Switched by
+       js/dvsl-awards-ui.js (window.dvslLeadersTab); deep links #leaders/potw
+       and #leaders/records. -->
+  <style>
+    #lp-tabs{display:flex;gap:0;margin:0 48px 22px;border-bottom:2px solid var(--border);max-width:1104px}
+    #lp-tabs .lp-tab{flex:0 0 auto;background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:10px 18px 12px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+    #lp-tabs .lp-tab.active{color:var(--gold);border-bottom-color:#C9A227}
+    #lp-tabs .lp-tab:focus-visible{outline:2px solid #C9A227;outline-offset:-2px}
+    @media (min-width:1201px){#lp-tabs{margin-left:auto;margin-right:auto;max-width:1104px}}
+    @media (max-width:640px){
+      #lp-tabs{margin:0 14px 16px;overflow-x:auto;scrollbar-width:none}
+      #lp-tabs::-webkit-scrollbar{display:none}
+      #lp-tabs .lp-tab{font-size:15px;padding:10px 12px 11px;letter-spacing:.04em}
+    }
+    #lp-awards-wrap{padding:0 48px 60px;max-width:1200px;margin:0 auto}
+    #lp-awards-wrap .aw-intro{margin:0 0 18px;padding:10px 14px;background:rgba(245,200,66,.1);border-left:3px solid #C9A227;border-radius:6px;font-size:14px;color:var(--muted);line-height:1.5}
+    #lp-awards-wrap .aw-intro strong{color:var(--white)}
+    #lp-awards-wrap .aw-empty{padding:48px 12px;text-align:center;color:var(--muted);font-size:15px}
+    #lp-awards-wrap .aw-season{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;text-transform:uppercase;color:var(--white);margin:8px 0 6px}
+    #lp-awards-wrap .aw-list{list-style:none;margin:0 0 28px;padding:0;border-top:2px solid var(--white)}
+    #lp-awards-wrap .aw-row{display:grid;grid-template-columns:150px 1fr;gap:16px;padding:16px 0;border-bottom:1px solid var(--border)}
+    #lp-awards-wrap .aw-wk{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;text-transform:uppercase;color:var(--gold)}
+    #lp-awards-wrap .aw-dates{display:block;font-size:13px;color:var(--muted)}
+    #lp-awards-wrap .aw-who{display:grid;gap:12px;min-width:0}
+    #lp-awards-wrap .aw-person{display:flex;align-items:center;gap:16px;cursor:pointer;min-width:0;-webkit-tap-highlight-color:rgba(0,45,114,.12)}
+    #lp-awards-wrap .aw-logo{width:64px;height:64px;object-fit:contain;flex-shrink:0}
+    #lp-awards-wrap .aw-ptxt{flex:1;min-width:0}
+    #lp-awards-wrap .aw-name{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:23px;line-height:1.05;text-transform:uppercase;color:var(--white)}
+    #lp-awards-wrap .aw-person:hover .aw-name{color:var(--gold)}
+    #lp-awards-wrap .aw-team{font-size:13px;color:var(--muted)}
+    #lp-awards-wrap .aw-line{font-size:14px;font-weight:600;color:var(--white);margin-top:3px}
+    #lp-awards-wrap .aw-pts{flex-shrink:0;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:30px;line-height:1;color:var(--gold)}
+    #lp-awards-wrap .aw-pts small{display:block;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+    #lp-awards-wrap .aw-tag{justify-self:start;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#7a5d00;background:rgba(201,162,39,.16);border-radius:999px;padding:3px 10px}
+    #lp-awards-wrap .aw-note{padding-left:10px;border-left:3px solid #C9A227;font-size:14px;font-style:italic;color:var(--muted)}
+    #lp-awards-wrap .aw-muted{font-size:15px;color:var(--muted);padding-top:4px}
+    #lp-awards-wrap .aw-logo-txt,#lp-awards-wrap .rb-logo.aw-logo-txt{display:flex;align-items:center;justify-content:center;border-radius:50%;background:#002D72;color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px}
+    #lp-awards-wrap .rb-title{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:26px;text-transform:uppercase;color:var(--white);margin:10px 0 6px}
+    #lp-awards-wrap .rb-table{border-top:2px solid var(--white);margin-bottom:30px}
+    #lp-awards-wrap .rb-row{display:grid;grid-template-columns:170px 96px 1fr;gap:6px 16px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)}
+    #lp-awards-wrap .rb-cat{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+    #lp-awards-wrap .rb-val{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:44px;line-height:1;color:var(--gold)}
+    #lp-awards-wrap .rb-holders{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+    #lp-awards-wrap .rb-holder{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px}
+    #lp-awards-wrap .rb-who{display:inline-flex;align-items:center;gap:10px;cursor:pointer;min-width:0}
+    #lp-awards-wrap .rb-logo{width:40px;height:40px;object-fit:contain;flex-shrink:0}
+    #lp-awards-wrap .rb-name{font-weight:700;font-size:16px;color:var(--white)}
+    #lp-awards-wrap .rb-who:hover .rb-name{color:var(--gold);text-decoration:underline}
+    #lp-awards-wrap .rb-game{background:none;border:0;padding:4px 0;cursor:pointer;font:inherit;font-size:13px;font-weight:600;color:var(--gold);text-decoration:underline;text-underline-offset:2px}
+    #lp-awards-wrap .rb-meta{font-size:13px;color:var(--muted)}
+    #lp-awards-wrap .rb-tie{grid-column:3;font-size:12px;color:var(--muted)}
+    @media (max-width:640px){
+      #lp-awards-wrap{padding:0 14px 80px}
+      #lp-awards-wrap .aw-row{grid-template-columns:1fr;gap:10px;padding:14px 0}
+      #lp-awards-wrap .aw-when{display:flex;align-items:baseline;gap:10px}
+      #lp-awards-wrap .aw-wk,#lp-awards-wrap .aw-dates{display:inline}
+      #lp-awards-wrap .aw-logo{width:56px;height:56px}
+      #lp-awards-wrap .aw-name{font-size:21px}
+      #lp-awards-wrap .rb-row{grid-template-columns:1fr auto;padding:12px 0}
+      #lp-awards-wrap .rb-val{font-size:38px;grid-row:1;grid-column:2}
+      #lp-awards-wrap .rb-cat{grid-row:1;grid-column:1}
+      #lp-awards-wrap .rb-holders,#lp-awards-wrap .rb-tie{grid-column:1 / -1}
+    }
+  </style>
+  <div id="lp-tabs" role="tablist" aria-label="Leaders sections">
+    <button type="button" class="lp-tab active" role="tab" aria-selected="true" data-lp-tab="leaders">Leaders</button>
+    <button type="button" class="lp-tab" role="tab" aria-selected="false" data-lp-tab="potw">Player of the Week</button>
+    <button type="button" class="lp-tab" role="tab" aria-selected="false" data-lp-tab="records">Records Book</button>
+  </div>
   <div class="leaders-page-wrap">
     <div class="stat-filter-bar" id="lp-filters"></div>
     <!-- Same 10-AB min disclaimer as the Stats page. Mirrors the rule so a
@@ -3237,6 +3382,10 @@ thead th.sorted-col .sarrow{opacity:1}
         <tbody id="lp-tbody"></tbody>
       </table>
     </div>
+  </div>
+  <div id="lp-awards-wrap" hidden>
+    <div id="lp-potw" role="tabpanel" aria-label="Player of the Week" hidden><div class="aw-empty">Loading…</div></div>
+    <div id="lp-records" role="tabpanel" aria-label="Records Book" hidden><div class="aw-empty">Loading…</div></div>
   </div>
   <footer class="ft">
     <div class="ft-logo">⬡ DVSL</div>
@@ -3568,6 +3717,23 @@ thead th.sorted-col .sarrow{opacity:1}
       <button class="dn-arrow" onclick="shiftNav(1)">&#8250;</button>
     </div>
   </div>
+  <!-- Postponed games (Rules 11-12): only on the Schedule tab and only when
+       any exist. Filled by renderPpdBlock(). Games docs hold no contact info. -->
+  <style>
+    #ppd-block{max-width:1100px;margin:0 auto;padding:20px 48px 0;background:var(--bg2)}
+    #ppd-block .ppd-box{background:#fff;border:1px solid var(--border);border-top:3px solid var(--gold);border-radius:10px;padding:14px 16px}
+    #ppd-block .ppd-h{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;color:#002D72;margin-bottom:4px}
+    #ppd-block .ppd-sub{font-size:12px;color:var(--muted,#64748b);margin-bottom:6px}
+    #ppd-block .ppd-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--border)}
+    #ppd-block .ppd-logos{display:flex;align-items:center;gap:4px;flex-shrink:0}
+    #ppd-block .ppd-logo{width:46px;height:46px;display:flex;align-items:center;justify-content:center}
+    #ppd-block .ppd-m{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:17px;color:#1a1a1a;line-height:1.1}
+    #ppd-block .ppd-d{font-size:12.5px;color:var(--muted,#64748b);margin-top:2px}
+    #ppd-block .ppd-s{font-size:12.5px;font-weight:700;margin-top:2px}
+    #ppd-block .ppd-s.set{color:#166534}#ppd-block .ppd-s.need{color:#92400e}#ppd-block .ppd-s.over{color:#991b1b}
+    @media(max-width:768px){#ppd-block{padding:16px 12px 0}}
+  </style>
+  <div id="ppd-block" hidden></div>
   <div class="sb-wrap" id="sbWrap" style="padding:24px 48px 80px;max-width:1100px;margin:0 auto;background:var(--bg2)"></div>
   <footer class="ft"><div class="ft-logo">⬡ DVSL</div><div class="ft-copy">© 2026 DVSL</div></footer>
 </div>
@@ -3647,6 +3813,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <tbody id="tbody-2026"></tbody>
     </table>
   </div>
+  <div id="stand-2026-race"></div>
 </div>
 
 <!-- ═══════════ 2025 ═══════════ -->
@@ -3891,6 +4058,40 @@ function jsArg(s) {
 // values in esc()d data-* attributes and a fixed handler reads them back
 // (onclick="openBoxEl(this)"), so no Firestore text is spliced into JS source.
 function _bxNum(v) { return (v === undefined || v === '' || v === 'undefined' || v === 'null') ? undefined : (isNaN(+v) ? v : +v); }
+// Forfeits (Rule 19). games.forfeit = 'away' | 'home' (that side forfeited) |
+// 'double', set in admin; the rules live in js/dvsl-standings.js. A forfeit is
+// a final with NO runs, so wherever a score would show, a FORFEIT pill and
+// W / L stand in. Runs are never invented.
+function gForfeit(g) {
+  if (!g || !g.done) return '';
+  if (window.DVSLStandings && DVSLStandings.forfeitOf) return DVSLStandings.forfeitOf(g);
+  return (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double') ? g.forfeit : '';
+}
+// Winning side of a final: 'away' | 'home' | '' (tie, double forfeit, not final)
+function gWinSide(g) {
+  const f = gForfeit(g);
+  if (f) return f === 'double' ? '' : (f === 'away' ? 'home' : 'away');
+  if (!g || !g.done || g.as == null || g.hs == null) return '';
+  return +g.as > +g.hs ? 'away' : (+g.hs > +g.as ? 'home' : '');
+}
+// 'W' | 'L' | 'T' for the team (short code as in SCHEDULE_PREVIEW) in a final, else ''
+function gTeamResult(g, short) {
+  if (!g || !g.done || g.ppd) return '';
+  const side = g.home === short ? 'home' : (g.away === short ? 'away' : '');
+  if (!side) return '';
+  const f = gForfeit(g);
+  if (!f && (g.as == null || g.hs == null)) return '';
+  const w = gWinSide(g);
+  return w ? (w === side ? 'W' : 'L') : (f ? 'L' : 'T');
+}
+function ffPill() { return '<span class="ff-pill">Forfeit</span>'; }
+function ffLetter(g, side) { return gWinSide(g) === side ? 'W' : 'L'; }
+// "BSMC forfeited" | "Double forfeit" (labels are plain text; caller escapes)
+function ffNote(g, awayLabel, homeLabel) {
+  const f = gForfeit(g);
+  if (f === 'double') return 'Double forfeit';
+  return f ? ((f === 'away' ? awayLabel : homeLabel) + ' forfeited') : '';
+}
 function boxDataAttrs(away, home, as, hs, field, date, id) {
   return 'data-bx-away="' + esc(away) + '" data-bx-home="' + esc(home) + '" data-bx-as="' + esc(as) +
     '" data-bx-hs="' + esc(hs) + '" data-bx-field="' + esc(field || '') + '" data-bx-date="' + esc(date || '') +
@@ -4670,6 +4871,8 @@ async function loadAllData() {
       window._dvslDebug={boxScoreCount:boxScores.length,finalBSCount:0,playerCount:PLAYERS.length};
     }
 
+    window._dvslGamesRaw = games; // postponed games block (renderPpdBlock)
+    if (typeof renderPpdBlock === 'function') { try { renderPpdBlock(); } catch (_) {} }
     // Map games -> SCHEDULE_PREVIEW format, sort by wk then time
     SCHEDULE_PREVIEW = games
       .map(g => ({
@@ -4678,7 +4881,7 @@ async function loadAllData() {
         field: g.field, addr: g.addr||'',
         away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
         home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
-        as: g.away_score, hs: g.home_score, done: g.done||false,
+        as: g.away_score, hs: g.home_score, done: g.done||false, forfeit: g.forfeit||'',
         // Score conflict surfaces a "⚠ Under review" badge in the schedule
         // rows so fans know the score may change once admin resolves the
         // disagreement. Without this, a disputed score looks final.
@@ -4794,13 +4997,15 @@ async function refreshVolatileData() {
 
     // Rebuild SCHEDULE_PREVIEW
     const freshGames = gamesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    window._dvslGamesRaw = freshGames; // postponed games block (renderPpdBlock)
+    if (typeof renderPpdBlock === 'function') { try { renderPpdBlock(); } catch (_) {} }
     SCHEDULE_PREVIEW = freshGames.map(g => ({
       id: g.id,
       wk: g.wk, date: normGameDate(g.date), rawDate: g.date||'', date_iso: g.date_iso||'', day: g.day, time: g.time,
       field: g.field, addr: g.addr||'',
       away: TEAMS.find(t=>t.id===g.away)?.short || (g.away||'').toUpperCase(),
       home: TEAMS.find(t=>t.id===g.home)?.short || (g.home||'').toUpperCase(),
-      as: g.away_score, hs: g.home_score, done: g.done||false,
+      as: g.away_score, hs: g.home_score, done: g.done||false, forfeit: g.forfeit||'',
       conflict: !!g.score_conflict,
       ppd: !!(g.ppd || g.rained_out), ppdResched: g.ppd_rescheduled_to || '',
       live: (g.live||false) && (() => {
@@ -5709,6 +5914,8 @@ function goPage(name,extra,skipHistory){
     if(!PLAYERS.length && window._dataPromise) {
       window._dataPromise.then(()=>{ try { buildLeadersPage(); } catch(e){} });
     }
+    // Leaders | Player of the Week | Records Book tabs (js/dvsl-awards-ui.js)
+    try { if (window.dvslLeadersTab) window.dvslLeadersTab(extra || 'leaders', true); } catch(e){}
   }
   if(name==='rules'){
     _lazyLoadRules(extra);
@@ -6741,6 +6948,12 @@ function loadTeam(teamId){
   document.getElementById('team-div-label').textContent=`2026 Season`;
   document.getElementById('team-big-name').innerHTML=esc(t.name);
   document.getElementById('team-rec').innerHTML=`<strong>${esc(t.w)}–${esc(t.l)}</strong>&nbsp;·&nbsp;${t.pct.toFixed(3).replace(/^0\./,'.')}&nbsp;PCT&nbsp;·&nbsp;${esc(t.rs)} RS&nbsp;·&nbsp;${esc(t.ra)} RA&nbsp;·&nbsp;<span class="${String(t.streak)[0]==='W'?'badge-w':'badge-l'}">${esc(t.streak)}</span>`;
+  // Forfeits charged to this team (Rule 24: two or more = no playoff spot).
+  try {
+    const _ffN=window.DVSLStandings?((DVSLStandings.forfeitTally(TEAMS,SCHEDULE_PREVIEW)[t.id]||{}).forfeits||0):0;
+    if(_ffN) document.getElementById('team-rec').insertAdjacentHTML('beforeend',
+      `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">${ffPill()}<span style="font-size:13px;font-weight:700;color:#991b1b">${esc(_ffN)} forfeit${_ffN>1?'s':''} this season${_ffN>=DVSLStandings.FORFEITS_TO_LOSE_SPOT?' · Playoff spot forfeited (Rule 24)':''}</span></div>`);
+  } catch(_) {}
   document.getElementById('team-blob').style.background=`linear-gradient(135deg,${t.color},transparent 60%)`;
   // Set team hero logo
   const heroLogo=document.getElementById('team-hero-logo');
@@ -6906,8 +7119,9 @@ function buildSchedRows(t, tgames){
     const isH=g.home===t.short;
     const opp=isH?g.away:g.home;
     const myS=isH?g.hs:g.as, oppS=isH?g.as:g.hs;
-    const won=g.done&&myS>oppS;
-    const tied=g.done&&myS===oppS;
+    const _ff=gForfeit(g);
+    const won=_ff?gWinSide(g)===(isH?'home':'away'):(g.done&&myS>oppS);
+    const tied=!_ff&&g.done&&myS===oppS;
     const oppTeam=getTeamByShort(opp);
     const oppColor=esc(oppTeam?.color||'#9ca3af');
     const logo=oppTeam?.id&&LOGO_TEAMS.has(oppTeam.id)
@@ -6920,7 +7134,7 @@ function buildSchedRows(t, tgames){
     const scoreCol=g.ppd
       ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;line-height:1;color:#92400e">PPD</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#92400e;margin-top:2px">🌧 ${esc(g.ppdResched||'TBD')}</div></div>`
       :g.done
-      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${esc(myS)}–${esc(oppS)}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(tied?'#6b7280':(won?'#22c55e':'#ef4444'))};margin-top:2px">${g.conflict?'⚠ UNDER REVIEW':(tied?'TIE':(won?'WIN':'LOSS'))}</div></div>`
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${_ff?ffPill():`${esc(myS)}–${esc(oppS)}`}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(tied?'#6b7280':(won?'#22c55e':'#ef4444'))};margin-top:2px">${g.conflict?'⚠ UNDER REVIEW':(tied?'TIE':(won?'WIN':'LOSS'))}</div></div>`
       :'';
     const rowClick=(g.done&&!g.ppd)?`${boxDataAttrs(g.away,g.home,g.as,g.hs,g.field,g.date,g.id)} onclick="openBoxEl(this)"`:'' ;
     const rowBg=i%2===0?'#fff':'#fafafa';
@@ -7023,8 +7237,8 @@ function renderTeamTab(tab){
     </table></div>`;
     // ── Desktop split: append schedule panel on the right ──
     const _sg=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short).slice().sort(_teamSchedSort);
-    const _sw=_sg.filter(g=>g.done&&!g.ppd&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
-    const _sl=_sg.filter(g=>g.done&&!g.ppd&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
+    const _sw=_sg.filter(g=>gTeamResult(g,t.short)==='W').length;
+    const _sl=_sg.filter(g=>gTeamResult(g,t.short)==='L').length;
     body.innerHTML=`<div class="team-roster-split"><div class="trs-left">${body.innerHTML}</div><div class="trs-right">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">2026 Schedule</div>
@@ -7034,9 +7248,9 @@ function renderTeamTab(tab){
     </div></div>`;
   } else if(tab==='schedule'){
     const tgames=SCHEDULE_PREVIEW.filter(g=>g.away===t.short||g.home===t.short).slice().sort(_teamSchedSort);
-    const wins=tgames.filter(g=>g.done&&!g.ppd&&((g.home===t.short&&g.hs>g.as)||(g.away===t.short&&g.as>g.hs))).length;
-    const losses=tgames.filter(g=>g.done&&!g.ppd&&((g.home===t.short&&g.hs<g.as)||(g.away===t.short&&g.as<g.hs))).length;
-    const ties=tgames.filter(g=>g.done&&!g.ppd&&g.hs===g.as).length;
+    const wins=tgames.filter(g=>gTeamResult(g,t.short)==='W').length;
+    const losses=tgames.filter(g=>gTeamResult(g,t.short)==='L').length;
+    const ties=tgames.filter(g=>gTeamResult(g,t.short)==='T').length;
     body.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;letter-spacing:.04em;color:#1a1a1a">2026 Schedule</div>
@@ -7053,8 +7267,9 @@ function renderTeamTab(tab){
       const isH=g.home===t.short;
       const opp=isH?g.away:g.home;
       const myS=isH?g.hs:g.as, oppS=isH?g.as:g.hs;
-      const won=myS>oppS;
-      const tied=myS===oppS;
+      const _ff=gForfeit(g);
+      const won=_ff?gWinSide(g)===(isH?'home':'away'):myS>oppS;
+      const tied=!_ff&&myS===oppS;
       if(tied) ti++; else if(won) w++; else l++;
       const oppTeam=getTeamByShort(opp);
       const logo=oppTeam?.id&&LOGO_TEAMS.has(oppTeam.id)
@@ -7070,7 +7285,7 @@ function renderTeamTab(tab){
         <td style="padding:10px 8px">${haLabel}</td>
         <td style="padding:10px 8px;white-space:nowrap">${logo}<span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:#1a1a1a;text-transform:uppercase">${esc(oppTeam?.short||opp)}</span></td>
         <td style="padding:10px 12px;text-align:center"><span style="display:inline-block;padding:3px 10px;border-radius:5px;background:${tied?'rgba(107,114,128,.12)':(won?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)')};color:${tied?'#6b7280':(won?'#16a34a':'#dc2626')};font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.06em">${tied?'T':(won?'W':'L')}</span></td>
-        <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#1a1a1a;white-space:nowrap">${esc(myS)}–${esc(oppS)}</td>
+        <td style="padding:10px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:#1a1a1a;white-space:nowrap">${_ff?ffPill():`${esc(myS)}–${esc(oppS)}`}</td>
         <td style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap">${w}-${l}${ti?'-'+ti:''}</td>
         <td style="padding:10px 12px;font-size:11px;color:var(--muted);white-space:nowrap">${g.field?fieldLink(g.field, g.addr):''}</td>
       </tr>`;
@@ -7257,7 +7472,7 @@ function downloadCalendar(teamShort){
 
     const summary=`DVSL: ${t.name} ${isH?'vs':'@'} ${oppName}`;
     const desc=g.done
-      ? `Result: ${isH?g.hs:g.as}–${isH?g.as:g.hs} · Week ${g.wk}`
+      ? (gForfeit(g) ? `Result: ${ffNote(g, g.away, g.home)} · Week ${g.wk}` : `Result: ${isH?g.hs:g.as}–${isH?g.as:g.hs} · Week ${g.wk}`)
       : `Week ${g.wk} · Game time: ${g.time}`;
 
     lines.push('BEGIN:VEVENT');
@@ -8074,14 +8289,15 @@ function buildTicker2(){
     const ht = getTeamByShort(g.home);
     const aRec = at ? '('+esc(at.w)+'-'+esc(at.l)+')' : '';
     const hRec = ht ? '('+esc(ht.w)+'-'+esc(ht.l)+')' : '';
-    const done = g.done && g.as !== null && g.hs !== null;
-    const aWin = done && g.as > g.hs;
-    const hWin = done && g.hs > g.as;
+    const _ff = gForfeit(g);
+    const done = !!_ff || (g.done && g.as !== null && g.hs !== null);
+    const aWin = _ff ? gWinSide(g) === 'away' : (done && g.as > g.hs);
+    const hWin = _ff ? gWinSide(g) === 'home' : (done && g.hs > g.as);
     // PPD takes precedence over Final/LIVE/datetime so postponed games are
     // immediately obvious (red PPD badge + reschedule target if known).
     const status = g.ppd
       ? '<span style="color:#ff4d4d;font-weight:900;letter-spacing:.05em">PPD'+(g.ppdResched?' · → '+esc(g.ppdResched):'')+'</span>'
-      : (done ? 'Final' : (g.live ? '<span class="live-badge">🔴 LIVE</span>' : (esc(g.date)+' · '+esc(g.time))));
+      : (_ff ? ffPill() : done ? 'Final' : (g.live ? '<span class="live-badge">🔴 LIVE</span>' : (esc(g.date)+' · '+esc(g.time))));
     const field = g.field||'';
     const timeStr = g.time||'TBD';
     const awayLabel = esc(isMob ? getMobileAbbr(g.away) : g.away);
@@ -8100,12 +8316,12 @@ function buildTicker2(){
       +'<div class="st-row">'
         +'<span class="st-abbr'+(aWin?' winner':done?' loser':'')+'" style="color:#fff">'+awayLabel+'</span>'
         +'<span class="st-rec">'+aRec+'</span>'
-        +(done?'<span class="st-score'+(aWin?' winner':' loser')+'">'+esc(g.as)+'</span>':'')
+        +(done?'<span class="st-score'+(aWin?' winner':' loser')+'">'+esc(_ff?ffLetter(g,'away'):g.as)+'</span>':'')
       +'</div>'
       +'<div class="st-row">'
         +'<span class="st-abbr'+(hWin?' winner':done?' loser':'')+'" style="color:#fff">'+homeLabel+'</span>'
         +'<span class="st-rec">'+hRec+'</span>'
-        +(done?'<span class="st-score'+(hWin?' winner':' loser')+'">'+esc(g.hs)+'</span>':'')
+        +(done?'<span class="st-score'+(hWin?' winner':' loser')+'">'+esc(_ff?ffLetter(g,'home'):g.hs)+'</span>':'')
       +'</div>'
       +'</div>'
       +'</div>';
@@ -8609,6 +8825,32 @@ function shiftNav(d){
   if(ni<0||ni>=wks.length)return;
   weekOffset=ni;buildScoresNav();renderScores();
 }
+// Postponed games block on the Schedule tab (Rules 11-12). Math in
+// js/dvsl-makeups.js. Public: team names, dates and fields only.
+function renderPpdBlock(){
+  const el=document.getElementById('ppd-block');
+  const M=window.DVSLMakeups, games=window._dvslGamesRaw;
+  if(!el) return;
+  if(view!=='schedule'||!M||!Array.isArray(games)){ el.hidden=true; return; }
+  const now=Date.now();
+  const open=M.trackMakeups(games,now).open.filter(e=>!M.isStale(e,now));
+  if(!open.length){ el.hidden=true; el.innerHTML=''; return; }
+  const nm=(id)=>{ const t=TEAMS.find(x=>x.id===id); return t?(t.short||t.name):String(id||'').toUpperCase(); };
+  el.innerHTML=`<div class="ppd-box"><div class="ppd-h">Postponed games</div>
+    <div class="ppd-sub">A makeup date is set within 48 hours and the game is played within 21 days, or the commissioners assign it (Rules 11 and 12).</div>
+    ${open.map(e=>{
+      const mk=e.makeup&&!e.makeup.ppd?e.makeup:null;
+      let st, cls;
+      if(e.status==='date_set'){ cls='set'; st=mk?`Makeup ${M.fmtYmd(mk.date_iso)}${mk.time?', '+mk.time:''}${mk.field?', '+mk.field:''}`:`Makeup ${e.note}`; }
+      else if(e.status==='overdue'){ cls='over'; st='Commissioners assigning a makeup date'; }
+      else { cls='need'; st=`Makeup date needed by ${M.fmtDay(e.pickBy)}`; }
+      return `<div class="ppd-row"><div class="ppd-logos"><span class="ppd-logo">${teamLogoEl(e.away,nm(e.away))}</span><span class="ppd-logo">${teamLogoEl(e.home,nm(e.home))}</span></div>
+        <div style="min-width:0"><div class="ppd-m">${esc(nm(e.away))} @ ${esc(nm(e.home))}</div>
+        <div class="ppd-d">Originally ${esc(M.fmtYmd(e.origDate))}${e.origTime?' '+esc(e.origTime):''}. Play by ${esc(M.fmtYmd(e.playBy))}.</div>
+        <div class="ppd-s ${cls}">${esc(st)}</div></div></div>`;
+    }).join('')}</div>`;
+  el.hidden=false;
+}
 function setView(v){
   document.title = v==='schedule' ? 'Schedule — DVSL Softball' : 'Scores — DVSL Softball';
   weekOffset=-1; // reset to auto-select correct week for each view
@@ -8616,6 +8858,7 @@ function setView(v){
   // auto-land on today's date (or the next upcoming day).
   if(v==='schedule') selectedDay=null;
   view=v;
+  try{ renderPpdBlock(); }catch(_){}
   // Sync URL so the hash reflects which tab is active
   try {
     const wantHash = v === 'schedule' ? '#schedule' : '#scores';
@@ -8726,13 +8969,16 @@ function scheduleBlock(g, isNext){
   const hShort=htm?.short||g.home;
 
   if(g.done && !g.ppd){
-    const aw=g.as>g.hs;
+    // Forfeit: no runs. W / L letters and a FORFEIT pill stand in for the score.
+    const _ff=gForfeit(g);
+    const aw=_ff?gWinSide(g)==='away':g.as>g.hs;
+    const hw=_ff?gWinSide(g)==='home':!aw;
     // The card and its buttons each carry the game in data-* attributes;
     // openBoxEl(this) reads them back (no Firestore text inside the handler).
     const _bsData=boxDataAttrs(g.away,g.home,g.as,g.hs,g.field,g.date,g.id);
     // Notable play headline — pull from recap if available
     const recap=RECAPS.find(r=>r.away===g.away&&r.home===g.home);
-    const headline=recap?.headline||(()=>{
+    const headline=_ff?ffNote(g,aShort,hShort):recap?.headline||(()=>{
       // Auto-generate a simple headline from the score
       const winner=aw?aShort:hShort;
       const diff=Math.abs(g.as-g.hs);
@@ -8744,7 +8990,7 @@ function scheduleBlock(g, isNext){
     const hLogo=htm?.id&&LOGO_TEAMS.has(htm.id)?`<img src="logos/${esc(htm.id)}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${hc}"></span>`;
     return `<div class="gc-card" ${_bsData} onclick="openBoxEl(this)">
       <div class="gc-card-hdr">
-        <span class="gc-card-status">${g.live?'<span class="live-badge">🔴 LIVE</span>':(g.conflict?'<span style="color:#92400e;font-weight:700">⚠ UNDER REVIEW</span>':'FINAL')}</span>
+        <span class="gc-card-status">${_ff?ffPill():g.live?'<span class="live-badge">🔴 LIVE</span>':(g.conflict?'<span style="color:#92400e;font-weight:700">⚠ UNDER REVIEW</span>':'FINAL')}</span>
         <span class="gc-card-date">${esc(g.date||'')}</span>
         ${headline?`<span class="gc-card-headline">${esc(String(headline).toUpperCase())}</span>`:''}
       </div>
@@ -8755,15 +9001,15 @@ function scheduleBlock(g, isNext){
             <span class="gc-team-name${aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${jsArg(atm?.id||g.away)}')">${esc(aShort)}</span>
             ${aRec?`<span class="gc-record">${aRec}</span>`:''}
           </div>
-          <div class="gc-score${aw?' gc-score-win':' gc-score-lose'}"> ${esc(g.as)}</div>
+          <div class="gc-score${aw?' gc-score-win':' gc-score-lose'}"> ${esc(_ff?ffLetter(g,'away'):g.as)}</div>
         </div>
         <div class="gc-team-row">
           <div class="gc-logo-wrap">${hLogo}</div>
           <div class="gc-team-info">
-            <span class="gc-team-name${!aw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${jsArg(htm?.id||g.home)}')">${esc(hShort)}</span>
+            <span class="gc-team-name${hw?'':' gc-loser'}" onclick="event.stopPropagation();goTeam('${jsArg(htm?.id||g.home)}')">${esc(hShort)}</span>
             ${hRec?`<span class="gc-record">${hRec}</span>`:''}
           </div>
-          <div class="gc-score${!aw?' gc-score-win':' gc-score-lose'}"> ${esc(g.hs)}</div>
+          <div class="gc-score${hw?' gc-score-win':' gc-score-lose'}"> ${esc(_ff?ffLetter(g,'home'):g.hs)}</div>
         </div>
       </div>
       <div class="gc-card-footer">
@@ -9047,6 +9293,41 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const col=esc(tm?.color||'#9ca3af');
     return `<span style="display:inline-block;width:40px;height:40px;border-radius:50%;background:${col};margin-bottom:4px"></span>`;
   };
+
+  // Forfeit (Rule 19): no runs and no box score, so the pop-up says who
+  // forfeited instead of showing a score.
+  const _ffG = gameId ? SCHEDULE_PREVIEW.find(x => x.id === gameId) : null;
+  if (_ffG && gForfeit(_ffG)) {
+    const _win = gWinSide(_ffG);
+    const _aN = atm?.name || away, _hN = htm?.name || home;
+    const _res = side => `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:15px;letter-spacing:.06em;text-transform:uppercase;margin-top:4px;color:${_win === side ? '#166534' : '#991b1b'}">${_win === side ? 'Win' : 'Forfeit'}</div>`;
+    document.getElementById('scPopContent').innerHTML = `
+    <div class="pop-hd" style="background:#fff">
+      <div class="pop-matchup">
+        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${jsArg(away)}')">
+          ${mkHdrLogo(atm,away)}
+          <div class="pop-abbr" style="color:${ac};font-size:18px;margin-top:2px">${esc(away)}</div>
+          <div class="pop-role-lbl">Away</div>${_res('away')}
+        </div>
+        <div class="pop-sc-mid">
+          <div style="transform:scale(1.35);margin:8px 0">${ffPill()}</div>
+          <div class="pop-badge">Final</div>
+        </div>
+        <div class="pop-team" style="cursor:pointer" onclick="goTeam('${jsArg(home)}')">
+          ${mkHdrLogo(htm,home)}
+          <div class="pop-abbr" style="color:${hc};font-size:18px;margin-top:2px">${esc(home)}</div>
+          <div class="pop-role-lbl">Home</div>${_res('home')}
+        </div>
+      </div>
+      <div class="pop-meta"><span>${esc(date)}</span><span>${fieldLink(field)}</span></div>
+    </div>
+    <div class="pop-body" style="padding:22px 24px;text-align:center;font-size:14px;line-height:1.6;color:#374151">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;text-transform:uppercase;color:#991b1b;margin-bottom:6px">${esc(ffNote(_ffG, _aN, _hN))}</div>
+      <div>${_win ? `${esc(_win === 'away' ? _aN : _hN)} gets the win and 3 points (Rule 19).` : 'Neither team gets points (Rule 19).'} No runs are recorded for a forfeit, so there is no box score.</div>
+    </div>`;
+    openScPop();
+    return;
+  }
 
   // Shared header HTML with logos
   const hdrHtml=`
@@ -9518,8 +9799,8 @@ function generateGamePreview(atm,htm,g){
 
   // Head-to-head
   const h2h=SCHEDULE_PREVIEW.filter(p=>p.done&&((p.away===g.away&&p.home===g.home)||(p.away===g.home&&p.home===g.away)));
-  const aWins=h2h.filter(p=>(p.away===g.away&&p.as>p.hs)||(p.home===g.away&&p.hs>p.as)).length;
-  const hWins=h2h.filter(p=>(p.away===g.home&&p.as>p.hs)||(p.home===g.home&&p.hs>p.as)).length;
+  const aWins=h2h.filter(p=>gTeamResult(p,g.away)==='W').length;
+  const hWins=h2h.filter(p=>gTeamResult(p,g.home)==='W').length;
 
   // Streaks
   const pStrk=s=>{if(!s||s==='—')return null;const m=s.match(/^([WL])(\d+)$/);return m?{type:m[1],n:+m[2]}:null;};
@@ -10581,9 +10862,24 @@ function buildStandTable(yr, sortKey, sortDir){
     const _tShort=r._short||_atm?.short||'';
     const _tId=r._id||_atm?.id||'';
     const _tColor=r._color||_atm?.color||'';
-    return `<tr class="${rowCls}">
+    // Playoff race (2026 rows carry _race from DVSLStandings.playoffRace):
+    // a Rule 20 line above the first team of each band on the default PTS
+    // sort, and word tags under the team name.
+    const _rc=r._race, _rs=_race2026&&_race2026.state;
+    let _line='';
+    if(_rc&&_rc.seed&&_rs&&_rs!=='preseason'&&sortKey==='pts'&&sortDir==='desc'){
+      const _b=_race2026.bands.find(b=>b.from===_rc.seed);
+      if(_b) _line=`<tr class="race-line${_b.key==='gold'?' gold':''}"><td colspan="${cols.length+2}">${esc(_b.label)}${_b.from===_b.to?` · ${_b.from}`:` · ${_b.from} to ${_b.to}`}</td></tr>`;
+    }
+    const _tags=(_rc&&_rs&&_rs!=='preseason')?[
+      _rc.spotForfeited?'<span class="race-tag ff">Playoff spot forfeited (Rule 24)</span>':'',
+      (_rs==='live'&&_rc.clinchedGold)?'<span class="race-tag clinched">Clinched Gold</span>':'',
+      (_rs==='live'&&_rc.eliminatedGold)?'<span class="race-tag out">Eliminated from Gold</span>':'',
+      (_rs==='final'&&_race2026.skipped&&_rc.seed)?`<span class="race-tag seed">Seed ${esc(_rc.seed)}</span>`:''
+    ].join(''):'';
+    return `${_line}<tr class="${rowCls}">
       <td class="rank-cell">${medal(i)||i+1}</td>
-      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" ${_tId?`onclick="goPage('team','${jsArg(_tId)}')"`:`data-tname="${esc(r.t)}" onclick="goTeamByName(this.dataset.tname)"`} title="View ${esc(r.t)} team page">${(()=>{const lid=getLogoId(r.t,_tId);return lid?`<span style="display:inline-block;width:42px;height:42px;overflow:hidden;margin-right:8px;flex-shrink:0;vertical-align:middle"><img src="logos/${esc(lid)}.png" style="width:100%;height:100%;object-fit:contain;display:block" loading="lazy"></span>`:_tColor?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${esc(_tColor)};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''})()}${_tShort?`<span class="stand-name-full" style="vertical-align:middle">${esc(r.t)}</span><span class="stand-name-abbr" style="vertical-align:middle">${esc(_tShort)}</span>`:`<span style="vertical-align:middle">${esc(r.t)}</span>`}</td>
+      <td class="team-name" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px" ${_tId?`onclick="goPage('team','${jsArg(_tId)}')"`:`data-tname="${esc(r.t)}" onclick="goTeamByName(this.dataset.tname)"`} title="View ${esc(r.t)} team page">${(()=>{const lid=getLogoId(r.t,_tId);return lid?`<span style="display:inline-block;width:42px;height:42px;overflow:hidden;margin-right:8px;flex-shrink:0;vertical-align:middle"><img src="logos/${esc(lid)}.png" style="width:100%;height:100%;object-fit:contain;display:block" loading="lazy"></span>`:_tColor?`<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${esc(_tColor)};margin-right:7px;flex-shrink:0;vertical-align:middle"></span>`:''})()}${_tShort?`<span class="stand-name-full" style="vertical-align:middle">${esc(r.t)}</span><span class="stand-name-abbr" style="vertical-align:middle">${esc(_tShort)}</span>`:`<span style="vertical-align:middle">${esc(r.t)}</span>`}${_tags?`<div style="margin-top:2px">${_tags}</div>`:''}</td>
       <td class="num">${esc(r.w)}</td><td class="num">${esc(r.l)}</td><td class="num">${esc(r.ti)}</td>
       <td class="num pts-col">${esc(r.pts)}</td>
       <td class="num">${pctBar}</td>
@@ -10595,6 +10891,31 @@ function buildStandTable(yr, sortKey, sortDir){
   }).join('');
 }
 
+// Playoff picture for the 2026 table (DVSLStandings.playoffRace), read by
+// buildStandTable for the Rule 20 lines and the team tags.
+var _race2026=null;
+function _raceRange(b){ return b.from===b.to?String(b.from):(b.to===b.from+1?`${b.from} and ${b.to}`:`${b.from} to ${b.to}`); }
+function _raceLegendHtml(race, anyForfeit){
+  if(!race||race.state==='preseason'||!race.bands.length) return '';
+  const say={   // [plural, one team]
+    'gold':['go straight to Gold','goes straight to Gold'],
+    'gold-playin':['play one game for the last 2 Gold seeds and the first 2 Silver seeds','plays one game for the last Gold seed'],
+    'silver':['go to Silver','goes to Silver'],
+    'silver-playin':['play for the last 2 Silver seeds','takes the last Silver seed'],
+    'out':['are eliminated','is eliminated']
+  };
+  const lines=race.bands.map(b=>`${_raceRange(b)} ${say[b.key][b.from===b.to?1:0]}`).join('. ')+'.';
+  const p=[`<p><b>Playoff lines (Rule 20)</b> for the ${race.eligible} teams in the race: ${lines}</p>`];
+  p.push(race.state==='final'
+    ? '<p>The regular season is over, so these are the final seeds.</p>'
+    : '<p><b>Clinched Gold</b> means a top 6 finish is certain even if every tie goes against the team. <b>Eliminated from Gold</b> means the team can no longer finish in the top 10. Both count every game still on the schedule.</p>');
+  if(race.skipped) p.push('<p>A team with two or more forfeits loses its playoff spot (Rule 24) and is skipped, so the teams below it move up a seed.</p>');
+  if(anyForfeit){
+    const flp=(window.DVSLStandings&&DVSLStandings.FORFEIT_LOSS_POINTS)||0;
+    p.push(`<p><b>Forfeits</b> count as a win and 3 points for the other team and a loss worth ${flp} point${flp===1?'':'s'} for the team that forfeited. A double forfeit is a loss worth 0 points for both. Forfeits add no runs.</p>`);
+  }
+  return `<div class="race-legend" role="note" aria-label="Playoff lines">${p.join('')}</div>`;
+}
 function buildStand2026(){
   // Order = league rulebook (points, head to head, strength of schedule)
   // via the shared DVSLStandings.rank, so this page, the home sidebar, the
@@ -10602,6 +10923,13 @@ function buildStand2026(){
   const _act26=[...TEAMS].filter(t=>t.active!==false);
   const teams=window.DVSLStandings?DVSLStandings.rank(_act26,SCHEDULE_PREVIEW):_act26.sort((a,b)=>b.pct-a.pct||b.w-a.w||(b.rs-b.ra)-(a.rs-a.ra));
   if(!teams.length) return;
+  // Forfeit losses are worth FORFEIT_LOSS_POINTS, not 1, so PTS comes from
+  // the shared module with the forfeit tally (same numbers when there are none).
+  const _ffT=window.DVSLStandings?DVSLStandings.forfeitTally(_act26,SCHEDULE_PREVIEW):{};
+  _race2026=null;
+  try { if(window.DVSLStandings&&DVSLStandings.playoffRace) _race2026=DVSLStandings.playoffRace(teams,SCHEDULE_PREVIEW); } catch(e){ console.warn('playoffRace failed',e); }
+  const _raceEl=document.getElementById('stand-2026-race');
+  if(_raceEl) _raceEl.innerHTML=_raceLegendHtml(_race2026, Object.values(_ffT).some(x=>x&&x.forfeits));
   const started=teams.some(t=>t.w>0||t.l>0);
   const leader=teams[0];
 
@@ -10624,6 +10952,8 @@ function buildStand2026(){
     const avg=gp>0?(t.rs||0)/gp:0;
     return {
       t:t.name, _id:t.id, _color:t.color, _short:t.short||'', _rank:i,
+      _race:_race2026?_race2026.rows[t.id]:null,
+      pts:window.DVSLStandings?DVSLStandings.points(t,_ffT[t.id]):undefined,
       w:t.w||0, l:t.l||0, ti:t.ti||0,
       pct:t.pct||0, avg, gb,
       pf:t.rs||0, pa:t.ra||0,

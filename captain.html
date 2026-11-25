@@ -873,6 +873,8 @@ select.form-input{cursor:pointer}
 
     <!-- MY TEAM -->
     <div class="section active" id="sec-team">
+      <!-- Makeup date needed (Rule 12). Filled by renderMakeupAlert; empty otherwise. -->
+      <div id="capt-makeup-alert"></div>
       <div class="welcome-card">
         <h2 id="welcome-team">Welcome, Captain</h2>
         <p>Manage your team, view your schedule, and submit game scores.</p>
@@ -1328,6 +1330,8 @@ select.form-input{cursor:pointer}
      before the module below runs. -->
 <script src="/js/dvsl-bracket.js"></script>
 <script src="/js/dvsl-standings.js"></script>
+<!-- Makeup tracker math (Rules 11-12): the "needs a makeup date" notice. -->
+<script src="/js/dvsl-makeups.js"></script>
 
 <script type="module">
 // ═══════════════════════════════════════════════════════════════════
@@ -1906,10 +1910,22 @@ async function recalcStandingsFromAllGames() {
     // standings page reads, and sort chronologically (date_iso) so streaks
     // are correct even with makeup games.
     const _dk = g => (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) ? g.date_iso : String(g.wk||0).padStart(4,'0');
+    // Forfeits (games.forfeit 'away'|'home'|'double', set in admin) have no
+    // scores: the forfeiting side takes an L (both on a double), the other a
+    // W, and no runs count. Same rule as js/dvsl-standings.js.
+    const _ffOf = g => (g && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double')) ? g.forfeit : '';
     const doneGames = gamesSnap.docs.map(d => d.data())
-      .filter(g => !g.ppd && !g.rained_out && g.away_score != null && g.home_score != null)
+      .filter(g => !g.ppd && !g.rained_out && (_ffOf(g) || (g.away_score != null && g.home_score != null)))
       .sort((a,b) => _dk(a).localeCompare(_dk(b)));
     doneGames.forEach(g => {
+      const _ff = _ffOf(g);
+      if (_ff) {
+        [['away','home'],['home','away']].forEach(([me, opp]) => {
+          const s = stats[g[me]]; if (!s) return;
+          if (_ff === opp) { s.w++; s.results.push('W'); } else { s.l++; s.results.push('L'); }
+        });
+        return;
+      }
       const as = g.away_score, hs = g.home_score;
       if (stats[g.away]) {
         const s = stats[g.away]; s.rs += as; s.ra += hs;
@@ -3621,9 +3637,38 @@ window.captRestorePlayer = async function(playerId) {
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// MAKEUP DATE NEEDED (Rules 11-12, Builder M). Top of the My Team view when
+// one of this team's postponed games has no makeup date yet. The math is
+// js/dvsl-makeups.js. A makeup counts as set once a later game between the
+// same two teams is on the schedule (Add Game) or the commissioner sets it.
+// ═══════════════════════════════════════════════════════════════════
+function renderMakeupAlert() {
+  const host = document.getElementById('capt-makeup-alert');
+  const M = window.DVSLMakeups;
+  if (!host || !M || !captainData || !captainData.team_id) return;
+  const me = captainData.team_id, now = Date.now();
+  const due = M.trackMakeups(MY_GAMES || [], now).open
+    .filter(e => (e.away === me || e.home === me) && !M.isStale(e, now)
+      && (e.status === 'needs_date' || e.overdueWhy === 'no_date_48h'));
+  if (!due.length) { host.innerHTML = ''; return; }
+  host.innerHTML = `<div class="panel" style="border:2px solid #C9A227;background:#fffbeb;margin-bottom:18px">
+    <div class="panel-title" style="color:#78350f">Makeup date needed</div>
+    ${due.map(e => {
+      const opp = getTeamFull(e.away === me ? e.home : e.away);
+      const line = e.status === 'needs_date'
+        ? `Your ${M.fmtYmd(e.origDate)} game vs ${opp} needs a makeup date by ${M.fmtDay(e.pickBy)} at ${M.fmtClock(e.pickBy)}. Rule 12.`
+        : `Your ${M.fmtYmd(e.origDate)} game vs ${opp} passed the 48 hour makeup deadline (${M.fmtDay(e.pickBy)}). The commissioners will assign the date and field unless you two agree on one now. Rule 12.`;
+      return `<div style="font-size:14px;color:#78350f;line-height:1.5;margin-bottom:8px">${esc(line)} It must be played by ${esc(M.fmtYmd(e.playBy))}.</div>`;
+    }).join('')}
+    <button type="button" class="btn btn-primary btn-sm" style="min-height:40px" onclick="showTab('schedule');if(document.getElementById('capt-add-game-form')?.dataset.open!=='1')captOpenAddGame()">Add the makeup game</button>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // SCHEDULE
 // ═══════════════════════════════════════════════════════════════════
 function renderSchedule() {
+  try { renderMakeupAlert(); } catch (e) { console.warn('[makeups] alert failed:', e); }
   const el = document.getElementById('schedule-content');
   // Header bar with Add Game button — captain can append a makeup or
   // newly-scheduled game without going through admin. Always visible
@@ -3658,7 +3703,10 @@ function renderSchedule() {
             : `Wk ${esc(g.wk || '?')} &bull; ${esc(g.date || '')} ${esc(g.day || '')} &bull; ${esc(g.time || '')}<br>${esc(g.field || '')}`}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          ${done
+          ${(done && window.DVSLStandings && DVSLStandings.forfeitOf(g))
+            ? (() => { const _f = DVSLStandings.forfeitOf(g); const _won = _f !== 'double' && g[_f] !== captainData.team_id;
+                return `<span class="badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-weight:800;letter-spacing:.06em">FORFEIT</span><span style="font-size:13px;font-weight:700;color:${_won ? '#166534' : '#991b1b'}">${_f === 'double' ? 'Double forfeit' : (_won ? 'Win by forfeit' : 'Loss by forfeit')}</span>`; })()
+            : done
             ? `<div class="score-display">${esc(g.away_score ?? '-')} &ndash; ${esc(g.home_score ?? '-')}</div><span class="badge badge-done">Final</span>${g.has_discrepancy ? `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700;padding:4px 10px" onclick="showDiscrepancy('${jsAttr(g.id)}')">${g.discrepancy_partial ? '⚠ Stats partial' : '⚠ Stats differ'}</button>` : (g.discrepancy_resolved ? `<button class="btn btn-sm" style="background:#dcfce7;color:#166534;border:1px solid #166534;font-weight:700;padding:4px 10px" onclick="showDiscrepancy('${jsAttr(g.id)}')">✓ Stats resolved</button>` : '')}`
             : (isPpd ? ppdBadge : `<span class="badge badge-pending">Upcoming</span>`)
           }

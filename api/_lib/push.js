@@ -122,6 +122,8 @@ export function selectRecipients(tokens, rolesByUid, opts) {
   const teamWanted = strList(opts.teams);
   const excludeIds = strList(opts.excludePlayerIds, 500);
   const rosterOnly = !!opts.rosterOnly;
+  // captainOf: only devices whose account captains one of these teams (late score / makeup reminders).
+  const captainOf = strList(opts.captainOf);
   const excludeToken = opts.excludeToken || null;
   // When a device has its canonical doc (id = sha256(token)), only that doc
   // counts: legacy copies may carry a stale owner or stale prefs.
@@ -158,6 +160,7 @@ export function selectRecipients(tokens, rolesByUid, opts) {
       }
     }
     if (rosterOnly && (!roles || !roles.player_ids.length)) continue;
+    if (captainOf.length && (!roles || !captainOf.some(x => roles.captain_teams.includes(x)))) continue;
     if (excludeIds.length && roles && roles.player_ids.some(p => excludeIds.includes(p))) continue;
     seen.add(tok);
     out.push(t);
@@ -170,6 +173,7 @@ export function selectRecipients(tokens, rolesByUid, opts) {
 function needsRoles(opts) {
   return !!(opts.adminOnly || opts.category === 'admin' || opts.category === 'team_chat'
     || opts.category === 'captains_chat' || opts.rosterOnly
+    || (Array.isArray(opts.captainOf) && opts.captainOf.length)
     || (Array.isArray(opts.excludePlayerIds) && opts.excludePlayerIds.length));
 }
 
@@ -316,7 +320,7 @@ async function pool(items, n, fn) {
 // ─── The fan-out ─────────────────────────────────────────────────────────
 // sendPush({ title, body, category, teams=[], url='/', adminOnly=false,
 //            rosterOnly=false, excludeToken, excludePlayerIds=[], sourceId,
-//            imageDataUrl, gameId }, { senderRole='system', senderUid })
+//            imageDataUrl, gameId, captainOf=[] }, { senderRole='system', senderUid })
 //   → { sent, failed, total, pruned }
 export async function sendPush(opts = {}, { senderRole = 'system', senderUid = null } = {}) {
   const category = CATEGORIES.includes(opts.category) ? opts.category : null;
@@ -333,6 +337,7 @@ export async function sendPush(opts = {}, { senderRole = 'system', senderUid = n
   const sel = {
     category, teams, adminOnly,
     rosterOnly: !!opts.rosterOnly,
+    captainOf: strList(opts.captainOf),
     excludeToken: typeof opts.excludeToken === 'string' ? opts.excludeToken : null,
     excludePlayerIds: strList(opts.excludePlayerIds, 500),
   };

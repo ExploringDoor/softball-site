@@ -6697,12 +6697,24 @@ async function recalcStandingsFromAllGames() {
   // reads, exclude ppd/rained_out + null-score games, sort chronologically
   // for correct streaks. (Same fix as captain.html.)
   const _dk = g => (g.date_iso && /^\d{4}-\d{2}-\d{2}$/.test(g.date_iso)) ? g.date_iso : String(g.wk||0).padStart(4,'0');
+  // Forfeits (games.forfeit 'away'|'home'|'double', set in admin) have no
+  // scores: the forfeiting side takes an L (both on a double), the other a W,
+  // and no runs count. Same rule as js/dvsl-standings.js.
+  const _ffOf = g => (g && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double')) ? g.forfeit : '';
   const doneGames = gamesSnap.docs.map(d => d.data())
-    .filter(g => !g.ppd && !g.rained_out && g.away_score != null && g.home_score != null
+    .filter(g => !g.ppd && !g.rained_out && (_ffOf(g) || (g.away_score != null && g.home_score != null
               && g.away_score !== '' && g.home_score !== ''
-              && Number.isFinite(Number(g.away_score)) && Number.isFinite(Number(g.home_score)))
+              && Number.isFinite(Number(g.away_score)) && Number.isFinite(Number(g.home_score)))))
     .sort((a,b) => _dk(a).localeCompare(_dk(b)));
   doneGames.forEach(g => {
+    const _ff = _ffOf(g);
+    if (_ff) {
+      [['away','home'],['home','away']].forEach(([me, opp]) => {
+        const s = stats[g[me]]; if (!s) return;
+        if (_ff === opp) { s.w++; s.results.push('W'); } else { s.l++; s.results.push('L'); }
+      });
+      return;
+    }
     // Scores may be stored as digit strings; always do the math on numbers.
     const as = Number(g.away_score), hs = Number(g.home_score);
     if (stats[g.away]) {

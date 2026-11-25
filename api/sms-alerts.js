@@ -8,12 +8,13 @@
 // A dry run is also open to a signed-in admin (Bearer Firebase ID token), for
 // the Texts tab in admin.html.
 //
-// Dormant: a real run answers 503 until the Twilio env is set, and sends
-// nothing until sms_state/config.schedule_alerts.enabled is true.
+// Dormant: a real run answers 503 while neither channel can send (texts need
+// the Twilio env + schedule_alerts on; emails need the email env in
+// api/_lib/email.js + schedule_emails on). A switch that is on still moves
+// the snapshots forward while dormant, so nothing old goes out later.
 import crypto from 'crypto';
 import { cors, verifyIdToken, getRoles, rateLimited } from './_lib/dvsl.js';
 import { runScheduleAlerts } from './_sms/alerts.js';
-import { twilioConfigured } from './_sms/send.js';
 
 function isCron(req) {
   const exp = process.env.CRON_SECRET || '';
@@ -40,10 +41,12 @@ export default async function handler(req, res) {
     }
   }
   if (!who) return res.status(401).json({ error: 'unauthorized' });
-  if (!dry && !twilioConfigured()) return res.status(503).json({ error: 'dormant', message: 'Twilio is not configured.' });
 
   try {
-    const out = await runScheduleAlerts({ dry });
+    const out = await runScheduleAlerts({ dry, emailTeam: typeof q.team === 'string' ? q.team.slice(0, 40) : '' });
+    // Both switches off is a normal state (200, skipped:'off'); a switch on
+    // with nothing able to send is dormant (503), after moving snapshots on.
+    if (!dry && out.dormant && out.skipped !== 'off') return res.status(503).json({ error: 'dormant', message: 'Neither schedule texts (Twilio) nor schedule emails can send yet.', skipped: out.skipped || null, changes: out.changes || 0 });
     return res.status(200).json(out);
   } catch (e) {
     console.error('[sms-alerts] run failed:', e && e.message);

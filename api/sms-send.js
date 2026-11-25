@@ -11,6 +11,7 @@
 //   status                       -> switches, env readiness, per-team counts, senders, opt-ins, log
 //   config {key, enabled}        -> flip a switch in sms_state/config (schedule_alerts ON re-seeds snapshots)
 //   add-sender {phone, name, team, role:'captain'|'admin'} / remove-sender {ref}
+//   email-status / email-config {enabled} / email-preview {team?}  (schedule emails, api/_sms/email-admin.js)
 // The tab never sees a full phone number: last 4 digits, and an opaque `ref`.
 // Seeding lives in api/sms-seed.js. The schedule dry run is GET /api/sms-alerts?dry=1.
 import { cors, rejectForeignOrigin, rateLimited, requireUser, getRoles, dailyCount, fsGet, fsQuery, fsUpdate, sha256hex, body } from './_lib/dvsl.js';
@@ -21,6 +22,7 @@ import { loadContacts, contactsForTeams } from './_sms/audience.js';
 import { loadTeams, loadCurrent, seedSnapshots } from './_sms/schedule.js';
 import { buildBody, segments, TEMPLATES } from './_sms/blast.js';
 import { strictUsE164 } from './_sms/optin.js';
+import { emailAdmin } from './_sms/email-admin.js'; // Builder E: email-status / email-config / email-preview
 
 const MAX_RECIPIENTS = 400;
 const refOf = (docId) => sha256hex('sms-sender:' + docId).slice(0, 20);
@@ -201,6 +203,11 @@ export default async function handler(req, res) {
 
     if (!isAdmin) return err(res, 403, 'forbidden', 'Admins only.');
 
+    if (action.startsWith('email-')) {
+      const r = await emailAdmin(action, b, { uid: user.uid });
+      return res.status(r.status).json(r.body);
+    }
+
     if (action === 'status') return res.status(200).json(await status());
 
     if (action === 'config') {
@@ -210,7 +217,8 @@ export default async function handler(req, res) {
       const prev = cur[key] && typeof cur[key] === 'object' ? cur[key] : {};
       let reseeded = null;
       // Switching the watcher on starts it quiet: snapshots match the schedule now.
-      if (key === 'schedule_alerts' && b.enabled && prev.enabled !== true) reseeded = await seedSnapshots({});
+      // (When schedule emails are already on, the watcher is running and the snapshots are current.)
+      if (key === 'schedule_alerts' && b.enabled && prev.enabled !== true && !(cur.schedule_emails && cur.schedule_emails.enabled === true)) reseeded = await seedSnapshots({});
       await fsUpdate('sms_state/config', { [key]: { ...prev, enabled: b.enabled, updated_at: new Date(), updated_by: user.uid } });
       return res.status(200).json({ ok: true, key, enabled: b.enabled, reseeded });
     }

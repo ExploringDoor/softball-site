@@ -168,6 +168,26 @@ export default async function handler(req, res) {
       }
     }
 
+    // Forfeits are set in admin, never by text: a "forfeit 7-0" text would
+    // otherwise post a fake final with made-up runs (Rule 19 forfeits carry
+    // no runs). Pass the message to the commissioner instead.
+    if (sender && /\bforfeit/i.test(body)) {
+      const reply = sender.role === 'admin'
+        ? 'Forfeits are not set by text. Mark it in admin on the Scores tab (Forfeit button).'
+        : 'Forfeits are set by the commissioner, not by text. I passed your message along.';
+      if (sender.role !== 'admin') {
+        try {
+          await sendPush({
+            title: `Forfeit text from ${String(sender.name || 'a captain').slice(0, 60)}`,
+            body: String(body || '').slice(0, 300),
+            category: 'admin', adminOnly: true, url: '/admin.html',
+          }, { senderRole: 'system' });
+        } catch (e) { console.warn('[sms-inbound] forfeit alert failed:', e && e.message); }
+      }
+      await logLine({ from, body, kind: 'score', outcome: 'forfeit_to_office', reply, team_id: sender.team_id });
+      return answer(reply);
+    }
+
     // The Text a Score conversation.
     let result;
     try {
