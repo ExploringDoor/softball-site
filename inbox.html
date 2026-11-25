@@ -1158,7 +1158,8 @@ function render(items, mode = 'unread') {
     // weirdness. Wrapping in a button is the most-reliable opt-in to
     // single-element-target click behavior. Also bound on multiple
     // event types so something fires regardless of iOS quirks.
-    if (item.image_data_url) {
+    // Attached images: base64 data:image/ uploads or https: only.
+    if (typeof item.image_data_url === 'string' && /^(data:image\/(png|jpe?g|gif|webp);base64,|https:\/\/)/i.test(item.image_data_url)) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'card-imgbtn';

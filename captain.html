@@ -1442,6 +1442,16 @@ function rolesCaptainOf(teamId) {
   return !!(MY_ROLES && Array.isArray(MY_ROLES.captain_teams) && MY_ROLES.captain_teams.includes(teamId));
 }
 function rolesIsAdmin() { return !!(MY_ROLES && MY_ROLES.admin === true); }
+// The signed-in captain's own row on the current team's roster: one of
+// roles.player_ids (server-derived), else the row whose auth_uid is this
+// account. Never matched by email.
+function _myOwnPlayer() {
+  const uid = auth.currentUser ? auth.currentUser.uid : '';
+  const ids = new Set((MY_ROLES && Array.isArray(MY_ROLES.player_ids)) ? MY_ROLES.player_ids : []);
+  return (MY_PLAYERS || []).find(p => ids.has(p.id))
+    || (MY_PLAYERS || []).find(p => uid && p.auth_uid === uid)
+    || null;
+}
 
 // Device push token ↔ account link (server-side; tokens are not client-writable).
 async function _dvslPushTokenAction(action) {
@@ -1620,7 +1630,6 @@ function _injectMyPlayoffGames() {
       const aT = _poTeamByName(A.name), hT = _poTeamByName(H.name);
       if (!aT || !hT) return;                            // can't map to a team
       if (aT.id !== myId && hT.id !== myId) return;      // only my team's games
-      const played = B.isPlayed(g);
       const iso = /^\d{4}-\d{2}-\d{2}$/.test(g.date || '') ? g.date : '';
       const d = iso ? new Date(iso + 'T12:00:00') : null;
       const time24 = /^(\d{1,2}):(\d{2})$/.test(g.time || '') ? g.time : '';
@@ -1636,12 +1645,64 @@ function _injectMyPlayoffGames() {
         day: d ? d.toLocaleDateString('en-US', { weekday:'short' }) : '',
         time: time12, time_24: time24,
         field: g.field || '',
-        done: played,
-        away_score: played ? g.as : undefined,
-        home_score: played ? g.hs : undefined,
+        ..._poPlayedState(g),
       });
     });
   });
+}
+
+// Result fields of a bracket game in the shape the score screens use for a
+// /games doc. The server records who entered a playoff final in `sub`
+// ('away' | 'home' | 'admin'); a captain's own entry shows as that side's
+// score lane, so the same "correct your own score until the other side
+// reports" logic applies (the server re-checks it in playoff-score).
+function _poPlayedState(bg) {
+  const B = window.DVSLBracket;
+  const played = !!(B && B.isPlayed(bg));
+  const st = {
+    done: played,
+    away_score: played ? bg.as : undefined,
+    home_score: played ? bg.hs : undefined,
+    score_submitted_away_away: undefined, score_submitted_away_home: undefined,
+    score_submitted_home_away: undefined, score_submitted_home_home: undefined,
+  };
+  if (played && (bg.sub === 'away' || bg.sub === 'home')) {
+    st[`score_submitted_${bg.sub}_away`] = bg.as;
+    st[`score_submitted_${bg.sub}_home`] = bg.hs;
+  }
+  return st;
+}
+
+// Re-read a game right before a score is written, so first-submit-wins and
+// the side locks are decided on the current state, not on what was loaded
+// when the page opened (the other captain may have reported since, and the
+// rules would then refuse a write built on stale data).
+const _FRESH_GAME_KEYS = ['done', 'away_score', 'home_score', 'away', 'home', 'forfeit', 'ppd', 'rained_out',
+  'score_conflict', 'score_pending', 'score_confirmed', 'has_discrepancy',
+  'score_submitted_away_away', 'score_submitted_away_home', 'score_submitted_away_by',
+  'score_submitted_home_away', 'score_submitted_home_home', 'score_submitted_home_by'];
+async function _refreshGameForSubmit(g) {
+  if (!g || !g.id) return g;
+  try {
+    if (g.playoff) {
+      const snap = await getDoc(doc(db, 'teams', PO_BRACKET_DOC_ID));
+      if (!snap.exists()) return g;
+      PO_BRACKET_DOC = { id: snap.id, ...snap.data() };
+      let t = null;
+      try { t = JSON.parse(PO_BRACKET_DOC[g.bracket] || 'null'); } catch (_) {}
+      const bg = t && Array.isArray(t.games) ? t.games.find(x => x.g === g.bracket_game) : null;
+      if (bg) Object.assign(g, _poPlayedState(bg));
+      return g;
+    }
+    const snap = await getDoc(doc(db, 'games', g.id));
+    if (!snap.exists()) return g;
+    const fresh = snap.data() || {};
+    _FRESH_GAME_KEYS.forEach(k => { g[k] = fresh[k]; });
+    g.done = fresh.done === true;
+  } catch (e) {
+    console.warn('[score] could not re-read the game, using the loaded copy:', e && e.message);
+  }
+  return g;
 }
 
 // Push a playoff game's final into the bracket so the public bracket
@@ -1735,6 +1796,20 @@ function jsAttr(s) {
     .replace(/`/g, '\\`').replace(/\n/g, '\\n').replace(/\r/g, '\\r')
     .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'));
 }
+// URLs from Firestore / the API that land in src or href: https:// or a
+// same-site relative path only (images may also be inline data:image/png|
+// jpeg|gif|webp). Any other scheme (javascript:, data:text/html, http:,
+// protocol-relative //host) comes back as ''. Control characters and spaces
+// are ignored while sniffing the scheme, as browsers ignore them too.
+function safeUrl(u, image) {
+  const s = String(u == null ? '' : u).trim();
+  if (!s) return '';
+  const probe = s.replace(/[\u0000-\u0020\u007f-\u009f]/g, '');
+  if (image && /^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]*$/i.test(probe)) return s;
+  if (/^https:\/\//i.test(probe)) return s;
+  if (/^[a-z][a-z0-9+.\-]*:/i.test(probe) || /^[\\/]{2}/.test(probe)) return '';
+  return s;
+}
 // Team colors go into style attributes and handler strings: allow only a hex,
 // a bare color keyword, or rgb()/rgba()/var(--x); anything else -> fallback.
 function safeColor(c, fallback) {
@@ -1761,8 +1836,9 @@ async function logActivity(action, details) {
   if (!email) return;
   try {
     await addDoc(collection(db, 'activity_log'), {
-      action: String(action || '').slice(0, 200),
-      details: String(details || '').slice(0, 2000),
+      // The rules want action ≤ 80 chars and no < or > in either field.
+      action: shortStr(action, 80),
+      details: String(details || '').replace(/[<>]/g, '').slice(0, 2000),
       timestamp: Timestamp.now(),
       user: email,
     });
@@ -2680,6 +2756,12 @@ window.showTab = function(name) {
   if (name === 'payments') renderPayments();
   if (name === 'notif') renderNotificationsTab('captnotif-content', 'captnotif-recent');
 };
+// Used by the service-worker NAVIGATE handler (push taps while the page is
+// open). Only known tab names are accepted.
+window.captainTab = function(name) {
+  const valid = ['team','notif','roster','schedule','scores','payments','attendance','teamchat','captchat','announcements','help'];
+  if (captainData && valid.includes(String(name))) window.showTab(String(name));
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // NOTIFICATIONS — in-place captain inbox (full Unread / Archive / Settings)
@@ -2818,7 +2900,7 @@ function _notifCardHtml(it, archived) {
   const titleEsc = esc(it.title || 'Notification');
   const bodyEsc = it.body ? esc(it.body) : '';
   const catLabel = it.category ? (_NOTIF_CAT_LABEL[it.category] || it.category) : '';
-  const imgEsc = it.image_data_url ? esc(it.image_data_url) : '';
+  const imgEsc = it.image_data_url ? esc(safeUrl(it.image_data_url, true)) : '';
   return `
     <div class="notif-card-row ${archived ? 'archived' : ''}" data-id="${esc(it.id)}"
          style="display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;background:var(--card);${archived ? 'opacity:.72' : ''}">
@@ -2844,6 +2926,8 @@ function _notifCardHtml(it, archived) {
 // Lightbox for tap-to-zoom on push-attached images. Mirrors profile.html / inbox.html.
 let _notifImgBoxOpenedAt = 0;
 window._notifOpenImage = function(src) {
+  src = safeUrl(src, true);
+  if (!src) return;
   let bg = document.getElementById('notif-imgbox-bg');
   if (!bg) {
     bg = document.createElement('div');
@@ -3112,7 +3196,9 @@ async function loadAllData() {
     // Store my team's calendar URL for the Share Calendar Link feature
     try {
       const myCal = (calendars || []).find(c => c.id === captainData.team_id);
-      window._myCalendarUrl = (myCal && myCal.calendar_url) ? myCal.calendar_url : null;
+      // https only: it becomes a webcal:// / Google Calendar link below.
+      const calUrl = (myCal && typeof myCal.calendar_url === 'string') ? myCal.calendar_url.trim() : '';
+      window._myCalendarUrl = /^https:\/\/[^\s"'<>`]+$/i.test(calUrl) ? calUrl : null;
     } catch(_) { window._myCalendarUrl = null; }
     updateCalendarShareBox();
 
@@ -3216,12 +3302,10 @@ window.renderNextUp = async function(){
     const byGame = {};        // for the count chips + remind list
     const myStatusByGame = {}; // captain's own status per game
     // Find captain's own player record (so we can show the captain's
-    // CURRENT RSVP and let them tap to update it): the roster row linked to
-    // this account, else the row whose email matches the account email.
-    const captainEmail = (captainData.email || '').toLowerCase();
-    const myUid = auth.currentUser ? auth.currentUser.uid : '';
-    const myPlayer = (MY_PLAYERS || []).find(p => myUid && p.auth_uid === myUid)
-      || (MY_PLAYERS || []).find(p => captainEmail && (p.email || '').toLowerCase() === captainEmail);
+    // CURRENT RSVP and let them tap to update it): a roster row the server
+    // says is this account's (roles.player_ids), else the row linked to this
+    // uid. Never by email: roster emails are not proof of identity.
+    const myPlayer = _myOwnPlayer();
     snap.docs.forEach(d => {
       const r = d.data();
       if (!byGame[r.game_id]) byGame[r.game_id] = { yes:[], maybe:[], no:[], all:new Set() };
@@ -3246,7 +3330,7 @@ window.renderNextUp = async function(){
       const remind = pending.length
         ? `<button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="captainRemindWaiting('${jsAttr(g.id)}', this)">📢 Remind ${pending.length} waiting</button>`
         : '<div style="font-size:11px;color:var(--green);font-weight:700;margin-top:6px">✓ All replied</div>';
-      // Captain-own RSVP row — only renders if we matched a player by email.
+      // Captain-own RSVP row — only renders when this account owns a roster row.
       // Adam ask 4/30/26: let the captain set their OWN attendance from the
       // My Team page without bouncing to the Attendance tab.
       const myStatus = myStatusByGame[g.id] || '';
@@ -3288,7 +3372,7 @@ window.renderNextUp = async function(){
 window.captainSetMyAvail = async function(gameId, status, btnEl) {
   const myPlayer = window._captMyPlayer;
   if (!myPlayer) {
-    toast('Could not find your player record. Make sure your captain email matches a player on the roster.', 'error');
+    toast('Your account is not linked to a player on this roster yet. Ask the commissioner to link it.', 'error');
     return;
   }
   const teamId = captainData.team_id;
@@ -3836,10 +3920,10 @@ window.captSaveAddGame = async function() {
     try {
       await setDoc(doc(db, 'pending_gcal_syncs', ref.id), {
         game_id: ref.id,
-        teams_label: teamsLabel,
-        edited_by: captainData?.team_name || 'captain',
+        teams_label: shortStr(teamsLabel, 200),
+        edited_by: shortStr(captainData?.team_name || 'captain', 200),
         edited_by_id: captainData?.team_id || '',
-        summary: `added by captain: Wk ${wk} ${dateDisplay} ${timeDisplay} @ ${field || 'TBD'}`,
+        summary: shortStr(`added by captain: Wk ${wk} ${dateDisplay} ${timeDisplay} @ ${field || 'TBD'}`, 500),
         source: 'captain_add',
         status: 'pending',
         timestamp: serverTimestamp(),
@@ -3886,10 +3970,10 @@ window.captTogglePpd = async function(gameId) {
       try {
         await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
           game_id: gameId,
-          teams_label: `${awayName} @ ${homeName}`,
-          edited_by: captainData?.team_name || 'captain',
+          teams_label: shortStr(`${awayName} @ ${homeName}`, 200),
+          edited_by: shortStr(captainData?.team_name || 'captain', 200),
           edited_by_id: captainData?.team_id || '',
-            summary: `un-marked PPD by captain: Wk ${g.wk||'?'} ${g.date||''} ${g.time||''} @ ${g.field||''}`,
+            summary: shortStr(`un-marked PPD by captain: Wk ${g.wk||'?'} ${g.date||''} ${g.time||''} @ ${g.field||''}`, 500),
           source: 'captain_ppd_clear',
           status: 'pending',
           timestamp: serverTimestamp(),
@@ -3921,10 +4005,10 @@ window.captTogglePpd = async function(gameId) {
     try {
       await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
         game_id: gameId,
-        teams_label: `${awayName} @ ${homeName}`,
-        edited_by: captainData?.team_name || 'captain',
+        teams_label: shortStr(`${awayName} @ ${homeName}`, 200),
+        edited_by: shortStr(captainData?.team_name || 'captain', 200),
         edited_by_id: captainData?.team_id || '',
-        summary: `marked PPD by captain: Wk ${g.wk||'?'} ${g.date||''} ${g.time||''} @ ${g.field||''}${rescheduledTo ? ' → ' + rescheduledTo : ''}`,
+        summary: shortStr(`marked PPD by captain: Wk ${g.wk||'?'} ${g.date||''} ${g.time||''} @ ${g.field||''}${rescheduledTo ? ' → ' + rescheduledTo : ''}`, 500),
         source: 'captain_ppd_mark',
         status: 'pending',
         timestamp: serverTimestamp(),
@@ -4245,7 +4329,23 @@ window.saveEditGame = async function(gameId) {
       date_iso: dateIso||'', field: field||'', addr: newAddr,
       away: newAway, home: newHome, wk: newWk
     };
-    await updateDoc(doc(db, 'games', gameId), updatePayload);
+    // Send only the fields that change, at most 4 per write. The rules
+    // re-check every changed field, and a single write that changes 6 or
+    // more of them runs into Firestore's 1000-expression limit and is
+    // refused (reported to the lockdown lead). The matchup goes first so a
+    // refused opponent change stops before anything else is saved.
+    const _same = (a, b) => String(a == null ? '' : a) === String(b == null ? '' : b);
+    const _keys = Object.keys(updatePayload).filter(k => !_same(g[k], updatePayload[k]));
+    const _groups = [];
+    let _cur = _keys.filter(k => k === 'away' || k === 'home');
+    _keys.filter(k => k !== 'away' && k !== 'home').forEach(k => {
+      if (_cur.length >= 4) { _groups.push(_cur); _cur = []; }
+      _cur.push(k);
+    });
+    if (_cur.length) _groups.push(_cur);
+    for (const grp of _groups) {
+      await updateDoc(doc(db, 'games', gameId), Object.fromEntries(grp.map(k => [k, updatePayload[k]])));
+    }
     if (g) { g.date = dateDisplay; g.day = dayDisplay; g.time = timeDisplay; g.time_24 = time24||''; g.date_iso = dateIso||''; g.field = field||''; g.addr = newAddr; g.away = newAway; g.home = newHome; g.wk = newWk; }
 
     const after  = { date: dateDisplay, day: dayDisplay, time: timeDisplay, field: field||'', date_iso: dateIso||'', away: newAway, home: newHome };
@@ -4278,10 +4378,10 @@ window.saveEditGame = async function(gameId) {
     try {
       await setDoc(doc(db, 'pending_gcal_syncs', gameId), {
         game_id: gameId,
-        teams_label: teamsLabel,
-        edited_by: captainData?.team_name || 'captain',
+        teams_label: shortStr(teamsLabel, 200),
+        edited_by: shortStr(captainData?.team_name || 'captain', 200),
         edited_by_id: captainData?.team_id || '',
-        summary: summary || 'game edited',
+        summary: shortStr(summary || 'game edited', 500),
         source: 'captain',
         status: 'pending',
         timestamp: serverTimestamp(),
@@ -4439,7 +4539,7 @@ function renderPendingGames() {
             ? `<span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #d97706" title="You submitted score-only — tap 📊 Box Score to add player batting stats. The score stays the same.">📝 Score-only · Add Stats</span>`
             : `<span class="badge badge-pending" title="You already submitted full stats — adding more will UPDATE your submission">✓ Submitted · Edit</span>`
           ) : ''}
-          ${g.playoff ? '' : `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${jsAttr(g.id)}&team=${jsAttr(captainData.team_id)}&from=captain','_blank')">⚡ Score Live</button>`}
+          ${g.playoff ? '' : `<button class="btn btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #d97706;font-weight:700" onclick="window.open('scorer.html?game=${jsAttr(encodeURIComponent(g.id))}&amp;team=${jsAttr(encodeURIComponent(captainData.team_id))}&amp;from=captain','_blank')">⚡ Score Live</button>`}
           <button class="btn btn-outline btn-sm" style="color:#7c3aed;border-color:#7c3aed" onclick="showUploadZone('${jsAttr(g.id)}')">📄 Upload</button>
           <button class="btn btn-outline btn-sm" onclick="showScoreOnlyEntry('${jsAttr(g.id)}')">📝 Score Only</button>
           <button class="btn btn-outline btn-sm" onclick="showBoxScoreEntry('${jsAttr(g.id)}')">📊 Box Score</button>
@@ -5250,6 +5350,8 @@ window.submitScoreOnly = async function(gameId) {
   const awayErrors = parseInt(document.getElementById(`so-ls-${gameId}-away-E`)?.value)||0;
   const homeErrors = parseInt(document.getElementById(`so-ls-${gameId}-home-E`)?.value)||0;
   const myId = captainData.team_id;
+  await _refreshGameForSubmit(g);
+  if (g.away !== myId && g.home !== myId) { toast('This game no longer lists your team. Refresh the page.', 'error'); return; }
   const isHome = g.home===myId; const myRole=isHome?'home':'away'; const otherRole=isHome?'away':'home';
   const boxScoreData = {
     game_id: gameId, week: g.wk||0, date: g.date||'', field: g.field||'',
@@ -5280,9 +5382,14 @@ window.submitScoreOnly = async function(gameId) {
     const gameUpdate = {
       [`score_submitted_${myRole}_away`]: awayFinal,
       [`score_submitted_${myRole}_home`]: homeFinal,
-      [`score_submitted_${myRole}_by`]:  captainData.team_name,
+      [`score_submitted_${myRole}_by`]:  shortStr(captainData.team_name, 200),
     };
-    if (!_wasDone) {
+    // Same self-correction rule as submitBoxScore / submitScore: while only
+    // this side has reported, its new numbers replace the final.
+    const _iAlreadySubmitted = g[`score_submitted_${myRole}_away`] !== undefined;
+    const _otherHasSubmitted = g[`score_submitted_${otherRole}_away`] !== undefined;
+    const _selfCorrect = _wasDone && _iAlreadySubmitted && !_otherHasSubmitted;
+    if (!_wasDone || _selfCorrect) {
       Object.assign(gameUpdate, {
         done: true,
         away_score: awayFinal,
@@ -5300,9 +5407,25 @@ window.submitScoreOnly = async function(gameId) {
         gameUpdate.score_conflict = true;
       }
     }
+    const _storedAway = g.away_score, _storedHome = g.home_score;
     await persistGameResult(g, gameId, gameUpdate);   // playoff games advance the bracket instead of writing /games
     const gObj = MY_GAMES.find(x=>x.id===gameId);
     if (gObj) Object.assign(gObj, gameUpdate);
+    // This side's score lane (score_submissions/{gid}_{side}), like the
+    // other submit paths, so the commissioner's review sees both reports.
+    try {
+      await setDoc(doc(db, 'score_submissions', `${gameId}_${myRole}`), {
+        game_id: gameId, away: g.away, home: g.home,
+        away_score: awayFinal, home_score: homeFinal,
+        submitted_by: captainData.team_name, team_id: captainData.team_id,
+        team_name: captainData.team_name, wk: parseInt(g.wk) || 0,
+        timestamp: Timestamp.now(), status: gameUpdate.score_conflict === true ? 'conflict' : 'approved',
+        has_boxscore: false, role: myRole,
+      });
+    } catch (le) { console.warn('[score-only] score lane write failed:', le && le.message); }
+    if (gameUpdate.score_conflict === true) {
+      sendScoreConflictAlert(g, awayFinal, homeFinal, _storedAway, _storedHome);
+    }
     // Notifications: if this submission newly finalizes the game, send
     // the "Final:" push. Otherwise (first captain submitting, game
     // still pending confirmation) send the "Score submitted:" push so
@@ -5316,6 +5439,7 @@ window.submitScoreOnly = async function(gameId) {
     document.getElementById('boxscore-entry-'+gameId).style.display='none';
     const msg = !_wasDone
       ? 'Score submitted — game is now final! (Admin can edit later if needed.)'
+      : _selfCorrect ? 'Score updated — your previous submission was replaced.'
       : (gameUpdate.score_conflict
           ? 'Submitted — but your score differs from the already-final result. Flagged for admin review.'
           : 'Score submitted — matches the final on record.');
@@ -5796,8 +5920,8 @@ window.printBsScore = function(gameId, awayTeamNameRaw, homeTeamNameRaw) {
   // Team data for logos + colors
   const awayObj = ALL_TEAMS?.find(t=>t.id===g?.away);
   const homeObj = ALL_TEAMS?.find(t=>t.id===g?.home);
-  const awayLogo = awayObj?.logo||awayObj?.logoUrl||awayObj?.logo_url||'';
-  const homeLogo = homeObj?.logo||homeObj?.logoUrl||homeObj?.logo_url||'';
+  const awayLogo = safeUrl(awayObj?.logo||awayObj?.logoUrl||awayObj?.logo_url||'', true);
+  const homeLogo = safeUrl(homeObj?.logo||homeObj?.logoUrl||homeObj?.logo_url||'', true);
   const awayColor = safeColor(awayObj?.color||awayObj?.primary_color||awayObj?.primaryColor||'#002D72');
   const homeColor = safeColor(homeObj?.color||homeObj?.primary_color||homeObj?.primaryColor||'#002D72');
   let dateStr = g?.date||'';
@@ -5906,6 +6030,10 @@ window.submitBoxScore = async function(gameId) {
   const awayFinal = parseInt(document.getElementById('bs-' + gameId + '-ls-away-R')?.value) || 0;
   const homeFinal = parseInt(document.getElementById('bs-' + gameId + '-ls-home-R')?.value) || 0;
   if (!validScore(awayFinal) || !validScore(homeFinal)) { toast('Scores must be whole numbers from 0 to 99.', 'error'); return; }
+  // Current state of the game (first-submit-wins and the side locks are
+  // decided on it), before anything below reads g.
+  await _refreshGameForSubmit(g);
+  if (g.away !== captainData.team_id && g.home !== captainData.team_id) { toast('This game no longer lists your team. Refresh the page.', 'error'); return; }
 
   function readLinescore(team) {
     const tbl = document.getElementById('bs-ls-' + gameId);
@@ -6065,7 +6193,7 @@ window.submitBoxScore = async function(gameId) {
   const gameUpdate = {
     [`score_submitted_${myRole}_away`]: awayFinal,
     [`score_submitted_${myRole}_home`]: homeFinal,
-    [`score_submitted_${myRole}_by`]:  captainData.team_name,
+    [`score_submitted_${myRole}_by`]:  shortStr(captainData.team_name, 200),
   };
 
   let finalStatus = 'approved';
@@ -6580,6 +6708,8 @@ window.submitScore = async function(gameId) {
   if (!validScore(awayScore) || !validScore(homeScore)) { toast('Scores must be whole numbers from 0 to 99.', 'error'); return; }
 
   const myId = captainData.team_id;
+  await _refreshGameForSubmit(g);
+  if (g.away !== myId && g.home !== myId) { toast('This game no longer lists your team. Refresh the page.', 'error'); return; }
   const isHome = g.home === myId;
   const myRole = isHome ? 'home' : 'away';
   const otherRole = isHome ? 'away' : 'home';
@@ -6591,7 +6721,7 @@ window.submitScore = async function(gameId) {
   const gameUpdate = {
     [`score_submitted_${myRole}_away`]: awayScore,
     [`score_submitted_${myRole}_home`]: homeScore,
-    [`score_submitted_${myRole}_by`]:  captainData.team_name,
+    [`score_submitted_${myRole}_by`]:  shortStr(captainData.team_name, 200),
   };
 
   let finalStatus = 'approved';
@@ -6816,21 +6946,30 @@ window.togglePayment = async function(playerId) {
 // Update the player's existing payments doc (docId comes from the load, so
 // edits after a reload no longer create duplicate rows); create one only
 // when the player has none yet.
+const _PAYMENT_KEYS = ['team_id', 'player_id', 'player_name', 'paid', 'amount_owed', 'amount_paid', 'notes', 'updated_at', 'updated_by'];
 window.savePaymentField = async function(playerId, playerName, field, value) {
   if (!['paid', 'amount_owed', 'notes'].includes(field)) return;
   if (field === 'amount_owed') value = Math.max(0, Math.min(100000, Number(value) || 0));
-  if (field === 'notes') value = String(value || '').slice(0, 200);
+  // The rules refuse < and > in payment notes.
+  if (field === 'notes') value = String(value || '').replace(/[<>]/g, '').slice(0, 200);
   if (field === 'paid') value = !!value;
   const player = MY_PLAYERS.find(x => x.id === playerId);
-  const name = playerName || (player && player.name) || '';
+  const name = shortStr(playerName || (player && player.name) || '');
   const by = (auth.currentUser && auth.currentUser.email) || '';
   try {
     const pay = PAYMENT_DATA[playerId] || {};
     const now = Timestamp.now();
     let updated;
     if (pay.docId) {
-      await updateDoc(doc(db, 'payments', pay.docId), { [field]: value, updated_by: by, updated_at: now });
+      // The rules allow only the payment keys on the whole doc, so a stray
+      // key from an older version of this page (e.g. an `id` copy) would
+      // block every edit: drop such keys in the same update.
+      const patch = { [field]: value, updated_by: by, updated_at: now };
+      const legacy = Object.keys(pay).filter(k => k !== 'docId' && !_PAYMENT_KEYS.includes(k));
+      legacy.forEach(k => { patch[k] = deleteField(); });
+      await updateDoc(doc(db, 'payments', pay.docId), patch);
       updated = { ...pay, [field]: value, updated_by: by, updated_at: now };
+      legacy.forEach(k => { delete updated[k]; });
     } else {
       const fresh = {
         team_id: captainData.team_id, player_id: playerId, player_name: name,
@@ -7313,6 +7452,16 @@ function _captainDisplayName(uid, teamId) {
   if (rp && rp.name) return rp.name;
   return '';
 }
+// The signed-in captain's own name for push titles: their linked roster
+// row, else the first captains row on file for this team (by team_id, never
+// by email). '' when neither exists; callers fall back to the team name.
+function _myCaptainName() {
+  const teamId = captainData && captainData.team_id;
+  const own = _captainDisplayName(_myUid(), teamId);
+  if (own) return own;
+  const row = (ALL_CAPTAINS || []).find(c => c.team_id === teamId && c.name);
+  return row ? String(row.name) : '';
+}
 
 function renderChatMessages(msgs, containerId, myEmail) {
   const el = document.getElementById(containerId);
@@ -7418,20 +7567,20 @@ async function deleteChatMessage(containerId, collName, mid) {
   if (!m) return;
   const preview = (m.text || '').slice(0, 60);
   if (!confirm(`Delete this message?\n\n"${preview}${m.text?.length > 60 ? '…' : ''}"`)) return;
+  if (collName !== 'team_messages' && collName !== 'captain_chat') return;
   try {
-    await deleteDoc(doc(db, collName, mid));
-    // Cascade-clear matching pending_nav rows so the corresponding push
-    // disappears from every recipient's bell panel. Fire-and-forget.
-    apiPost('delete-by-source', { sourceId: mid })
-      .catch(e => console.warn('Inbox cleanup failed:', e.message));
+    // The server checks who may delete it (sender / author, a captain of
+    // that team for team chat, or the admin), deletes the message and
+    // clears the matching inbox items in one step.
+    await apiPost('delete-by-source', { collection: collName, id: mid });
     // onSnapshot listener will re-render
   } catch(e) {
-    alert('Could not delete: ' + e.message);
+    toast('Could not delete: ' + e.message, 'error');
   }
 }
 
-// Captain-only: nuke every message in this team's chat. Batched in 400s
-// to stay under Firestore's 500-op writeBatch limit.
+// Captain-only: nuke every message in this team's chat. Each delete is
+// checked by the rules (which read roles/{uid}), so batches stay at 10.
 window.resetTeamChat = async function() {
   const teamName = captainData?.team_name || captainData?.team_id || 'your team';
   if (!confirm(`Reset the entire Team Chat for ${teamName}?\n\nThis deletes ALL messages permanently. This cannot be undone.`)) return;
@@ -7442,7 +7591,7 @@ window.resetTeamChat = async function() {
     if (!snap.docs.length) { alert('Chat is already empty.'); return; }
     let remaining = snap.docs.slice();
     while (remaining.length) {
-      const chunk = remaining.splice(0, 400);
+      const chunk = remaining.splice(0, 10);
       const batch = writeBatch(db);
       chunk.forEach(d => batch.delete(d.ref));
       await batch.commit();
@@ -7520,11 +7669,7 @@ window.sendTeamMsg = async function() {
   // Captains post as the team (sender_id = team id, is_captain:true); the
   // bubble label is built from the roster at render time. sender_name is
   // informational only and never rendered.
-  const myCapDoc = (ALL_CAPTAINS || []).find(c =>
-    c.team_id === captainData.team_id &&
-    (c.email || '').toLowerCase() === (currentUser.email || '').toLowerCase()
-  );
-  const myName = _captainDisplayName(auth.currentUser.uid, captainData.team_id) || myCapDoc?.name || 'Captain';
+  const myName = _myCaptainName() || 'Captain';
   try {
     const msgRef = await addDoc(collection(db, 'team_messages'), {
       team_id: captainData.team_id,
@@ -7539,8 +7684,8 @@ window.sendTeamMsg = async function() {
     // Excludes the captain's own FCM token so they don't ping themselves.
     try {
       // Title is just the captain's real name (e.g. "Mark Schwartz") — cleaner
-      // than "Tifereth Bet Israel Royals — Captain". Look up in the captains
-      // collection by matching email + team; fall back to short-code + Captain.
+      // than "Tifereth Bet Israel Royals — Captain". From _myCaptainName()
+      // (linked roster row, else this team's captains row); else short-code + Captain.
       const pushTitle = (myName && myName !== 'Captain') ? myName
         : `${MY_TEAM?.short || captainData.team_id} — Captain`;
       await sendPushApi({
@@ -7596,14 +7741,9 @@ window.sendCaptMsg = async function() {
     // this room is league-wide for captains + commissioners).
     try {
       // Title format: "TBI — Mark Schwartz" — short team code + captain's
-      // real name. Falls back to "<short> — Captain" if we can't find the
-      // captain doc for this logged-in email.
+      // real name (_myCaptainName). Falls back to "<short> — Captain".
       const teamShort = MY_TEAM?.short || captainData.team_id;
-      const capDoc = (ALL_CAPTAINS || []).find(c =>
-        c.team_id === captainData.team_id &&
-        (c.email || '').toLowerCase() === (currentUser.email || '').toLowerCase()
-      );
-      const senderName = _captainDisplayName(auth.currentUser.uid, captainData.team_id) || capDoc?.name || 'Captain';
+      const senderName = _myCaptainName() || 'Captain';
       await sendPushApi({
         title: `${teamShort} — ${senderName}`,
         body: text.length > 120 ? text.slice(0, 120) + '…' : text,

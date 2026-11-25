@@ -6689,7 +6689,10 @@ async function recalcStandingsFromAllGames() {
   const gamesSnap = await getDocs(query(collection(db, 'games'), where('done', '==', true)));
   const teamsSnap = await getDocs(collection(db, 'teams'));
 
-  const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t => t.active !== false);
+  // The bracket JSON lives in teams/__playoff_brackets; it is not a team and
+  // the rules refuse standings writes to it.
+  const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(t => t.active !== false && t.id !== '__playoff_brackets');
   const stats = {};
   allTeams.forEach(t => { stats[t.id] = { w:0, l:0, ti:0, rs:0, ra:0, results:[] }; });
 

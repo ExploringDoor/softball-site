@@ -650,6 +650,8 @@ let unsub = null;
 let MSG_CACHE = {}; // id → message doc (for delete lookup)
 
 const esc = (s) => String(s ?? '').replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
+// Image URLs from Firestore: https:// or a same-site relative path only.
+const safeImg = (u) => { const v = String(u ?? '').trim(); return (/^https:\/\//i.test(v) || /^\/?[A-Za-z0-9_.\-\/]+$/.test(v)) && !v.startsWith('//') ? v : ''; };
 
 // First auth state (persistence restores the session asynchronously).
 const AUTH_READY = new Promise(resolve => {
@@ -734,7 +736,7 @@ async function showTeamPicker() {
   teams.sort((a,b) => (a.name || a.id).localeCompare(b.name || b.id));
   document.getElementById('team-picker-grid').innerHTML = teams.map(t => `
     <a class="team-card" href="team-chat.html?team=${encodeURIComponent(t.id)}">
-      <div class="tlogo">${t.logo ? `<img src="${esc(t.logo)}" alt="">` : ''}</div>
+      <div class="tlogo">${safeImg(t.logo) ? `<img src="${esc(safeImg(t.logo))}" alt="">` : ''}</div>
       <div class="tname">${esc(t.name || t.id)}</div>
     </a>`).join('');
 }
@@ -808,8 +810,8 @@ async function loadTeamAndChat(tid) {
   document.getElementById('team-name').textContent = TEAM.short || TEAM.name || TEAM.id;
   try { document.getElementById('team-name').title = TEAM.name || TEAM.id || ''; } catch(_) {}
   document.getElementById('team-sub').textContent = 'Team Chat';
-  if (TEAM.logo) {
-    document.getElementById('team-logo').innerHTML = `<img src="${esc(TEAM.logo)}" alt="">`;
+  if (safeImg(TEAM.logo)) {
+    document.getElementById('team-logo').innerHTML = `<img src="${esc(safeImg(TEAM.logo))}" alt="">`;
   }
 
   // Roster (public). Used to label messages with roster names. Note: the
@@ -969,12 +971,12 @@ async function deleteMessage(mid) {
   const preview = (m.text || '').slice(0, 60);
   if (!confirm(`Delete this message?\n\n"${preview}${m.text?.length > 60 ? '…' : ''}"`)) return;
   try {
-    await deleteDoc(doc(db, 'team_messages', mid));
-    // Cascade: clear matching pending_nav docs so the push disappears from
-    // every recipient's bell panel too. Fire-and-forget — the message is
-    // already gone from chat; worst case the push row lingers until the
-    // 24h stale sweep runs.
-    api('delete-by-source', { sourceId: mid }).catch(e => console.warn('delete-by-source failed:', e));
+    // The server checks who may delete (sender_uid, team captain, admin),
+    // deletes the message and clears its pushes from every recipient's
+    // inbox (pending_nav). Only fall back to a client delete when the server
+    // says it didn't delete the message.
+    const r = await api('delete-by-source', { collection: 'team_messages', id: mid });
+    if (!(r && r.messageDeleted)) await deleteDoc(doc(db, 'team_messages', mid));
     // Snapshot listener will re-render automatically
   } catch(e) {
     alert('Could not delete: ' + e.message);
@@ -1032,7 +1034,9 @@ window.sendMessage = async function() {
       text,
       sender_uid: ME.uid,
       sender_id: IDENTITY.sender_id,
-      sender_name: IDENTITY.name,
+      // rules: sender_name is a short string (≤ 80, no < or >); display
+      // always uses the roster name, this is only a hint for old clients.
+      sender_name: String(IDENTITY.name || '').replace(/[<>]/g, '').slice(0, 80),
       is_captain: !!IDENTITY.is_captain,
       timestamp: serverTimestamp(),
     });

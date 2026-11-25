@@ -2242,7 +2242,9 @@ window.setAvail = async function(gameId, status) {
       }
     } else {
       await setDoc(doc(db, 'availability', docId), {
-        game_id: gameId, player_id: pid, player_name: player?.name || '',
+        game_id: gameId, player_id: pid,
+        // rules: player_name is a short string (≤ 80, no < or >)
+        player_name: String(player?.name || '').replace(/[<>]/g, '').slice(0, 80),
         team_id: MY_TEAM.id, status, updated_at: new Date().toISOString()
       });
       _rsvps[gameId] = status;
@@ -2383,21 +2385,20 @@ window.playerDelChat = async function(msgId) {
   if (!confirm('Delete this message?')) return;
   // Server first, while the message still exists: it checks sender_uid and
   // removes the message's chat push from teammates' inboxes (pending_nav).
-  // Newer servers also delete the message itself.
+  // The server deletes the message itself (messageDeleted:true). A client
+  // delete or get of an already-deleted message is denied by the rules
+  // (no resource to check), so only fall back to deleteDoc when the server
+  // reports it did not delete the message.
+  let r;
   try {
-    await _dvslApi('delete-by-source', { collection: 'team_messages', id: msgId, sourceId: msgId });
+    r = await _dvslApi('delete-by-source', { collection: 'team_messages', id: msgId });
   } catch(e) {
     toast('Delete failed: ' + (e.message || 'please try again.'), 'error');
     return;
   }
+  if (r && r.messageDeleted) return;
   try { await deleteDoc(doc(db, 'team_messages', msgId)); }
-  catch(e) {
-    // If the server already deleted it, the rules deny a delete of a
-    // missing doc; that's success.
-    let gone = false;
-    try { gone = !(await getDoc(doc(db, 'team_messages', msgId))).exists(); } catch(_) {}
-    if (!gone) toast('Delete failed: ' + e.message, 'error');
-  }
+  catch(e) { toast('Delete failed: ' + e.message, 'error'); }
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2771,7 +2772,7 @@ window.dvslOpenNotif = function(url, category, title) {
     if (samePage || (u && (u.pathname === '/profile.html' || u.pathname.endsWith('/profile.html')))) {
       // 1) Explicit hash wins
       const hash = (u && u.hash || '').replace(/^#/, '');
-      if (hash) {
+      if (hash && ['avail','chat','notif','photos','help'].includes(hash)) {
         if (MODE === 'player' && typeof window.playerTab === 'function') { window.playerTab(hash); return; }
         if (MODE === 'captain' && typeof window.captainTab === 'function') { window.captainTab(hash); return; }
       }
@@ -2842,7 +2843,7 @@ async function loadPlayerMedia() {
       if (it.type === 'youtube' || it.youtube) {
         const ytRaw = String(it.url || it.youtube || '');
         // Links only to http(s) (no javascript: etc.); ids only [\w-].
-        const ytUrl = /^https?:\/\//i.test(ytRaw) ? ytRaw : '#';
+        const ytUrl = /^https:\/\//i.test(ytRaw) ? ytRaw : '#';
         const ytIdRaw = it.youtube_id || extractYoutubeId(ytRaw);
         const ytId = /^[\w-]{6,20}$/.test(String(ytIdRaw || '')) ? String(ytIdRaw) : '';
         const thumb = ytId ? `https://img.youtube.com/vi/${ytId}/mqdefault.jpg` : '';
@@ -2852,7 +2853,9 @@ async function loadPlayerMedia() {
           + `</a>${meta}</div>`;
       }
       // Image entry: support both new (type:'image',url) and legacy (image_url) shapes
-      const imgUrl = it.url || it.image_url;
+      // Only https: images or the base64 data:image/ uploads reach <img src>.
+      const imgRaw = String(it.url || it.image_url || '');
+      const imgUrl = /^(https:\/\/|data:image\/(png|jpe?g|gif|webp);base64,)/i.test(imgRaw) ? imgRaw : '';
       if (imgUrl) {
         return `<div class="media-card" style="position:relative">${deleteBtn}<img src="${esc(imgUrl)}" alt="${esc(it.caption||'photo')}" style="aspect-ratio:1;object-fit:cover;width:100%" loading="lazy">${meta}</div>`;
       }

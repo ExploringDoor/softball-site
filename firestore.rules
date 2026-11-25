@@ -122,6 +122,7 @@ service cloud.firestore {
     match /team_media/{id} { allow read: if true; allow write: if isAdmin(); }
     match /playoff_games/{id} { allow read: if true; allow write: if isAdmin(); }
     match /alert_history/{id} { allow read, write: if isAdmin(); }
+    match /announcements/{id} { allow read: if isAdmin() || isAnyCaptain(); allow write: if isAdmin(); }
     match /score_uploads/{id} { allow read, write: if isAdmin(); }
 
     // Rosters and stats (contact details live in player_private).
@@ -246,12 +247,13 @@ service cloud.firestore {
     function captainUpdatesGame() {
       let r = resource.data;
       let d = request.resource.data;
+      let c = changed();
       let mineAway = isCaptainOf(r.get('away', ''));
       let mineHome = isCaptainOf(r.get('home', ''));
       return (mineAway || mineHome)
         && isCaptainOfAny([d.get('away', ''), d.get('home', '')])
         && d.get('away', '') != d.get('home', '')
-        && changed().hasOnly([
+        && c.hasOnly([
              'away', 'home', 'away_score', 'home_score', 'done',
              'live', 'liveAt', 'live_owner', 'live_owner_started_at', 'inning', 'half',
              'has_discrepancy', 'score_pending', 'score_conflict', 'score_confirmed', 'discrepancy_partial',
@@ -262,37 +264,38 @@ service cloud.firestore {
              'date', 'date_iso', 'day', 'time', 'time_24', 'field', 'addr', 'moved_note', 'wk',
              'last_edited_at', 'last_edited_by'])
         // only your own side's report
-        && (mineAway || !changed().hasAny(['score_submitted_away', 'score_submitted_away_at', 'score_submitted_away_away',
+        && (mineAway || !c.hasAny(['score_submitted_away', 'score_submitted_away_at', 'score_submitted_away_away',
                                            'score_submitted_away_home', 'score_submitted_away_by']))
-        && (mineHome || !changed().hasAny(['score_submitted_home', 'score_submitted_home_at', 'score_submitted_home_away',
+        && (mineHome || !c.hasAny(['score_submitted_home', 'score_submitted_home_at', 'score_submitted_home_away',
                                            'score_submitted_home_home', 'score_submitted_home_by']))
         // the final
-        && (!changed().hasAny(['away_score', 'home_score', 'done', 'score_confirmed'])
+        && (!c.hasAny(['away_score', 'home_score', 'done', 'score_confirmed'])
             || r.get('done', false) != true
             || (mineAway && ('score_submitted_away_away' in r) && !('score_submitted_home_away' in r))
             || (mineHome && ('score_submitted_home_away' in r) && !('score_submitted_away_away' in r)))
         // who plays whom is fixed once a result exists
-        && (!changed().hasAny(['away', 'home'])
+        && (!c.hasAny(['away', 'home'])
             || (r.get('done', false) != true && !('score_submitted_away_away' in r) && !('score_submitted_home_away' in r)
                 && exists(teamPath(d.get('away', 'x'))) && exists(teamPath(d.get('home', 'x')))
                 && d.get('away', '') != '__playoff_brackets' && d.get('home', '') != '__playoff_brackets'))
-        && gameValuesValid();
+        && gameValuesValid(c);
     }
-    function gameValuesValid() {
+    function strIfC(c, k) { return !(k in c) || request.resource.data[k] == null || medStr(request.resource.data[k]); }
+    function gameValuesValid(c) {
       let d = request.resource.data;
-      return (!ch('away_score') || scoreOk(d.away_score)) && (!ch('home_score') || scoreOk(d.home_score))
-        && (!ch('score_submitted_away_away') || scoreOk(d.score_submitted_away_away))
-        && (!ch('score_submitted_away_home') || scoreOk(d.score_submitted_away_home))
-        && (!ch('score_submitted_home_away') || scoreOk(d.score_submitted_home_away))
-        && (!ch('score_submitted_home_home') || scoreOk(d.score_submitted_home_home))
-        && (!ch('done') || d.done is bool) && (!ch('live') || d.live is bool)
-        && (!ch('ppd') || d.ppd is bool) && (!ch('rained_out') || d.rained_out is bool)
-        && (!ch('inning') || d.inning == null || intIn(d.inning, 0, 30))
-        && strIfCh('half') && strIfCh('live_owner') && strIfCh('date') && strIfCh('date_iso') && strIfCh('day')
-        && strIfCh('time') && strIfCh('time_24') && strIfCh('field') && strIfCh('addr') && strIfCh('moved_note')
-        && strIfCh('ppd_by') && strIfCh('ppd_rescheduled_to') && strIfCh('last_edited_by')
-        && strIfCh('score_submitted_away_by') && strIfCh('score_submitted_home_by')
-        && (!ch('wk') || d.wk == null || shortStr(d.wk) || intIn(d.wk, 0, 99));
+      return (!('away_score' in c) || scoreOk(d.away_score)) && (!('home_score' in c) || scoreOk(d.home_score))
+        && (!('score_submitted_away_away' in c) || scoreOk(d.score_submitted_away_away))
+        && (!('score_submitted_away_home' in c) || scoreOk(d.score_submitted_away_home))
+        && (!('score_submitted_home_away' in c) || scoreOk(d.score_submitted_home_away))
+        && (!('score_submitted_home_home' in c) || scoreOk(d.score_submitted_home_home))
+        && (!('done' in c) || d.done is bool) && (!('live' in c) || d.live is bool)
+        && (!('ppd' in c) || d.ppd is bool) && (!('rained_out' in c) || d.rained_out is bool)
+        && (!('inning' in c) || d.inning == null || intIn(d.inning, 0, 30))
+        && strIfC(c, 'half') && strIfC(c, 'live_owner') && strIfC(c, 'date') && strIfC(c, 'date_iso') && strIfC(c, 'day')
+        && strIfC(c, 'time') && strIfC(c, 'time_24') && strIfC(c, 'field') && strIfC(c, 'addr') && strIfC(c, 'moved_note')
+        && strIfC(c, 'ppd_by') && strIfC(c, 'ppd_rescheduled_to') && strIfC(c, 'last_edited_by')
+        && strIfC(c, 'score_submitted_away_by') && strIfC(c, 'score_submitted_home_by')
+        && (!('wk' in c) || d.wk == null || shortStr(d.wk) || intIn(d.wk, 0, 99));
     }
 
     // Public box scores. A captain writes the canonical doc only for a game
@@ -302,8 +305,41 @@ service cloud.firestore {
       allow create, update: if isAdmin()
         || (isCaptainOfGame(bid)
             && request.resource.data.get('away', '') == sideTeam(bid, 'away')
-            && request.resource.data.get('home', '') == sideTeam(bid, 'home'));
+            && request.resource.data.get('home', '') == sideTeam(bid, 'home')
+            && scoreDocValid());
       allow delete: if isAdmin();
+    }
+
+    // Captain-written box scores and score lanes: nested batter rows can't be
+    // checked in rules, so cap the shape (field count, list lengths) and check
+    // every top-level number and displayed string. Pages still escape on render.
+    function optStr(d, k, n) { return !(k in d) || (d[k] is string && d[k].size() <= n && noTags(d[k])) || d[k] == null; }
+    function optList(d, k, n) { return !(k in d) || (d[k] is list && d[k].size() <= n) || d[k] == null; }
+    function optNum(d, k) { return !(k in d) || numOk(d[k]); }
+    function scoreDocValid() {
+      let d = request.resource.data;
+      return d.size() <= 80
+        && scoreOk(d.get('away_score', null)) && scoreOk(d.get('home_score', null))
+        && optNum(d, 'away_hits') && optNum(d, 'home_hits') && optNum(d, 'away_errors') && optNum(d, 'home_errors')
+        && optStr(d, 'recap', 2000) && optStr(d, 'potg_name', 80) && optStr(d, 'potg_team', 80)
+        && optStr(d, 'field', 80) && optStr(d, 'date', 40) && optStr(d, 'status', 40)
+        && optStr(d, 'submitted_by', 120) && optStr(d, 'team_name', 120) && optStr(d, 'submitting_team', 120)
+        && optList(d, 'awayBatters', 40) && optList(d, 'homeBatters', 40)
+        && optList(d, 'away_lineup', 40) && optList(d, 'home_lineup', 40)
+        && optList(d, 'away_pitchers', 10) && optList(d, 'home_pitchers', 10)
+        && optList(d, 'away_linescore', 15) && optList(d, 'home_linescore', 15)
+        && optList(d, 'away_errors_detail', 40) && optList(d, 'home_errors_detail', 40)
+        && optList(d, 'discrepancies', 60) && optList(d, 'discrepancy_picks', 60);
+    }
+    // The live scorer's saved state (scorer.html): bounded, numbers are numbers.
+    function gameStateValid() {
+      let d = request.resource.data;
+      return d.size() <= 60
+        && optList(d, 'playLog', 600) && optList(d, 'hrLog', 60) && optList(d, 'twoOutRbiLog', 60)
+        && optStr(d, 'half', 10)
+        && (!('inning' in d) || intIn(d.inning, 0, 30))
+        && (!('awayScore' in d) || intIn(d.awayScore, 0, 199))
+        && (!('homeScore' in d) || intIn(d.homeScore, 0, 199));
     }
 
     // Score lanes {gid}_away / {gid}_home (captains) and {gid}_admin (admin).
@@ -312,7 +348,7 @@ service cloud.firestore {
     match /score_submissions/{sid} {
       allow get: if isAdmin() || captainMayReadLane(sid);
       allow list: if isAdmin() || isCaptainOf(resource.data.get('team_id', ''));
-      allow create, update: if isAdmin() || captainOwnLane(sid);
+      allow create, update: if isAdmin() || (captainOwnLane(sid) && scoreDocValid());
       allow delete: if isAdmin();
     }
     function laneGame(sid) { return sid.replace('_(away|home|admin)$', ''); }
@@ -332,8 +368,9 @@ service cloud.firestore {
     match /game_states/{sid} {
       allow read: if true;
       allow write: if isAdmin()
-        || (sid.matches('.*_away$') && isCaptainOf(sideTeam(sid.replace('_away$', ''), 'away')))
-        || (sid.matches('.*_home$') && isCaptainOf(sideTeam(sid.replace('_home$', ''), 'home')));
+        || (((sid.matches('.*_away$') && isCaptainOf(sideTeam(sid.replace('_away$', ''), 'away')))
+             || (sid.matches('.*_home$') && isCaptainOf(sideTeam(sid.replace('_home$', ''), 'home'))))
+            && (request.resource == null || gameStateValid()));
     }
 
     // RSVPs {team}_{gid}_{pid}. Team members read; an active, approved player

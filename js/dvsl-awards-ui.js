@@ -14,7 +14,10 @@
   if (!A) return;
   var state = { data: null, awards: null, tab: 'leaders' };
 
-  function e(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  // Own escaper (same table as index.html esc) so this file never depends
+  // on load order to stay safe.
+  var ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' };
+  function e(s) { return s == null ? '' : String(s).replace(/[&<>"'`]/g, function (c) { return ESC_MAP[c]; }); }
   function teamOf(id) {
     var list = (typeof ALL_TEAMS !== 'undefined' && ALL_TEAMS.length) ? ALL_TEAMS : ((typeof TEAMS !== 'undefined') ? TEAMS : []);
     return list.filter(function (t) { return t.id === id; })[0] || null;
