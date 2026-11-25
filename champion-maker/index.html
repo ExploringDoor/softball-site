@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Champion Post Maker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #15171a; --mute: #5d646d; --line: #d9dde2; --paper: #f4f2ee; --white: #fff;
+    --go: #c8102e; --go-ink: #fff;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.45 Barlow, system-ui, sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+
+  .top { background: var(--ink); color: #fff; padding: 14px 16px; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .top h1 { margin: 0; font: 400 30px/1 Anton, Impact, sans-serif; letter-spacing: .02em; text-transform: uppercase; }
+  .top h1 b { color: #ffc72c; font-weight: 400; }
+  .top p { margin: 0; color: #c9ced6; font-size: 15px; }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; display: grid; gap: 28px; }
+  @media (min-width: 900px) {
+    .wrap { grid-template-columns: minmax(0, 440px) minmax(0, 1fr); align-items: start; padding: 28px 24px 60px; gap: 44px; }
+    .stage { position: sticky; top: 20px; }
+  }
+
+  /* preview */
+  .stage canvas { display: block; width: 100%; height: auto; background: #222; box-shadow: 8px 8px 0 var(--ink); }
+  .acts { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .btn { border: 2px solid var(--ink); background: var(--white); padding: 12px 18px; font: 700 19px/1 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
+  .btn.go { background: var(--go); border-color: var(--go); color: var(--go-ink); flex: 1 1 200px; }
+  .btn:active { transform: translate(2px, 2px); }
+  a.btn { text-decoration: none; display: inline-block; }
+  .acts.end { margin-top: 0; }
+  @media (min-width: 900px) { .acts.end { display: none; } }
+  .hint { margin: 12px 0 0; color: var(--mute); font-size: 14px; }
+
+  /* form */
+  form { display: grid; gap: 34px; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  legend { padding: 0; width: 100%; display: flex; align-items: baseline; gap: 12px; border-bottom: 3px solid var(--ink); padding-bottom: 6px; margin-bottom: 16px; }
+  legend i { font: 400 34px/1 Anton, Impact, sans-serif; font-style: normal; color: var(--go); }
+  legend span { font: 800 26px/1 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .03em; }
+  legend small { margin-left: auto; color: var(--mute); font-size: 13px; }
+  .rows { display: grid; gap: 14px; }
+  @media (min-width: 560px) { .two { grid-template-columns: 1fr 1fr; } .three { grid-template-columns: 2fr 1fr 1fr; } }
+  label.f { display: grid; gap: 5px; min-width: 0; }
+  label.f > span { font: 700 14px/1.2 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+  input[type=text] { width: 100%; border: 0; border-bottom: 2px solid var(--line); background: transparent; padding: 8px 0; font-size: 18px; font-weight: 600; border-radius: 0; }
+  input[type=text]:focus { outline: 0; border-bottom-color: var(--ink); }
+  input[type=text]::placeholder { color: #a9afb7; font-weight: 400; }
+  input[type=range] { width: 100%; accent-color: var(--ink); }
+
+  .pick { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .pick .thumb { flex: 0 0 76px; height: 76px; background: #fff repeating-linear-gradient(45deg, #eceef1 0 8px, #fff 8px 16px); border: 2px solid var(--ink); display: grid; place-items: center; overflow: hidden; }
+  .pick .thumb img { max-width: 100%; max-height: 100%; display: block; }
+  .pick .side { min-width: 0; display: grid; gap: 6px; justify-items: start; }
+  .pick input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .pick .choose { border: 2px solid var(--ink); background: var(--white); padding: 8px 12px; font: 700 16px/1 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; }
+  .pick input[type=file]:focus-visible + .choose { outline: 3px solid var(--go); }
+  .pick .clear { border: 0; background: none; padding: 0; color: var(--mute); text-decoration: underline; cursor: pointer; font-size: 14px; }
+
+  .colors { display: flex; gap: 22px; flex-wrap: wrap; align-items: end; }
+  .colors label { display: grid; gap: 5px; }
+  .colors label span { font: 700 14px/1.2 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); }
+  input[type=color] { width: 76px; height: 44px; padding: 0; border: 2px solid var(--ink); background: #fff; border-radius: 0; cursor: pointer; }
+
+  .seg { display: flex; flex-wrap: wrap; gap: 0; border: 2px solid var(--ink); width: fit-content; max-width: 100%; }
+  .seg label { cursor: pointer; }
+  .seg input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .seg span { display: block; padding: 10px 16px; font: 700 18px/1 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .05em; border-right: 2px solid var(--ink); background: var(--white); }
+  .seg label:last-child span { border-right: 0; }
+  .seg input:checked + span { background: var(--ink); color: #fff; }
+  .seg input:focus-visible + span { outline: 3px solid var(--go); outline-offset: -3px; }
+  .sub { font: 700 14px/1.2 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 0 0 6px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Champion <b>Post</b> Maker</h1>
+  <p>Crown your champions with your own logos on it. Nothing is uploaded; it all stays on this device.</p>
+</header>
+
+<main class="wrap">
+  <section class="stage" aria-label="Preview">
+    <canvas id="cv" width="1080" height="1350" aria-label="Preview of the champion image"></canvas>
+    <div class="acts">
+      <button class="btn go" id="save" type="button">Save image</button>
+      <button class="btn" id="share" type="button" hidden>Share</button>
+    </div>
+    <p class="hint" id="hint">The picture updates as you type.</p>
+  </section>
+
+  <form id="f" autocomplete="off" onsubmit="return false">
+    <fieldset>
+      <legend><i>1</i><span>Your site</span><small>Remembered on this device</small></legend>
+      <div class="rows">
+        <label class="f"><span>Website name</span><input type="text" name="site" placeholder="yourtournaments.com" maxlength="48"></label>
+        <div>
+          <p class="sub">Site logo</p>
+          <div class="pick" data-slot="siteLogo">
+            <div class="thumb"></div>
+            <div class="side"><input type="file" accept="image/*" id="fSite"><label class="choose" for="fSite">Choose logo</label><button class="clear" type="button" hidden>Remove</button></div>
+          </div>
+        </div>
+        <div class="colors">
+          <label><span>Main color</span><input type="color" name="c1" value="#0b1f3a"></label>
+          <label><span>Accent color</span><input type="color" name="c2" value="#ffc72c"></label>
+          <button class="btn" type="button" id="auto" hidden>Match my logo</button>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><i>2</i><span>The tournament</span></legend>
+      <div class="rows">
+        <label class="f"><span>Tournament name</span><input type="text" name="tourney" placeholder="Turf Wars" maxlength="60"></label>
+        <div class="rows two">
+          <label class="f"><span>Date</span><input type="text" name="date" placeholder="November 22, 2026" maxlength="40"></label>
+          <label class="f"><span>Where</span><input type="text" name="place" placeholder="Stephenville, TX" maxlength="40"></label>
+        </div>
+        <div>
+          <p class="sub">Tournament logo</p>
+          <div class="pick" data-slot="tourneyLogo">
+            <div class="thumb"></div>
+            <div class="side"><input type="file" accept="image/*" id="fTourney"><label class="choose" for="fTourney">Choose logo</label><button class="clear" type="button" hidden>Remove</button></div>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><i>3</i><span>The champion</span></legend>
+      <div class="rows">
+        <div class="rows two">
+          <label class="f"><span>Team name</span><input type="text" name="team" placeholder="Texas Smoke" maxlength="48"></label>
+          <label class="f"><span>Division</span><input type="text" name="division" placeholder="13U Gold" maxlength="28"></label>
+        </div>
+        <div class="rows three">
+          <label class="f"><span>Beat in the final</span><input type="text" name="runner" placeholder="Runner up team" maxlength="48"></label>
+          <label class="f"><span>Final score</span><input type="text" name="score" placeholder="7-3" maxlength="12" inputmode="text"></label>
+          <label class="f"><span>Record</span><input type="text" name="record" placeholder="5-0" maxlength="12"></label>
+        </div>
+        <div>
+          <p class="sub">Team photo</p>
+          <div class="pick" data-slot="photo">
+            <div class="thumb"></div>
+            <div class="side"><input type="file" accept="image/*" id="fPhoto"><label class="choose" for="fPhoto">Choose photo</label><button class="clear" type="button" hidden>Remove</button></div>
+          </div>
+        </div>
+        <div class="rows two" id="photoTune" hidden>
+          <label class="f"><span>Move photo up or down</span><input type="range" name="py" min="0" max="100" value="12"></label>
+          <label class="f"><span>Zoom</span><input type="range" name="zoom" min="100" max="220" value="100"></label>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend><i>4</i><span>The look</span></legend>
+      <div class="rows">
+        <div>
+          <p class="sub">Style</p>
+          <div class="seg">
+            <label><input type="radio" name="tpl" value="banner" checked><span>Banner</span></label>
+            <label><input type="radio" name="tpl" value="poster"><span>Poster</span></label>
+            <label><input type="radio" name="tpl" value="photo"><span>Full photo</span></label>
+          </div>
+        </div>
+        <div>
+          <p class="sub">Tournament logo sits on the</p>
+          <div class="seg">
+            <label><input type="radio" name="side" value="left"><span>Left</span></label>
+            <label><input type="radio" name="side" value="right" checked><span>Right</span></label>
+          </div>
+        </div>
+        <div>
+          <p class="sub">Shape</p>
+          <div class="seg">
+            <label><input type="radio" name="size" value="post" checked><span>Post</span></label>
+            <label><input type="radio" name="size" value="square"><span>Square</span></label>
+            <label><input type="radio" name="size" value="story"><span>Story</span></label>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <div class="acts end">
+      <button class="btn go" id="save2" type="button">Save image</button>
+      <a class="btn" href="#cv">See the picture</a>
+    </div>
+  </form>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var W = 1080, SIZES = { post: 1350, square: 1080, story: 1920 };
+  var DISPLAY = 'Anton, Impact, "Arial Narrow", sans-serif';
+  var COND = '"Barlow Condensed", "Arial Narrow", Arial, sans-serif';
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+  var form = document.getElementById('f');
+  var imgs = { siteLogo: null, tourneyLogo: null, photo: null };   // HTMLImageElement or null
+  var KEY = 'champion-post-kit-v1';
+  var TEXT = ['site', 'tourney', 'date', 'place', 'team', 'division', 'runner', 'score', 'record', 'c1', 'c2'];
+
+  // ---------- small helpers ----------
+  function val(n) { var el = form.elements[n]; return el ? String(el.value || '').trim() : ''; }
+  function hexRgb(h) { var m = /^#?([0-9a-f]{6})$/i.exec(h || ''); var n = m ? parseInt(m[1], 16) : 0; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function rgbHex(r, g, b) { return '#' + [r, g, b].map(function (v) { return ('0' + Math.max(0, Math.min(255, Math.round(v))).toString(16)).slice(-2); }).join(''); }
+  function lum(h) { var c = hexRgb(h).map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+  function on(h) { return lum(h) > 0.45 ? '#111418' : '#ffffff'; }                 // readable text on a color
+  function rgba(h, a) { var c = hexRgb(h); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
+  function mix(h, toward, t) { var a = hexRgb(h), b = hexRgb(toward); return rgbHex(a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t); }
+  function font(weight, px, fam, italic) { return (italic ? 'italic ' : '') + weight + ' ' + Math.round(px) + 'px ' + fam; }
+  function spaced(px) { if ('letterSpacing' in ctx) ctx.letterSpacing = px + 'px'; }
+
+  // Largest size (between min and max) at which `text` fits `maxW` on one line.
+  function fitSize(text, weight, fam, maxW, max, min, italic) {
+    var s = max;
+    for (; s > min; s -= 2) { ctx.font = font(weight, s, fam, italic); if (ctx.measureText(text).width <= maxW) break; }
+    return Math.max(s, min);
+  }
+  // Break into at most two balanced lines.
+  function twoLines(text) {
+    var w = text.split(/\s+/); if (w.length < 2) return [text];
+    var best = null;
+    for (var i = 1; i < w.length; i++) {
+      var a = w.slice(0, i).join(' '), b = w.slice(i).join(' ');
+      var d = Math.abs(ctx.measureText(a).width - ctx.measureText(b).width);
+      if (!best || d < best.d) best = { d: d, lines: [a, b] };
+    }
+    return best.lines;
+  }
+  function cover(img, x, y, w, h, px, py, zoom) {       // draw img filling the box, with a focal point
+    var s = Math.max(w / img.width, h / img.height) * (zoom || 1);
+    var dw = img.width * s, dh = img.height * s;
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.drawImage(img, x - (dw - w) * px, y - (dh - h) * py, dw, dh);
+    ctx.restore();
+  }
+  function contain(img, x, y, w, h, alignX) {            // draw img inside the box, keeping its shape
+    var s = Math.min(w / img.width, h / img.height), dw = img.width * s, dh = img.height * s;
+    var dx = alignX === 'left' ? x : alignX === 'right' ? x + w - dw : x + (w - dw) / 2;
+    ctx.drawImage(img, dx, y + (h - dh) / 2, dw, dh);
+    return { x: dx, w: dw };
+  }
+  function stripes(x, y, w, h, c1, c2) {                 // designed empty state for the photo
+    ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+    ctx.fillStyle = c1; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = c2; ctx.lineWidth = 46;
+    for (var i = -h; i < w + h; i += 120) { ctx.beginPath(); ctx.moveTo(x + i, y + h); ctx.lineTo(x + i + h, y); ctx.stroke(); }
+    ctx.restore();
+  }
+  // A logo on a white plate with a hard offset shadow.
+  function plate(img, x, y, size, shadow, pad) {
+    ctx.fillStyle = shadow; ctx.fillRect(x + 12, y + 12, size, size);
+    ctx.fillStyle = '#fff'; ctx.fillRect(x, y, size, size);
+    contain(img, x + pad, y + pad, size - pad * 2, size - pad * 2);
+  }
+
+  // ---------- what the picture says ----------
+  function model() {
+    var c1 = val('c1') || '#0b1f3a', c2 = val('c2') || '#ffc72c';
+    var team = val('team') || 'Your Champion', runner = val('runner'), score = val('score'), record = val('record');
+    var result = '';
+    if (runner && score) result = 'Beat ' + runner + ' ' + score + ' in the final';
+    else if (runner) result = 'Beat ' + runner + ' in the final';
+    else if (score) result = 'Won the final ' + score;
+    if (record) result += (result ? '   |   ' : '') + 'Went ' + record;
+    var where = [val('date'), val('place')].filter(Boolean).join('   |   ');
+    return {
+      c1: c1, c2: c2, team: team.toUpperCase(), division: val('division').toUpperCase(), result: result,
+      tourney: (val('tourney') || 'Your Tournament').toUpperCase(), where: where, site: val('site'),
+      right: form.elements.side.value !== 'left', py: (parseInt(val('py'), 10) || 0) / 100, zoom: (parseInt(val('zoom'), 10) || 100) / 100,
+    };
+  }
+
+  // The stack of words that every style shares. Sizes shrink together until it fits `maxH`.
+  // Returns the height used. `x` left edge, `y` top, `maxW` width.
+  function words(m, x, y, maxW, maxH, colors, k) {
+    for (var scale = 1; scale > 0.5; scale -= 0.04) {
+      var rows = layout(scale);
+      var total = rows.reduce(function (t, r) { return t + r.h; }, 0);
+      if (total <= maxH || scale <= 0.54) { paint(rows); return total; }
+    }
+    function layout(sc) {
+      var rows = [], q = k * sc;
+      if (m.division) rows.push({ t: m.division, f: font(800, 54 * q, COND), c: colors.text, h: 66 * q, ls: 5 });
+      var champSize = fitSize('CHAMPIONS', 400, DISPLAY, maxW * 0.98, 190 * q, 60);
+      rows.push({ t: 'CHAMPIONS', f: font(400, champSize, DISPLAY), c: colors.accent, h: champSize * 1.04, slant: true });
+      ctx.font = font(400, 100, DISPLAY);
+      var one = fitSize(m.team, 400, DISPLAY, maxW, 128 * q, 40);
+      var lines = [m.team], size = one;
+      if (one < 84 * q && /\s/.test(m.team)) {                      // too small on one line: use two
+        ctx.font = font(400, 100, DISPLAY); lines = twoLines(m.team);
+        size = Math.min(fitSize(lines[0], 400, DISPLAY, maxW, 112 * q, 40), fitSize(lines[1], 400, DISPLAY, maxW, 112 * q, 40));
+      }
+      lines.forEach(function (l, i) { rows.push({ t: l, f: font(400, size, DISPLAY), c: colors.text, h: size * (i === lines.length - 1 ? 1.2 : 1.04) }); });
+      if (m.result) { var rs = fitSize(m.result, 700, COND, maxW, 50 * q, 26); rows.push({ t: m.result, f: font(700, rs, COND), c: colors.soft, h: rs * 1.45 }); }
+      return rows;
+    }
+    function paint(rows) {
+      var cy = y;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      rows.forEach(function (r) {
+        if (r.rule) { ctx.fillStyle = r.c; ctx.fillRect(x, cy + r.h * 0.3, 120, 8); cy += r.h; return; }
+        ctx.font = r.f; ctx.fillStyle = r.c; spaced(r.ls || 0);
+        var base = cy + r.h * 0.82;
+        if (r.slant) { ctx.save(); ctx.transform(1, 0, -0.14, 1, base * 0.14, 0); ctx.fillText(r.t, x, base); ctx.restore(); }
+        else ctx.fillText(r.t, x, base);
+        cy += r.h;
+      });
+      spaced(0);
+    }
+  }
+
+  // Accent strip that names the tournament: name on the left, date and place on the right.
+  var BAND = 92, FOOT = 176;
+  function band(m, y) {
+    ctx.fillStyle = m.c2; ctx.fillRect(0, y, W, BAND);
+    var ink = on(m.c2), pad = 56, room = W - pad * 2;
+    ctx.textBaseline = 'middle'; spaced(2);
+    var ws = 0, ww = 0;
+    if (m.where) { ws = fitSize(m.where, 700, COND, room * 0.46, 36, 20); ctx.font = font(700, ws, COND); ww = ctx.measureText(m.where).width + 36; }
+    var ts = fitSize(m.tourney, 800, COND, room - ww, 52, 24);
+    ctx.font = font(800, ts, COND); ctx.fillStyle = ink; ctx.textAlign = 'left'; ctx.fillText(m.tourney, pad, y + BAND / 2 + 4);
+    if (m.where) { ctx.font = font(700, ws, COND); ctx.fillStyle = rgba(ink, 0.8); ctx.textAlign = 'right'; ctx.fillText(m.where, W - pad, y + BAND / 2 + 4); }
+    spaced(0);
+  }
+  // White strip along the bottom: the site's logo, big, and its name. The band sits on top of it.
+  function footer(m, H, h) {
+    var y = H - h;
+    band(m, y - BAND);
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, y, W, h);
+    var left = 56;
+    if (imgs.siteLogo) { var d = contain(imgs.siteLogo, 48, y + 14, 330, h - 28, 'left'); left = d.x + d.w + 28; }
+    if (m.site) {
+      var maxW = W - left - 56, s = fitSize(m.site, 700, COND, maxW, 64, 26);
+      ctx.font = font(700, s, COND); ctx.fillStyle = '#111418'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; spaced(1);
+      ctx.fillText(m.site, W - 56, y + h / 2 + 6); spaced(0);
+    }
+  }
+  function photoOrStripes(m, x, y, w, h) {
+    if (imgs.photo) cover(imgs.photo, x, y, w, h, 0.5, m.py, m.zoom);
+    else {
+      stripes(x, y, w, h, mix(m.c1, '#ffffff', 0.12), mix(m.c1, '#ffffff', 0.2));
+      ctx.font = font(700, 44, COND); ctx.fillStyle = rgba(on(m.c1), 0.75); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; spaced(6);
+      ctx.fillText('YOUR TEAM PHOTO GOES HERE', x + w / 2, y + h / 2); spaced(0);
+    }
+  }
+
+  // ---------- the three styles ----------
+  var STYLES = {
+    banner: function (m, H) {
+      var story = H > 1500, foot = FOOT, k = H < 1200 ? 0.8 : story ? 1.18 : 1;
+      var cut = Math.round(H * (story ? 0.47 : H < 1200 ? 0.41 : 0.47));   // where the photo ends on the left
+      var rise = 96;
+      photoOrStripes(m, 0, 0, W, cut + 40);
+      var g = ctx.createLinearGradient(0, cut - 260, 0, cut + 40);
+      g.addColorStop(0, rgba(m.c1, 0)); g.addColorStop(1, rgba(m.c1, 0.9));
+      ctx.fillStyle = g; ctx.fillRect(0, cut - 260, W, 300);
+      ctx.fillStyle = m.c1; ctx.beginPath(); ctx.moveTo(0, cut); ctx.lineTo(W, cut - rise); ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = m.c2; ctx.beginPath(); ctx.moveTo(0, cut); ctx.lineTo(W, cut - rise); ctx.lineTo(W, cut - rise + 18); ctx.lineTo(0, cut + 18); ctx.closePath(); ctx.fill();
+      var top = story ? 150 : 48, ps = Math.round(250 * k);
+      if (imgs.tourneyLogo) {
+        if (m.right) plate(imgs.tourneyLogo, W - 60 - ps, cut - rise - Math.round(ps * 0.62), ps, m.c2, 16);
+        else plate(imgs.tourneyLogo, 48, top, ps, m.c2, 16);
+      }
+      var y0 = cut + 46;
+      words(m, 60, y0, W - 120, H - foot - BAND - y0 - (story ? 130 : 20), { text: on(m.c1), accent: m.c2, soft: rgba(on(m.c1), 0.86) }, k);
+      footer(m, H - (story ? 110 : 0), foot);
+      if (story) { ctx.fillStyle = m.c1; ctx.fillRect(0, H - 110, W, 110); }
+    },
+
+    poster: function (m, H) {
+      var story = H > 1500, foot = FOOT, k = H < 1200 ? 0.76 : story ? 1.14 : 0.96;
+      ctx.fillStyle = m.c1; ctx.fillRect(0, 0, W, H);
+      ctx.save(); ctx.translate(W / 2, H * 0.3); ctx.rotate(-0.12);
+      ctx.fillStyle = mix(m.c1, on(m.c1), 0.07); ctx.fillRect(-W, -H * 0.2, W * 2, H * 0.34);
+      ctx.restore();
+      var top = story ? 190 : 70, fw = W - 170, fh = Math.round(H * (story ? 0.34 : H < 1200 ? 0.33 : 0.37)), fx = 78;
+      ctx.save(); ctx.translate(fx + fw / 2, top + fh / 2); ctx.rotate(-0.035);
+      ctx.fillStyle = m.c2; ctx.fillRect(-fw / 2 + 22, -fh / 2 + 22, fw, fh);
+      ctx.fillStyle = '#fff'; ctx.fillRect(-fw / 2, -fh / 2, fw, fh);
+      ctx.translate(-(fx + fw / 2), -(top + fh / 2));
+      photoOrStripes(m, fx + 18, top + 18, fw - 36, fh - 36);
+      ctx.restore();
+      if (imgs.tourneyLogo) {
+        var ps = Math.round(230 * k);
+        ctx.save(); ctx.translate(m.right ? W - 60 - ps / 2 : 60 + ps / 2, top + fh - ps * 0.35); ctx.rotate(m.right ? 0.06 : -0.06); plate(imgs.tourneyLogo, -ps / 2, -ps / 2, ps, m.c2, 14); ctx.restore();
+      }
+      var y0 = top + fh + 56;
+      words(m, 60, y0, W - 120, H - foot - BAND - y0 - (story ? 130 : 20), { text: on(m.c1), accent: m.c2, soft: rgba(on(m.c1), 0.86) }, k);
+      footer(m, H - (story ? 110 : 0), foot);
+      if (story) { ctx.fillStyle = m.c1; ctx.fillRect(0, H - 110, W, 110); }
+    },
+
+    photo: function (m, H) {
+      var story = H > 1500, foot = FOOT + BAND, k = H < 1200 ? 0.8 : story ? 1.14 : 0.98, base = H - (story ? 110 : 0);
+      photoOrStripes(m, 0, 0, W, base - foot + 4);
+      var gh = Math.round(H * 0.62), g = ctx.createLinearGradient(0, base - foot - gh, 0, base - foot);
+      g.addColorStop(0, rgba(m.c1, 0)); g.addColorStop(0.55, rgba(m.c1, 0.82)); g.addColorStop(1, rgba(m.c1, 0.97));
+      ctx.fillStyle = g; ctx.fillRect(0, base - foot - gh, W, gh + 4);
+      var top = story ? 150 : 48, ps = Math.round(230 * k);
+      if (imgs.tourneyLogo) plate(imgs.tourneyLogo, m.right ? W - 60 - ps : 48, top, ps, m.c2, 16);
+      var maxH = Math.round(H * 0.36), y0 = base - foot - maxH - 18;
+      // measure first so the words sit on the bottom
+      var probe = document.createElement('canvas').getContext('2d'), real = ctx; ctx = probe;
+      var used = words(m, 60, 0, W - 120, maxH, { text: '#fff', accent: m.c2, soft: 'rgba(255,255,255,.85)' }, k); ctx = real;
+      words(m, 60, y0 + (maxH - used), W - 120, maxH, { text: on(m.c1), accent: m.c2, soft: rgba(on(m.c1), 0.85) }, k);
+      footer(m, base, FOOT);
+      if (story) { ctx.fillStyle = m.c1; ctx.fillRect(0, H - 110, W, 110); }
+    },
+  };
+
+  function draw() {
+    var size = (form.elements.size.value || 'post'), tpl = form.elements.tpl.value || 'banner', H = SIZES[size] || 1350;
+    if (cv.height !== H) cv.height = H;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H);
+    (STYLES[tpl] || STYLES.banner)(model(), H);
+  }
+  // A short timer, not requestAnimationFrame: a tab in the background never gets a frame,
+  // and the picture must still be current when Save is pressed.
+  var pending = 0;
+  function redraw() { if (pending) return; pending = setTimeout(function () { pending = 0; draw(); }, 16); }
+
+  // ---------- pictures in ----------
+  function loadImage(src) { return new Promise(function (ok, no) { var i = new Image(); i.onload = function () { ok(i); }; i.onerror = no; i.src = src; }); }
+  // Read a chosen file, shrink it so a phone photo does not bog the page down, hand back a data URL.
+  function readShrunk(file, maxSide, type) {
+    return new Promise(function (ok, no) {
+      var url = URL.createObjectURL(file);
+      loadImage(url).then(function (img) {
+        var s = Math.min(1, maxSide / Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        ok(c.toDataURL(type, 0.9));
+      }).catch(function (e) { URL.revokeObjectURL(url); no(e); });
+    });
+  }
+  function setSlot(slot, dataUrl) {
+    var box = document.querySelector('.pick[data-slot="' + slot + '"]'), thumb = box.querySelector('.thumb'), clear = box.querySelector('.clear');
+    thumb.textContent = '';
+    if (!dataUrl) { imgs[slot] = null; clear.hidden = true; after(); return Promise.resolve(); }
+    return loadImage(dataUrl).then(function (img) {
+      imgs[slot] = img; var t = new Image(); t.src = dataUrl; t.alt = ''; thumb.appendChild(t); clear.hidden = false; after();
+    });
+    function after() {
+      if (slot === 'photo') document.getElementById('photoTune').hidden = !imgs.photo;
+      if (slot === 'siteLogo') document.getElementById('auto').hidden = !imgs.siteLogo;
+      redraw();
+    }
+  }
+  var stored = {};                                        // logo data URLs worth remembering
+  document.querySelectorAll('.pick').forEach(function (box) {
+    var slot = box.dataset.slot, input = box.querySelector('input[type=file]');
+    input.addEventListener('change', function () {
+      var file = input.files && input.files[0]; if (!file) return;
+      var isPhoto = slot === 'photo';
+      readShrunk(file, isPhoto ? 2200 : 700, isPhoto ? 'image/jpeg' : 'image/png').then(function (url) {
+        if (!isPhoto) stored[slot] = url;
+        return setSlot(slot, url).then(function () { if (slot === 'siteLogo' && !touchedColors) matchLogo(); save(); });
+      }).catch(function () { say('That file would not open as a picture. Try a JPG or PNG.'); });
+      input.value = '';
+    });
+    box.querySelector('.clear').addEventListener('click', function () { delete stored[slot]; setSlot(slot, null); save(); });
+  });
+
+  // ---------- colors from the logo ----------
+  var touchedColors = false;
+  function matchLogo() {
+    var img = imgs.siteLogo; if (!img) return;
+    var c = document.createElement('canvas'), n = 48; c.width = c.height = n;
+    var x = c.getContext('2d'); x.drawImage(img, 0, 0, n, n);
+    var d = x.getImageData(0, 0, n, n).data, buckets = {};
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 200) continue;
+      var r = d[i], g = d[i + 1], b = d[i + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      if (mx > 238 && mn > 238) continue;                               // skip white
+      var key = (r >> 5) + '-' + (g >> 5) + '-' + (b >> 5), o = buckets[key] || (buckets[key] = { n: 0, r: 0, g: 0, b: 0 });
+      o.n++; o.r += r; o.g += g; o.b += b;
+    }
+    var list = Object.keys(buckets).map(function (kk) { var o = buckets[kk]; var r = o.r / o.n, g = o.g / o.n, b = o.b / o.n; return { n: o.n, hex: rgbHex(r, g, b), sat: Math.max(r, g, b) - Math.min(r, g, b) }; });
+    if (!list.length) return;
+    list.sort(function (a, b) { return b.n - a.n; });
+    var total = list.reduce(function (t, o) { return t + o.n; }, 0);
+    // A real brand color is strong and takes up a real share of the logo. A photo style
+    // logo (a leather ball, a wood bat) has neither, and matching it gives mud, so leave
+    // the colors alone and say so.
+    var strong = list.filter(function (o) { return o.sat >= 110 && o.n / total >= 0.03; }).sort(function (a, b) { return b.n * b.sat - a.n * a.sat; });
+    if (!strong.length) { say('Your logo has no strong color to match, so pick your two colors by hand.'); return false; }
+    var bright = strong.filter(function (o) { return lum(o.hex) > 0.1; })[0] || strong[0];
+    var deep = strong.filter(function (o) { return lum(o.hex) < 0.1 && o.hex !== bright.hex; })[0];
+    var black = list.filter(function (o) { return lum(o.hex) < 0.02 && o.n / total >= 0.12; })[0];
+    var main = deep ? deep.hex : black ? '#14171c' : mix(bright.hex, '#000000', 0.66);
+    var accent = bright.hex;
+    if (deep && bright.hex === deep.hex) accent = '#ffffff';
+    if (Math.abs(lum(main) - lum(accent)) < 0.1) accent = '#ffffff';
+    form.elements.c1.value = main; form.elements.c2.value = accent; redraw(); return true;
+  }
+  document.getElementById('auto').addEventListener('click', function () { matchLogo(); save(); });
+  ['c1', 'c2'].forEach(function (n) { form.elements[n].addEventListener('input', function () { touchedColors = true; }); });
+
+  // ---------- remember the kit on this device ----------
+  function save() {
+    var o = { v: 1, logos: stored, touched: touchedColors, tpl: form.elements.tpl.value, size: form.elements.size.value, side: form.elements.side.value };
+    TEXT.forEach(function (n) { o[n] = form.elements[n].value; });
+    try { localStorage.setItem(KEY, JSON.stringify(o)); }
+    catch (e) { try { delete o.logos; localStorage.setItem(KEY, JSON.stringify(o)); } catch (e2) { /* private window: nothing to do */ } }
+  }
+  function restore() {
+    var o = null; try { o = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { o = null; }
+    if (!o) return Promise.resolve();
+    TEXT.forEach(function (n) { if (typeof o[n] === 'string' && form.elements[n]) form.elements[n].value = o[n]; });
+    if (o.tpl && STYLES[o.tpl]) form.elements.tpl.value = o.tpl;
+    if (o.size && SIZES[o.size]) form.elements.size.value = o.size;
+    if (o.side === 'left' || o.side === 'right') form.elements.side.value = o.side;
+    touchedColors = !!o.touched; stored = o.logos || {};
+    return Promise.all(Object.keys(stored).map(function (s) { return imgs.hasOwnProperty(s) ? setSlot(s, stored[s]).catch(function () {}) : null; }));
+  }
+  form.addEventListener('input', function () { redraw(); save(); });
+  form.addEventListener('change', function () { redraw(); save(); });
+
+  // ---------- picture out ----------
+  var hint = document.getElementById('hint');
+  function say(t) { hint.textContent = t; }
+  function fileName() { var m = model(); return (m.team + ' ' + (m.division || '') + ' champions').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.png'; }
+  function toBlob() { draw(); return new Promise(function (ok) { cv.toBlob(ok, 'image/png'); }); }
+  function saveImage() {
+    toBlob().then(function (b) {
+      var a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fileName();
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+      say('Saved. On a phone, look in your Files or Downloads, or use Share to send it straight to Instagram.');
+    });
+  }
+  document.getElementById('save').addEventListener('click', saveImage);
+  document.getElementById('save2').addEventListener('click', saveImage);
+  var shareBtn = document.getElementById('share');
+  try { if (navigator.canShare && navigator.canShare({ files: [new File([new Blob(['x'])], 'x.png', { type: 'image/png' })] })) shareBtn.hidden = false; } catch (e) {}
+  shareBtn.addEventListener('click', function () {
+    toBlob().then(function (b) {
+      var m = model(), file = new File([b], fileName(), { type: 'image/png' });
+      return navigator.share({ files: [file], title: m.team + ' are champions', text: m.site ? 'Full results at ' + m.site : '' });
+    }).catch(function () { /* closed the share sheet */ });
+  });
+
+  // ---------- start ----------
+  function fontsReady() {
+    if (!document.fonts || !document.fonts.load) return Promise.resolve();
+    return Promise.all([document.fonts.load('400 80px Anton'), document.fonts.load('600 40px "Barlow Condensed"'), document.fonts.load('700 40px "Barlow Condensed"'), document.fonts.load('800 40px "Barlow Condensed"')]).catch(function () {});
+  }
+  function demo() {                                       // local testing only: ?demo=1 reads ./_demo/
+    var d = { site: 'ststournaments.com', tourney: 'Turf Wars', date: 'November 22, 2026', place: 'Stephenville, TX', team: 'Texas Smoke', division: '13U Gold', runner: 'Aledo Sox', score: '7-3', record: '5-0' };
+    Object.keys(d).forEach(function (n) { form.elements[n].value = d[n]; });
+    var q = new URLSearchParams(location.search);
+    if (q.get('team')) form.elements.team.value = q.get('team');
+    if (q.get('tpl')) form.elements.tpl.value = q.get('tpl');
+    if (q.get('size')) form.elements.size.value = q.get('size');
+    if (q.get('side')) form.elements.side.value = q.get('side');
+    var files = { siteLogo: '_demo/site-logo.png', tourneyLogo: '_demo/tourney-logo.png', photo: '_demo/photo.jpg' };
+    return Promise.all(Object.keys(files).map(function (s) { return setSlot(s, files[s]).catch(function () {}); })).then(function () { form.elements.c1.value = q.get('c1') || '#002d72'; form.elements.c2.value = q.get('c2') || '#c9a227'; if (q.get('match')) matchLogo(); });
+  }
+  var isDemo = /[?&]demo=1/.test(location.search);
+  if (/[?&]shot=1/.test(location.search)) {              // local testing only: the bare picture at full size
+    var st = document.createElement('style');
+    st.textContent = 'body{background:#fff}.top,form,.acts,.hint{display:none!important}.wrap{display:block;padding:0;max-width:none}.stage{position:static}.stage canvas{width:1080px;box-shadow:none}';
+    document.head.appendChild(st);
+  }
+  Promise.all([fontsReady(), isDemo ? demo() : restore()]).then(draw, draw);
+  draw();
+})();
+</script>
+</body>
+</html>
