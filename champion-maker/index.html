@@ -77,6 +77,14 @@
   .seg label:last-child span { border-right: 0; }
   .seg input:checked + span { background: var(--ink); color: #fff; }
   .seg input:focus-visible + span { outline: 3px solid var(--go); outline-offset: -3px; }
+  .champs { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--ink); }
+  .champs li { border-bottom: 1px solid var(--line); }
+  .champs button { width: 100%; text-align: left; background: none; border: 0; padding: 12px 0; cursor: pointer; display: grid; grid-template-columns: 96px 1fr; gap: 4px 14px; align-items: baseline; }
+  .champs button:hover b, .champs button:focus-visible b { text-decoration: underline; }
+  .champs .dv { font: 800 22px/1 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .03em; color: var(--go); }
+  .champs b { font-size: 18px; font-weight: 700; }
+  .champs small { grid-column: 2; color: var(--mute); font-size: 14px; }
+  .champs li.on { background: #fff; box-shadow: -10px 0 0 #fff, 10px 0 0 #fff; }
   .sub { font: 700 14px/1.2 "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .08em; color: var(--mute); margin: 0 0 6px; }
 </style>
 </head>
@@ -98,6 +106,16 @@
   </section>
 
   <form id="f" autocomplete="off" onsubmit="return false">
+    <fieldset id="linkBox">
+      <legend><i>&#9733;</i><span>Start with a link</span><small>Optional</small></legend>
+      <div class="rows">
+        <label class="f"><span>USSSA event link or event number</span><input type="text" name="link" placeholder="usssa.com/event/your-event/123456" maxlength="300" inputmode="url" autocapitalize="off" spellcheck="false"></label>
+        <div class="acts" style="margin-top:0"><button class="btn" id="find" type="button">Find the champions</button></div>
+        <p class="hint" id="linkMsg" style="margin:0" aria-live="polite">Paste the link and every division's champion, score and record fill in for you.</p>
+        <ul class="champs" id="champs" hidden></ul>
+      </div>
+    </fieldset>
+
     <fieldset>
       <legend><i>1</i><span>Your site</span><small>Remembered on this device</small></legend>
       <div class="rows">
@@ -550,6 +568,45 @@
       return navigator.share({ files: [file], title: m.team + ' are champions', text: m.site ? 'Full results at ' + m.site : '' });
     }).catch(function () { /* closed the share sheet */ });
   });
+
+  // ---------- start from a link ----------
+  var linkMsg = document.getElementById('linkMsg'), champList = document.getElementById('champs'), findBtn = document.getElementById('find');
+  function setField(n, v) { if (form.elements[n]) form.elements[n].value = v || ''; }
+  function useChampion(ev, c, li) {
+    setField('tourney', ev.name); setField('date', ev.dates); setField('place', ev.location);
+    setField('team', c.team); setField('division', c.division); setField('runner', c.runnerUp); setField('score', c.score); setField('record', c.record);
+    Array.prototype.forEach.call(champList.children, function (x) { x.classList.toggle('on', x === li); });
+    if (ev.logo && !imgs.tourneyLogo) { stored.tourneyLogo = ev.logo; setSlot('tourneyLogo', ev.logo).catch(function () { delete stored.tourneyLogo; }); }
+    redraw(); save();
+    linkMsg.textContent = c.team + ' filled in. Add the team photo and it is ready.' + (c.score ? '' : ' USSSA has no final score for this one, so type it in if you want it shown.');
+  }
+  function findChampions() {
+    var link = val('link'); if (!link) { linkMsg.textContent = 'Paste your USSSA event link first.'; return; }
+    findBtn.disabled = true; linkMsg.textContent = 'Reading the event from USSSA...'; champList.hidden = true; champList.textContent = '';
+    fetch('/api/lookup?url=' + encodeURIComponent(link)).then(function (r) { return r.json().catch(function () { return { ok: false }; }); }).then(function (d) {
+      if (!d || !d.ok) { linkMsg.textContent = (d && d.message) || 'Could not read that link. You can still type the details in below.'; return; }
+      var ev = d.event || {}, list = d.champions || [];
+      setField('tourney', ev.name); setField('date', ev.dates); setField('place', ev.location);
+      if (ev.logo && !imgs.tourneyLogo) { stored.tourneyLogo = ev.logo; setSlot('tourneyLogo', ev.logo).catch(function () { delete stored.tourneyLogo; }); }
+      list.forEach(function (c) {
+        var li = document.createElement('li'), b = document.createElement('button'); b.type = 'button';
+        var dv = document.createElement('span'); dv.className = 'dv'; dv.textContent = c.division || 'Division';
+        var nm = document.createElement('b'); nm.textContent = c.team;
+        var sm = document.createElement('small'); sm.textContent = [c.runnerUp ? 'Beat ' + c.runnerUp + (c.score ? ' ' + c.score : '') : '', c.record ? 'Went ' + c.record : ''].filter(Boolean).join('   |   ');
+        b.appendChild(dv); b.appendChild(nm); if (sm.textContent) b.appendChild(sm);
+        b.addEventListener('click', function () { useChampion(ev, c, li); });
+        li.appendChild(b); champList.appendChild(li);
+      });
+      champList.hidden = !list.length;
+      var wait = (d.waiting || []).length, fail = (d.failed || []).length;
+      var msg = list.length ? ev.name + ': pick a champion to fill in the picture.' : ev.name + ' has no champions posted on USSSA yet.';
+      if (wait && list.length) msg += ' ' + wait + (wait === 1 ? ' division has' : ' divisions have') + ' no champion posted yet.';
+      if (fail) msg += ' ' + fail + (fail === 1 ? ' division' : ' divisions') + ' could not be read just now, so try again in a minute for the rest.';
+      linkMsg.textContent = msg; redraw(); save();
+    }).catch(function () { linkMsg.textContent = 'Could not reach the lookup. You can still type the details in below.'; }).then(function () { findBtn.disabled = false; });
+  }
+  findBtn.addEventListener('click', findChampions);
+  form.elements.link.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); findChampions(); } });
 
   // ---------- start ----------
   function fontsReady() {
