@@ -2578,13 +2578,21 @@ async function _deleteInChunks(collName, ids) {
   }
 }
 
+// The server clears the messages AND the inbox (pending_nav) items their
+// pushes created; the page cannot reach pending_nav itself. A very large
+// chat comes back with more:true, so keep calling until it is done.
 window.clearCaptainChat = async function() {
   if (!confirm('Delete ALL messages in Captains Chat? This cannot be undone.')) return;
   try {
-    const snap = await getDocs(collection(db, 'captain_chat'));
-    if (snap.empty) { toast('Captains chat is already empty'); return; }
-    await _deleteInChunks('captain_chat', snap.docs.map(d => d.id));
-    toast(`Deleted ${snap.size} captain chat message${snap.size===1?'':'s'}`);
+    let msgs = 0, items = 0;
+    for (let i = 0; i < 3; i++) {
+      const r = await apiPost('delete-by-source', { collection: 'captain_chat', all: true });
+      msgs += Number(r.messagesDeleted) || 0;
+      items += Number(r.deleted) || 0;
+      if (!r.more) break;
+    }
+    if (!msgs && !items) toast('Captains chat is already empty');
+    else toast(`Deleted ${msgs} captain chat message${msgs===1?'':'s'} and ${items} inbox item${items===1?'':'s'}`);
     refreshCaptainChat();
   } catch(e) {
     toast('Failed to clear captains chat: ' + e.message, 'error');
@@ -4062,6 +4070,7 @@ window.saveForfeit = async function(gameId) {
     score_conflict: false, score_pending: false, score_confirmed: true,
   };
   laneFields.forEach(k => { update[k] = deleteField(); });
+  const prevSide = _forfeitOf(g);
   try {
     await updateDoc(doc(db, 'games', gameId), update);
     Object.assign(g, { forfeit: side, forfeit_at: update.forfeit_at, forfeit_by: 'admin', done: true, away_score: null, home_score: null,
@@ -4076,8 +4085,13 @@ window.saveForfeit = async function(gameId) {
       } catch (laneErr) { console.warn('Could not settle lane', gameId, s, laneErr); }
     }
     toast(`${label}. Standings updated.`);
+    // Same push a final sends, to both teams. Only when the result is new
+    // or changed, so re-saving the same forfeit does not ping everyone again.
+    if (prevSide !== side) { try { sendForfeitPush(g, side); } catch (_) {} }
     await logActivity('Forfeit', `${label}: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk || '?'}`);
     await recalcStandingsFromGames();
+    // A box score already entered for this game stops counting in stats.
+    recalcPlayerStatsFromBoxScores().catch(e => console.warn('stats recalc after forfeit failed', e));
     renderScores(); renderDashboard(); renderStandings();
     try { renderFinancials(); } catch (_) {}
   } catch (e) { toast('Failed: ' + e.message, 'error'); }
@@ -4096,6 +4110,7 @@ window.clearForfeit = async function(gameId) {
     toast('Forfeit removed');
     await logActivity('Forfeit', `Removed forfeit: ${getTeamName(g.away)} @ ${getTeamName(g.home)} Wk ${g.wk || '?'}`);
     await recalcStandingsFromGames();
+    recalcPlayerStatsFromBoxScores().catch(e => console.warn('stats recalc after forfeit removal failed', e));
     renderScores(); renderDashboard(); renderStandings();
     try { renderFinancials(); } catch (_) {}
   } catch (e) { toast('Failed: ' + e.message, 'error'); }
@@ -6697,8 +6712,15 @@ async function recalcPlayerStatsFromBoxScores() {
   // (captain submissions get marked 'approved' on merge). Also tolerate
   // missing status — older docs sometimes lack the field entirely.
   const FINALIZED = new Set(['final', 'approved', '']);
-  Object.values(byGame).forEach(bs => {
+  // A game later ruled a forfeit keeps no stats: its box score (if one was
+  // entered) is left out of the season totals (js/dvsl-awards.js rule).
+  const _ffIds = {};
+  (typeof GAMES !== 'undefined' && Array.isArray(GAMES) ? GAMES : []).forEach(g => {
+    if (g && g.id && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double')) _ffIds[String(g.id)] = true;
+  });
+  Object.entries(byGame).forEach(([gid, bs]) => {
     if (bs.status && !FINALIZED.has(bs.status)) return;
+    if (_ffIds[gid]) return;
     (bs.away_lineup || []).forEach(line => addLine(line, bs.away));
     (bs.home_lineup || []).forEach(line => addLine(line, bs.home));
   });
@@ -9476,6 +9498,32 @@ function renderForfeitFees() {
     </tbody></table></div>` : ''}`;
 }
 
+// Captain dues rows (captain.html Payments tab) are per player and store
+// amount_owed / amount_paid / paid instead of `amount`. Read them as owed,
+// paid and balance; a row marked paid with no amount_paid counts as paid in
+// full. Stored data is never changed here.
+function _captainDues(p) {
+  if (!p || p.amount != null) return null;
+  if (p.amount_owed == null && p.amount_paid == null && !p.player_id) return null;
+  const owed = Math.max(0, Number(p.amount_owed) || 0);
+  const paid = p.amount_paid != null && p.amount_paid !== ''
+    ? Math.max(0, Number(p.amount_paid) || 0)
+    : (p.paid === true ? owed : 0);
+  return { owed, paid, balance: Math.max(0, owed - paid) };
+}
+// Ledger rows have a YYYY-MM-DD `date`; captain dues rows only carry
+// updated_at (a Timestamp), so fall back to that for display and sorting.
+function _payDate(p) {
+  if (p && p.date) return String(p.date);
+  const t = p && (p.updated_at || p.created_at);
+  try {
+    const d = t && (t.toDate ? t.toDate() : (t.seconds ? new Date(t.seconds * 1000) : new Date(t)));
+    if (d && !isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  } catch (_) {}
+  return '';
+}
+window._captainDues = _captainDues;
+
 window.renderFinancials = function() {
   try { renderForfeitFees(); } catch (e) { console.warn('forfeit fees', e); }
   // Summary cards
@@ -9503,7 +9551,7 @@ window.renderFinancials = function() {
   const teamId = document.getElementById('fin-filter-team')?.value || 'all';
   // Admin ledger rows carry `team`; captain dues rows carry `team_id`.
   const filtered = teamId === 'all' ? PAYMENTS : PAYMENTS.filter(p=>(p.team||p.team_id)===teamId);
-  const sorted = [...filtered].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const sorted = [...filtered].sort((a,b)=>_payDate(b).localeCompare(_payDate(a)));
 
   if (!sorted.length) {
     el.innerHTML = '<div class="empty">No payments recorded yet. Click "+ Record Payment" to add one.</div>';
@@ -9513,14 +9561,23 @@ window.renderFinancials = function() {
     <thead><tr><th>Date</th><th>Team</th><th>Type</th><th>Amount</th><th>Note</th><th>Actions</th></tr></thead>
     <tbody>${sorted.map(p => {
       const typeColor = p.type==='dues'?'var(--green)':p.type==='expense'?'var(--red)':'var(--blue)';
+      const cd = _captainDues(p);
+      const money = n => '$' + (Number(n) || 0).toLocaleString();
+      const amountCell = cd
+        ? `<td style="font-size:13px;line-height:1.45;white-space:nowrap">
+            <div>Owed <strong>${esc(money(cd.owed))}</strong></div>
+            <div style="color:var(--green)">Paid <strong>${esc(money(cd.paid))}</strong></div>
+            <div style="color:${cd.balance > 0 ? 'var(--red)' : 'var(--muted2)'}">Balance <strong>${esc(money(cd.balance))}</strong></div>
+          </td>`
+        : `<td style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:${p.type==='expense'?'var(--red)':'var(--green)'}">
+          ${p.type==='expense'?'-':''}${esc(money(p.amount))}
+        </td>`;
       return `<tr>
-        <td style="color:var(--muted2);font-size:12px">${esc(p.date||'—')}</td>
-        <td><strong>${esc(getTeamName(p.team||p.team_id)||p.team||'—')}</strong></td>
-        <td><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:${typeColor}">${esc(p.type||'payment')}</span></td>
-        <td style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;color:${p.type==='expense'?'var(--red)':'var(--green)'}">
-          ${p.type==='expense'?'-':''}$${esc((Number(p.amount)||0).toLocaleString())}
-        </td>
-        <td style="color:var(--muted2);font-size:13px">${esc(p.note||'—')}</td>
+        <td style="color:var(--muted2);font-size:12px">${esc(_payDate(p)||'—')}</td>
+        <td><strong>${esc(getTeamName(p.team||p.team_id)||p.team||'—')}</strong>${cd && p.player_name ? `<div style="font-size:12px;color:var(--muted)">${esc(p.player_name)}</div>` : ''}</td>
+        <td><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:${cd ? 'var(--blue)' : typeColor}">${esc(cd ? 'player dues' : (p.type||'payment'))}</span></td>
+        ${amountCell}
+        <td style="color:var(--muted2);font-size:13px">${esc(p.note||p.notes||'—')}</td>
         <td class="actions"><button class="btn btn-danger btn-sm" onclick="deletePayment('${jsArg(p.id)}')">Delete</button></td>
       </tr>`;
     }).join('')}
@@ -10329,6 +10386,38 @@ window.sendScorePush = function(g, awayScore, homeScore) {
   }
 };
 
+// Forfeit result push (admin saveForfeit). Mirrors sendScorePush: category
+// 'scores' to both teams, deep link to the game, plus 'playoffs' for a
+// playoff round. Title names the winner ("Shir Ami wins by forfeit").
+function _forfeitPushText(g, side) {
+  const awayName = getTeamName(g.away);
+  const homeName = getTeamName(g.home);
+  const title = side === 'double'
+    ? `Double forfeit: ${awayName} at ${homeName}`
+    : `${getTeamFull(side === 'away' ? g.home : g.away)} wins by forfeit`;
+  const parts = [];
+  if (side !== 'double') parts.push(`${getTeamFull(g[side])} forfeited`);
+  if (g.wk) parts.push(`Week ${g.wk}`);
+  if (g.date) parts.push(g.date);
+  return { title, body: parts.join(' · ') || 'Game final' };
+}
+window._forfeitPushText = _forfeitPushText;
+window.sendForfeitPush = function(g, side) {
+  if (!g || !g.away || !g.home) return;
+  if (side !== 'away' && side !== 'home' && side !== 'double') return;
+  const { title, body } = _forfeitPushText(g, side);
+  const sendOne = (category, url) => sendPushApi({
+    title, body, category,
+    teams: [g.away, g.home],
+    url,
+    excludeToken: localStorage.getItem('dvsl-notif-token') || undefined,
+  });
+  sendOne('scores', g.id ? `/#game/${encodeURIComponent(g.id)}` : '/#scores');
+  const wkStr = String(g.wk || '').toUpperCase();
+  const isPlayoff = g.playoff === true || wkStr.startsWith('PL') || wkStr.includes('PLAYOFF') || wkStr.includes('CHAMP') || wkStr.includes('SEMI') || wkStr.includes('QUARTER');
+  if (isPlayoff) sendOne('playoffs', '/playoffs.html');
+};
+
 window.refreshSubscriberCount = async function() {
   const el = document.getElementById('push-sub-count');
   if (!el) return;
@@ -10339,7 +10428,8 @@ window.refreshSubscriberCount = async function() {
 };
 
 // notification_tokens docs are anonymous — no email/name, just
-// { token, categories[], teams[], timestamp, is_admin? }. This view
+// { token, categories[], teams[], timestamp, auth_uid? } (legacy docs may
+// still carry is_admin). This view
 // gives Adam per-phone visibility into what each subscription opted
 // into: which teams they follow (empty = all), which categories are
 // on, admin flag, when they enabled, and the last 6 chars of the FCM
@@ -10375,6 +10465,18 @@ window.togglePushSubscriberList = async function() {
               return d.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
             } catch(_) { return '—'; }
           };
+          // Admin devices: tokens now carry auth_uid; the trusted admin flag
+          // lives in roles/{uid}.admin. Read each distinct uid's roles doc in
+          // parallel chunks; the old is_admin token field is only a fallback
+          // for legacy tokens that have no auth_uid yet.
+          const _subUids = [...new Set(rows.map(r => r.auth_uid).filter(u => typeof u === 'string' && u))];
+          const _adminUids = new Set();
+          for (let i = 0; i < _subUids.length; i += 20) {
+            const chunk = _subUids.slice(i, i + 20);
+            const snaps = await Promise.all(chunk.map(u => getDoc(doc(db, 'roles', u)).catch(() => null)));
+            snaps.forEach((s, j) => { if (s && s.exists() && (s.data() || {}).admin === true) _adminUids.add(chunk[j]); });
+          }
+          rows.forEach(r => { r._admin = r.auth_uid ? _adminUids.has(r.auth_uid) : r.is_admin === true; });
           // Summary header: how many opted into each category / each team.
           const catCounts = {};
           const teamCounts = {};
@@ -10383,7 +10485,7 @@ window.togglePushSubscriberList = async function() {
             (r.categories || []).forEach(c => { catCounts[c] = (catCounts[c]||0)+1; });
             if (!r.teams || r.teams.length === 0) allTeamsN++;
             (r.teams || []).forEach(t => { teamCounts[t] = (teamCounts[t]||0)+1; });
-            if (r.is_admin) adminN++;
+            if (r._admin) adminN++;
           });
           const catSummary = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])
             .map(([c,n]) => `<span style="display:inline-block;padding:1px 6px;margin:0 3px 3px 0;background:#e0e7ff;color:#1e3a8a;border-radius:10px;font-size:11px">${esc(c)}: ${esc(n)}</span>`).join('');
@@ -10403,7 +10505,7 @@ window.togglePushSubscriberList = async function() {
               ? r.categories.map(c => `<span style="display:inline-block;padding:0 5px;margin-right:3px;background:#e0e7ff;color:#1e3a8a;border-radius:8px;font-size:11px">${esc(c)}</span>`).join('')
               : '<span style="color:var(--muted2);font-style:italic">none</span>';
             const tokenTail = (r.token || '').slice(-6) || '—';
-            const adminBadge = r.is_admin
+            const adminBadge = r._admin
               ? '<span style="display:inline-block;padding:0 5px;margin-right:4px;background:#fecaca;color:#991b1b;border-radius:8px;font-size:11px;font-weight:700">ADMIN</span>'
               : '';
             return `

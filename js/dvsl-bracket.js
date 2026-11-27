@@ -197,7 +197,7 @@
         '<span class="nm">' + esc(s.name) + (s.via ? '<span class="via">via ' + esc(s.via) + '</span>' : '') + '</span>' +
         '<span class="sc">' + (sc != null && sc !== '' ? esc(sc) : '') + '</span></div>';
     }
-    var tag = cls === 'f' ? '<span class="tag f">🏆 Final</span>'
+    var tag = cls === 'f' ? '<span class="tag f"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:3px"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg>Final</span>'
             : cls === 'l' ? '<span class="tag l">Losers</span>'
                           : '<span class="tag w">Winners</span>';
     var cd = okStr(g.date) ? new Date(g.date + 'T12:00:00') : null;
@@ -208,7 +208,7 @@
     var field = okStr(g.field) ? String(g.field) : '';
     // Reuse the site's clickable-venue helper when it's available.
     var fieldHTML = field
-      ? '📍 ' + (typeof window.fieldLink === 'function' ? window.fieldLink(field) : esc(field))
+      ? '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px;margin-right:3px"><path d="M12 21s-7-6.2-7-11.2a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.5"/></svg>' + (typeof window.fieldLink === 'function' ? window.fieldLink(field) : esc(field))
       : '';
     return '<div class="bk-match acc-' + cls + '" data-tkey="' + esc(t.key) + '" data-g="' + esc(g.g) + '"' +
       ' style="left:' + x + 'px;top:' + y + 'px">' +

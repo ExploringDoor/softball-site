@@ -12,6 +12,8 @@
  *   - singles = stored s, else H minus 2B, 3B and HR
  *   - H = 1B + 2B + 3B + HR, TB = 1B + 2*2B + 3*3B + 4*HR
  *   - playoff box scores (id / game_id 'po__...') count, like the Stats page
+ *   - a box score for a game ruled a forfeit (games.forfeit away|home|double)
+ *     never counts: the result stands with no runs, so the stats go too
  * Rows marked dnp are skipped (they carry no stats).
  *
  * Player of the Week (one line on the page, see FORMULA_TEXT):
@@ -96,6 +98,23 @@
 
   function gameIdOf(bs) { return String((bs && (bs.game_id || bs.id)) || ''); }
 
+  // Games ruled a forfeit: {gameId: true}. Same test as
+  // DVSLStandings.forfeitOf. Any box score entered for one of these games
+  // is left out of season stats, leaders, Player of the Week and records.
+  function forfeitGameIds(games) {
+    var out = {};
+    (games || []).forEach(function (g) {
+      if (g && g.id && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double')) out[String(g.id)] = true;
+    });
+    return out;
+  }
+  // ff = forfeitGameIds(games). Checks both the doc id and game_id, since
+  // captain per-team docs are {gameId}_{teamId} with game_id set.
+  function isForfeitBox(bs, ff) {
+    if (!bs || !ff) return false;
+    return !!(ff[String(bs.game_id || '')] || ff[String(bs.id || '')]);
+  }
+
   // Normalise the schedule. Accepts raw games docs or index.html
   // SCHEDULE_PREVIEW rows: {id, wk, date_iso | rawDate | date, done, ppd | rained_out}.
   function normGames(games, defaultYear) {
@@ -123,9 +142,11 @@
     var games = normGames(opts.games, year);
     var gById = {};
     games.forEach(function (g) { gById[g.id] = g; });
+    var ff = forfeitGameIds(opts.games);
     var lines = [];
     (boxScores || []).forEach(function (bs) {
       if (!countsAsFinal(bs)) return;
+      if (isForfeitBox(bs, ff)) return;
       var gid = gameIdOf(bs);
       var g = gById[gid] || null;
       var playoff = isPlayoffId(gid) || isPlayoffId(bs.id);
@@ -376,7 +397,8 @@
   var api = {
     MIN_PA_WEEK: MIN_PA_WEEK, SEASON_AVG_MIN_PA: SEASON_AVG_MIN_PA, FORMULA_TEXT: FORMULA_TEXT,
     cleanName: cleanName, isoFrom: isoFrom, rangeLabel: rangeLabel, shortDate: shortDate,
-    countsAsFinal: countsAsFinal, battingLines: battingLines, aggregate: aggregate,
+    countsAsFinal: countsAsFinal, forfeitGameIds: forfeitGameIds, isForfeitBox: isForfeitBox,
+    battingLines: battingLines, aggregate: aggregate,
     potwScore: potwScore, pickWeek: pickWeek, weeks: weeks, applyOverrides: applyOverrides,
     statLine: statLine, records: records, matchPlayer: matchPlayer, currentPick: currentPick,
     fmtAvg: fmtAvg

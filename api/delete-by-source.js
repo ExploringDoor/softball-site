@@ -16,6 +16,13 @@
 //       with that id still exists, the same message rules apply; if it no
 //       longer exists: the admin, any captain, or the user who sent the push
 //       (every pending_nav item carries sender_uid == caller).
+//   { collection: 'captain_chat', all: true }  admin only ("Clear all" in
+//       admin.html): deletes every captains chat message AND every inbox
+//       item those pushes created (by source_id, plus any leftover
+//       captains_chat inbox items whose message was already gone), in
+//       batches. Rate limited to 3 runs per 10 minutes per admin. If the
+//       chat is too big for one run, returns more:true and the page calls
+//       again.
 
 import { cors, rateLimited, requireUser, getRoles, fsGet, fsQuery, fsCommit, fsDelete, body as readBody } from './_lib/dvsl.js';
 
@@ -43,6 +50,42 @@ async function deleteItems(items) {
   }
 }
 
+// Bulk clear of the captains chat. Pages of PAGE messages: look up their
+// inbox items (source_id IN, 30 ids per query), then delete items and
+// messages together in commits of at most 400 writes. A final sweep removes
+// captains_chat inbox items left behind by messages deleted earlier.
+export const BULK_PAGE = 300;
+export const BULK_MAX_ROUNDS = 10;
+export async function clearCaptainChat() {
+  let messages = 0, items = 0, more = false;
+  for (let round = 0; ; round++) {
+    if (round >= BULK_MAX_ROUNDS) { more = true; break; }
+    const msgs = await fsQuery('captain_chat', [], { limit: BULK_PAGE });
+    if (!msgs.length) break;
+    const ids = msgs.map(m => m.id);
+    const navIds = new Set();
+    for (let i = 0; i < ids.length; i += 30) {
+      const rows = await fsQuery('pending_nav', [['source_id', 'in', ids.slice(i, i + 30)]], { limit: 1000 });
+      rows.forEach(r => navIds.add(r.id));
+    }
+    const writes = [...[...navIds].map(id => ({ delete: `pending_nav/${id}` })), ...ids.map(id => ({ delete: `captain_chat/${id}` }))];
+    for (let i = 0; i < writes.length; i += 400) await fsCommit(writes.slice(i, i + 400));
+    messages += ids.length; items += navIds.size;
+    if (msgs.length < BULK_PAGE) break;
+  }
+  if (!more) {
+    for (let round = 0; round < BULK_MAX_ROUNDS; round++) {
+      const rows = await fsQuery('pending_nav', [['category', '==', 'captains_chat']], { limit: BULK_PAGE });
+      if (!rows.length) break;
+      await deleteItems(rows);
+      items += rows.length;
+      if (rows.length < BULK_PAGE) break;
+      if (round === BULK_MAX_ROUNDS - 1) more = true;
+    }
+  }
+  return { messages, items, more };
+}
+
 export default async function handler(req, res) {
   if (cors(req, res)) return;
   const user = await requireUser(req, res);
@@ -50,6 +93,21 @@ export default async function handler(req, res) {
   if (rateLimited('dbs:' + user.uid, 30, 60000)) return fail(res, 429, 'rate-limited', 'Too many requests. Please wait a minute.');
 
   const b = readBody(req);
+  if (b.all !== undefined) {
+    if (b.all !== true || b.collection !== 'captain_chat' || b.id !== undefined || b.sourceId !== undefined) {
+      return fail(res, 400, 'bad-request', 'Bulk delete is only {collection:"captain_chat", all:true}.');
+    }
+    try {
+      const roles = await getRoles(user.uid);
+      if (!roles.admin) return fail(res, 403, 'forbidden', 'Only the commissioner can clear the whole captains chat.');
+      if (rateLimited('dbs-all:' + user.uid, 3, 10 * 60000)) return fail(res, 429, 'rate-limited', 'Captains chat was just cleared. Please wait a few minutes.');
+      const r = await clearCaptainChat();
+      return res.status(200).json({ ok: true, messagesDeleted: r.messages, deleted: r.items, more: r.more });
+    } catch (e) {
+      console.error('delete-by-source bulk failed:', e.message);
+      return fail(res, 503, 'unavailable', 'Could not clear the captains chat. Please try again.');
+    }
+  }
   const msgMode = b.collection !== undefined;
   let sourceId, collection = null;
   if (msgMode) {

@@ -646,7 +646,8 @@ a{color:inherit;text-decoration:none}
 .loading{text-align:center;padding:48px;color:var(--muted);font-size:13px}
 
 /* Tabs: Unread | Archive.
-   Archive is a client-side cache in localStorage (dvsl-inbox-archive).
+   Archive is a client-side cache in localStorage (dvsl-inbox-archive:{uid}
+   when signed in, dvsl-inbox-archive when not, so accounts never mix).
    The server deletes pending_nav docs on dismiss, so if we didn't snapshot
    every notification we see, the user could never revisit an old one. The
    cache is capped at 100 items, keyed by id, and lives per-device. */
@@ -777,8 +778,56 @@ let LAST_UNREAD = []; // most recent fetch — used for tab switching without re
 // ── Archive (localStorage) ──────────────────────────────────────────────
 // Cap at 100 to keep storage trivial; oldest evicted first. Keyed by id
 // so re-snapshotting an item we've already archived is a no-op.
-const ARCHIVE_KEY = 'dvsl-inbox-archive';
+// Keyed by the signed-in uid so two accounts on one device never merge
+// archives (the old unkeyed key is now only the signed-out archive).
+const ARCHIVE_KEY_BASE = 'dvsl-inbox-archive';
 const ARCHIVE_MAX = 100;
+// What syncs to inbox_archive/{uid}: no data: images (they pushed the doc
+// past Firestore's 1 MB cap and the save failed), short text, capped count.
+const SYNC_MAX = 100;
+const SYNC_MAX_BYTES = 700000;
+function _archiveUid() {
+  // try: _ARCHIVE_AUTH_UID is declared further down this script.
+  try {
+    if (_ARCHIVE_AUTH_UID) return _ARCHIVE_AUTH_UID;
+    const u = window._fbAuth && window._fbAuth.currentUser;
+    return (u && u.uid) || '';
+  } catch (_) { return ''; }
+}
+function _archiveKey() {
+  const uid = _archiveUid();
+  return uid ? ARCHIVE_KEY_BASE + ':' + uid : ARCHIVE_KEY_BASE;
+}
+function _httpsImg(v) {
+  return (typeof v === 'string' && v.length <= 2000 && /^https:\/\//i.test(v)) ? v : '';
+}
+function _syncItem(it) {
+  return {
+    id: String(it.id).slice(0, 200),
+    title: String(it.title || '').slice(0, 200),
+    body: String(it.body || '').slice(0, 1000),
+    url: String(it.url || '/').slice(0, 500),
+    ts: Number(it.ts) || 0,
+    category: String(it.category || '').slice(0, 40),
+    sender_role: String(it.sender_role || '').slice(0, 20),
+    image_data_url: _httpsImg(it.image_data_url),
+    archivedAt: Number(it.archivedAt) || 0,
+  };
+}
+function _syncList(arr) {
+  const items = arr.filter(it => it && it.id).slice(0, SYNC_MAX).map(_syncItem);
+  while (items.length && JSON.stringify(items).length > SYNC_MAX_BYTES) items.pop();
+  return items;
+}
+// Quiet one-line notice in the sync bar (no alert, no toast).
+function _archiveNotice(text) {
+  const banner = document.getElementById('archive-sync-status');
+  if (!banner) return;
+  banner.style.display = 'block';
+  banner.textContent = text;
+  banner.style.background = '#fef3c7';
+  banner.style.color = '#92400e';
+}
 
 // Locally-dismissed id set. Adam asked that tapping a notification move
 // it to Archive immediately, without having to press the X — but the
@@ -815,7 +864,7 @@ function isDismissedLocal(id) {
 
 function loadArchive() {
   try {
-    const raw = localStorage.getItem(ARCHIVE_KEY);
+    const raw = localStorage.getItem(_archiveKey());
     if (!raw) return [];
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? arr : [];
@@ -828,7 +877,13 @@ function saveArchive(arr) {
       .slice()
       .sort((a, b) => (b.ts || 0) - (a.ts || 0))
       .slice(0, ARCHIVE_MAX);
-    localStorage.setItem(ARCHIVE_KEY, JSON.stringify(trimmed));
+    const key = _archiveKey();
+    try { localStorage.setItem(key, JSON.stringify(trimmed)); }
+    catch (_) {
+      // Storage full (attached images): keep the list, drop data: images.
+      try { localStorage.setItem(key, JSON.stringify(trimmed.map(it => ({ ...it, image_data_url: _httpsImg(it.image_data_url) })))); }
+      catch (_) { _archiveNotice('This device is out of space, so the newest alerts were not added to Archive.'); }
+    }
   } catch (_) {}
 }
 function archiveSnapshot(items) {
@@ -866,7 +921,7 @@ function removeFromArchive(id) {
   pushArchiveToFirestore();
 }
 function clearArchive() {
-  try { localStorage.removeItem(ARCHIVE_KEY); } catch (_) {}
+  try { localStorage.removeItem(_archiveKey()); } catch (_) {}
   pushArchiveToFirestore();
 }
 
@@ -909,14 +964,19 @@ function pushArchiveToFirestore() {
   // Coalesce rapid writes (multiple archives in a row) into one Firestore
   // round-trip. 800ms debounce.
   clearTimeout(_ARCHIVE_PUSH_TIMER);
+  const uid = _ARCHIVE_AUTH_UID;
   _ARCHIVE_PUSH_TIMER = setTimeout(async () => {
+    if (uid !== _ARCHIVE_AUTH_UID) return;   // account changed meanwhile
     try {
       const { doc, setDoc } = window._fbDeps;
-      const items = loadArchive();
-      await setDoc(doc(window._fbDb, 'inbox_archive', _ARCHIVE_AUTH_UID), {
+      const items = _syncList(loadArchive());
+      await setDoc(doc(window._fbDb, 'inbox_archive', uid), {
         items, updated_at: new Date().toISOString(),
       });
-    } catch (e) { console.warn('archive push failed:', e); }
+    } catch (e) {
+      console.warn('archive push failed:', e);
+      _archiveNotice('Archive did not sync to your other devices. It is still saved on this device.');
+    }
   }, 800);
 }
 
@@ -930,18 +990,22 @@ function _initArchiveSync() {
   }
   window._fbDeps.onAuthStateChanged(window._fbAuth, async (user) => {
     const banner = document.getElementById('archive-sync-status');
+    const prevUid = _ARCHIVE_AUTH_UID;
+    clearTimeout(_ARCHIVE_PUSH_TIMER);
     if (!user) {
       _ARCHIVE_AUTH_UID = null;
       if (banner) {
         banner.style.display = 'block';
-        banner.innerHTML = '⚠️ Not signed in — archive only stored on this device. <a href="/profile.html" style="color:inherit;text-decoration:underline">Sign in</a> to sync across devices.';
+        banner.innerHTML = 'Not signed in, so Archive is only saved on this device. <a href="/profile.html" style="color:inherit;text-decoration:underline">Sign in</a> to sync across devices.';
       }
+      if (prevUid && CURRENT_TAB === 'archive') render(loadArchive(), 'archive');
       return;
     }
     _ARCHIVE_AUTH_UID = user.uid;
+    if (prevUid !== user.uid && CURRENT_TAB === 'archive') render(loadArchive(), 'archive');
     if (banner) {
       banner.style.display = 'block';
-      banner.textContent = `✓ Synced as ${user.email || 'signed-in user'} — archive shared across your devices.`;
+      banner.textContent = `Synced as ${user.email || 'signed-in user'}. Archive is shared across your devices.`;
       banner.style.background = '#dcfce7';
       banner.style.color = '#166534';
     }
@@ -1132,7 +1196,7 @@ function render(items, mode = 'unread') {
     if (item.sender_role === 'admin') {
       const src = document.createElement('div');
       src.className = 'card-source';
-      src.textContent = '📣 From DVSL League Admin';
+      src.textContent = 'From DVSL League Admin';
       textZone.appendChild(src);
     }
 

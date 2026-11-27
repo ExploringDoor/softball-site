@@ -529,6 +529,7 @@ body{background:var(--bg);color:var(--white);font-family:'Inter',sans-serif;line
 .team-hdr .admin-actions .reset-link{color:#ffb4b4}
 
 .empty{color:var(--muted);text-align:center;padding:40px 20px;font-size:14px}
+.load-older{align-self:center;margin:0 0 4px;padding:8px 16px;border:1px solid var(--border);background:#fff;color:var(--navy);border-radius:18px;font-size:13px;font-weight:600;cursor:pointer}
 
 /* Input row */
 .input-row{display:flex;gap:8px;padding:10px 12px;background:#fff;border-top:1px solid var(--border);position:sticky;bottom:0}
@@ -648,6 +649,11 @@ let IDENTITY = null;      // { sender_id, name, is_captain }
 let CAN_MODERATE = false; // captain of this team or admin
 let unsub = null;
 let MSG_CACHE = {}; // id → message doc (for delete lookup)
+// Newest messages first from Firestore, shown oldest to newest. "Load older"
+// grows the window by one page and re-subscribes.
+const CHAT_PAGE = 100;
+let chatLimit = CHAT_PAGE;
+let keepScrollFrom = null; // scrollHeight before a "Load older" re-render
 
 const esc = (s) => String(s ?? '').replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
 // Image URLs from Firestore: https:// or a same-site relative path only.
@@ -889,16 +895,18 @@ window.switchIdentity = function() {
 // ── Messages ─────────────────────────────────────────────────────────
 function subscribeToMessages() {
   if (unsub) unsub();
-  // limit(100) caps the initial fetch + listener billing.
+  // Newest chatLimit messages (desc + limit), reversed for display, so new
+  // messages always show up even once a team has more than one page.
+  // Needs the composite index team_messages (team_id asc, timestamp desc).
   const q = query(
     collection(db, 'team_messages'),
     where('team_id', '==', teamId),
-    orderBy('timestamp', 'asc'),
-    limit(100)
+    orderBy('timestamp', 'desc'),
+    limit(chatLimit)
   );
   unsub = onSnapshot(q, snap => {
-    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderMessages(msgs);
+    const msgs = snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse();
+    renderMessages(msgs, snap.docs.length >= chatLimit);
   }, err => {
     console.error('Snapshot error:', err);
     document.getElementById('chat-wrap').innerHTML =
@@ -921,7 +929,14 @@ function whoLabelFor(m) {
   return hit ? hit.name : 'Teammate';
 }
 
-function renderMessages(msgs) {
+window.loadOlderMessages = function() {
+  const el = document.getElementById('chat-wrap');
+  keepScrollFrom = el ? el.scrollHeight - el.scrollTop : null;
+  chatLimit += CHAT_PAGE;
+  subscribeToMessages();
+};
+
+function renderMessages(msgs, hasOlder) {
   const el = document.getElementById('chat-wrap');
   if (!msgs.length) {
     el.innerHTML = '<div class="empty">No messages yet. Start the conversation!</div>';
@@ -931,7 +946,8 @@ function renderMessages(msgs) {
   MSG_CACHE = {};
   msgs.forEach(m => { MSG_CACHE[m.id] = m; });
   const myUid = ME?.uid || '';
-  el.innerHTML = msgs.map(m => {
+  const olderBtn = hasOlder ? '<button type="button" class="load-older" id="load-older-btn">Load older messages</button>' : '';
+  el.innerHTML = olderBtn + msgs.map(m => {
     const mine = !!myUid && m.sender_uid === myUid;
     const isCap = !!m.is_captain;
     const whoLabel = whoLabelFor(m);
@@ -961,6 +977,14 @@ function renderMessages(msgs) {
       deleteMessage(btn.dataset.mid);
     });
   });
+  const ob = document.getElementById('load-older-btn');
+  if (ob) ob.addEventListener('click', () => window.loadOlderMessages());
+  if (keepScrollFrom != null) {
+    // After "Load older": keep the reader where they were.
+    el.scrollTop = el.scrollHeight - keepScrollFrom;
+    keepScrollFrom = null;
+    return;
+  }
   // Auto-scroll to bottom on new messages
   el.scrollTop = el.scrollHeight;
 }

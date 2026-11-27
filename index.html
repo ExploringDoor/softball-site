@@ -1671,6 +1671,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 .score-row:last-child{border-bottom:none}
 .score-row:hover{background:rgba(0,0,0,.04)}
 .score-status{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);width:60px;flex-shrink:0}
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0;vertical-align:1px;margin-right:5px}
+.live-badge .live-dot{margin-right:0}
 .live-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#f87171;font-size:11px;font-weight:800;letter-spacing:1px;padding:2px 8px;border-radius:4px;animation:livePulse 1.5s ease-in-out infinite}
 @keyframes livePulse{0%,100%{opacity:1}50%{opacity:0.5}}
 .score-teams{flex:1;min-width:0}
@@ -2250,6 +2252,14 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;height:62px;display:flex;ali
 @keyframes popIn{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
 .pop-x{position:absolute;top:14px;right:16px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:13px;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
 .pop-x:hover{color:var(--white)}
+/* Save Box Score as Picture. Desktop: top right, beside the X. Phones: its
+   own row above the matchup so it never covers the team logos. */
+.pop-save{position:absolute;top:14px;right:54px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;font-weight:700;height:28px;padding:0 10px;cursor:pointer;display:flex;align-items:center;gap:6px;z-index:2;font-family:inherit;white-space:nowrap}
+.pop-save svg{flex-shrink:0}
+@media (max-width:600px){
+  .pop-save{position:relative;top:auto;right:auto;margin:14px 54px 0 14px;display:inline-flex;max-width:calc(100% - 68px)}
+  .pop-save .pop-save-lbl{overflow:hidden;text-overflow:ellipsis}
+}
 .pop-hd{padding:28px 32px 18px;border-bottom:1px solid var(--border)}
 .pop-matchup{display:flex;align-items:center;justify-content:center;margin-bottom:12px}
 .pop-team{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
@@ -3095,15 +3105,15 @@ thead th.sorted-col .sarrow{opacity:1}
         <!-- v97: removed redundant Player Portal + Captain Dashboard
              entries (both redirect into profile.html). Single "My Profile"
              covers both roles; the page switches on who's signed in. -->
-        <a class="nav-dd-item" href="watch.html" style="color:var(--red);font-weight:700">🔴 Watch Live</a>
-        <a class="nav-dd-item" href="profile.html" style="color:var(--navy);font-weight:700">👤 My Profile</a>
-        <a class="nav-dd-item" href="leaders.html">🥇 Leaders</a>
-        <a class="nav-dd-item" href="playoffs.html">🏆 Brackets</a>
-        <a class="nav-dd-item" href="/#history">🏅 Champions</a>
-        <a class="nav-dd-item" href="rules.html">📋 Rules</a>
-        <a class="nav-dd-item" href="photos.html">📷 Gallery</a>
-        <a class="nav-dd-item" href="registration.html">📝 Player Signup</a>
-        <a class="nav-dd-item" href="admin.html" style="color:rgba(0,45,114,.6)">⚙ Admin</a>
+        <a class="nav-dd-item" href="watch.html" style="color:var(--red);font-weight:700"><span class="live-dot"></span>Watch Live</a>
+        <a class="nav-dd-item" href="profile.html" style="color:var(--navy);font-weight:700">My Profile</a>
+        <a class="nav-dd-item" href="leaders.html">Leaders</a>
+        <a class="nav-dd-item" href="playoffs.html">Brackets</a>
+        <a class="nav-dd-item" href="/#history">Champions</a>
+        <a class="nav-dd-item" href="rules.html">Rules</a>
+        <a class="nav-dd-item" href="photos.html">Gallery</a>
+        <a class="nav-dd-item" href="registration.html">Player Signup</a>
+        <a class="nav-dd-item" href="admin.html" style="color:rgba(0,45,114,.6)">Admin</a>
       </div>
     </li>
   </ul>
@@ -3114,8 +3124,8 @@ thead th.sorted-col .sarrow{opacity:1}
          sign-in, team chat, availability, payments, etc.). The bell
          (inbox of received notifications) is still reachable via the
          More sheet → Account → Notifications. -->
-    <button class="nav-signup-btn" onclick="window.location='profile.html'">👤 Profile</button>
-    <button id="nav-notif-btn" onclick="window.location='profile.html#notif'" title="Notifications" aria-label="Notifications" style="position:relative;background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:16px;transition:all .2s;line-height:1">🔔<span id="nav-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;background:#dc2626;color:#fff;border-radius:9px;font-size:11px;font-weight:700;padding:0 5px;line-height:18px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span></button>
+    <button class="nav-signup-btn" onclick="window.location='profile.html'">Profile</button>
+    <button id="nav-notif-btn" onclick="window.location='profile.html#notif'" title="Notifications" aria-label="Notifications" style="position:relative;background:none;border:1px solid rgba(0,0,0,.15);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:16px;transition:all .2s;line-height:1;color:var(--navy);display:inline-flex;align-items:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span id="nav-notif-badge" style="display:none;position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;background:#dc2626;color:#fff;border-radius:9px;font-size:11px;font-weight:700;padding:0 5px;line-height:18px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span></button>
     <!-- Dark/light toggle removed per Adam (2026-04-21). Keeping the
          toggleDarkMode() function and CSS vars for any lingering .dark
          class on body, but the button is gone from both desktop and mobile. -->
@@ -3127,8 +3137,8 @@ thead th.sorted-col .sarrow{opacity:1}
        are both redirects into profile.html, so only one profile entry).
        MY STUFF section pinned to the top; league browsing in the middle;
        admin quiet at the bottom. -->
-  <a href="profile.html" style="display:block;font-size:24px;padding:12px 0;border-bottom:1px solid var(--border);font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--navy);text-decoration:none">👤 My Profile</a>
-  <a href="watch.html" style="display:block;font-size:24px;padding:12px 0;border-bottom:1px solid var(--border);font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--red);text-decoration:none">🔴 Watch Live</a>
+  <a href="profile.html" style="display:block;font-size:24px;padding:12px 0;border-bottom:1px solid var(--border);font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--navy);text-decoration:none">My Profile</a>
+  <a href="watch.html" style="display:block;font-size:24px;padding:12px 0;border-bottom:1px solid var(--border);font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--red);text-decoration:none"><span class="live-dot" style="width:10px;height:10px;vertical-align:3px;margin-right:8px"></span>Watch Live</a>
   <span onclick="goPage('home');closeMob()">Home</span>
   <span onclick="goPage('scores');closeMob()">Scores</span>
   <span onclick="goPage('scores');setTimeout(()=>setView('schedule'),100);closeMob()">Schedule</span>
@@ -3137,13 +3147,13 @@ thead th.sorted-col .sarrow{opacity:1}
   <span onclick="goPage('players');closeMob()">Teams</span>
   <span onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='flex'?'none':'flex'" style="display:flex;align-items:center;justify-content:space-between">More <span style="font-size:18px;opacity:.5">›</span></span>
   <div style="display:none;flex-direction:column;padding-left:20px;border-bottom:1px solid var(--border)">
-    <a href="leaders.html" style="font-size:20px;padding:10px 0;border-bottom:none">🥇 Leaders</a>
-    <a href="playoffs.html" style="font-size:20px;padding:10px 0;border-bottom:none">🏆 Brackets</a>
-    <a href="rules.html" style="font-size:20px;padding:10px 0;border-bottom:none">📋 Rules</a>
-    <a href="photos.html" style="font-size:20px;padding:10px 0;border-bottom:none">📷 Gallery</a>
-    <a href="registration.html" style="font-size:20px;padding:10px 0;border-bottom:none">📝 Player Signup</a>
+    <a href="leaders.html" style="font-size:20px;padding:10px 0;border-bottom:none">Leaders</a>
+    <a href="playoffs.html" style="font-size:20px;padding:10px 0;border-bottom:none">Brackets</a>
+    <a href="rules.html" style="font-size:20px;padding:10px 0;border-bottom:none">Rules</a>
+    <a href="photos.html" style="font-size:20px;padding:10px 0;border-bottom:none">Gallery</a>
+    <a href="registration.html" style="font-size:20px;padding:10px 0;border-bottom:none">Player Signup</a>
   </div>
-  <a href="admin.html" style="color:rgba(0,45,114,.7)">⚙ Admin</a>
+  <a href="admin.html" style="color:rgba(0,45,114,.7)">Admin</a>
 </div>
 
 <!-- ═══ HOME PAGE ═══ -->
@@ -3558,7 +3568,7 @@ thead th.sorted-col .sarrow{opacity:1}
         <div class="hoc-photo-wrap">
           <img class="hoc-photo-img" src="goldsteins-champ-2026.jpg" alt="2026 Gold Bracket Champions - Goldstein's" onerror="this.style.display='none'">
           <div class="hoc-photo-overlay"></div>
-          <div class="hoc-photo-badge">🏆 2026 Gold Bracket Champions</div>
+          <div class="hoc-photo-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg> 2026 Gold Bracket Champions</div>
         </div>
         <div class="hoc-info">
           <div>
@@ -3607,7 +3617,7 @@ thead th.sorted-col .sarrow{opacity:1}
         <div class="hoc-photo-wrap">
           <img class="hoc-photo-img" src="champ-photo.jpg" alt="2019 Gold Cup Champions - Beth Am" onerror="this.style.display='none'">
           <div class="hoc-photo-overlay"></div>
-          <div class="hoc-photo-badge">🏆 2019 Gold Cup Champions</div>
+          <div class="hoc-photo-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg> 2019 Gold Cup Champions</div>
         </div>
         <div class="hoc-info">
           <div>
@@ -3621,7 +3631,7 @@ thead th.sorted-col .sarrow{opacity:1}
             </div>
           </div>
           <div class="hoc-trophy-area">
-            <div class="hoc-trophy-big">🏆</div>
+            <div class="hoc-trophy-big" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div>
             <div class="hoc-trophy-label">Gold Cup</div>
           </div>
         </div>
@@ -3634,7 +3644,7 @@ thead th.sorted-col .sarrow{opacity:1}
           <div class="hoc-photo-wrap">
             <img class="hoc-photo-img" src="ki-silver-cup-2025.jpg" alt="2025 Silver Cup Champions - Keneseth Israel" onerror="this.style.display='none'">
             <div class="hoc-photo-overlay"></div>
-            <div class="hoc-photo-badge" style="background:rgba(0,45,114,.85);border-color:rgba(0,45,114,.5);color:#fff">🥈 2025 Silver Cup Champions</div>
+            <div class="hoc-photo-badge" style="background:rgba(0,45,114,.85);border-color:rgba(0,45,114,.5);color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg> 2025 Silver Cup Champions</div>
           </div>
           <div class="hoc-info">
             <div>
@@ -3648,7 +3658,7 @@ thead th.sorted-col .sarrow{opacity:1}
               </div>
             </div>
             <div class="hoc-trophy-area">
-              <div class="hoc-trophy-big" style="filter:drop-shadow(0 0 30px rgba(0,45,114,.4))">🥈</div>
+              <div class="hoc-trophy-big" style="filter:drop-shadow(0 0 30px rgba(0,45,114,.4));color:#8a94a6"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div>
               <div class="hoc-trophy-label" style="color:#002D72">Silver Cup</div>
             </div>
           </div>
@@ -3659,12 +3669,12 @@ thead th.sorted-col .sarrow{opacity:1}
       <div class="hoc-past">
         <div class="hoc-past-hdr">Past Champions</div>
         <div class="hoc-past-list">
-          <div class="hoc-past-card gold-cup"><div><div class="hoc-past-year">2026</div><div class="hoc-past-team">Goldstein's</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon">🥇</div></div>
-          <div class="hoc-past-card" style="border-left:3px solid #002D72"><div><div class="hoc-past-year">2026</div><div class="hoc-past-team">Beth Or Blue</div><div class="hoc-past-bracket">Silver Bracket</div></div><div class="hoc-past-icon">🥈</div></div>
-          <div class="hoc-past-card gold-cup"><div><div class="hoc-past-year">2019</div><div class="hoc-past-team">Beth Am</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon">🥇</div></div>
-          <div class="hoc-past-card gold-cup"><div><div class="hoc-past-year">2018</div><div class="hoc-past-team">SA</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon">🥇</div></div>
-          <div class="hoc-past-card gold-cup"><div><div class="hoc-past-year">2017</div><div class="hoc-past-team">SA</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon">🥇</div></div>
-          <div class="hoc-past-card" style="border-left:3px solid var(--muted)"><div><div class="hoc-past-year">2016</div><div class="hoc-past-team">KI</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon">🥈</div></div>
+          <div class="hoc-past-card gold-cup"><div><div class="hoc-past-year">2026</div><div class="hoc-past-team">Goldstein's</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div></div>
+          <div class="hoc-past-card" style="border-left:3px solid #002D72"><div><div class="hoc-past-year">2026</div><div class="hoc-past-team">Beth Or Blue</div><div class="hoc-past-bracket">Silver Bracket</div></div><div class="hoc-past-icon" style="color:#8a94a6"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div></div>
+          <div class="hoc-past-card gold-cup"><div><div class="hoc-past-year">2019</div><div class="hoc-past-team">Beth Am</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div></div>
+          <div class="hoc-past-card gold-cup"><div><div class="hoc-past-year">2018</div><div class="hoc-past-team">SA</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div></div>
+          <div class="hoc-past-card gold-cup"><div><div class="hoc-past-year">2017</div><div class="hoc-past-team">SA</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div></div>
+          <div class="hoc-past-card" style="border-left:3px solid var(--muted)"><div><div class="hoc-past-year">2016</div><div class="hoc-past-team">KI</div><div class="hoc-past-bracket">Gold Bracket</div></div><div class="hoc-past-icon" style="color:#8a94a6"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div></div>
         </div>
       </div>
     </div>
@@ -3824,7 +3834,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <div class="yr-subtitle">Final Regular Season Standings · 19 Teams</div>
     </div>
     <div class="yr-champ-badge">
-      <div class="yr-champ-crown">🏆</div>
+      <div class="yr-champ-crown" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div>
       <div>
         <div class="yr-champ-label">Gold Cup Champion</div>
         <div class="yr-champ-name">Goldstein's</div>
@@ -3866,7 +3876,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <div class="yr-subtitle">Final Regular Season Standings · 18 Teams</div>
     </div>
     <div class="yr-champ-badge">
-      <div class="yr-champ-crown">🏆</div>
+      <div class="yr-champ-crown" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div>
       <div>
         <div class="yr-champ-label">Gold Cup Champion</div>
         <div class="yr-champ-name">Shir Ami</div>
@@ -3908,7 +3918,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <div class="yr-subtitle">Final Regular Season Standings · 18 Teams</div>
     </div>
     <div class="yr-champ-badge">
-      <div class="yr-champ-crown">🏆</div>
+      <div class="yr-champ-crown" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div>
       <div>
         <div class="yr-champ-label">Gold Cup Champion</div>
         <div class="yr-champ-name">Shir Ami</div>
@@ -3949,7 +3959,7 @@ thead th.sorted-col .sarrow{opacity:1}
       <div class="yr-subtitle">Final Regular Season Standings · 18 Teams</div>
     </div>
     <div class="yr-champ-badge">
-      <div class="yr-champ-crown">🏆</div>
+      <div class="yr-champ-crown" style="color:#c9a227"><svg width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg></div>
       <div>
         <div class="yr-champ-label">Gold Cup Champion</div>
         <div class="yr-champ-name">Beth Or Orange</div>
@@ -4008,7 +4018,7 @@ thead th.sorted-col .sarrow{opacity:1}
      Tab handlers and matchup fade-in run on first show. -->
 <div class="page" id="pg-playoffs"></div>
 
-<div class="pop" id="scPop" onclick="if(event.target===this)closeScPop()"><div class="pop-box"><button class="pop-x" onclick="closeScPop()">✕</button><button id="scPopSaveImg" onclick="saveBoxScoreImage()" title="Save this box score as a PNG image you can share" style="position:absolute;top:14px;right:54px;background:var(--card2);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:12px;font-weight:700;height:28px;padding:0 10px;cursor:pointer;display:flex;align-items:center;gap:4px;z-index:2;font-family:inherit;white-space:nowrap">📷 Save Box Score as Picture</button><div id="scPopContent"></div></div></div>
+<div class="pop" id="scPop" onclick="if(event.target===this)closeScPop()"><div class="pop-box"><button class="pop-x" onclick="closeScPop()">✕</button><button id="scPopSaveImg" class="pop-save" onclick="saveBoxScoreImage()" title="Save this box score as a PNG image you can share"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/></svg><span class="pop-save-lbl">Save Box Score as Picture</span></button><div id="scPopContent"></div></div></div>
 <div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
   <div class="modal-box">
     <div class="modal-bar"><button class="modal-close" onclick="closeModal()">✕ Close</button></div>
@@ -4024,12 +4034,11 @@ thead th.sorted-col .sarrow{opacity:1}
 <div id="welcome-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,8,20,.88);backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px">
   <div style="background:linear-gradient(135deg,#002D72 0%,#0048b3 100%);color:#fff;padding:32px 28px 28px;border-radius:18px;max-width:440px;width:100%;position:relative;box-shadow:0 24px 64px rgba(0,0,0,.5);text-align:center">
     <button onclick="dismissWelcomeCard()" aria-label="Dismiss" style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,.12);border:none;color:#fff;font-size:18px;font-weight:700;width:34px;height:34px;border-radius:50%;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center">×</button>
-    <div style="font-size:46px;line-height:1;margin-bottom:10px">👋</div>
-    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;letter-spacing:.04em;text-transform:uppercase;line-height:1.05">Welcome to DVSL</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:28px;letter-spacing:.04em;text-transform:uppercase;line-height:1.05">Welcome to DVSL</div>
     <div style="font-size:14.5px;font-weight:500;opacity:.92;margin-top:10px;line-height:1.5">Create a profile to track your stats, mark game availability, and get notifications. Captains can manage rosters, schedules, and submit scores.</div>
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:22px">
-      <a href="profile.html" style="display:block;background:#F5C842;color:#0a1730;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:14px 18px;border-radius:10px;text-decoration:none">👤 Player Sign Up / Sign In</a>
-      <a href="captain.html" style="display:block;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.28);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:14px 18px;border-radius:10px;text-decoration:none">⚾ Captain Dashboard</a>
+      <a href="profile.html" style="display:block;background:#F5C842;color:#0a1730;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:14px 18px;border-radius:10px;text-decoration:none">Player Sign Up / Sign In</a>
+      <a href="captain.html" style="display:block;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.28);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;letter-spacing:.06em;text-transform:uppercase;padding:14px 18px;border-radius:10px;text-decoration:none">Captain Dashboard</a>
     </div>
     <div style="font-size:11px;font-weight:600;opacity:.55;margin-top:18px;letter-spacing:.05em;text-transform:uppercase">Tap × to continue browsing</div>
   </div>
@@ -4040,6 +4049,16 @@ thead th.sorted-col .sarrow{opacity:1}
 // innerHTML (recap text, player names, team names, etc.). Prevents stored
 // XSS — e.g. an admin typing `<script>...` in a recap would otherwise run
 // for every visitor opening the box-score modal.
+// Inline SVG icons used instead of emoji (house style: no emoji in UI).
+var DVSL_ICO = {
+  cal: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  pin: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M12 21s-7-6.2-7-11.2a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.5"/></svg>',
+  clock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
+  trophy: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 6h3v1a3 3 0 0 1-3 3M7 6H4v1a3 3 0 0 0 3 3"/></svg>',
+  star: '<svg width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><polygon points="12 2 15.1 8.6 22 9.3 16.8 14 18.2 21 12 17.3 5.8 21 7.2 14 2 9.3 8.9 8.6"/></svg>',
+  warn: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-2px;flex-shrink:0"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
+};
+window.DVSL_ICO = DVSL_ICO;
 function esc(s) {
   if (s == null) return '';
   return String(s).replace(/[&<>"'`]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'})[c]);
@@ -4602,7 +4621,12 @@ async function loadAllData() {
     };
     // Playoff box scores (po__*) count toward season leaderboards + team stats,
     // same as regular-season box scores (Adam 2026-07-22).
-    const finalBS = boxScores.filter(bs => bs.status === 'final' || _hasAnyLineup(bs));
+    // A box score for a game later ruled a forfeit never counts (the forfeit
+    // stands with no runs). Same test as js/dvsl-awards.js forfeitGameIds.
+    const _ffIds = {};
+    games.forEach(g => { if (g && g.id && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double')) _ffIds[String(g.id)] = true; });
+    const _isFfBox = bs => !!(_ffIds[String(bs.game_id || '')] || _ffIds[String(bs.id || '')]);
+    const finalBS = boxScores.filter(bs => (bs.status === 'final' || _hasAnyLineup(bs)) && !_isFfBox(bs));
     // Expose for recap-card POTG fallback (buildRecaps reads window.FINAL_BOX_SCORES)
     window.FINAL_BOX_SCORES = finalBS;
     if (finalBS.length > 0) {
@@ -5029,7 +5053,11 @@ async function refreshVolatileData() {
       const h = bs.home_lineup || bs.homeLineup || bs.homeBatters;
       return (Array.isArray(a) && a.length > 0) || (Array.isArray(h) && h.length > 0);
     };
-    const finalBS = freshBS.filter(bs => bs.status === 'final' || _hasAnyLineup2(bs));
+    // Forfeit games' box scores never count (see loadAllData).
+    const _ffIds2 = {};
+    freshGames.forEach(g => { if (g && g.id && (g.forfeit === 'away' || g.forfeit === 'home' || g.forfeit === 'double')) _ffIds2[String(g.id)] = true; });
+    const finalBS = freshBS.filter(bs => (bs.status === 'final' || _hasAnyLineup2(bs))
+      && !(_ffIds2[String(bs.game_id || '')] || _ffIds2[String(bs.id || '')]));
     if (finalBS.length > 0) {
       const batMap = {};
       const pitMap = {};
@@ -5199,7 +5227,7 @@ function loadFallbackData() {
       const bannerText = document.getElementById('site-banner-text');
       if (banner && bannerText) {
         banner.style.cssText += ';display:block;background:#c8102e;color:#fff';
-        bannerText.textContent = '⚠ Could not load league data — check your connection and refresh. Showing partial / empty state.';
+        bannerText.textContent = 'Could not load league data. Check your connection and refresh.';
       } else {
         // No banner element yet; fall back to console.
         console.warn('[DVSL] Firestore unreachable — running in offline mode with empty data.');
@@ -5571,7 +5599,7 @@ window.submitRegistration = async () => {
   const $ = sel => document.querySelector('#pg-registration ' + sel);
   const btn   = $('#submit-btn');
   const errEl = $('#error-box-submit');
-  const resetBtn = () => { btn.disabled = false; btn.textContent = '✍ Sign & Complete Registration'; };
+  const resetBtn = () => { btn.disabled = false; btn.textContent = 'Sign & Complete Registration'; };
   const showErr = (msg) => { errEl.textContent = msg; errEl.className = 'error-box show'; resetBtn(); };
   errEl.className = 'error-box';
   btn.disabled = true;
@@ -5784,7 +5812,7 @@ function _attachChampPhotos(container){
   if(!photo) return;
   const wrap = document.createElement('div');
   wrap.className = 'bk-champ-photo-wrap';
-  wrap.innerHTML = '<button type="button" class="bk-champ-photo-btn">📸 Click to see the champions photo</button>';
+  wrap.innerHTML = '<button type="button" class="bk-champ-photo-btn">See the champions photo</button>';
   ban.after(wrap);
   wrap.querySelector('button').addEventListener('click', () => _openChampLightbox(photo.src));
 }
@@ -6094,11 +6122,8 @@ function fetchWeather(lat, lon){
       const cur = data.current;
       const temp = Math.round(cur.temperature_2m);
       const code = cur.weathercode;
-      const icons = {0:'☀️',1:'🌤',2:'⛅',3:'☁️',45:'🌫',48:'🌫',51:'🌦',61:'🌧',71:'🌨',80:'🌦',95:'⛈',96:'⛈'};
       const descs = {0:'Clear skies',1:'Mostly clear',2:'Partly cloudy',3:'Overcast',45:'Foggy',51:'Light drizzle',61:'Rainy',71:'Snowy',80:'Showers',95:'Thunderstorm'};
-      const icon = icons[code] || icons[Math.floor(code/10)*10] || '🌤';
       const desc = descs[code] || descs[Math.floor(code/10)*10] || 'Variable';
-      document.getElementById('wx-icon').textContent = icon;
       document.getElementById('wx-temp').textContent = temp + '°F';
       document.getElementById('wx-desc').textContent = desc + ' · Wind ' + Math.round(cur.windspeed_10m) + 'mph';
     })
@@ -6147,7 +6172,7 @@ function shareRecap(title, idx){
   } else {
     navigator.clipboard.writeText(url).then(()=>{
       const btn = document.getElementById('share-copy-'+idx);
-      if(btn){ btn.textContent = '✓ Copied!'; btn.classList.add('copied'); setTimeout(()=>{btn.textContent='📋 Copy Link';btn.classList.remove('copied')},2000); }
+      if(btn){ btn.textContent = '✓ Copied!'; btn.classList.add('copied'); setTimeout(()=>{btn.textContent='Copy Link';btn.classList.remove('copied')},2000); }
     });
   }
 }
@@ -6307,7 +6332,7 @@ function openRecap(gameIdx){
     '<span class="bsm-badge badge-w">Final</span></div>' +
     '<div class="bsm-team"><div class="bsm-abbr" style="color:'+hc+'">'+esc(g.home||'—')+'</div><div class="bsm-label">Home</div></div>' +
     '</div>' +
-    '<div class="bsm-meta"><span>📅 '+esc(recap&&recap.date?recap.date:g.date||'')+'</span><span>📍 '+fieldLink(recap&&recap.field?recap.field:g.field||'')+'</span></div>' +
+    '<div class="bsm-meta"><span>'+DVSL_ICO.cal+' '+esc(recap&&recap.date?recap.date:g.date||'')+'</span><span>'+DVSL_ICO.pin+' '+fieldLink(recap&&recap.field?recap.field:g.field||'')+'</span></div>' +
     '</div>' +
     '<div class="bsm-section">' +
     '<div class="bsm-section-title">Game Recap</div>' +
@@ -6357,13 +6382,13 @@ function openBsm(gameIdx){
           </div>
         </div>
         <div class="bsm-meta">
-          <span>📅 ${esc(g.date)}</span><span>📍 ${fieldLink(g.field, g.addr)}</span><span>⏰ ${esc(g.time)}</span>
+          <span>${DVSL_ICO.cal} ${esc(g.date)}</span><span>${DVSL_ICO.pin} ${fieldLink(g.field, g.addr)}</span><span>${DVSL_ICO.clock} ${esc(g.time)}</span>
         </div>
       </div>
       <div class="bsm-upcoming">
         <div class="bsm-date-big">${esc(g.day)}, ${esc(g.date)}</div>
         <div>Game time: <strong>${esc(g.time)}</strong></div>
-        <div style="margin-top:6px">📍 ${fieldLink(g.field, g.addr)}${g.addr?` · ${esc(g.addr)}`:''}</div>
+        <div style="margin-top:6px">${DVSL_ICO.pin} ${fieldLink(g.field, g.addr)}${g.addr?` · ${esc(g.addr)}`:''}</div>
         <div style="margin-top:16px;font-size:12px;color:var(--muted2)">Box score available after the game</div>
       </div>`;
   }
@@ -6501,12 +6526,21 @@ function buildHomeSidebar(){
   const sorted = window.DVSLStandings
     ? DVSLStandings.rank(_active, SCHEDULE_PREVIEW)
     : _active.sort((a,b)=>((b.w||0)*3+(b.ti||0)*2+(b.l||0))-((a.w||0)*3+(a.ti||0)*2+(a.l||0)));
-  el.innerHTML=sorted.map((t,i)=>`<div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:10px" onclick="goPage('team','${jsArg(t.id)}')">
+  // Rule 24 mark, same as the full Standings table: two or more forfeits
+  // cost the team its playoff spot.
+  const _ffT = (window.DVSLStandings && DVSLStandings.forfeitTally) ? DVSLStandings.forfeitTally(_active, SCHEDULE_PREVIEW) : {};
+  const _ffLose = (window.DVSLStandings && DVSLStandings.FORFEITS_TO_LOSE_SPOT) || 2;
+  el.innerHTML=sorted.map((t,i)=>{
+    const _lost = ((_ffT[t.id] || {}).forfeits || 0) >= _ffLose;
+    return `<div style="display:flex;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(0,0,0,.06);cursor:pointer;gap:10px" onclick="goPage('team','${jsArg(t.id)}')">
     <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;color:rgba(0,0,0,.35);width:18px">${i+1}</span>
     ${LOGO_TEAMS.has(t.id)?`<img src="logos/${esc(t.id)}.png" style="width:32px;height:32px;object-fit:contain;flex-shrink:0" loading="lazy">`:`<span style="width:8px;height:8px;border-radius:50%;background:${esc(t.color)};flex-shrink:0"></span>`}
-    <span style="font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:#1a1a1a;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.short||t.name)}</span>
+    <span style="flex:1;min-width:0">
+      <span style="display:block;font-family:'Inter',sans-serif;font-weight:600;font-size:14px;color:#1a1a1a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.short||t.name)}</span>
+      ${_lost?'<span class="race-tag ff" style="margin:2px 0 0;white-space:normal">Playoff spot forfeited (Rule 24)</span>':''}
+    </span>
     <span style="font-family:'Oswald',sans-serif;font-weight:600;font-size:12px;color:rgba(0,0,0,.5)">${esc(t.w)}-${esc(t.l)}${t.ti?'-'+esc(t.ti):''}</span>
-  </div>`).join('');
+  </div>`;}).join('');
 }
 
 // ════════════════════════════ SCHEDULE PREVIEW ═══════════════════════════
@@ -6610,7 +6644,7 @@ function _renderUpcomingCards(wrap, games, label){
     const hRec=(htm&&htm.w!=null)?`(${esc(htm.w)}-${esc(htm.l)})`:'';
     return `<div class="preview-card">
       <div class="preview-time">${g.day?esc(String(g.day).slice(0,3).toUpperCase())+' ':''}${esc(g.date||'')}${g.date?' · ':''}${esc(g.time||'TBD')}${g.field?` · ${fieldLink(g.field, g.addr)}`:''}${g.poTag?` · <span style="color:#C9A227;font-weight:800">${esc(g.poTag)}</span>`:''}</div>
-      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${esc(g.ppdResched)}`:' · Reschedule TBD'}</div>`:''}
+      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">PPD${g.ppdResched?` · → ${esc(g.ppdResched)}`:' · Reschedule TBD'}</div>`:''}
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,atm?.short||g.away)}</div>
@@ -6778,7 +6812,7 @@ function buildLeaderboard(){
   // No stats yet — season hasn't started
   if (!activePlayers.length) {
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:60px 20px">
-      <div style="font-size:48px;margin-bottom:16px">⚾</div>
+      
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;color:#1a1a1a;letter-spacing:.05em;text-transform:uppercase">Season Hasn't Started Yet</div>
       <div style="font-size:14px;color:rgba(0,0,0,.45);margin-top:8px">League leaders will appear here once games are played.</div>
     </div>`;
@@ -7135,9 +7169,9 @@ function buildSchedRows(t, tgames){
       :`<span style="display:inline-block;padding:3px 9px;background:#fff;color:#666;border:1.5px solid #d1d5db;border-radius:5px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:11px;letter-spacing:.08em;white-space:nowrap">AWAY</span>`;
     const oppLabel=esc(`${isH?'VS':'@'} ${oppTeam?.short||opp}`.toUpperCase());
     const scoreCol=g.ppd
-      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;line-height:1;color:#92400e">PPD</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#92400e;margin-top:2px">🌧 ${esc(g.ppdResched||'TBD')}</div></div>`
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:16px;line-height:1;color:#92400e">PPD</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:#92400e;margin-top:2px">${esc(g.ppdResched||'TBD')}</div></div>`
       :g.done
-      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${_ff?ffPill():`${esc(myS)}–${esc(oppS)}`}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(tied?'#6b7280':(won?'#22c55e':'#ef4444'))};margin-top:2px">${g.conflict?'⚠ UNDER REVIEW':(tied?'TIE':(won?'WIN':'LOSS'))}</div></div>`
+      ?`<div style="text-align:right;flex-shrink:0;min-width:54px"><div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;line-height:1;color:#1a1a1a">${_ff?ffPill():`${esc(myS)}–${esc(oppS)}`}</div><div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:${g.conflict?'#d97706':(tied?'#6b7280':(won?'#22c55e':'#ef4444'))};margin-top:2px">${g.conflict?'UNDER REVIEW':(tied?'TIE':(won?'WIN':'LOSS'))}</div></div>`
       :'';
     const rowClick=(g.done&&!g.ppd)?`${boxDataAttrs(g.away,g.home,g.as,g.hs,g.field,g.date,g.id)} onclick="openBoxEl(this)"`:'' ;
     const rowBg=i%2===0?'#fff':'#fafafa';
@@ -7751,7 +7785,7 @@ function buildRecaps(){
     '<div class="recap-champ" onclick="goPage(\'playoffs\')">'
     + '<img src="/assets/trophy.png" alt="Champion trophy" class="recap-champ-trophy">'
     + '<div class="recap-champ-txt">'
-    + '<div class="recap-champ-lbl">🏆 2026 ' + esc(c.bracket) + ' Bracket Champions</div>'
+    + '<div class="recap-champ-lbl">' + DVSL_ICO.trophy + ' 2026 ' + esc(c.bracket) + ' Bracket Champions</div>'
     + '<div class="recap-champ-team">' + esc(c.team) + '</div>'
     + '<div class="recap-champ-sub">Congratulations to ' + esc(c.team) + ' on winning the 2026 DVSL ' + esc(c.bracket) + ' bracket!</div>'
     + '</div></div>'
@@ -7783,7 +7817,7 @@ function buildRecaps(){
     // hero of the game before anyone scans the paragraph.
     const potgHtml = _potgName ? `
       <div style="background:linear-gradient(135deg,#fde047,#f5c842);border:2px solid #ca8a04;border-radius:12px;padding:14px 16px;margin-bottom:14px;text-align:center;box-shadow:0 3px 10px rgba(245,200,66,.35)">
-        <div style="font-size:28px;line-height:1;margin-bottom:2px">⭐</div>
+        <div style="font-size:28px;line-height:1;margin-bottom:2px;color:#78350f">${DVSL_ICO.star}</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#78350f;margin-bottom:4px">Player of the Game</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:22px;color:#1a1a1a;line-height:1.1;text-transform:uppercase;letter-spacing:.01em;cursor:${potgPlayer?'pointer':'default'}" ${potgPlayer?`onclick="openModal('${jsArg(potgPlayer.id)}')"`:''}>${esc(_potgName)}${potgTeamObj?` <span style="font-weight:600;font-size:13px;color:#78350f;letter-spacing:.02em">· ${esc(potgTeamObj.short||potgTeamObj.name)}</span>`:''}</div>
       </div>` : '';
@@ -7795,7 +7829,7 @@ function buildRecaps(){
             <span style="color:var(--muted);font-size:18px;margin:0 10px">vs</span>
             <span style="color:var(--white);cursor:pointer" onclick="goPage('team','${jsArg(ht?.id)}')">${esc(r.home)}</span>
           </div>
-          <div class="recap-meta">📅 ${esc(r.date)} · 📍 ${fieldLink(r.field)} · Week ${r.wk|0}</div>
+          <div class="recap-meta">${DVSL_ICO.cal} ${esc(r.date)} · ${DVSL_ICO.pin} ${fieldLink(r.field)} · Week ${r.wk|0}</div>
         </div>
         <div class="recap-score">${r.as|0}–${r.hs|0}</div>
       </div>
@@ -7806,7 +7840,7 @@ function buildRecaps(){
           const pname=s.split('·')[0].trim().replace(/^[⭐★\s]+/,'');
           const stats=s.split('·').slice(1).join('·').trim();
           const player=PLAYERS.find(p=>p.name.split(' ').pop()===pname.split(' ').pop()||p.name===pname);
-          return `<div class="star-chip" ${player?`onclick="openModal('${jsArg(player.id)}')" title="Click to view profile"`:''}><span>⭐</span><strong>${esc(pname)}</strong><span style="color:var(--muted)">·</span><span>${esc(stats)}</span></div>`;
+          return `<div class="star-chip" ${player?`onclick="openModal('${jsArg(player.id)}')" title="Click to view profile"`:''}><span style="color:var(--gold)">${DVSL_ICO.star}</span><strong>${esc(pname)}</strong><span style="color:var(--muted)">·</span><span>${esc(stats)}</span></div>`;
         }).join('')}</div>
       </div>
     </div>`;
@@ -7871,7 +7905,7 @@ function buildHistory(){
     <div class="hist-row" onclick="${h.champ_team?`goPage('team','${jsArg(h.champ_team)}')`:''}" style="${h.champ_team?'':'cursor:default'}">
       <div class="hist-yr">${esc(h.yr)}</div>
       <div>
-        <div class="hist-champ">${h.yr===2024?'🥇 ':h.yr===2019?'🏆 ':''}<span style="color:var(--gold)">${esc(h.champ)}</span></div>
+        <div class="hist-champ">${(h.yr===2024||h.yr===2019)?DVSL_ICO.trophy+' ':''}<span style="color:var(--gold)">${esc(h.champ)}</span></div>
         <div class="hist-runner">Runner-up: <strong>${esc(h.runner)}</strong> · MVP: <span style="color:var(--gold)">${esc(h.mvp)}</span></div>
       </div>
       <div class="hist-mvp" style="font-size:12px;color:var(--muted2)">${esc(h.mvp)}</div>
@@ -7886,14 +7920,14 @@ function toggleDarkMode(){
   document.body.classList.toggle('dark');
   const isDark = document.body.classList.contains('dark');
   localStorage.setItem('dvsl-dark', isDark ? '1' : '0');
-  document.getElementById('darkToggle').textContent = isDark ? '☀️' : '🌙';
+  const _dt = document.getElementById('darkToggle'); if (_dt) _dt.textContent = isDark ? 'Light' : 'Dark';
 }
 // Restore preference on load
 (function(){
   if(localStorage.getItem('dvsl-dark') === '1'){
     document.body.classList.add('dark');
     const btn = document.getElementById('darkToggle');
-    if(btn) btn.textContent = '☀️';
+    if(btn) btn.textContent = 'Light';
   }
 })();
 
@@ -8300,7 +8334,7 @@ function buildTicker2(){
     // immediately obvious (red PPD badge + reschedule target if known).
     const status = g.ppd
       ? '<span style="color:#ff4d4d;font-weight:900;letter-spacing:.05em">PPD'+(g.ppdResched?' · → '+esc(g.ppdResched):'')+'</span>'
-      : (_ff ? ffPill() : done ? 'Final' : (g.live ? '<span class="live-badge">🔴 LIVE</span>' : (esc(g.date)+' · '+esc(g.time))));
+      : (_ff ? ffPill() : done ? 'Final' : (g.live ? '<span class="live-badge"><span class="live-dot"></span>LIVE</span>' : (esc(g.date)+' · '+esc(g.time))));
     const field = g.field||'';
     const timeStr = g.time||'TBD';
     const awayLabel = esc(isMob ? getMobileAbbr(g.away) : g.away);
@@ -8332,7 +8366,7 @@ function buildTicker2(){
   // Lead the ticker with any crowned bracket champions.
   const champItems = _getBracketChampions().map(c =>
     '<div class="st-champ" onclick="goPage(\'playoffs\')">'
-    + '<span class="st-champ-trophy">🏆</span>'
+    + '<span class="st-champ-trophy" style="color:#c9a227">' + DVSL_ICO.trophy.replace(/width="14" height="14"/, 'width="1em" height="1em"') + '</span>'
     + '<div class="st-champ-inner">'
     + '<div class="st-champ-lbl">2026 ' + esc(c.bracket) + ' Champions</div>'
     + '<div class="st-champ-team">' + esc(c.team) + '</div>'
@@ -8993,7 +9027,7 @@ function scheduleBlock(g, isNext){
     const hLogo=htm?.id&&LOGO_TEAMS.has(htm.id)?`<img src="logos/${esc(htm.id)}.png" class="gc-logo-img" loading="lazy">`:`<span class="gc-logo-dot" style="background:${hc}"></span>`;
     return `<div class="gc-card" ${_bsData} onclick="openBoxEl(this)">
       <div class="gc-card-hdr">
-        <span class="gc-card-status">${_ff?ffPill():g.live?'<span class="live-badge">🔴 LIVE</span>':(g.conflict?'<span style="color:#92400e;font-weight:700">⚠ UNDER REVIEW</span>':'FINAL')}</span>
+        <span class="gc-card-status">${_ff?ffPill():g.live?'<span class="live-badge"><span class="live-dot"></span>LIVE</span>':(g.conflict?'<span style="color:#92400e;font-weight:700">UNDER REVIEW</span>':'FINAL')}</span>
         <span class="gc-card-date">${esc(g.date||'')}</span>
         ${headline?`<span class="gc-card-headline">${esc(String(headline).toUpperCase())}</span>`:''}
       </div>
@@ -9026,8 +9060,8 @@ function scheduleBlock(g, isNext){
     const datePart=g.date?`${dayPrefix}${esc(g.date)} · `:'';
     const timeField=datePart+esc(timeStr)+(g.field?` · ${fieldLink(g.field, g.addr)}`:'');
     return `<div class="preview-card${isNext?' next':''}">
-      <div class="preview-time">${timeField}${g.live?' <span class="live-badge">🔴 LIVE</span>':''}</div>
-      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">🌧 PPD${g.ppdResched?` · → ${esc(g.ppdResched)}`:' · Reschedule TBD'}</div>`:''}
+      <div class="preview-time">${timeField}${g.live?' <span class="live-badge"><span class="live-dot"></span>LIVE</span>':''}</div>
+      ${g.ppd?`<div style="margin:4px 0 6px;padding:4px 8px;background:#fef3c7;color:#92400e;border:1px solid #d97706;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">PPD${g.ppdResched?` · → ${esc(g.ppdResched)}`:' · Reschedule TBD'}</div>`:''}
       <div class="preview-teams">
         <div class="preview-team-row">
           <div class="preview-logo">${teamLogoEl(atm?.id,aShort)}</div>
@@ -9074,7 +9108,7 @@ function showToast(msg){
 function renderScores(){
   const wrap=document.getElementById('sbWrap');
   if(!SCHEDULE_PREVIEW||!SCHEDULE_PREVIEW.length){
-    wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⏳</div><div style="font-size:18px;font-weight:700">Loading...</div></div>';
+    wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:18px;font-weight:700">Loading...</div></div>';
     if(!window._scoreRetry) { window._scoreRetry=0; }
     if(window._scoreRetry < 20){
       window._scoreRetry++;
@@ -9096,7 +9130,7 @@ function renderScores(){
   if(view==='scores'){
     const doneWks=allWks.filter(w=>w.games.some(g=>g.done));
     if(!doneWks.length){
-      wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:48px;margin-bottom:16px">⚾</div><div style="font-size:20px;font-weight:700;margin-bottom:8px">No final scores yet</div><div style="color:var(--muted);font-size:14px">Once a game wraps up it will show here. Check the Schedule tab for upcoming games.</div></div>';
+      wrap.innerHTML='<div class="no-games" style="text-align:center;padding:60px 20px"><div style="font-size:20px;font-weight:700;margin-bottom:8px">No final scores yet</div><div style="color:var(--muted);font-size:14px">Once a game wraps up it will show here. Check the Schedule tab for upcoming games.</div></div>';
       return;
     }
     const off=Math.min(Math.max(0,weekOffset<0?doneWks.length-1:weekOffset),doneWks.length-1);
@@ -9183,9 +9217,9 @@ async function openRecap(away,home,as,hs,field,date){
         </div>
         <div class="pop-team" style="cursor:pointer" onclick="goTeam('${jsArg(home)}')"><div class="pop-abbr" style="color:${hc}">${esc(home)}</div><div class="pop-role-lbl">Home</div></div>
       </div>
-      <div class="pop-meta"><span>📅 ${esc(date)}</span><span>📍 ${fieldLink(field)}</span></div>
+      <div class="pop-meta"><span>${DVSL_ICO.cal} ${esc(date)}</span><span>${DVSL_ICO.pin} ${fieldLink(field)}</span></div>
     </div>`;
-  document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999"><div style="font-size:20px;margin-bottom:8px">⏳</div>Loading…</div>`;
+  document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999">Loading…</div>`;
   openScPop();
 
   // Fetch box score for POTG computation
@@ -9209,7 +9243,7 @@ async function openRecap(away,home,as,hs,field,date){
   let potgHtml='';
   if(!boxScore && recap?.potg_name){
     potgHtml=`<div style="background:linear-gradient(135deg,#fde047,#f5c842);border:3px solid #ca8a04;border-radius:14px;padding:22px 20px;margin-bottom:20px;text-align:center;box-shadow:0 4px 14px rgba(245,200,66,.4)">
-      <div style="font-size:40px;line-height:1;margin-bottom:6px">⭐</div>
+      <div style="font-size:40px;line-height:1;margin-bottom:6px;color:#78350f">${DVSL_ICO.star}</div>
       <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.28em;text-transform:uppercase;color:#78350f;margin-bottom:6px">Player of the Game</div>
       <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;color:#1a1a1a;line-height:1.05;text-transform:uppercase;letter-spacing:.01em">${esc(recap.potg_name)}</div>
     </div>`;
@@ -9267,7 +9301,7 @@ async function openRecap(away,home,as,hs,field,date){
         ? `${potgEntry.name} ${_outcome} for ${potgTeamName||'the team'}, ${_lineParts.join(' ')}.`
         : `${potgEntry.name} earned Player of the Game honors for ${potgTeamName||'the team'}.`;
       potgHtml=`<div style="background:linear-gradient(135deg,#fde047,#f5c842);border:3px solid #ca8a04;border-radius:14px;padding:22px 20px;margin-bottom:20px;text-align:center;box-shadow:0 4px 14px rgba(245,200,66,.4)">
-        <div style="font-size:40px;line-height:1;margin-bottom:6px">⭐</div>
+        <div style="font-size:40px;line-height:1;margin-bottom:6px;color:#78350f">${DVSL_ICO.star}</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.28em;text-transform:uppercase;color:#78350f;margin-bottom:6px">Player of the Game</div>
         <div style="font-family:'Barlow Condensed',sans-serif;font-size:34px;font-weight:900;color:#1a1a1a;line-height:1.05;text-transform:uppercase;letter-spacing:.01em">${esc(potgEntry.name)}</div>
         <div style="font-size:13px;color:#78350f;margin-top:8px;font-weight:700">${esc(potgTeamName||'')}${potgStatLine?`${potgTeamName?' · ':''}${esc(potgStatLine)}`:''}</div>
@@ -9353,10 +9387,10 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
           <div class="pop-role-lbl">Home</div>
         </div>
       </div>
-      <div class="pop-meta"><span>📅 ${esc(date)}</span><span>📍 ${fieldLink(field)}</span></div>
+      <div class="pop-meta"><span>${DVSL_ICO.cal} ${esc(date)}</span><span>${DVSL_ICO.pin} ${fieldLink(field)}</span></div>
     </div>`;
 
-  document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999"><div style="font-size:20px;margin-bottom:8px">⏳</div>Loading…</div>`;
+  document.getElementById('scPopContent').innerHTML=hdrHtml+`<div class="pop-body" style="text-align:center;padding:32px 20px;color:#999">Loading…</div>`;
   openScPop();
 
   // Fetch box score from Firestore
@@ -9389,8 +9423,8 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
   const showTabs = !!boxScore;
   if (showTabs) {
     bodyHtml += `<div class="bstabs">
-      <button id="bstab-btn-box" class="bstab-btn active" onclick="switchBoxTab('box')">📊 Box Score</button>
-      <button id="bstab-btn-recap" class="bstab-btn" onclick="switchBoxTab('recap')">📰 Recap</button>
+      <button id="bstab-btn-box" class="bstab-btn active" onclick="switchBoxTab('box')">Box Score</button>
+      <button id="bstab-btn-recap" class="bstab-btn" onclick="switchBoxTab('recap')">Recap</button>
     </div><div id="bstab-box">`;
   }
 
@@ -9420,7 +9454,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
     const aScoreOnly = !!boxScore.away_score_only || (!!boxScore.score_only && aLineup.length === 0);
     const hScoreOnly = !!boxScore.home_score_only || (!!boxScore.score_only && hLineup.length === 0);
     const scoreOnlyMsg = (teamShort, accentColor) => `<div style="padding:24px 16px;text-align:center;background:#fafbfc;border:1px dashed #d1d5db;border-radius:8px">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:${accentColor||'#374151'};margin-bottom:6px">📝 Score Only Entry</div>
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:${accentColor||'#374151'};margin-bottom:6px">Score Only Entry</div>
       <div style="font-size:12px;color:#6b7280;line-height:1.5;max-width:280px;margin:0 auto">Individual stats were not recorded for ${esc(teamShort)}. The captain submitted a final score only.</div>
     </div>`;
     // Support linescores (admin/scorer), innings (old admin), and away_linescore (captain portal) field names
@@ -9678,11 +9712,11 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
             const kBad = outs > 0 && kVal > outs;
             const pcBad = pitches > 0 && strikesP > 0 && strikesP > pitches;
             const kCell = kBad
-              ? `<span style="${warnStyle}" title="Impossible: K (${esc(kVal)}) exceeds outs recorded (${esc(outs)}). A strikeout is always an out, so this line has bad data.">${esc(kVal)} ⚠</span>`
+              ? `<span style="${warnStyle}" title="Impossible: K (${esc(kVal)}) exceeds outs recorded (${esc(outs)}). A strikeout is always an out, so this line has bad data.">${esc(kVal)} ${DVSL_ICO.warn}</span>`
               : esc(kVal);
             const pc=pitches||(p.balls||0)+strikesP||null;
             const pcCell = pcBad
-              ? `<span style="${warnStyle}" title="Impossible: strike-pitches (${esc(strikesP)}) exceed total pitches (${esc(pitches)}).">${esc(pc)} ⚠</span>`
+              ? `<span style="${warnStyle}" title="Impossible: strike-pitches (${esc(strikesP)}) exceed total pitches (${esc(pitches)}).">${esc(pc)} ${DVSL_ICO.warn}</span>`
               : esc(pc||'—');
             // WHIP = (BB + H) / IP. Compute from outs to avoid .1/.2 string
             // rounding weirdness — 3 outs = 1.0 IP exactly. Show "—" if the
@@ -9715,7 +9749,7 @@ async function openBox(away,home,as,hs,field,date,gameId,defaultTab){
             const hVal = p.h || 0;
             const kBad = outs > 0 && kVal > outs;
             const kCell = kBad
-              ? `<span style="${warnStyle}" title="Impossible: K (${esc(kVal)}) exceeds outs recorded (${esc(outs)}). A strikeout is always an out, so this line has bad data.">${esc(kVal)} ⚠</span>`
+              ? `<span style="${warnStyle}" title="Impossible: K (${esc(kVal)}) exceeds outs recorded (${esc(outs)}). A strikeout is always an out, so this line has bad data.">${esc(kVal)} ${DVSL_ICO.warn}</span>`
               : esc(kVal);
             return `<tr>
               <td style="text-align:left;width:1%;white-space:nowrap;padding-right:4px"><span style="font-weight:600;color:#1a1a1a">${esc(p.name||'')}</span>${decBadge}</td>
@@ -9940,7 +9974,7 @@ function generateAutoRecap(away,home,as,hs,date,field,atm,htm,aLineup,hLineup,po
   // S2: Top performer / POTG
   if(adminPotg){
     const sl=statLine(adminPotg);
-    parts.push(`🏆 Player of the Game: ${adminPotg.name}${sl?`, going ${sl}`:'.'}`);
+    parts.push(`Player of the Game: ${adminPotg.name}${sl?`, going ${sl}`:'.'}`);
   } else if(hasStats){
     const sl=statLine(star);
     if(sl) parts.push(`${star.name} led all hitters, going ${sl}.`);
@@ -10066,7 +10100,7 @@ function openGameday(away,home,field,time){
           ${ht && ht.w != null ? `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:rgba(0,0,0,.55);letter-spacing:.04em;margin-top:2px">${esc(ht.w)}-${esc(ht.l)}${ht.ti?'-'+esc(ht.ti):''}</div>` : ''}
         </div>
       </div>
-      <div class="pop-meta"><span>📍 ${fieldLink(field)}</span></div>
+      <div class="pop-meta"><span>${DVSL_ICO.pin} ${fieldLink(field)}</span></div>
     </div>
     <div class="pop-body">
       ${prevText?`<div style="font-size:13px;line-height:1.6;color:rgba(0,0,0,.6);padding:14px 24px 0;border-bottom:1px solid rgba(0,0,0,.07);padding-bottom:14px;margin-bottom:4px">${prevText}</div>`:''}
@@ -10135,7 +10169,7 @@ window.saveBoxScoreImage = async function() {
   if (!box) return;
   const originalText = saveBtn ? saveBtn.innerHTML : '';
   if (saveBtn) {
-    saveBtn.innerHTML = '⏳ Generating...';
+    saveBtn.textContent = 'Saving picture…';
     saveBtn.disabled = true;
   }
   // Adam ask 4/30/26: previous version captured only the visible
@@ -10158,7 +10192,9 @@ window.saveBoxScoreImage = async function() {
     // Hide the X + Save buttons during capture so they don't appear
     // in the rendered image.
     if (x) x.style.visibility = 'hidden';
-    if (saveBtn) saveBtn.style.visibility = 'hidden';
+    // display:none, not just hidden: on phones the button sits in its own
+    // row above the matchup and would leave a blank strip in the picture.
+    if (saveBtn) saveBtn.style.setProperty('display', 'none', 'important');
     // Strip height + scroll constraints so the entire content renders
     // inline. setProperty with 'important' beats inline media-query
     // overrides (e.g. mobile @media rule sets max-height with !important).
@@ -10205,7 +10241,7 @@ window.saveBoxScoreImage = async function() {
     // Restore everything, even on error.
     if (x) x.style.visibility = '';
     if (saveBtn) {
-      saveBtn.style.visibility = '';
+      saveBtn.style.removeProperty('display');
       saveBtn.innerHTML = originalText;
       saveBtn.disabled = false;
     }
@@ -10990,7 +11026,7 @@ function initStandings(){
 <!-- Alert Modal -->
 <div id="alert-modal-overlay" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px">
   <div style="width:100%;max-width:520px;border-radius:16px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.4)">
-    <div style="background:#001a3e;color:#FFD700;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;padding:16px 24px;letter-spacing:.05em">📢 League Alert</div>
+    <div style="background:#001a3e;color:#FFD700;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:20px;text-transform:uppercase;padding:16px 24px;letter-spacing:.05em">League Alert</div>
     <div id="alert-modal-body" style="padding:20px 24px;font-size:15px;line-height:1.6;min-height:60px"></div>
     <div style="background:rgba(0,0,0,.05);padding:14px 24px;text-align:center">
       <button onclick="alertModalDismiss()" style="background:#001a3e;color:#FFD700;border:none;border-radius:8px;padding:12px 40px;font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;text-transform:uppercase;cursor:pointer;letter-spacing:.05em">✓ OK, Got It</button>
@@ -11018,7 +11054,7 @@ function initStandings(){
 
 <div id="pwa-install-banner" style="display:none;position:fixed;bottom:12px;left:12px;right:12px;z-index:9998;background:#002D72;color:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-family:system-ui,-apple-system,sans-serif;font-size:14px;align-items:center;gap:12px;max-width:440px;margin:0 auto">
   <div style="flex:1;line-height:1.4">
-    <div style="font-weight:800;margin-bottom:2px">📱 Add DVSL to Home Screen</div>
+    <div style="font-weight:800;margin-bottom:2px">Add DVSL to Home Screen</div>
     <div id="pwa-install-hint" style="font-size:12px;opacity:.85">Faster access, no browser bar</div>
   </div>
   <button id="pwa-install-btn" style="background:#F5C842;color:#000;border:none;border-radius:6px;padding:8px 14px;font-weight:800;font-size:13px;cursor:pointer;display:none">Install</button>
