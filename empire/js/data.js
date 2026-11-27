@@ -34,7 +34,7 @@ window.EMPIRE = {
     { id: 'black-16u', age: '16U', color: 'Black', name: 'Empire Black 16u', coach: 'Mark LoPorto' },
     { id: 'gold-14u', age: '14U', color: 'Gold', name: 'Empire Gold 14u', coach: 'Nick Siozios', photo: 'img/teams/gold-14u.webp', wide: 'img/photos/gold14-team.webp' },
     { id: 'white-13u', age: '13U', color: 'White', name: 'Empire White 13u', coach: 'Brian Tighe' },
-    { id: 'black-13u', age: '13U', color: 'Black', name: 'Empire Black 13u', coach: 'Ben Necci' },
+    { id: 'black-13u', age: '13U', color: 'Black', name: 'Empire Black 13u', coach: 'Dan Morra', staff: [{ name: 'Dan Morra', role: 'Head Coach' }, { name: 'Jim Ganly', role: 'Assistant Coach' }] }, /* coaches from the team's October 2026 Instagram post; the old website listed Ben Necci */
     { id: 'gold-12u', age: '12U', color: 'Gold', name: 'Empire Gold 12u', coach: 'Franklin Aaron', photo: 'img/teams/gold-12u.webp', wide: 'img/photos/gold12-team.webp' }
   ],
 
@@ -152,7 +152,8 @@ window.EMPIRE.alumni = [
   window.EMPIRE.players.forEach(function (p) { if (H[p.id]) { p.honors = H[p.id].honors; if (H[p.id].stats) { p.stats = H[p.id].stats; p.statsNote = H[p.id].statsNote; } } });
   var t = window.EMPIRE.teams.filter(function (x) { return x.id === 'white-16u-elite'; })[0];
   t.blurb = 'Unbeaten in the fall of 2025 and 58-18-1 in 2024, with titles at Toys for Tots, We Play for A.K. and the USSSA Long Island Championship.';
-  window.EMPIRE.club.ages = '10U to 18U';
+  window.EMPIRE.club.tryoutAges = '10U to 18U'; /* teams run 12U to 18U; tryouts start at 10U (2025-26 tryout post) */
+  window.EMPIRE.club.teamBrand = 'Empire Express'; /* name the teams use on Instagram in 2026 */
   window.EMPIRE.club.store = 'https://empire2027.itemorder.com';
   window.EMPIRE.club.program = [
     ['Empire Athletics Foundation', 'A nonprofit that helps keep player fees down, helps athletes who could not otherwise play, and gives scholarships to Empire players moving on to college. The Brandon Wilson Scholarship honors a late Empire coach.'],
