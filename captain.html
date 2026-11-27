@@ -4593,7 +4593,7 @@ function renderPendingGames() {
           <button class="btn btn-success btn-sm" onclick="submitScore('${jsAttr(g.id)}')">Submit Score</button>
         </div>
       </div>
-      <div id="boxscore-entry-${esc(g.id)}" style="display:none"></div>
+      <div id="boxscore-entry-${esc(g.id)}" style="display:none;min-width:0;max-width:100%"></div>
       `}
     </div>`;
   };
@@ -5393,7 +5393,10 @@ async function planBoxScoreWrite(gameId, boxScoreData, myRole) {
   }
   return {
     ref, mode: 'update', payload: mergeUpdate,
-    flagGame: discrepancies.length > 0 && !isPlayoffGameId(gameId),   // playoff ids have no games doc
+    // The game's "Stats differ" flag is for box-stat disagreements only; a
+    // score mismatch is flagged as score_conflict by the submit path (same
+    // rule as scorer.html). Playoff ids have no games doc.
+    flagGame: discrepancies.some(d => d.type !== 'score') && !isPlayoffGameId(gameId),
     result: { firstSubmission: false, hasDiscrepancy: discrepancies.length > 0 },
   };
 }
@@ -5506,7 +5509,7 @@ window.submitScoreOnly = async function(gameId) {
       : (gameUpdate.score_conflict
           ? 'Submitted — but your score differs from the already-final result. Flagged for admin review.'
           : 'Score submitted — matches the final on record.');
-    toast(msg,'success');
+    toast(msg, gameUpdate.score_conflict ? 'error' : 'success');
     await loadAllData();
   } catch(e) { toast('Error: '+e.message,'error'); }
 };
